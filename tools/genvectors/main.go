@@ -207,6 +207,10 @@ func main() {
 	}
 	write("v11-aes-siv.json", map[string]any{"spec": "SPEC.md 4.9", "blob_key": hex.EncodeToString(blobKey), "associated_data": core.BlobAD, "blobs": blobs})
 
+	for _, f := range extra {
+		f(signer, claim)
+	}
+
 	// V12: dedupe refs.
 	obs := map[string]any{"start": "2026-10-26T03:00:00Z", "precision": "minute"}
 	val := map[string]any{"n": 42.5, "unit": "ms"}
@@ -218,3 +222,57 @@ func main() {
 		map[string]any{"input": core.RefInputTuple("csv", "hrv.rmssd", nil, val, 0), "input_canonical": string(core.Canonical(core.RefInputTuple("csv", "hrv.rmssd", nil, val, 0))), "ref": core.DedupeRefTuple(dedupeKey, "csv", "hrv.rmssd", nil, val, 0)},
 	}})
 }
+
+func init() { extra = append(extra, genV17) }
+
+// genV17 writes one bad file per error string of SPEC.md 3.8 steps 1 to 14.
+// Field-level errors (step 15) are covered by core/verify_test.go.
+func genV17(signer core.Signer, claim map[string]any) {
+	good := core.Canonical(claim)
+	path := core.PathOf(claim["id"].(string))
+	type bad struct {
+		Name  string `json:"name"`
+		Path  string `json:"path"`
+		Bytes string `json:"bytes"`
+		Error string `json:"error"`
+	}
+	mut := func(f func(m map[string]any), resign bool) (string, string) {
+		v, _ := core.Parse(good)
+		m := v.(map[string]any)
+		f(m)
+		if resign {
+			id, b, _ := core.SignRecord(m, signer)
+			return core.PathOf(id), string(b)
+		}
+		return core.PathOf(m["id"].(string)), string(core.Canonical(m))
+	}
+	var cases []bad
+	add := func(name, p, b string) {
+		fr := core.CheckFile(p, []byte(b))
+		if fr.Err == nil {
+			panic("V17 case passed: " + name)
+		}
+		if fr.Err.Error() != name {
+			panic(fmt.Sprintf("V17 %s produced %s", name, fr.Err))
+		}
+		cases = append(cases, bad{name, p, b, fr.Err.Error()})
+	}
+	add("bad path", "objects/zz/"+strings.Repeat("0", 62)+".json", string(good))
+	add("bad json", path, "{")
+	add("duplicate key", path, `{"v":0,"v":0}`)
+	add("bad number", path, `{"v":9007199254740992}`)
+	add("bad string", path, `{"v":"\udc00"}`)
+	add("bad v", path, `{"v":"0"}`)
+	add("bad type", path, `{"v":0}`)
+	add("id mismatch", path, strings.Replace(string(good), `"n":42.5`, `"n":42.6`, 1))
+	p, b := mut(func(m map[string]any) { m["kid"] = "secp256k1:00"; m["author"] = m["kid"] }, true)
+	add("unsupported key algorithm", p, b)
+	p, b = mut(func(m map[string]any) { m["kid"] = "ed25519:00"; m["author"] = m["kid"] }, true)
+	add("bad key", p, b)
+	p, b = mut(func(m map[string]any) { m["sig"] = "ed25519:" + strings.Repeat("00", 64) }, false)
+	add("bad signature", p, b)
+	add("not canonical", path, strings.Replace(string(good), `"n":42.5`, `"n": 42.5`, 1))
+	write("v17-bad-files.json", map[string]any{"spec": "SPEC.md 3.8 steps 1 to 14 (change set C2 order)", "note": "too large is omitted: a 1 MiB file does not belong in a vector", "cases": cases})
+}
+
+var extra []func(core.Signer, map[string]any)

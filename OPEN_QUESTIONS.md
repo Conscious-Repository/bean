@@ -27,3 +27,21 @@ Rule from AGENT_BRIEF.md: follow the DEFAULT; if none, pick the simplest determi
 ## Spec errors found
 
 - SPEC 14 V1 lists "the RFC 8785 number samples". Two of those samples are commonly misquoted; the authoritative strings for `0x41b3de4355555556` and `…57` are `333333333.3333334` and `333333333.33333343`. Both Go `strconv` and Python `repr` agree. The vector file carries the literal inputs rather than the bit patterns, so there is nothing to misquote.
+
+## M2 (verifier)
+
+11. **Successions are built in M2, not M5**, using the seed-only rule from the v0.4 change set (C5 to C11). With no current-signed successions the tree code is about 60 lines, so a stub would have cost more than the real thing. If the meeting restores current-key rotation, `checkSuccession` and the fork branch of chain selection are the only places that change.
+
+12. **Size check order (C6).** The 16 MiB succession limit is applied before parsing (step 2) and the 1 MiB record limit after the type is known (step 8), both with `too large`. The spec puts the size check at step 2 only, which cannot know the type yet.
+
+13. **Purged targets in the summary.** 12.1 counts valid, invalid, skipped, held and duplicate. A purged target is none of these ("not valid data"). It is left out of every count. Propose adding `<p> purged` to the summary line.
+
+14. **Records of a too-new identity are counted as skipped**, along with the unknown-version files themselves. 8.2 says "do not evaluate"; skipped is the nearest bucket.
+
+15. **Held destructive records and `superseded by sibling` are warnings on the record, held records stay valid**, as 6.6 and 6.7 say. A held tombstone's target does not exist locally, so there is nothing to purge until sync (7.5, M3).
+
+16. **A tombstone of an invalid record still purges it.** 6.7 does not say whether the target must be valid. Simplest rule: the bytes are hidden either way, which is what the person wanted.
+
+17. **`frozen` for off-chain keys.** 5.7 item 4 says claims signed by keys below the lowest common ancestor are `frozen`; a key that was never in the tree stays `key not in chain`. The verifier keeps both strings.
+
+18. **Blob checks (`blob corrupt`, `blob missing`) are not in `VerifyFiles`.** They need the `blobs/` directory and belong to the folder layer (M3). `VerifyFiles` depends only on the record files, which keeps 6.2 literally true.

@@ -296,6 +296,43 @@ for c in v12["cases"]:
     check(f"v12 input_canonical {cb[:40]!r}", cb.decode(), c["input_canonical"])
     check(f"v12 ref {cb[:40]!r}", "hmac-sha256:" + hmac.new(dedupe_key, cb, hashlib.sha256).hexdigest(), c["ref"])
 
+# ---- V17 bad files (parse and envelope level) -------------------------
+
+import re
+v17 = load("v17-bad-files.json")
+for c in v17["cases"]:
+    want = c["error"]
+    data, path = c["bytes"], c["path"]
+    m = re.match(r"^objects/([0-9a-f]{2})/([0-9a-f]{62})\.json$", path)
+    if not m:
+        got = "bad path"
+    else:
+        v, err = parse(data)
+        if err:
+            got = err
+        elif not isinstance(v, dict) or not isinstance(v.get("v"), (int, float)) or isinstance(v.get("v"), bool):
+            got = "bad v"
+        elif not isinstance(v.get("type"), str):
+            got = "bad type"
+        else:
+            rid, _ = record_id(v)
+            if v.get("id") != rid or rid != "sha256:" + m[1] + m[2]:
+                got = "bad field: author" if not isinstance(v.get("author"), str) else "id mismatch"
+            else:
+                alg = v["kid"].split(":")[0]
+                hx = v["kid"].split(":")[1]
+                if alg not in ("ed25519", "p256"):
+                    got = "unsupported key algorithm"
+                elif (alg == "ed25519" and len(hx) != 64) or (alg == "p256" and len(hx) != 66):
+                    got = "bad key"
+                elif verify(v["kid"], rid, v["sig"]) != "accept":
+                    got = "bad signature"
+                elif canonical(v) != data:
+                    got = "not canonical"
+                else:
+                    got = "accept"
+    check(f"v17 {c['name']}", got, want)
+
 print()
 print("FAILURES:", failures)
 sys.exit(1 if failures else 0)
