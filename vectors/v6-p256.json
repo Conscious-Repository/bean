@@ -1,0 +1,11 @@
+{
+  "ecdsa_hash_input": "sha256 of the 32 id bytes",
+  "high_s_result": "bad signature",
+  "high_s_sig": "p256:c7a6c8603003385c839c42d1d23f73faf2ae49ca9587c3c7c1c203bf065d354cc8f03f08e83ab978af8aae2cbf1378fd1a5d502b1d59e2b73cc44f47e6b9b7eb",
+  "id": "sha256:52387e61df81dd978648c8a3ca112df7d865a9a2a14df3d0cd94b4b910fd0bc0",
+  "kid": "p256:03d65a93977caa3d1b081852ff57a79e465f1660577304baead505dd3a48589cf3",
+  "low_s_result": "accept",
+  "low_s_sig": "p256:c7a6c8603003385c839c42d1d23f73faf2ae49ca9587c3c7c1c203bf065d354c370fc0f617c54688507551d340ec8702a289aa8289bdbbcdb6f57b7b15a96d66",
+  "private_scalar": "2222222222222222222222222222222222222222222222222222222222222222",
+  "spec": "SPEC.md 4.5"
+}

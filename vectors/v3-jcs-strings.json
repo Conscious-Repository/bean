@@ -1,0 +1,65 @@
+{
+  "cases": [
+    {
+      "input": "\"\\u0000\\u0001\\u001f\"",
+      "canonical": "\"\\u0000\\u0001\\u001f\""
+    },
+    {
+      "input": "\"\\b\\t\\n\\f\\r\"",
+      "canonical": "\"\\b\\t\\n\\f\\r\""
+    },
+    {
+      "input": "\"\\u0008\\u0009\\u000a\\u000c\\u000d\"",
+      "canonical": "\"\\b\\t\\n\\f\\r\""
+    },
+    {
+      "input": "\"\\/\"",
+      "canonical": "\"/\""
+    },
+    {
+      "input": "\"\\u007f\"",
+      "canonical": "\"\""
+    },
+    {
+      "input": "\"é\"",
+      "canonical": "\"é\""
+    },
+    {
+      "input": "\"é\"",
+      "canonical": "\"é\""
+    },
+    {
+      "input": "\"😀\"",
+      "canonical": "\"😀\""
+    },
+    {
+      "input": "\"😀\"",
+      "canonical": "\"😀\""
+    },
+    {
+      "input": "\"a\\\"b\\\\c\"",
+      "canonical": "\"a\\\"b\\\\c\""
+    },
+    {
+      "input": "\"\\ud800\"",
+      "error": "bad string"
+    },
+    {
+      "input": "\"\\udc00\"",
+      "error": "bad string"
+    },
+    {
+      "input": "\"\\ud800A\"",
+      "error": "bad string"
+    },
+    {
+      "input": "\"😀\"",
+      "canonical": "\"😀\""
+    },
+    {
+      "input": "\"\u2028\u2029\"",
+      "canonical": "\"\u2028\u2029\""
+    }
+  ],
+  "spec": "SPEC.md 4.1 rules 3 to 6"
+}

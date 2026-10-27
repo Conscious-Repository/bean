@@ -1,0 +1,9 @@
+{
+  "cases": [
+    {
+      "input": "{\"€\":\"Euro Sign\",\"\\r\":\"Carriage Return\",\"דּ\":\"Hebrew Letter Dalet With Dagesh\",\"1\":\"One\",\"😀\":\"Emoji: Grinning Face\",\"\\u0080\":\"Control\",\"ö\":\"Latin Small Letter O With Diaeresis\",\"￿\":\"Last BMP\",\"a\":\"ascii\",\"A\":\"upper\",\"\":\"empty\",\"aa\":\"double\"}",
+      "canonical": "{\"\":\"empty\",\"\\r\":\"Carriage Return\",\"1\":\"One\",\"A\":\"upper\",\"a\":\"ascii\",\"aa\":\"double\",\"\":\"Control\",\"ö\":\"Latin Small Letter O With Diaeresis\",\"€\":\"Euro Sign\",\"😀\":\"Emoji: Grinning Face\",\"דּ\":\"Hebrew Letter Dalet With Dagesh\",\"￿\":\"Last BMP\"}"
+    }
+  ],
+  "spec": "SPEC.md 4.1 rule 1"
+}

@@ -1,0 +1,3 @@
+*.test
+/hlog
+/hlog-import-*

@@ -1,0 +1,26 @@
+{
+  "associated_data": "hlog/v0/blob",
+  "blob_key": "4097a75a4a1ff17a5fa8a351e74b606e7540f5ae029f515deb02cf8108a0e852699d11779ea5c76ae69eea0db500c5401e11eab8a1f00e002fa4ad7466efba93",
+  "blobs": [
+    {
+      "name": "empty",
+      "output_hex": "156096c785499c2a4123c4a1281cf0b8",
+      "output_sha256": "e3b5172f15f13f0a83a16bc35835186682c8045d95eb0636eae1115c69ffa4cc",
+      "blob_id": "sha256:e3b5172f15f13f0a83a16bc35835186682c8045d95eb0636eae1115c69ffa4cc"
+    },
+    {
+      "name": "one-byte",
+      "plaintext_hex": "41",
+      "output_hex": "97c6c3fcfbd9182ca4b5e3b9a6463f3418",
+      "output_sha256": "02bd464b3b4c38386fb921c181ebff6462f03d57d7bc31eb1181a10b9dbda519",
+      "blob_id": "sha256:02bd464b3b4c38386fb921c181ebff6462f03d57d7bc31eb1181a10b9dbda519"
+    },
+    {
+      "name": "1mib",
+      "plaintext_desc": "bytes de ad be ef repeated 262144 times",
+      "output_sha256": "9eff094d9db6cf096275b34e486668189ed7d55563b982bee581485be0023b49",
+      "blob_id": "sha256:9eff094d9db6cf096275b34e486668189ed7d55563b982bee581485be0023b49"
+    }
+  ],
+  "spec": "SPEC.md 4.9"
+}
