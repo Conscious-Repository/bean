@@ -1,7 +1,7 @@
-# hlog core specification v0.3, draft
+# hlog core specification v0.4, draft
 
 Status: draft for review with Rob Long. This text is not frozen.
-Date: 2026-10-27.
+Date: 2026-10-28. v0.4 applies the change set recorded in the build notes (C1 to C20): seed-only rotation, a frozen envelope, verify-before-copy sync, and no erasure on a timer. The reference implementation is the `bean` repository.
 Editor: Benjamin Anderson (AION Biosciences, steward).
 License: CC0 1.0 (see section 19).
 Name: "hlog" is a placeholder. The project will take a neutral name.
@@ -116,7 +116,7 @@ Other documents and code comments MUST use these terms with these meanings.
 | head key | The `value.key` of the head. |
 | chain key | The `value.key` of any node on the chain. |
 | fork | Two or more well-signed successions that have the same parent. |
-| losing branch | A node that is in the succession tree but not on the chain, and its descendants. |
+| fork point | The chain node with two or more children. Everything below it is invalid (`frozen`). |
 | seal | To list a destructive record id in the `value.sealed` list of a succession. |
 | frozen | The state of an identity after a recovery conflict (section 6.4). A verifier reports it as `compromised`. |
 | bare key | A tagged key used directly as an author. A bare key never rotates. |
@@ -254,27 +254,31 @@ A record MUST NOT have two refs with the same rel and id.
 
 ### 3.8 Validation order
 
+The fields `v`, `type`, `author`, `kid`, `id` and `sig` are the envelope. Their meaning and constraints do not change between record versions. A verifier of any version checks the envelope, the id and the signature before it reads `v`.
+
 A verifier MUST check each file in this order.
 At the first failure, the verifier reports the error string and stops checking that file.
 
 1. The path matches `objects/<2 hex>/<62 hex>.json`. Error: `bad path`.
-2. The file size is at most the maximum. Error: `too large`.
+2. The file size is at most 16 MiB. Error: `too large`.
 3. The bytes are valid UTF-8 and parse as one JSON object. Error: `bad json`.
 4. The object has no duplicate keys at any depth. Error: `duplicate key`.
-5. Every number is an integer in the range -(2^53 - 1) to 2^53 - 1, or a finite double that canonicalizes (section 4.1). Error: `bad number`.
+5. Every number is an integer in the range -(2^53 - 1) to 2^53 - 1, or a finite double that canonicalizes (section 4.1). An integer is a number whose canonical form has no `.` and no `e`. Error: `bad number`.
 6. No string holds an escaped lone surrogate. Error: `bad string`.
-7. `v` is present and is an integer. Error: `bad v`.
-8. `type` is present and is a string. Error: `bad type`.
-9. If `v` is not a version that this verifier knows, apply section 8 and stop.
-10. The file bytes are equal to the canonical bytes of the parsed object. Error: `not canonical`.
-11. All required fields are present with the correct JSON types and constraints in 3.2 to 3.7. Error: `bad field: <name>`.
-12. The recomputed id is equal to `id` and to the id from the path. Error: `id mismatch`.
-13. `kid` parses as a supported tagged key. Error: `unsupported key algorithm` or `bad key`.
-14. `sig` verifies for `kid` over the id bytes (section 4.5). Error: `bad signature`.
-15. Apply the authority rules in section 6.
+7. `v` is present and is a non-negative integer. Error: `bad v`.
+8. `type` is present and is a string. If `type` is not `hlog.succession`, the file size is at most 1 MiB. Error: `bad type`, `too large`.
+9. `author` and `kid` are present and are strings. Error: `bad field: author`, `bad field: kid`.
+10. `id` is a string equal to the recomputed id and to the id from the path. Error: `id mismatch`.
+11. `kid` parses as a supported tagged key. Error: `unsupported key algorithm` or `bad key`.
+12. `sig` verifies for `kid` over the id bytes (section 4.5). Error: `bad signature`.
+13. If `v` is not a version that this verifier knows, apply section 8 and stop.
+14. The file bytes are equal to the canonical bytes of the parsed object. Error: `not canonical`.
+15. All required fields are present with the correct JSON types and constraints in 3.2 to 3.7. Error: `bad field: <name>`.
+16. Apply the authority rules in section 6.
 
-Steps 1 to 14 depend only on the file.
-Step 15 depends on the set of files.
+Steps 1 to 15 depend only on the file.
+Step 16 depends on the set of files.
+A parser MAY refuse nesting deeper than 256 levels with `bad json`.
 
 ## 4. Encoding and cryptography
 
@@ -397,7 +401,7 @@ Rules:
 5. In one adapter run, two readings are identical when their arrays, without the occurrence, have equal canonical bytes.
 6. The first identical reading gets occurrence 0. The next gets 1, in source order.
 7. Do not use the file hash. Do not use the row position.
-8. An adapter MUST keep the HMAC input stable across adapter versions for the same source reading.
+8. An adapter MUST keep the HMAC input stable across adapter versions for the same source reading when the source has a native id. A tuple input changes when a parser fix changes the value; 9.7 handles that case.
 9. Write `source.ref` as `hmac-sha256:` followed by 64 lowercase hex digits. DEFAULT, Rob to confirm.
 
 Result: two exports that overlap make the same refs for the same readings. The second import adds nothing.
@@ -415,8 +419,8 @@ A writer MUST encrypt every blob before it hashes and stores it.
 
 Equal plaintext gives equal blob bytes and an equal blob id for one identity secret.
 Go has no AES-SIV in its standard library.
-An implementation MUST build CMAC (RFC 4493), S2V and CTR from `crypto/aes` and `crypto/cipher`.
-It MUST pass the RFC 5297 Appendix A vectors.
+An implementation MAY use a vetted AES-SIV library or build CMAC (RFC 4493), S2V and CTR from `crypto/aes` and `crypto/cipher`.
+Either way it MUST pass the RFC 5297 Appendix A vectors. The reference implementation builds it and matches OpenSSL on vector V11.
 Implementations MUST support blobs of at least 256 MiB. DEFAULT, Rob to confirm.
 
 ### 4.10 Paper seed encoding
@@ -459,22 +463,13 @@ Devices hold the identity secret and the current signing key. Devices never hold
 7. Erase the paper seed and the recovery private key from memory and disk.
 
 The signing key is random. The paper seed does not derive it.
-A person MAY copy the identity secret and the signing private key to their other devices out of band.
-These devices then act as one author. DEFAULT, Rob to confirm.
+One host holds the signing key. A second device is paired as a bare device key (11.3). Copying the signing key between devices is not supported in v0.
 
-### 5.3 Rotate with the current key
+### 5.3 Rotation
 
-The person rotates when a device is lost, a key is old, or a device leaves.
+There is one kind of succession. It is signed by the recovery key that the parent commits to (5.5). A signing key cannot write a succession. Error: `bad succession`.
 
-1. Sync all of the person's devices first. Records that are not synced can become invalid (5.4).
-2. Make a new signing key.
-3. Write a succession with:
-   - `refs` = `[{"rel":"succeeds","id":<head id>}]`.
-   - `value.key` = the new tagged public key.
-   - `value.recovery` = the same commitment as the head. A device cannot make a new commitment because it has no paper seed.
-   - `value.sealed` = the sorted ids of every destructive record that the outgoing key signed and that the writer wants to keep.
-4. Sign the succession with the outgoing head key.
-5. Replace the signing key in `local/`.
+The person rotates when a device is lost, a key is old, or a device leaves. Rotation needs the paper seed. This is deliberate: a stolen device can add claims, but it can never take over the identity, because it cannot write a succession.
 
 ### 5.4 Sealed rotation
 
@@ -482,68 +477,64 @@ A destructive record signed by the head key is valid.
 A destructive record signed by an older chain key is valid only when the succession that ends that key seals it.
 The succession that ends a key is the next node on the chain after the node that names the key.
 Only that succession can seal records of that key.
+`hlog rotate` MUST print every destructive record of the outgoing key and seal all of them by default. `-no-seal <id>` excludes one.
+The maximum file size of an `hlog.succession` is 16 MiB, so `sealed` can hold about 230,000 ids. DEFAULT.
 
 `value.sealed` is an array of record ids.
 The ids MUST be unique and sorted in ascending order of their ASCII bytes. Error: `bad field: value.sealed`.
 An id in `sealed` that does not name a destructive record of the outgoing key has no effect.
 
 Result: every replica with the same files gets the same answer. No trusted time is necessary.
-A thief who steals a key cannot keep a destructive record after a recovery, unless the person seals it.
+A thief who steals a key cannot keep a destructive record after a rotation, unless the person seals it.
 
-### 5.5 Recover with the paper seed
+### 5.5 Write a succession with the paper seed
 
-The person recovers when a key is stolen or all devices are lost.
+The person rotates when a device is lost, a key is stolen, or a device leaves. Sync all devices first. Destructive records that are not synced are not sealed and become invalid (5.4).
 
 1. Enter the 24 words on one device.
-2. Select the parent node. This is the last node on the chain that the person trusts.
-3. Derive recovery generations 0, 1, 2 and so on until a generation matches the commitment of the parent. Stop at generation 63. Error: `seed does not match`.
-4. Call the matching generation `g`.
+2. The parent is the chain head (6.3). Its position on the chain, counting the genesis as 0, is the recovery generation `g`.
+3. Check that the identity secret derived from the words equals `local/identity-secret`, and that the commitment of recovery generation `g` equals the parent's `value.recovery`. Error: `seed does not match`.
+4. If the identity is frozen (5.7), stop. Error: `compromised: <id>`.
 5. Make a new signing key.
 6. Write a succession with:
    - `refs` = `[{"rel":"succeeds","id":<parent id>}]`.
    - `value.key` = the new tagged public key.
    - `value.recovery` = the commitment to recovery generation `g + 1`.
-   - `value.sealed` = the sorted ids of the parent key's destructive records that the person wants to keep.
+   - `value.sealed` = the sorted ids of the parent key's valid destructive records in this replica, minus any the person excludes.
 7. Sign with recovery key generation `g`. The `kid` is the recovery public key. This reveals the key.
-8. Derive the identity secret again and store it in `local/` with the new signing key.
+8. Store the new signing key in `local/`.
 9. Erase the paper seed and the recovery private keys.
 
-A recovery succession wins over every other branch below its parent (6.3).
 The identity secret does not change. See 17 for this limit.
 
 ### 5.6 Forks
 
 A fork is two or more well-signed successions with the same parent.
+Every succession is recovery-signed, so a fork means the same recovery key signed twice on different branches.
+A fork freezes the identity (5.7). There is no tie-break rule.
 
-- A recovery-signed succession wins over all current-signed successions with the same parent, and over all their descendants at any depth.
-- When the children are all current-signed, the child with the lowest id wins. Compare ids as ASCII strings. DEFAULT, Rob to confirm.
-- Records signed by keys that appear only on a losing branch are invalid. Error: `losing branch`.
-
-A stolen current key alone cannot win against a recovery. It also cannot freeze an identity.
+A stolen signing key cannot fork an identity, because it cannot write a succession.
 
 ### 5.7 Freeze
 
-Two recovery-signed successions conflict when neither one is an ancestor of the other.
-If two conflicting successions have the same `kid`, the identity is frozen.
-The same `kid` means the same recovery commitment was used twice on different branches.
-This means the paper seed is in two sets of hands.
+Two successions with the same parent freeze the identity.
+The same recovery key signed twice on different branches. This means the paper seed is in two sets of hands, or the person rotated on two devices without syncing.
 
 For a frozen identity, a verifier MUST:
 
 1. Report `compromised: <identity id>`.
-2. Treat every succession below the lowest common ancestor of the conflicting successions as invalid. Error: `frozen`.
+2. Treat every succession below the fork point as invalid. Error: `frozen`.
 3. Treat every destructive record of the identity as invalid. Error: `frozen`.
-4. Treat every claim signed by a key that is not on the path from genesis to the lowest common ancestor as invalid. Error: `frozen`.
+4. Treat every claim signed by a key that is not on the path from genesis to the fork point as invalid. Error: `frozen`.
 5. Restore any target that a now-invalid tombstone hides (7.6).
 
-A frozen identity cannot recover. The person MUST make a new identity.
+A frozen identity cannot rotate. The person MUST make a new identity.
 DEFAULT, Rob to confirm (items 2 to 4).
 
 ### 5.8 Key rules
 
 - A succession MUST NOT reuse a key in `value.key`. Error: `key reuse`. A key is reused when it is the signing key or recovery key of a node on the path from genesis to the parent.
-- A current-signed succession MUST copy `value.recovery` from its parent. Error: `recovery changed`.
-- A recovery-signed succession MUST name a `value.recovery` that differs from the parent commitment. Error: `recovery not advanced`.
+- A succession MUST name a `value.recovery` that differs from the parent commitment. Error: `recovery not advanced`.
 - A recovery key signs only successions. A record of any other type signed by a recovery key is invalid. Error: `key not in chain`.
 
 ### 5.9 Identity secret
@@ -563,7 +554,7 @@ If the identity secret leaks, the person MUST make a new identity and a new log,
 | Add a claim | Anyone. Readers decide trust. | Any chain key of the author, or a bare key. |
 | Correct (supersede) | The original author only. | The head key, or an older chain key with a seal. |
 | Delete (tombstone) | The subject only. | The head key, or an older chain key with a seal. |
-| Rotate | The identity. | The head key, or a recovery key that the parent commits to. |
+| Rotate | The identity. | The recovery key that the chain head commits to (the paper seed). |
 
 The subject can comment on, attest or dispute a claim of another author.
 The subject uses a new claim with rel `about` to do this.
@@ -571,7 +562,7 @@ The subject cannot supersede a claim of another author.
 
 ### 6.2 Input
 
-The verifier gets the set F of record files in `objects/`.
+The verifier gets the set F of record files in `objects/` plus the hidden records of this replica (7.6).
 The result depends only on F.
 The result does not depend on file order, file times, receipt times or the clock.
 Local hold state changes only which bytes are on disk (7.6). It never changes validity.
@@ -581,7 +572,7 @@ Local hold state changes only which bytes are on disk (7.6). It never changes va
 The verifier MUST compute the same result as these steps.
 
 Step 1. Check files.
-Apply steps 1 to 14 of section 3.8 to each file.
+Apply steps 1 to 15 of section 3.8 to each file.
 Keep the files that pass. Call this set R.
 Apply section 8 to files with an unknown `v`.
 
@@ -596,30 +587,25 @@ Repeat until no node is added:
 
 1. For each succession S in R with `subject` = `author` = I, and S not in N:
 2. Let P be the node that the `succeeds` ref of S names. If P is not in N, wait for the next pass.
-3. S is current-signed if `S.kid` = `P.value.key`.
-4. S is recovery-signed if the commitment of `S.kid` (4.6) = `P.value.recovery`.
-5. If S is neither, S is invalid. Error: `bad succession`.
-6. Apply the key rules in 5.8. If one fails, S is invalid with that error.
-7. Otherwise add S to N.
+3. S is valid when the commitment of `S.kid` (4.6) = `P.value.recovery`. Otherwise S is invalid. Error: `bad succession`.
+4. Apply the key rules in 5.8. If one fails, S is invalid with that error.
+5. Otherwise add S to N.
 
 A succession that never gets a parent in N stays held. Report `held: <id>` as a warning.
 
-Step 4. Check for freeze.
-Find every pair of recovery-signed successions in N with the same `kid`.
-If one pair has neither member as an ancestor of the other, the identity is frozen (5.7).
+Step 4. (Merged into step 5.)
 
-Step 5. Select the chain.
+Step 5. Select the chain and detect a freeze.
 Set node X = G. Repeat:
 
 1. Let C be the set of nodes in N whose parent is X.
 2. If C is empty, X is the head. Stop.
-3. If C has a recovery-signed node, set X to that node. If C has two, step 4 already froze the identity.
-4. Otherwise set X to the node in C with the lowest id.
+3. If C has one node, set X to that node.
+4. If C has two or more nodes, the identity is frozen (5.7) and X is the fork point. Stop. X is the head.
 
 The chain is the list of nodes from G to the head.
 Each chain node has a position. G has position 0.
-Every node in N that is not on the chain is on a losing branch.
-Every succession on a losing branch is invalid. Error: `losing branch`.
+Every node in N that is not on the chain is below a fork point and is invalid. Error: `frozen`.
 
 Step 6. Resolve the signing key of each other record.
 For each record D in R that is not an identity record:
@@ -627,7 +613,7 @@ For each record D in R that is not an identity record:
 1. If `D.author` is a tagged key, `D.kid` MUST equal `D.author`. Otherwise `D` is invalid. Error: `bad signature`. A bare key has no chain. Treat it as always the head key.
 2. If `D.author` is an identity id with no genesis in R, D is unresolved. Report `unresolved author: <id>` as a warning. Do not treat D as valid.
 3. If `D.kid` is the `value.key` of a chain node at position p, record p for D.
-4. Else if `D.kid` is the `value.key` of a node on a losing branch only, D is invalid. Error: `losing branch`.
+4. Else if `D.kid` is the `value.key` of a node below a fork point, D is invalid. Error: `frozen`.
 5. Else D is invalid. Error: `key not in chain`.
 
 Step 7. Check seals for destructive records.
@@ -676,6 +662,8 @@ For each supersede record D, for each `supersedes` target T:
 2. If T is an `hlog.*` record, D is invalid. Error: `bad target`.
 3. If `T.author` is not equal to `D.author`, D is invalid. Error: `not author`.
 4. Otherwise the target is superseded. Readers SHOULD show D in place of T. T stays in the log.
+5. When two or more valid supersede records name the same target and none supersedes another, readers SHOULD show the one with the lowest id. The verifier reports the others as `superseded by sibling: <lowest id>` (a warning). DEFAULT.
+6. A tombstone of a supersede record removes the supersede. The target is shown again unless another valid supersede names it.
 
 A supersede record can name more than one target. All targets MUST pass.
 
@@ -690,7 +678,7 @@ For each tombstone D with target T:
 5. Otherwise D is a valid tombstone for T. T is purged.
 
 A purged target is not valid data. A reader MUST NOT show it.
-A verifier reports a purged target that is still on disk after its hold as `purged bytes present: <id>`. This is an error.
+A verifier reports a purged target that is hidden and past its hold as `hidden pending gc: <id>` (a warning). `hlog gc` erases it (7.6).
 
 ## 7. Folder layout and sync
 
@@ -704,6 +692,7 @@ A verifier reports a purged target that is still on disk after its hold as `purg
 | `local/identity-secret` | 64 lowercase hex digits, one line. File mode 0600. | never |
 | `local/signing-key` | `<alg>:<hex private key>`, one line. File mode 0600. For Ed25519, the hex is the 32-byte seed. For P-256 hardware keys, it is a key handle. | never |
 | `local/holds.json` | Hold state (7.6). | never |
+| `local/hidden/<64 hex>.json` | Hidden records (7.6). | never |
 | `local/purged-refs.jsonl` | Purged dedupe refs (7.8). | never |
 | `local/cache/` | Indexes and other caches. | never |
 
@@ -734,10 +723,11 @@ Sync from replica A (source) to replica B (destination) is a set union with one 
 1. Compute the valid set of A and of B (section 6).
 2. Collect the valid tombstones of A and of B.
 3. For each record file in A that B does not have:
-   1. If the file fails steps 1 to 12 of 3.8, do not copy it.
+   1. If the file fails steps 1 to 12 of 3.8 (through the signature), do not copy it.
    2. If a valid tombstone of A or B names it, apply 7.5. Do not copy it.
    3. If B hides it under a hold, do not copy it.
    4. Otherwise copy it.
+   5. If B holds a file for that id that fails step 12 of 3.8 and the file in A passes, replace B's file.
 4. For each blob in A that B does not have:
    1. If the SHA-256 of the bytes does not match the path, do not copy it.
    2. If only purged or hidden records name it, do not copy it.
@@ -745,7 +735,8 @@ Sync from replica A (source) to replica B (destination) is a set union with one 
 5. Compute the valid set of B again. Apply 7.6 to new tombstones.
 
 Sync MUST copy files with an unknown `v`. Newer verifiers need them.
-Sync MUST copy invalid records that pass steps 1 to 12 of 3.8. Validity is a verifier result, not a sync rule.
+Sync MUST copy invalid records that pass steps 1 to 12 of 3.8. Validity is a verifier result, not a sync rule. A replica keeps the first file that passes the signature check for an id.
+A succession and a tombstone it invalidates can travel in one sync; the target then comes back on the next sync (step 5). Two passes converge.
 Sync with rsync, git, Syncthing or a USB drive is allowed if the person then runs `hlog verify` on each replica. Such tools do not apply the tombstone exception. `hlog verify` then hides or erases the target (7.6).
 
 ### 7.5 Held tombstones
@@ -764,18 +755,19 @@ Result: a tombstone from a stranger cannot block a record of another subject.
 When a replica first finds a valid tombstone T for a target that it stores:
 
 1. If this replica wrote T (`hlog purge`), erase the target at once.
-2. Otherwise hide the target at once.
+2. Otherwise hide the target at once: move it to `local/hidden/`. Hidden records are still input to the local verifier (6.2) and never sync.
 3. Record the receipt time in `local/holds.json` as `{"<T id>": {"target": "<target id>", "received": "<UTC time>"}}`.
-4. When the local clock is at least 7 days after `received` and T is still valid, erase the target.
-5. Erase each blob that no valid, unpurged record names.
+4. A replica MUST NOT erase a hidden target on a timer.
+5. `hlog gc` erases every target hidden for at least 7 days under a still-valid tombstone, and every blob that no valid, unpurged record names.
+6. `hlog verify` reports each hidden target as `hidden pending gc: <id>` (a warning).
 
 When T becomes invalid while the target is hidden, restore the target.
-T can become invalid after a recovery, a rotation that does not seal T, or a freeze.
-Restore means: show and sync the target again, and remove the hold entry.
+T can become invalid after a rotation that does not seal T, or a freeze.
+Restore means: move the target back to `objects/` and remove the hold entry.
 After erasure, the replica cannot restore the bytes. Another replica that still holds them can sync them back, because T is now invalid.
 
-Any command that loads the log (`verify`, `append`, `sync`, `export`, `reindex`) MUST apply this section.
-The hold length is 7 days. DEFAULT, Rob to confirm.
+Any command that loads the log (`verify`, `append`, `sync`, `export`, `reindex`, `rotate`, `purge`, `gc`) MUST apply this section.
+The hold length is 7 days. DEFAULT, Rob to confirm. Nothing is erased without the person running `gc` or `purge`.
 
 ### 7.7 Purge
 
@@ -804,7 +796,7 @@ Result: a re-import after a purge adds nothing on this replica.
 
 1. Write each record file that is not purged or hidden to `<dir>/records/<64 hex>.json`. Use the stored bytes.
 2. Decrypt each blob that an exported record names. Write the plaintext to `<dir>/blobs/<64 hex of the blob id>`.
-3. Write `<dir>/manifest.json` with the canonical bytes of `{"spec": "hlog-core-v0.3", "identity": <id>, "records": <count>, "blobs": [{"id": <blob id>, "plaintext_sha256": <hex>, "media_type": <string>}]}`. Sort `blobs` by `id`.
+3. Write `<dir>/manifest.json` with the canonical bytes of `{"spec": "hlog-core-v0.4", "identity": <id>, "records": <count>, "blobs": [{"id": <blob id>, "plaintext_sha256": <hex>, "media_type": <string>}]}`. Sort `blobs` by `id`.
 
 The export is not encrypted. The CLI MUST say this before it writes.
 `hlog import-export <dir>` reverses the export for a log with the same identity secret.
@@ -831,13 +823,13 @@ A verifier MUST NOT interpret a record whose `v` it does not know.
 - If `type` starts with `hlog.`, the affected identity is too new.
 - Otherwise the verifier skips the record.
 
-The affected identity of an `hlog.*` record with unknown `v` is:
+The record reached step 13 of 3.8, so its envelope, id and signature are good. The affected identity is:
 
-1. For `hlog.genesis`: the id computed from the file (4.2), if the file is canonical JSON. Otherwise the id from the path.
-2. For other `hlog.*` types: the `author` field, if it is a string. Otherwise the `subject` field, if it is a string.
-3. If neither field is a string, the whole log is too new. Report `too new: log`. Stop.
+1. For `hlog.genesis`: the record's own id, when `author` = `kid`.
+2. For other `hlog.*` types: the `author` field, but only when `kid` is a signing key or recovery key of a node in that identity's known succession tree (6.3 step 3). Otherwise the record is skipped and the identity is not too new.
 
-DEFAULT, Rob to confirm (items 1 to 3).
+A file that no known key signed cannot make an identity too new. There is no `too new: log`.
+DEFAULT.
 
 For a too-new identity, the verifier MUST:
 
@@ -883,9 +875,9 @@ If it has no `subject`, `hlog append` sets the local identity id.
 1. Store the raw source file as a blob before any record (`hlog blob put <file>` prints the blob id). DEFAULT, Rob to confirm the command name.
 2. Put `{"hash": <blob id>, "role": "raw-export", "media_type": <type>}` in `blobs` of each record from that file.
 
-### 9.4 One record per reading
+### 9.4 Granularity
 
-An adapter writes one record per reading.
+An adapter MAY write one record per reading, or one record per (source, type, interval) with the readings in a blob series (`value` = `{"blob": <id>}`). High-frequency sources such as watch heart rate SHOULD batch. The interval and the series format are adapter conventions, not core. Open: the data engineer picks the interval.
 Each record has `source.system`, `source.adapter` as `name@version`, and a dedupe ref in `source.ref` (4.8).
 The adapter does not hold the dedupe key.
 The adapter writes the HMAC input array (4.8) as `source.ref_input`.
@@ -910,10 +902,8 @@ An adapter MUST NOT invent values.
 
 ### 9.7 Parser fixes
 
-When an adapter version fixes a parse error, it writes new records with `supersedes` refs to the wrong records.
-The same author signs them.
-The fixed record keeps the same HMAC input (4.8 rule 8). Thus its dedupe ref is equal to the old one.
-`hlog append` MUST NOT skip a record that supersedes the existing record with the same ref.
+An adapter cannot know record ids. To correct a record, a partial record carries `source.supersedes_ref` = the HMAC input array (4.8) of the record it corrects. `hlog append` resolves it to the valid record with that ref and the same subject and system, adds a `supersedes` ref, and removes `source.supersedes_ref` before signing. If no record matches, `hlog append` skips the line and counts it as skipped.
+When the fixed record keeps the same HMAC input, its dedupe ref equals the old one; `hlog append` MUST NOT skip a record that supersedes the existing record with the same ref. A tuple ref changes when the value changes; that is expected.
 
 ### 9.8 Customer zero adapters
 
@@ -1069,9 +1059,9 @@ Lines are sorted by their ASCII bytes, with the summary line last.
 
 A conforming CLI MUST use these exact strings. Ids follow after `: ` where shown.
 
-`bad path`, `too large`, `bad json`, `duplicate key`, `bad number`, `bad string`, `bad v`, `bad type`, `not canonical`, `bad field: <name>`, `id mismatch`, `unsupported key algorithm`, `bad key`, `bad signature`, `unknown core type`, `unknown rel`, `blob not listed`, `bad succession`, `key reuse`, `recovery changed`, `recovery not advanced`, `losing branch`, `key not in chain`, `not sealed`, `frozen`, `not author`, `not subject`, `bad target`, `purged bytes present: <id>`, `too new: <identity id>`, `too new: log`, `compromised: <identity id>`, `seed does not match`, `input purged: <id>`, `input missing: <id>`, `input invalid: <id>`, `method unknown`, `method mismatch`, `replay mismatch`, `not initialized`, `already initialized`, `blob missing: <id>`, `blob corrupt: <id>`.
+`bad path`, `too large`, `bad json`, `duplicate key`, `bad number`, `bad string`, `bad v`, `bad type`, `not canonical`, `bad field: <name>`, `id mismatch`, `unsupported key algorithm`, `bad key`, `bad signature`, `unknown core type`, `unknown rel`, `blob not listed`, `bad succession`, `key reuse`, `recovery not advanced`, `key not in chain`, `not sealed`, `frozen`, `not author`, `not subject`, `bad target`, `too new: <identity id>`, `compromised: <identity id>`, `seed does not match`, `input purged: <id>`, `input missing: <id>`, `input invalid: <id>`, `method unknown`, `method mismatch`, `replay mismatch`, `not initialized`, `already initialized`, `blob missing: <id>`, `blob corrupt: <id>`.
 
-Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <id>`, `duplicate: <id> of <id>`.
+Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <id>`, `duplicate: <id> of <id>`, `superseded by sibling: <id>`, `hidden pending gc: <id>`, `blob missing: <id>` (for a purged or invalid record).
 
 ### 12.3 Commands
 
@@ -1104,17 +1094,22 @@ Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <
 - Action: delete `local/cache/` and rebuild it.
 - Output: `indexed <n> records`.
 
-`hlog rotate`
+`hlog rotate [-no-seal <id>]...`
 
-- Action: section 5.3. Seal every destructive record that the outgoing key signed and that is in this replica.
-- Output: `rotated to <tagged key>`, then `sealed <n>`. Before the write, print `sync all devices before you rotate` to standard error.
-
-`hlog recover -parent <node id> [-seal <id>]...`
-
-- Input: the 24 words on standard input.
-- Action: section 5.5. Seal only the ids that `-seal` names. `-parent` is required.
-- Output: the list of destructive records of the parent key, with `sealed` or `not sealed` for each, then `recovered to <tagged key>`.
+- Input: the 24 words on standard input. Numbering and case are ignored.
+- Action: section 5.5. Seal every valid destructive record of the outgoing key in this replica except the ids that `-no-seal` names.
+- Output: one line `sealed <id>` or `not sealed <id>` per destructive record of the outgoing key, then `rotated to <tagged key>`, then `sealed <n>`. Before reading input, print `sync all devices before you rotate` to standard error.
 - Errors: `seed does not match`, `compromised: <id>` (exit 4).
+
+`hlog gc`
+
+- Action: section 7.6 step 5.
+- Output: `erased <r> records, <b> blobs`.
+
+`hlog blob get <id>`
+
+- Action: decrypt one blob to standard output.
+- Errors: `blob missing: <id>`, `blob corrupt: <id>`.
 
 `hlog purge [-reason <text>] <id>`
 
@@ -1124,7 +1119,7 @@ Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <
 `hlog sync <source dir>`
 
 - Action: section 7.4 into the `-dir` log.
-- Output: `copied <r> records, <b> blobs, refused <p> purged`.
+- Output: `copied <r> records, <b> blobs, refused <p> purged`, then `replaced <n> bad copies` when n > 0.
 
 `hlog export <dir>`
 
@@ -1210,7 +1205,7 @@ Tests 1 to 22 cover the v0.2 acceptance tests 1 to 6 and the new decisions. Test
    - Action: J appends a record that supersedes T. Then write the same record with a direct file write.
    - Expected: append fails with `not author`. Verify reports `not author` for the file.
 9. Rotated-out key, not sealed.
-   - Setup: I appends claim T. A copy of I's key K1 writes supersede record D of T in a second replica. The first replica rotates to K2 without D.
+   - Setup: I appends claim T. Replica B (same signing key K1) writes supersede record D of T. Replica A rotates to K2 before D arrives.
    - Action: sync both ways. Verify.
    - Expected: `not sealed` for D. T is not superseded.
 10. Rotated-out key, sealed.
@@ -1246,29 +1241,28 @@ Tests 1 to 22 cover the v0.2 acceptance tests 1 to 6 and the new decisions. Test
 
 ### Rotate and recover (v0.2 test 5)
 
-17. Rotate, then recover.
-    - Setup: I appends claim C1. Rotate. Append C2. Recover with `-parent` = head. Append C3.
-    - Expected: verify passes. C1, C2 and C3 have three different `kid` values. The identity id did not change.
-18. Fork, current against recovery.
-    - Setup: I at head H. A thief with key of H writes current-signed succession S1 with parent H.
-    - Action: the person recovers with parent H (succession S2).
-    - Expected: S2 is on the chain. S1 is `losing branch`. Claims signed by the S1 key are `losing branch`.
-19. Deep fork recovery.
-    - Setup: I at head H. The thief writes S1, S2 and S3, each current-signed, starting at H. The thief signs claims and one tombstone with the S3 key.
-    - Action: the person recovers with parent H.
-    - Expected: S1, S2, S3 and all thief records are `losing branch`. The tombstoned target is visible again.
-20. Recovery wins with a sealed tombstone.
-    - Setup: the head key writes tombstone D, and a thief steals the key.
-    - Action: recover with parent H and `-seal D`.
-    - Expected: D stays valid.
-21. Double recovery freeze.
+17. Rotate twice.
+    - Setup: I appends claim C1. Rotate. Append C2. Rotate. Append C3.
+    - Expected: verify passes. C1, C2 and C3 have three different `kid` values. The identity id did not change. The chain has three nodes.
+18. Signing key cannot rotate.
     - Setup: I at head H.
-    - Action: write two recovery successions with parent H on two replicas, both signed by recovery generation 0. Sync.
-    - Expected: verify reports `compromised: <I>` and exits 4. Destructive records of I are `frozen`.
-22. Stolen current key cannot freeze.
-    - Setup: I at head H.
-    - Action: write two current-signed successions with parent H.
-    - Expected: no `compromised` line. The successor with the lower id is on the chain. The other is `losing branch`.
+    - Action: write a succession with parent H signed by H's signing key.
+    - Expected: `bad succession`. The chain is unchanged.
+19. Thief's tombstone dies at rotation.
+    - Setup: a copy of the head key writes tombstone D for T on replica B. Replica A rotates without D.
+    - Action: sync both ways twice.
+    - Expected: D is `not sealed` on both. T is visible on both.
+20. Rotation with a sealed tombstone.
+    - Setup: the head key writes tombstone D, then the person rotates.
+    - Action: rotate with the default seals.
+    - Expected: the succession lists D in `value.sealed`. D stays valid.
+21. Double rotation freeze.
+    - Setup: I at head H on replicas A and B.
+    - Action: rotate on A and on B without syncing. Sync.
+    - Expected: verify reports `compromised: <I>` and exits 4. Both successions and every destructive record of I are `frozen`. Claims on the trunk stay valid. `rotate` on a frozen identity fails with `compromised: <I>`.
+22. Recovery key cannot sign claims.
+    - Action: write a claim whose `kid` is a recovery public key of I.
+    - Expected: `key not in chain`.
 
 ### Version (v0.2 test 6)
 
@@ -1282,10 +1276,18 @@ Tests 1 to 22 cover the v0.2 acceptance tests 1 to 6 and the new decisions. Test
 
 ### Delete hold
 
-25. Recovery within the hold restores.
+25. Rotation within the hold restores.
     - Setup: replicas A and B. A thief with I's head key writes tombstone D for T on A. Sync A to B. B hides T.
-    - Action: on day 3 (`HLOG_NOW`), recover on A with parent H and no seal. Sync A to B.
-    - Expected: D is `not sealed`. B shows T again. B never erases T.
+    - Action: on day 3 (`HLOG_NOW`), rotate on A with `-no-seal D`. Sync A to B.
+    - Expected: D is `not sealed`. B moves T back to `objects/` and removes the hold. `gc` on day 30 erases nothing.
+25b. No erase without gc.
+    - Setup: as test 11 after the sync to B.
+    - Action: set `HLOG_NOW` 8 days later. Run `verify` on B, then `gc`.
+    - Expected: `verify` warns `hidden pending gc: <T>` and erases nothing. `gc` erases T and prints `erased 1 records`.
+31. Too-new file without a chain signature.
+    - Setup: identities I and J.
+    - Action: add an `hlog.succession` file with `v` = 99, `author` = I, signed by J's key.
+    - Expected: no `too new` line. The file is skipped.
 
 ### Exit and devices
 
@@ -1365,6 +1367,9 @@ The AES-SIV code MUST also pass the RFC 5297 Appendix A vectors. The HKDF code M
 
 ## 17. Known limits
 
+- Rotation needs the paper seed. A person who loses the paper and the device loses the identity. This is the price of a stolen device never being able to take over.
+- Records are plaintext on disk. Only blobs are encrypted. Folder-level encryption is the sync tool's job in v0.
+
 1. A rotated-out chain key can still sign a claim that verifies, with any `times.observed`. Witness records are a later extension.
 2. An identity secret leak needs a new paper seed, a new identity and a new log. The old data must be re-encrypted into the new log.
 3. A replica that never saw a purged target does not have its dedupe ref. A re-import on that replica brings the data back.
@@ -1442,17 +1447,20 @@ The build is on hold. This list is from a read of the code on 2026-10-27.
 
 Each item has a DEFAULT in the text. Rob can change any of them.
 
-1. Curve choice: Ed25519 default, P-256 for hardware device keys, `secp256k1` reserved for Nostr transport.
+1. Curve choice: Ed25519 default, P-256 for hardware device keys, `secp256k1` reserved. Decided 2026-10-28: a Schnorr/secp256k1 signing key (a Nostr key) is added as an extension after v0, when a reader or signer needs one. It needs a dependency; the core stays at zero until then.
 2. Own record format, with Nostr only as an encrypted carrier later. No NIP-01 event shape in the core.
 3. One identity secret per person now. Per-blob keys come with the sharing extension.
-4. Fork rule details: lowest id among current-signed children (5.6), and the frozen-identity rules (5.7).
-5. Hold length of 7 days (7.6).
-6. Record size limit of 1 MiB and blob minimum of 256 MiB.
+4. Decided in v0.4: every succession is seed-signed; any fork is a freeze (5.6, 5.7). The lowest-id rule is gone. Rob: confirm, or name what KERI pre-rotation still adds.
+5. Hold length of 7 days (7.6). Decided in v0.4: the hold gates `gc`; nothing is erased on a timer.
+6. Record size limit of 1 MiB (16 MiB for successions) and blob minimum of 256 MiB.
 7. `type` pattern and precision values (3.2, 3.5).
-8. AES-SIV associated data label (4.9) and the `hmac-sha256:` ref prefix (4.8).
+8. AES-SIV associated data label (4.9) and the `hmac-sha256:` ref prefix (4.8). A vetted AES-SIV library is allowed; the reference build is hand-rolled and matches OpenSSL.
 9. Paper seed as BIP-39 English words over 32 bytes (4.10).
-10. Copy of the signing key to the person's other devices (5.2). The alternative is one key per device as a bare key or a sub-identity.
-11. Native id fields for Oura, Whoop and Apple Health. Nobody has checked these export formats for this spec yet.
+10. Decided in v0.4: one host holds the signing key; other devices are bare device keys (11.3). No shared signing key.
+11. Native id fields for Oura, Whoop and Apple Health. Nobody has checked these export formats for this spec yet. Decided per adapter from a real export, never from memory.
+16. Batching interval and series format for high-frequency sources (9.4). Data engineer to pick.
+17. Measurement uncertainty convention (for example `context.cv`) for the NMR source. Adapter-level.
+18. Query format for the index (7.10). Readers decide; v0 ships `local/cache/index.json` only.
 12. Device record `times.imported` and blob handling (11.4).
 13. Method hash input (10.2).
 14. Exit code priority (12.1).
