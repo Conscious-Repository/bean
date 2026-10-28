@@ -33,7 +33,7 @@ M6. Read and write by hand. Done 2026-10-28.
 
 M7. Real importers (needs the sample files).
 - `hlog-import-apple-health export.xml`. Low-frequency types (weight, blood pressure, VO2 max, labs) one record per reading, native id from the XML. High-frequency types (heart rate, steps, energy) one record per (type, day) with a series blob. This settles open item 16 for Apple Health.
-- `hlog-import-labcorp` for the blood panel. Done 2026-10-28: Superpower exports are Labcorp patient report PDFs. Ben's 2025-05-31 panel parses to 71 results; re-import adds 0. No LOINC yet (OPEN_QUESTIONS 44 to 51).
+- `hlog-import-labcorp` for the blood panel. Done 2026-10-28: Superpower exports are Labcorp patient report PDFs. A real Superpower panel parses to 71 results; re-import adds 0. No LOINC yet (OPEN_QUESTIONS 44 to 51).
 - `hlog-import-csv -map "<column>=<type>[:<unit>]"`, repeatable, so one row can make several records.
 - Exit: Ben's full Apple Health export and one panel import, re-import adds 0, `verify` passes.
 
