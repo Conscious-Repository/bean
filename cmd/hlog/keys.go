@@ -7,7 +7,7 @@ import (
 	"os"
 	"os/exec"
 
-	"bean/core"
+	"github.com/consciousrepo/bean/core"
 )
 
 // nostrKey reads the -nostr flag of init, rotate and restore:
@@ -67,7 +67,6 @@ func readSecretLine(prompt string) (string, error) {
 func cmdWhoami(s *core.Store, args []string) {
 	if len(args) != 0 {
 		usage()
-		os.Exit(2)
 	}
 	id, err := s.Identity()
 	if err != nil {
@@ -80,7 +79,7 @@ func cmdWhoami(s *core.Store, args []string) {
 			fmt.Println("npub", npub)
 		}
 	} else {
-		fmt.Println("key none (agent-only replica)")
+		fmt.Println("key none (agent-only copy)")
 	}
 	if a, err := s.ReadAgent(); err == nil {
 		fmt.Println("agent", a.Signer.Public())

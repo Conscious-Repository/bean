@@ -199,7 +199,8 @@ func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, err
 	return res, nil
 }
 
-// Purge writes a tombstone for id and erases the target at once (7.7).
+// Purge writes a tombstone for id (or a 6+ hex prefix of it) and erases
+// the target at once (7.7).
 func (s *Store) Purge(id, reason string) (string, error) {
 	l, err := s.Load()
 	if err != nil {
@@ -208,10 +209,11 @@ func (s *Store) Purge(id, reason string) (string, error) {
 	if l.Local == nil {
 		return "", ErrNotInitialized
 	}
-	target, ok := l.Report.Records[id]
-	if !ok {
-		return "", errors.New("input missing: " + id)
+	target, err := l.Resolve(id)
+	if err != nil {
+		return "", err
 	}
+	id = target.ID
 	if target.IsIdentity() || target.Type == "hlog.tombstone" {
 		return "", ErrBadTarget
 	}

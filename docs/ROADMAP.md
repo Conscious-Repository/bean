@@ -1,5 +1,7 @@
 # Roadmap to v0.1
 
+Decision numbers refer to [DECISIONS.md](DECISIONS.md).
+
 Written 2026-10-28 after a review of the repo, the Rob conversation (2026-10-27) and the Oct 6, Oct 21 and Sep 22 notes. Nothing here is final.
 
 ## Goal
@@ -19,46 +21,48 @@ Written 2026-10-28 after a review of the repo, the Rob conversation (2026-10-27)
 ## Gaps found by using it as a new person
 
 - No way to read records back. Fixed in M6.
-- `hlog-import-csv` takes one `value` column. A real multi-column export fails with `no value column`. (Its `{"text"}` values are fixed to `{"s"}`: OPEN_QUESTIONS 79.)
+- `hlog-import-csv` takes one `value` column. A real multi-column export fails with `no value column`. (Its `{"text"}` values are fixed to `{"s"}`: DECISIONS 79.)
 - No quick manual entry. Fixed in M6.
 - After `purge` and `gc`, the summary reports the tombstone as `1 held` forever. Spec-correct, reads like a fault.
 
 ## Milestones
 
 M6. Read and write by hand. Done 2026-10-28.
-- `hlog ls [-type t] [-since d] [-until d] [-author a] [-all] [-json]` from the verified folder (OPEN_QUESTIONS 34). Hides superseded, duplicate and purged records by default.
+- `hlog ls [-type t] [-since d] [-until d] [-author a] [-all] [-json]` from the verified folder (DECISIONS 34). Hides superseded, duplicate and purged records by default.
 - `hlog show <id>` prints one record and lists its blobs and its `about` replies.
 - `hlog add <type> <value> [-unit u] [-at time] [-note text]` for symptoms and one-off readings.
 - Exit: a fresh log, five manual entries, `ls` and `show` work, conformance tests still pass.
 
 M7. Real importers (needs the sample files).
 - `hlog-import-apple-health export.xml`. Low-frequency types (weight, blood pressure, VO2 max, labs) one record per reading, native id from the XML. High-frequency types (heart rate, steps, energy) one record per (type, day) with a series blob. This settles open item 16 for Apple Health.
-- `hlog-import-labcorp` for the blood panel. Done 2026-10-28: Superpower exports are Labcorp patient report PDFs. A real Superpower panel parses to 71 results; re-import adds 0. No LOINC yet (OPEN_QUESTIONS 44 to 51).
+- `hlog-import-labcorp` for the blood panel. Done 2026-10-28: Superpower exports are Labcorp patient report PDFs. A real Superpower panel parses to 71 results; re-import adds 0. No LOINC yet (DECISIONS 44 to 51).
 - `hlog-import-csv -map "<column>=<type>[:<unit>]"`, repeatable, so one row can make several records.
 - Exit: Ben's full Apple Health export and one panel import, re-import adds 0, `verify` passes.
 
-Restore. Done 2026-10-28. `hlog restore` rebuilds `local/` on a new host from the 24 words and a synced backup, then rotates (OPEN_QUESTIONS 52 to 56). Without it the paper seed could not recover a lost laptop.
+Restore. Done 2026-10-28. `hlog restore` rebuilds `local/` on a new host from the 24 words and a synced backup, then rotates (DECISIONS 52 to 56). Without it the paper seed could not recover a lost laptop.
 
-M8. npub as signing key. Done 2026-10-28 (SPEC v0.5 C21, OPEN_QUESTIONS 58 to 66). Signs through a Nostr wrapper event so NIP-46 can come later without a format change.
+M8. npub as signing key. Done 2026-10-28 (SPEC v0.5 C21, DECISIONS 58 to 66). Signs through a Nostr wrapper event so NIP-46 can come later without a format change.
 - Tagged key `secp256k1:<64 hex x-only>`, BIP-340 Schnorr over the Nostr event id of a wrapper whose content is the record id. Spec 4.4 and 4.5 changed, vector V18, independent check `tools/checksecp256k1.py`.
 - `hlog init -nostr new|-|<nsec file>`; `rotate` and `restore` take `-nostr new|<nsec file>`. The recovery keys stay Ed25519 from the paper seed.
 - `hlog whoami` prints identity id and npub.
 - Later: NIP-46 remote signing (Amber), so the nsec never sits on the host.
 
-M9. `hlog mcp`. Done 2026-10-28 (OPEN_QUESTIONS 39 to 43).
+M9. `hlog mcp`. Done 2026-10-28 (DECISIONS 39 to 43).
 - Read-only MCP over stdio, standard library only. Tools: list types, query by type and time, get record, get blob text, summary statistics.
 - Exit: Claude Code answers "is my resting heart rate trending up this month" from the log. Tested over stdio with the real binary; a live Claude Code run is still to do outside this session.
 
-Agents and chat logging. Done 2026-10-28 (OPEN_QUESTIONS 67 to 75). `hlog mcp -write` adds `log_entry` signed by a per-machine agent key; `hlog agent init` makes an agent-only replica for a cloud agent (Hermes); `hlog agent pair` vouches for one; `add -photo`; the type vocabulary is served to the AI.
+Agents and chat logging. Done 2026-10-28 (DECISIONS 67 to 75). `hlog mcp -write` adds `log_entry` signed by a per-machine agent key; `hlog agent init` makes an agent-only replica for a cloud agent (Hermes); `hlog agent pair` vouches for one; `add -photo`; the type vocabulary is served to the AI.
 
 M10. Share and trust.
 - `hlog share -type ... -since ... -out bundle/` writes signed record files, the plaintext blobs they name, and a manifest. `-to <npub>` encrypts the bundle to the recipient.
 - `hlog check-bundle <dir>` verifies every signature without a log.
 - `hlog attest <id>` and `hlog trust <identity or npub> <1-100>` write ordinary claims (`about` refs). Readers compute trust; the core does not.
 
-Core spec. Done 2026-10-28: CORE.md, the protocol in two pages, tested by an implementation written from it alone (OPEN_QUESTIONS 85). Its open questions are decided (OPEN_QUESTIONS 87 to 90).
+Core spec. Done 2026-10-28: CORE.md, the protocol in two pages, tested by an implementation written from it alone (DECISIONS 85). Its open questions are decided (DECISIONS 87 to 90).
 
 Freeze at `v` = 1. When Ben has run his real log for two weeks (lab results, Apple Health, chat and agent logging) and nothing in CORE.md had to change. Then every DEFAULT in SPEC.md is final. Rob reviews before then; his comments can still change the format.
+
+Documentation and first-run UX. Done 2026-10-28 (DECISIONS 91 to 100): README, docs/COMMANDS.md, SECURITY.md and CONTRIBUTING.md, checked by following the README from a clean home folder.
 
 M11. Release.
 - README quick start, `go install` path, name, GitHub home. Publish after Rob reviews (SPEC 19).

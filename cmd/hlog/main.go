@@ -2,57 +2,105 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
-	"bean/core"
+	"github.com/consciousrepo/bean/core"
 )
 
-func usage() {
-	fmt.Fprintln(os.Stderr, `usage: hlog [-dir <path>] <command> [args]
+const help = `hlog keeps your health record as a folder of signed records.
 
-commands:
-  init [-nostr new|-|<nsec file>]
-                            create an identity; prints the 24 words once.
-                            -nostr signs with a Nostr key: new, or your nsec
-  whoami                    identity, signing key, npub and agent key
-  agent init [-label l] [-identity id]
-                            make this machine's agent key (works on a synced
-                            copy without your key); pairs it when it can
-  agent pair <npub> [-label l]
-                            vouch for an agent key from your own machine
-  append [-agent]           read JSONL partial records on stdin, sign, store
-  blob put <file>           encrypt and store a file; prints the blob id
-  blob get <id>             decrypt a blob to stdout
-  ls [-type t] [-since d] [-until d] [-author a] [-all] [-json]
-                            list current records in time order
-  show <id>                 one record, its status, blobs and replies;
-                            any unique id prefix of 6+ hex digits works
-  add <type> <value> [-unit u] [-at time] [-note t] [-about id] [-photo f] [-agent]
-                            write a claim by hand, for example
-                            hlog add symptom.headache 8 -unit {score}
-  mcp                       read-only MCP server on stdin/stdout for an AI
-                            client: claude mcp add hlog -- hlog -dir <log> mcp
-  verify                    check the folder; prints verify lines
-  reindex                   rebuild local/cache
-  purge [-reason <t>] <id>  tombstone and erase a record
-  gc                        erase hidden targets older than the hold
-  rotate [-no-seal <id>]... [-nostr new|<nsec file>]
-                            switch to a new signing key; reads the 24 words on stdin
-  restore [-no-seal <id>]... [-nostr new|<nsec file>]
-                            on a new machine: rebuild local/ from the 24
-                            words and a synced copy of the log, then rotate
-  sync <source dir>         copy missing files from another replica
-  export <dir>              write a plaintext copy (says so first)
-  import-export <dir>       reverse an export
+usage: hlog [-dir <folder>] <command> [arguments]
 
--dir defaults to $HLOG_DIR, then the current directory.
-$HLOG_NOW (RFC 3339) overrides the clock.`)
+Start
+  init [-nostr new|-|<file>]    Create your identity and log. Shows 24 words once.
+  whoami                        Show your identity, signing key, npub and agent key.
+
+Write
+  add <type> <value> [flags]    Add one record. Flags: -unit, -at, -note, -about,
+                                -corrects, -photo, -agent.
+  append [-agent]               Add the records that an importer writes to stdin.
+  blob put <file>               Store a file, encrypted. Prints its id.
+
+Read
+  ls [flags]                    List current records in time order. Flags: -type,
+                                -since, -until, -author, -all, -json.
+  show <id>                     Show one record, its status, files and replies.
+  blob get <id>                 Write a stored file to stdout.
+  verify                        Check every file and signature.
+
+AI and agents
+  mcp [-write] [-label <name>]  Run the MCP server for an AI client.
+  agent init [-label <name>]    Make the agent key of this machine.
+  agent pair <npub> [-label <name>]
+                                Trust an agent key. Run it on your own machine.
+
+Copies and keys
+  sync <folder>                 Copy the records and files that another copy has.
+  export <folder>               Write a plaintext copy of the log.
+  import-export <folder>        Read an export into a log of the same identity.
+  rotate [-nostr new|<file>]    Change your signing key. Reads the 24 words.
+  restore [-nostr new|<file>]   Rebuild your log on a new machine from the
+                                24 words and a backup.
+
+Delete
+  purge [-reason <text>] <id>   Delete a record from every copy.
+  gc                            Erase deleted records after the 7-day hold.
+
+Other
+  reindex                       Rebuild local/cache/index.json.
+  help                          Show this help.
+  version                       Show the version.
+
+-dir defaults to $HLOG_DIR, then the current folder.
+An id can be shortened to its first 6 or more hex digits.
+Full reference: docs/COMMANDS.md`
+
+// syntax is the usage line of each command, shown on a usage error.
+var syntax = map[string]string{
+	"init":          "init [-nostr new|-|<nsec file>]",
+	"whoami":        "whoami",
+	"add":           "add <type> <value> [-unit <u>] [-at <time>] [-note <text>] [-about <id>] [-corrects <id>] [-photo <file>] [-agent]",
+	"append":        "append [-agent] < records.jsonl",
+	"blob":          "blob put <file> | blob get <id>",
+	"ls":            "ls [-type <t>] [-since <time>] [-until <time>] [-author me|agent|<id>|<npub>] [-all] [-json]",
+	"show":          "show <id>",
+	"verify":        "verify",
+	"mcp":           "mcp [-write] [-label <name>]",
+	"agent":         "agent init [-label <name>] [-identity <id>] | agent pair <npub> [-label <name>]",
+	"sync":          "sync <source folder>",
+	"export":        "export <empty folder>",
+	"import-export": "import-export <export folder>",
+	"rotate":        "rotate [-no-seal <id>]... [-nostr new|<nsec file>] < words.txt",
+	"restore":       "restore [-no-seal <id>]... [-nostr new|<nsec file>] < words.txt",
+	"purge":         "purge [-reason <text>] <id>",
+	"gc":            "gc",
+	"reindex":       "reindex",
+	"help":          "help",
+	"version":       "version",
 }
+
+// current is the command being run, for usage errors.
+var current string
+
+// usage reports a usage error for the current command and exits 2.
+func usage() {
+	if line, ok := syntax[current]; ok {
+		fmt.Fprintf(os.Stderr, "usage: hlog [-dir <folder>] %s\nrun hlog help for all commands\n", line)
+	} else {
+		fmt.Fprintln(os.Stderr, help)
+	}
+	os.Exit(2)
+}
+
+// logDir is the folder in use, named in errors.
+var logDir string
 
 type multiFlag []string
 
@@ -61,6 +109,9 @@ func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
 
 func fail(err error) {
 	fmt.Fprintf(os.Stderr, "hlog: %s\n", err)
+	if errors.Is(err, core.ErrNotInitialized) {
+		fmt.Fprintf(os.Stderr, "hlog: no log in %s: run hlog init, or point -dir or HLOG_DIR at your log\n", logDir)
+	}
 	code := 1
 	msg := err.Error()
 	switch {
@@ -76,9 +127,11 @@ func main() {
 	fs := flag.NewFlagSet("hlog", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	dir := fs.String("dir", "", "log folder")
-	if err := fs.Parse(os.Args[1:]); err != nil {
+	if err := fs.Parse(os.Args[1:]); errors.Is(err, flag.ErrHelp) {
+		fmt.Println(help)
+		return
+	} else if err != nil {
 		usage()
-		os.Exit(2)
 	}
 	if *dir == "" {
 		*dir = os.Getenv("HLOG_DIR")
@@ -89,7 +142,11 @@ func main() {
 	args := fs.Args()
 	if len(args) == 0 {
 		usage()
-		os.Exit(2)
+	}
+	if abs, err := filepath.Abs(*dir); err == nil {
+		logDir = abs
+	} else {
+		logDir = *dir
 	}
 	s := core.Open(*dir)
 	if now := os.Getenv("HLOG_NOW"); now != "" {
@@ -101,14 +158,25 @@ func main() {
 		s.Now = func() time.Time { return t }
 	}
 	cmd, rest := args[0], args[1:]
+	current = cmd
+	if _, known := syntax[cmd]; !known {
+		fmt.Fprintf(os.Stderr, "hlog: unknown command %q\nrun hlog help for all commands\n", cmd)
+		os.Exit(2)
+	}
+	if needsLog[cmd] && !hasLog(s) {
+		fail(core.ErrNotInitialized)
+	}
 	switch cmd {
+	case "help":
+		fmt.Println(help)
+	case "version":
+		fmt.Printf("hlog %s (spec v0.5)\n", core.Version)
 	case "init":
 		inf := flag.NewFlagSet("init", flag.ContinueOnError)
 		inf.SetOutput(io.Discard)
 		nostr := inf.String("nostr", "", "new, -, or a file holding an nsec")
 		if err := inf.Parse(rest); err != nil || inf.NArg() != 0 {
 			usage()
-			os.Exit(2)
 		}
 		key, err := nostrKey(*nostr, true)
 		if err != nil {
@@ -125,14 +193,13 @@ func main() {
 		for i, w := range words {
 			fmt.Printf("%2d. %s\n", i+1, w)
 		}
-		fmt.Fprintln(os.Stderr, "write these 24 words on paper. use them for hlog only. they are shown once.")
+		fmt.Fprintln(os.Stderr, "Write these 24 words on paper now. hlog shows them only once. They recover your identity on a new machine. Use them only for hlog: never type them into a crypto wallet.")
 	case "append":
 		af := flag.NewFlagSet("append", flag.ContinueOnError)
 		af.SetOutput(io.Discard)
 		agent := af.Bool("agent", false, "sign with this machine's agent key")
 		if err := af.Parse(rest); err != nil || af.NArg() != 0 {
 			usage()
-			os.Exit(2)
 		}
 		appendFn := s.Append
 		if *agent {
@@ -146,7 +213,6 @@ func main() {
 	case "blob":
 		if len(rest) != 2 {
 			usage()
-			os.Exit(2)
 		}
 		switch rest[0] {
 		case "put":
@@ -167,7 +233,6 @@ func main() {
 			os.Stdout.Write(pt)
 		default:
 			usage()
-			os.Exit(2)
 		}
 	case "ls":
 		cmdList(s, rest)
@@ -202,7 +267,6 @@ func main() {
 		reason := pf.String("reason", "", "reason")
 		if err := pf.Parse(rest); err != nil || pf.NArg() != 1 {
 			usage()
-			os.Exit(2)
 		}
 		tid, err := s.Purge(pf.Arg(0), *reason)
 		if err != nil {
@@ -223,7 +287,6 @@ func main() {
 		nostr := rf.String("nostr", "", "new, or a file holding an nsec")
 		if err := rf.Parse(rest); err != nil || rf.NArg() != 0 {
 			usage()
-			os.Exit(2)
 		}
 		key, err := nostrKey(*nostr, false)
 		if err != nil {
@@ -254,7 +317,6 @@ func main() {
 		nostr := rf.String("nostr", "", "new, or a file holding an nsec")
 		if err := rf.Parse(rest); err != nil || rf.NArg() != 0 {
 			usage()
-			os.Exit(2)
 		}
 		key, err := nostrKey(*nostr, false)
 		if err != nil {
@@ -281,7 +343,6 @@ func main() {
 	case "sync":
 		if len(rest) != 1 {
 			usage()
-			os.Exit(2)
 		}
 		src := core.Open(rest[0])
 		src.Now = s.Now
@@ -296,7 +357,6 @@ func main() {
 	case "export":
 		if len(rest) != 1 {
 			usage()
-			os.Exit(2)
 		}
 		fmt.Fprintln(os.Stderr, "hlog: the export is not encrypted")
 		r, b, err := s.Export(rest[0])
@@ -307,7 +367,6 @@ func main() {
 	case "import-export":
 		if len(rest) != 1 {
 			usage()
-			os.Exit(2)
 		}
 		r, b, err := s.ImportExport(rest[0])
 		if err != nil {
@@ -316,6 +375,23 @@ func main() {
 		fmt.Printf("added %d records, %d blobs\n", r, b)
 	default:
 		usage()
-		os.Exit(2)
 	}
+}
+
+// needsLog lists the commands that only make sense in a folder that holds
+// a log; in an empty folder they say so instead of printing nothing.
+var needsLog = map[string]bool{
+	"whoami": true, "add": true, "append": true, "blob": true, "ls": true, "show": true,
+	"verify": true, "mcp": true, "export": true, "import-export": true, "rotate": true,
+	"purge": true, "gc": true, "reindex": true,
+}
+
+// hasLog reports whether the folder holds a log: an identity, or synced
+// records (an agent-only copy before agent init).
+func hasLog(s *core.Store) bool {
+	if _, err := s.Identity(); err == nil {
+		return true
+	}
+	_, err := os.Stat(filepath.Join(s.Dir, "objects"))
+	return err == nil
 }

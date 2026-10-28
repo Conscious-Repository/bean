@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// Agents (ROADMAP.md, chat logging). An agent is a secp256k1 key in
+// Agents (docs/ROADMAP.md, chat logging). An agent is a secp256k1 key in
 // local/agent-key. It writes ordinary claims about the local identity as a
 // bare-key author (SPEC.md 6.1: anyone may add a claim; readers decide
 // trust), so what an AI logged is never mistaken for what the person

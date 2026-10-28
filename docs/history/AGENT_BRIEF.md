@@ -1,3 +1,5 @@
+> **Historical.** The original build brief from 2026-10-27. Its milestones and rules are out of date; see [../ROADMAP.md](../ROADMAP.md) and [../../CONTRIBUTING.md](../../CONTRIBUTING.md).
+
 # Agent brief: build hlog v1 from SPEC.md
 
 Paste this brief with SPEC.md. SPEC.md is the source of truth. If this brief and SPEC.md differ, follow SPEC.md and report the difference.

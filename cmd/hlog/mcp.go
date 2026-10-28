@@ -1,6 +1,6 @@
 package main
 
-// hlog mcp (ROADMAP.md M9): a read-only Model Context Protocol server on
+// hlog mcp (docs/ROADMAP.md M9): a read-only Model Context Protocol server on
 // standard input and output, so an AI client can ask questions of the log.
 // JSON-RPC 2.0, one message per line. Standard library only. Every tool
 // call loads and verifies the folder, as hlog ls does, so a client never
@@ -22,7 +22,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"bean/core"
+	"github.com/consciousrepo/bean/core"
 )
 
 //go:embed vocabulary.md
@@ -140,6 +140,7 @@ var writeTools = []mcpTool{
 			"at":         strProp("When it happened: RFC 3339, YYYY-MM-DD HH:MM or YYYY-MM-DD in the local zone. Omit for now."),
 			"note":       strProp("Free text from the person."),
 			"about":      strProp("Id or 6+ hex prefix of the entry this one is about (required for food.estimate)."),
+			"corrects":   strProp("Id or 6+ hex prefix of an entry you wrote earlier that this one replaces."),
 			"details":    map[string]any{"type": "object", "description": "Extra fields from the vocabulary, for example meal, dose, protein_g, sodium_mg."},
 			"photo_path": strProp("Absolute path of an image on this machine to attach, stored encrypted."),
 		}, "type", "value"),
@@ -186,7 +187,7 @@ func toolLogEntry(s *core.Store, a toolArgs) (any, error) {
 			return nil, fmt.Errorf("bad at: %q", a.At)
 		}
 	}
-	o.About = a.About
+	o.About, o.Corrects = a.About, a.Corrects
 	if a.About == "" && a.Type == "food.estimate" {
 		return nil, errors.New("food.estimate needs about: the id of the food entry")
 	}
@@ -215,7 +216,6 @@ func cmdMCP(s *core.Store, args []string) {
 	label := fs.String("label", "agent@"+host, "label for the agent key if one is made now")
 	if err := fs.Parse(args); err != nil || fs.NArg() != 0 {
 		usage()
-		os.Exit(2)
 	}
 	if _, err := s.Identity(); err != nil {
 		fail(err)
@@ -336,6 +336,7 @@ type toolArgs struct {
 	At        string         `json:"at"`
 	Note      string         `json:"note"`
 	About     string         `json:"about"`
+	Corrects  string         `json:"corrects"`
 	Details   map[string]any `json:"details"`
 	PhotoPath string         `json:"photo_path"`
 }

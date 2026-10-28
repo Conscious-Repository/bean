@@ -195,3 +195,53 @@ func TestParserFixIsNotADuplicate(t *testing.T) {
 		t.Log("only one id order seen; rerun to cover both")
 	}
 }
+
+// hlog add -corrects: a correction replaces the person's own entry; ls
+// shows only the new one; an agent cannot correct the person's entry.
+func TestAddCorrects(t *testing.T) {
+	s, _ := initStore(t)
+	wrong, err := s.Add("weight", "18.2", AddOptions{Unit: "kg"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	right, err := s.Add("weight", "81.2", AddOptions{Unit: "kg", Corrects: wrong[7:15]})
+	if err != nil {
+		t.Fatal(err)
+	}
+	recs, l, _ := s.List(Filter{Type: "weight"})
+	if len(recs) != 1 || recs[0].ID != right || l.Status(wrong) != "superseded by "+right {
+		t.Errorf("list %v, status %q", ids(recs), l.Status(wrong))
+	}
+	if _, _, err := s.AgentInit("", "claude"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Add("weight", "70", AddOptions{Unit: "kg", Corrects: right, Agent: true}); err != ErrNotAuthor {
+		t.Errorf("agent corrected the person's entry: %v", err)
+	}
+	if _, err := s.Add("weight", "70", AddOptions{Corrects: "ffffff"}); err == nil {
+		t.Error("correction of a missing record accepted")
+	}
+}
+
+// Purge and rotate -no-seal take a shortened id, like every other command.
+func TestShortIDsEverywhere(t *testing.T) {
+	s, _, words := initWithWords(t)
+	a, _ := s.Add("weight", "80", AddOptions{Unit: "kg"})
+	b, _ := s.Add("weight", "81", AddOptions{Unit: "kg"})
+	tid, err := s.Purge(a[7:13], "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, _ := s.Load()
+	if l.Visible(a) || l.Report.Records[tid].Targets("purges")[0] != a {
+		t.Error("purge by prefix did not purge the full id")
+	}
+	c, _ := s.Add("weight", "82", AddOptions{Unit: "kg", Corrects: b})
+	res, err := s.Rotate(words, []string{c[7:13]}, NewKey{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.NotSealed) != 1 || res.NotSealed[0] != c {
+		t.Errorf("no-seal by prefix: sealed %v not sealed %v", res.Sealed, res.NotSealed)
+	}
+}

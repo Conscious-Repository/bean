@@ -64,6 +64,9 @@ func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string, k
 	outgoing := head.ValueKey()
 	skip := map[string]bool{}
 	for _, x := range noSeal {
+		if r, err := l.Resolve(x); err == nil {
+			x = r.ID // a 6+ hex prefix works, as everywhere else
+		}
 		skip[x] = true
 	}
 	for rid, r := range l.Report.Records {
@@ -107,7 +110,7 @@ func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string, k
 }
 
 // Restore rebuilds local/ on a new host from the 24 words and a synced
-// copy of the log (ROADMAP.md, before M8). The signing key stayed on the
+// copy of the log (docs/ROADMAP.md, before M8). The signing key stayed on the
 // lost host, so Restore always rotates: it finds the identity whose genesis
 // commits to recovery generation 0 of these words, writes the identity
 // secret, and writes a succession to a new signing key exactly as Rotate

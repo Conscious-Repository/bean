@@ -12,8 +12,12 @@ import (
 	"time"
 )
 
+// Version is the version of this implementation. It follows the spec
+// version until the format freezes at v1.
+const Version = "0.5.0"
+
 // Adapter is the source.adapter string the core writes on its own records.
-const Adapter = "hlog@0.4.0"
+const Adapter = "hlog@" + Version
 
 // HoldDays is the delete hold (SPEC.md 7.6). With change set C14 it gates
 // gc, not an automatic erase.

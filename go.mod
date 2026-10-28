@@ -1,4 +1,4 @@
-module bean
+module github.com/consciousrepo/bean
 
 go 1.24
 

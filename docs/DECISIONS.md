@@ -1,6 +1,8 @@
-# Open questions and choices made during the build
+# Decisions
 
-Rule from AGENT_BRIEF.md: follow the DEFAULT; if none, pick the simplest deterministic rule, write it here, continue.
+Every choice made where the spec was silent, every spec error found, and every design decision, numbered in the order they were made. Code comments and other documents cite them by number ("DECISIONS 76").
+
+The rule, from the original build brief ([history/AGENT_BRIEF.md](history/AGENT_BRIEF.md)): follow the spec's DEFAULT; if there is none, pick the simplest deterministic rule, write it here, and continue.
 
 ## M1 (bytes)
 
@@ -95,7 +97,7 @@ Recorded so the build reflects it. Rob did not review the eight one-pager questi
 
 32. **The paper words are parsed leniently**: numbering like "1." is dropped, case is ignored. The init output can be pasted back as is.
 
-## M6 (read and manual entry, ROADMAP.md)
+## M6 (read and manual entry, docs/ROADMAP.md)
 
 33. **`hlog add` with no `-at` sets `times.observed` to now at minute precision.** SPEC 3.5 says a writer MUST NOT guess a time. A person typing a symptom reports the present, so now is their claim, not a guess. Adapters still write null for a missing source time.
 34. **`hlog ls` and `hlog show` read the verified folder, not `local/cache/index.json`.** They call the same loader as `verify`, so they cannot show a stale or edited cache. Cost: every `ls` checks every signature. Revisit with a real Apple Health import.
@@ -104,7 +106,7 @@ Recorded so the build reflects it. Rob did not review the eight one-pager questi
 37. **`hlog show` and `-about` take an id prefix of 6 or more hex digits.** An ambiguous prefix fails with `ambiguous id: <prefix>` (a new error string, CLI only).
 38. **Manual values:** a number becomes `{"n", "unit"}`, `true`/`yes`/`false`/`no` become `{"b"}`, anything else `{"s"}`. NaN and infinities stay text. The note goes in `context.note`; `source` is `{"system":"self","adapter":"hlog@0.4.0","ref":null}`, so manual entries never dedupe.
 
-## M9 (hlog mcp, ROADMAP.md)
+## M9 (hlog mcp, docs/ROADMAP.md)
 
 39. **The MCP server is read-only.** Five tools: `list_types`, `query_records`, `stats`, `get_record`, `read_blob`, all marked `readOnlyHint`. A write tool (an AI adding a note) waits until npub signing exists, so an agent can sign as its own identity rather than the person's (Rob's PSR point: agents get their own key).
 40. **Every tool call loads and verifies the folder**, like `hlog ls`. A record added while the server runs shows on the next call. Cost grows with the log; revisit after the Apple Health import.
@@ -112,7 +114,7 @@ Recorded so the build reflects it. Rob did not review the eight one-pager questi
 42. **`stats` reads only `value.n`.** Series blobs (`value.blob`) and text are counted as `non_numeric`. Mixed units are reported with a warning, never converted. Buckets use the local zone; weeks start on Monday.
 43. **Protocol version:** the server answers with the client's version when it is one of 2024-11-05, 2025-03-26, 2025-06-18 or 2025-11-25, else 2025-06-18. Newline-delimited JSON-RPC on stdio; nothing else is written to stdout.
 
-## M7 (Labcorp adapter, ROADMAP.md)
+## M7 (Labcorp adapter, docs/ROADMAP.md)
 
 44. **PDF text comes from `pdftotext -layout` (poppler), run as a separate program.** Go's standard library cannot extract PDF text, and a PDF parser would be the biggest dependency in the repo. The adapter also accepts the text file, so a person without poppler can run pdftotext elsewhere. Superpower panels are Labcorp reports, so one adapter covers them.
 45. **Types are `lab.<slug of the Labcorp test name>`, with no LOINC codes.** The patient report prints no codes, and mapping from memory is the thing the brief forbids. Results from Quest or another lab will not share types with Labcorp until a mapping file exists.
@@ -188,3 +190,18 @@ Answered from the Rob transcript, the project's values and the Nostr specs, so R
 88. **Records stay their own format, not NIP-01 events.** Rob in the transcript: the NIP maintainers prefer local "micro standards" and medical data is the place for one; the existing medical NIPs stalled because maintainers do not want medical data on relays. Records need nested structure, device keys (Ed25519, P-256) and canonical ids independent of the key type. Nostr carries them later, encrypted, for sharing (M10).
 89. **Seed-only rotation and freeze-on-fork stay.** They answer Ben's port-out question better than re-signing: a custodian holds the signing key, the person holds the words, and leaving is one rotation with history intact and the custodian's key retired. Rob's own point, that you can never know a custodian discarded a key, is exactly what retiring it by rotation solves. Cost: losing paper and device loses the identity; social recovery can come as an extension.
 90. **Freeze criteria:** two weeks of Ben's real log (labs, Apple Health, chat and agent logging) with no change to CORE.md; then `v` = 1 and every DEFAULT final. Sharing, Apple Health batching and the vocabulary sit above the core and do not block it.
+
+## New-user audit, 2026-10-28
+
+Method: clone the repo into an empty home folder and follow the README word for word, twice; compare the README with those of age and restic; read the code for anything a first-time user would hit.
+
+91. **Install with `go install ./cmd/...`** into `$(go env GOPATH)/bin`, and say how to put it on the `PATH`. The old README built into `~/bin`, which is not on the `PATH` by default, so `hlog` was not found. The README also names the error an old Go gives (`package crypto/hkdf is not in GOROOT`); go1.17 at `/usr/local/go` produced it in the walkthrough.
+92. **The module path is `github.com/consciousrepo/bean`**, not `bean`, so `go install github.com/consciousrepo/bean/cmd/...@latest` works once the repository is public. Go practice.
+93. **Version 0.5.0** in `core.Version`, shown by `hlog version`. `source.adapter` on records written by `hlog` is now `hlog@0.5.0`; it said `hlog@0.4.0` after the spec moved to v0.5.
+94. **Help and errors.** `hlog help`, `-h` and `--help` print grouped help to stdout and exit 0 (they exited 2). An unknown command names itself instead of printing all the help. A usage error prints the syntax of that command only. `not initialized` is followed by the folder that was checked and what to do. The exact error strings of SPEC 12.2 do not change.
+95. **Read commands in a folder with no log fail with `not initialized`.** `hlog ls` printed nothing and exited 0, so a new user could think their data was gone. A folder counts as a log when it has `local/identity` or an `objects/` folder (an agent-only copy before `agent init`). In an empty folder this check comes before usage errors.
+96. **`hlog add -corrects <id>`**, and `corrects` in the MCP `log_entry` tool. A user could not correct a wrong entry from the CLI; it took a hand-written JSON line for `append`. The verifier already allows a correction only by the same author, so an agent cannot correct the person's records.
+97. **`hlog purge` and `rotate -no-seal` take a shortened id**, as `show`, `-about` and `-corrects` do. `purge` did an exact lookup and failed with `input missing` on a prefix that `ls` had just printed.
+98. **Messages are sentences.** The `init` warning and the agent-only pairing hint start with capitals and say "copy", not "replica". User documents say "copy"; SPEC.md keeps "replica".
+99. **Documents.** `HANDOFF.md` became `CONTRIBUTING.md` (build, test, rules, adding an importer). `OPEN_QUESTIONS.md` became `docs/DECISIONS.md`, because most entries are decisions. `ROADMAP.md` moved to `docs/`. The original build brief moved to `docs/history/` with a note that it is out of date. New: `docs/COMMANDS.md` (every command, flag, exit code, verify line and file) and `SECURITY.md` (what is and is not protected, the keys, how to report a problem). The README follows the age and restic pattern: a short opening with a real example, principles, an install table, a numbered quick start, then everyday use, imports, chat, more than one machine, how it works, security and a document map. All user documents use Simplified Technical English: no descriptive sentence over 25 words, the imperative for steps, one term for one meaning.
+100. **CLI tests run the real binary.** `cmd/hlog/cli_test.go` re-runs the test binary as `hlog` and checks help, version, unknown commands, usage errors, an empty folder and a first run, with exit codes.

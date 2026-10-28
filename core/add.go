@@ -55,6 +55,9 @@ type AddOptions struct {
 	Start, Precision string
 	Note             string
 	About            string // id or 6+ hex prefix of the record this claim comments on
+	// Corrects is the id or 6+ hex prefix of a record of the same author
+	// that this one replaces (a supersede, SPEC.md 6.6).
+	Corrects string
 	// Details are extra context keys, for example the protein_g of a
 	// food.estimate. They never replace note.
 	Details map[string]any
@@ -104,12 +107,19 @@ func (s *Store) Add(typ, value string, o AddOptions) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if o.About != "" {
-		r, err := l.Resolve(o.About)
+	var refs []any
+	for _, ref := range []struct{ rel, id string }{{"about", o.About}, {"supersedes", o.Corrects}} {
+		if ref.id == "" {
+			continue
+		}
+		r, err := l.Resolve(ref.id)
 		if err != nil {
 			return "", err
 		}
-		obj["refs"] = []any{map[string]any{"rel": "about", "id": r.ID}}
+		refs = append(refs, map[string]any{"rel": ref.rel, "id": r.ID})
+	}
+	if refs != nil {
+		obj["refs"] = refs
 	}
 	if o.Photo != nil {
 		blob, err := s.PutBlob(o.Photo)

@@ -13,7 +13,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"bean/core"
+	"github.com/consciousrepo/bean/core"
 )
 
 // parseInterspersed lets flags come before or after the positional
@@ -57,7 +57,6 @@ func cmdList(s *core.Store, args []string) {
 	pos, err := parseInterspersed(fs, args)
 	if err != nil || len(pos) != 0 {
 		usage()
-		os.Exit(2)
 	}
 	f := core.Filter{Type: *typ, Author: *author, All: *all}
 	if f.Since, err = parseBound(*since); err != nil {
@@ -104,7 +103,6 @@ func cmdList(s *core.Store, args []string) {
 func cmdShow(s *core.Store, args []string) {
 	if len(args) != 1 {
 		usage()
-		os.Exit(2)
 	}
 	l, err := s.Load()
 	if err != nil {
@@ -144,11 +142,11 @@ func cmdAdd(s *core.Store, args []string) {
 	note := fs.String("note", "", "free text, stored in context.note")
 	about := fs.String("about", "", "id of a record this claim comments on")
 	photo := fs.String("photo", "", "image file to attach, stored encrypted")
+	corrects := fs.String("corrects", "", "id of your record that this one replaces")
 	agent := fs.Bool("agent", false, "sign with this machine's agent key, not yours")
 	pos, err := parseInterspersed(fs, args)
 	if err != nil || len(pos) != 2 {
 		usage()
-		os.Exit(2)
 	}
 	o := core.AddOptions{Unit: *unit, Note: *note, Agent: *agent}
 	if *photo != "" {
@@ -161,7 +159,7 @@ func cmdAdd(s *core.Store, args []string) {
 			fail(err)
 		}
 	}
-	o.About = *about
+	o.About, o.Corrects = *about, *corrects
 	id, err := s.Add(pos[0], pos[1], o)
 	if err != nil {
 		fail(err)
