@@ -28,6 +28,8 @@ commands:
   add <type> <value> [-unit u] [-at time] [-note t] [-about id]
                             write a claim by hand, for example
                             hlog add symptom.headache 8 -unit {score}
+  mcp                       read-only MCP server on stdin/stdout for an AI
+                            client: claude mcp add hlog -- hlog -dir <log> mcp
   verify                    check the folder; prints verify lines
   reindex                   rebuild local/cache
   purge [-reason <t>] <id>  tombstone and erase a record
@@ -141,6 +143,8 @@ func main() {
 		cmdShow(s, rest)
 	case "add":
 		cmdAdd(s, rest)
+	case "mcp":
+		cmdMCP(s, rest)
 	case "verify":
 		lines, code, err := s.VerifyLines()
 		if err != nil {

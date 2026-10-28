@@ -103,3 +103,11 @@ Recorded so the build reflects it. Rob did not review the eight one-pager questi
 36. **Times in `ls` are local, and `-since`/`-until` use the local zone for dates.** A record keeps its own offset on disk; only the display converts.
 37. **`hlog show` and `-about` take an id prefix of 6 or more hex digits.** An ambiguous prefix fails with `ambiguous id: <prefix>` (a new error string, CLI only).
 38. **Manual values:** a number becomes `{"n", "unit"}`, `true`/`yes`/`false`/`no` become `{"b"}`, anything else `{"s"}`. NaN and infinities stay text. The note goes in `context.note`; `source` is `{"system":"self","adapter":"hlog@0.4.0","ref":null}`, so manual entries never dedupe.
+
+## M9 (hlog mcp, ROADMAP.md)
+
+39. **The MCP server is read-only.** Five tools: `list_types`, `query_records`, `stats`, `get_record`, `read_blob`, all marked `readOnlyHint`. A write tool (an AI adding a note) waits until npub signing exists, so an agent can sign as its own identity rather than the person's (Rob's PSR point: agents get their own key).
+40. **Every tool call loads and verifies the folder**, like `hlog ls`. A record added while the server runs shows on the next call. Cost grows with the log; revisit after the Apple Health import.
+41. **`read_blob` serves only blobs that a current record names.** A blob whose records are all purged is refused even before `gc` erases it.
+42. **`stats` reads only `value.n`.** Series blobs (`value.blob`) and text are counted as `non_numeric`. Mixed units are reported with a warning, never converted. Buckets use the local zone; weeks start on Monday.
+43. **Protocol version:** the server answers with the client's version when it is one of 2024-11-05, 2025-03-26, 2025-06-18 or 2025-11-25, else 2025-06-18. Newline-delimited JSON-RPC on stdio; nothing else is written to stdout.

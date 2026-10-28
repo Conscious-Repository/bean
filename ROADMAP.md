@@ -43,9 +43,9 @@ M8. npub as signing key.
 - `hlog whoami` prints identity id and npub.
 - Later: NIP-46 remote signing (Amber), so the nsec never sits on the host.
 
-M9. `hlog mcp`.
+M9. `hlog mcp`. Done 2026-10-28 (OPEN_QUESTIONS 39 to 43).
 - Read-only MCP over stdio, standard library only. Tools: list types, query by type and time, get record, get blob text, summary statistics.
-- Exit: Claude Code answers "is my resting heart rate trending up this month" from the log.
+- Exit: Claude Code answers "is my resting heart rate trending up this month" from the log. Tested over stdio with the real binary; a live Claude Code run is still to do outside this session.
 
 M10. Share and trust.
 - `hlog share -type ... -since ... -out bundle/` writes signed record files, the plaintext blobs they name, and a manifest. `-to <npub>` encrypts the bundle to the recipient.
