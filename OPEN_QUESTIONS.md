@@ -45,3 +45,18 @@ Rule from AGENT_BRIEF.md: follow the DEFAULT; if none, pick the simplest determi
 17. **`frozen` for off-chain keys.** 5.7 item 4 says claims signed by keys below the lowest common ancestor are `frozen`; a key that was never in the tree stays `key not in chain`. The verifier keeps both strings.
 
 18. **Blob checks (`blob corrupt`, `blob missing`) are not in `VerifyFiles`.** They need the `blobs/` directory and belong to the folder layer (M3). `VerifyFiles` depends only on the record files, which keeps 6.2 literally true.
+
+## Canon from the 2026-10-27 conversation with Rob
+
+Recorded so the build reflects it. Rob did not review the eight one-pager questions; they stay open.
+
+- **"This is just file storage."** Hash every file, address by hash, never edit, add new files. Confirms section 7. Where the folder lives (disk, S3, CDN) is outside the core.
+- **Identity.** Rob's default is a Nostr keypair (npub/nsec) with NIP-46 remote signing and re-sign-everything on custodian exit. The genesis-hash identity was not discussed. Open: should the signing key be allowed to be a secp256k1 Schnorr key so one identity flows through relays and signers? That needs a dependency (no stdlib support). Decision pending.
+- **Sharing** is a routing problem (grant a known identity access to a known file). Two patterns: login page on a privileged server, or security in the file. Out of scope for v0, confirmed.
+- **Schema.** Needed; make it expandable; optional fields are null when absent. Add an adapter-level convention for measurement uncertainty (coefficient of variance) for the NMR source; not core.
+- **Claims.** Every record is a claim, including device readings. Vocabulary stands.
+- **Trusted devices.** Sign with a tool once at setup; it writes until revoked. Extension 2 (device.pair) matches.
+- **Interpretation loop.** Blob in; person or AI returns an interpretation claim that references it (`about`). Already supported.
+- **First use case.** Whoop JSON via API, pulled on a schedule. M4 target confirmed.
+- **Event-driven** downstream processing preferred over cron. App layer; the index could expose a change feed later.
+- **Naming.** Say "core", not "kernel".
