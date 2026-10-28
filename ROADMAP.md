@@ -19,7 +19,7 @@ Written 2026-10-28 after a review of the repo, the Rob conversation (2026-10-27)
 ## Gaps found by using it as a new person
 
 - No way to read records back. Fixed in M6.
-- `hlog-import-csv` takes one `value` column. A real multi-column export fails with `no value column`.
+- `hlog-import-csv` takes one `value` column. A real multi-column export fails with `no value column`. It also writes text values as `{"text"}`, not the spec's `{"s"}`.
 - No quick manual entry. Fixed in M6.
 - After `purge` and `gc`, the summary reports the tombstone as `1 held` forever. Spec-correct, reads like a fault.
 
@@ -33,7 +33,7 @@ M6. Read and write by hand. Done 2026-10-28.
 
 M7. Real importers (needs the sample files).
 - `hlog-import-apple-health export.xml`. Low-frequency types (weight, blood pressure, VO2 max, labs) one record per reading, native id from the XML. High-frequency types (heart rate, steps, energy) one record per (type, day) with a series blob. This settles open item 16 for Apple Health.
-- `hlog-import-<panel>` for the blood panel export, after reading a real file. LOINC codes go in `context.coding`.
+- `hlog-import-labcorp` for the blood panel. Done 2026-10-28: Superpower exports are Labcorp patient report PDFs. Ben's 2025-05-31 panel parses to 71 results; re-import adds 0. No LOINC yet (OPEN_QUESTIONS 44 to 51).
 - `hlog-import-csv -map "<column>=<type>[:<unit>]"`, repeatable, so one row can make several records.
 - Exit: Ben's full Apple Health export and one panel import, re-import adds 0, `verify` passes.
 

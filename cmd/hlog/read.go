@@ -204,8 +204,17 @@ func valueText(r *core.Record) string {
 		out = "series " + b[:min(12, len(b))]
 	case r.Type == "hlog.genesis" || r.Type == "hlog.succession":
 		out = r.ValueKey()
+	case len(v) == 1 && v["n"] == nil:
+		if _, has := v["n"]; has {
+			out = "no value"
+			break
+		}
+		out = string(core.Canonical(v))
 	default:
 		out = string(core.Canonical(v))
+	}
+	if flag, ok := r.Context["flag"].(string); ok && flag != "" {
+		out += "  " + flag // a lab's High or Low
 	}
 	if note, ok := r.Context["note"].(string); ok && note != "" {
 		if out != "" {

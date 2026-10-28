@@ -111,3 +111,14 @@ Recorded so the build reflects it. Rob did not review the eight one-pager questi
 41. **`read_blob` serves only blobs that a current record names.** A blob whose records are all purged is refused even before `gc` erases it.
 42. **`stats` reads only `value.n`.** Series blobs (`value.blob`) and text are counted as `non_numeric`. Mixed units are reported with a warning, never converted. Buckets use the local zone; weeks start on Monday.
 43. **Protocol version:** the server answers with the client's version when it is one of 2024-11-05, 2025-03-26, 2025-06-18 or 2025-11-25, else 2025-06-18. Newline-delimited JSON-RPC on stdio; nothing else is written to stdout.
+
+## M7 (Labcorp adapter, ROADMAP.md)
+
+44. **PDF text comes from `pdftotext -layout` (poppler), run as a separate program.** Go's standard library cannot extract PDF text, and a PDF parser would be the biggest dependency in the repo. The adapter also accepts the text file, so a person without poppler can run pdftotext elsewhere. Superpower panels are Labcorp reports, so one adapter covers them.
+45. **Types are `lab.<slug of the Labcorp test name>`, with no LOINC codes.** The patient report prints no codes, and mapping from memory is the thing the brief forbids. Results from Quest or another lab will not share types with Labcorp until a mapping file exists.
+46. **Native id is `<specimen id>/<test name>`.** The specimen id reaches `hlog append` only inside `source.ref_input` and is gone after the HMAC. Patient name, birth date, patient id, account number and physician are never copied. A test checks this.
+47. **Collection time.** The report prints "Date Collected: MM/DD/YYYY HHMM Local" with no zone. Without `-tz` the adapter writes the day (`T00:00:00Z`, precision `day`) and keeps the printed time in `context.raw_time`. With `-tz <IANA zone>` it writes the minute in that zone. Ben's 2025-05-31 report also says the requisition had no collection time and the receipt date was used; that note goes in `context.report_note` on every record.
+48. **Values.** A plain number is `{"n", "unit"}` and the printed digits are kept in `context.raw_value` when they differ (`1.190`, `3.0`). Anything else is `{"s"}` (`<0.5`, `Negative`). A test the lab did not perform is `{"n": null}` with the lab's reason in `context.lab_comment`.
+49. **Units and reference intervals are told apart by column.** Measured on the real report: units start 18 to 25 columns left of the "Reference Interval" header, intervals 3 to 8 columns right of it. The cut is 8 columns left of the header. The "Previous Result" column goes to `context.previous_result` as printed; no real report with previous results has been seen yet.
+50. **The lab order PDF is not imported.** It holds no results. Store it with `hlog blob put` if the paper trail matters.
+51. **`hlog ls` shows `context.flag`** after the value (`22.4 umol/L  High`) and prints `no value` for `{"n": null}`.

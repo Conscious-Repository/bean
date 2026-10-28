@@ -22,6 +22,12 @@ Quick start:
     hlog ls -type 'hrv.*' -since 2026-10-01                    # -json for the stored bytes
     hlog show d1afbb945f                                       # any 6+ hex prefix
 
+Import a Labcorp patient report (also what Superpower hands out). Needs `pdftotext` (`brew install poppler`):
+
+    BLOB=$(hlog blob put lab-result.pdf)
+    hlog-import-labcorp -tz America/Chicago -blob $BLOB lab-result.pdf | hlog append
+    hlog ls -type 'lab.*'
+
 Let an AI read the log (read-only MCP server on stdio):
 
     claude mcp add hlog -- hlog -dir ~/health mcp
