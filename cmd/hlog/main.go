@@ -21,6 +21,13 @@ commands:
   append                    read JSONL partial records on stdin, sign, store
   blob put <file>           encrypt and store a file; prints the blob id
   blob get <id>             decrypt a blob to stdout
+  ls [-type t] [-since d] [-until d] [-author a] [-all] [-json]
+                            list current records in time order
+  show <id>                 one record, its status, blobs and replies;
+                            any unique id prefix of 6+ hex digits works
+  add <type> <value> [-unit u] [-at time] [-note t] [-about id]
+                            write a claim by hand, for example
+                            hlog add symptom.headache 8 -unit {score}
   verify                    check the folder; prints verify lines
   reindex                   rebuild local/cache
   purge [-reason <t>] <id>  tombstone and erase a record
@@ -128,6 +135,12 @@ func main() {
 			usage()
 			os.Exit(2)
 		}
+	case "ls":
+		cmdList(s, rest)
+	case "show":
+		cmdShow(s, rest)
+	case "add":
+		cmdAdd(s, rest)
 	case "verify":
 		lines, code, err := s.VerifyLines()
 		if err != nil {

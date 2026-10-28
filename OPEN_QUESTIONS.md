@@ -94,3 +94,12 @@ Recorded so the build reflects it. Rob did not review the eight one-pager questi
 31. **Sync converges in two passes** when a succession and a tombstone it invalidates travel in the same sync: the tombstone set is computed before copying (7.4 step 2), so the target comes back on the next pass (7.4 step 5). Spec-correct; recorded because it surprised a test.
 
 32. **The paper words are parsed leniently**: numbering like "1." is dropped, case is ignored. The init output can be pasted back as is.
+
+## M6 (read and manual entry, ROADMAP.md)
+
+33. **`hlog add` with no `-at` sets `times.observed` to now at minute precision.** SPEC 3.5 says a writer MUST NOT guess a time. A person typing a symptom reports the present, so now is their claim, not a guess. Adapters still write null for a missing source time.
+34. **`hlog ls` and `hlog show` read the verified folder, not `local/cache/index.json`.** They call the same loader as `verify`, so they cannot show a stale or edited cache. Cost: every `ls` checks every signature. Revisit with a real Apple Health import.
+35. **`hlog ls` shows only current records by default:** valid, not hidden, not superseded, not a duplicate, not an `hlog.*` record. `-all` adds superseded, duplicate and core records. Purged and invalid records are never listed; `verify` reports those.
+36. **Times in `ls` are local, and `-since`/`-until` use the local zone for dates.** A record keeps its own offset on disk; only the display converts.
+37. **`hlog show` and `-about` take an id prefix of 6 or more hex digits.** An ambiguous prefix fails with `ambiguous id: <prefix>` (a new error string, CLI only).
+38. **Manual values:** a number becomes `{"n", "unit"}`, `true`/`yes`/`false`/`no` become `{"b"}`, anything else `{"s"}`. NaN and infinities stay text. The note goes in `context.note`; `source` is `{"system":"self","adapter":"hlog@0.4.0","ref":null}`, so manual entries never dedupe.
