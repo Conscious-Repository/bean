@@ -84,3 +84,13 @@ Recorded so the build reflects it. Rob did not review the eight one-pager questi
 27. **`hlog append` prints the counts before the error** when it stops early, since records before the error stay written (12.3).
 
 28. **Exit codes for `purge`, `append`, and others** are 1 on any error; only `verify` uses 3 and 4. `fail()` maps a `too new:` or `compromised:` message to 3 or 4 for commands that surface them later (M5).
+
+## M5 (rotation)
+
+29. **One command, `hlog rotate`, reads the 24 words on stdin.** `hlog recover` is gone (C5). The recovery generation is the position of the head in the chain, so the person never types a generation number.
+
+30. **Seals default to all valid destructive records of the outgoing key in this replica**; `-no-seal <id>` excludes one. A destructive record on another replica that was not synced first is `not sealed` afterwards, which is why the command prints "sync all devices before you rotate".
+
+31. **Sync converges in two passes** when a succession and a tombstone it invalidates travel in the same sync: the tombstone set is computed before copying (7.4 step 2), so the target comes back on the next pass (7.4 step 5). Spec-correct; recorded because it surprised a test.
+
+32. **The paper words are parsed leniently**: numbering like "1." is dropped, case is ignored. The init output can be pasted back as is.

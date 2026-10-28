@@ -25,6 +25,7 @@ commands:
   reindex                   rebuild local/cache
   purge [-reason <t>] <id>  tombstone and erase a record
   gc                        erase hidden targets older than the hold
+  rotate [-no-seal <id>]... switch to a new signing key; reads the 24 words on stdin
   sync <source dir>         copy missing files from another replica
   export <dir>              write a plaintext copy (says so first)
   import-export <dir>       reverse an export
@@ -32,6 +33,11 @@ commands:
 -dir defaults to $HLOG_DIR, then the current directory.
 $HLOG_NOW (RFC 3339) overrides the clock.`)
 }
+
+type multiFlag []string
+
+func (m *multiFlag) String() string     { return strings.Join(*m, ",") }
+func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
 
 func fail(err error) {
 	fmt.Fprintf(os.Stderr, "hlog: %s\n", err)
@@ -156,6 +162,32 @@ func main() {
 			fail(err)
 		}
 		fmt.Printf("erased %d records, %d blobs\n", r, b)
+	case "rotate":
+		rf := flag.NewFlagSet("rotate", flag.ContinueOnError)
+		rf.SetOutput(io.Discard)
+		var noSeal multiFlag
+		rf.Var(&noSeal, "no-seal", "leave this destructive record unsealed (repeatable)")
+		if err := rf.Parse(rest); err != nil || rf.NArg() != 0 {
+			usage()
+			os.Exit(2)
+		}
+		fmt.Fprintln(os.Stderr, "sync all devices before you rotate. paste the 24 words, then end input:")
+		text, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			fail(err)
+		}
+		res, err := s.Rotate(core.ParseWords(string(text)), noSeal)
+		if err != nil {
+			fail(err)
+		}
+		for _, id := range res.Sealed {
+			fmt.Println("sealed", id)
+		}
+		for _, id := range res.NotSealed {
+			fmt.Println("not sealed", id)
+		}
+		fmt.Println("rotated to", res.NewKey)
+		fmt.Printf("sealed %d\n", len(res.Sealed))
 	case "sync":
 		if len(rest) != 1 {
 			usage()
