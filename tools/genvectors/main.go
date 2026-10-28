@@ -329,6 +329,6 @@ func genV18(_ core.Signer, claim map[string]any) {
 	write("v18-secp256k1.json", map[string]any{
 		"spec": "SPEC.md 4.4 and 4.5, change note C21", "secret_key": hex.EncodeToString(secp),
 		"nsec": core.Bech32Encode("nsec", secp), "npub": core.Npub(skid), "kid": skid,
-		"nostr_kind": float64(core.NostrKind), "id": claimID, "cases": sigCases, "rejects": rejects,
+		"nostr_kind": float64(core.NostrKind), "alt": core.WrapperAlt, "id": claimID, "cases": sigCases, "rejects": rejects,
 	})
 }

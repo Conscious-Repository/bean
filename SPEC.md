@@ -357,11 +357,11 @@ P-256:
 secp256k1 (C21):
 
 - The signature is a Nostr event signature, so any Nostr signer (a NIP-46 remote signer, a NIP-07 browser extension) can sign a record.
-- The wrapper event is `[0, <public key hex>, <created_at>, 29944, [], <record id>]`. Its bytes are the NIP-01 serialization: a JSON array with no whitespace. Every field is ASCII, so nothing is escaped.
+- The wrapper event is `[0, <public key hex>, <created_at>, 29944, [["alt","hlog record signature"]], <record id>]`. Its bytes are the NIP-01 serialization: a JSON array with no whitespace. Every field is ASCII, so nothing is escaped. The `alt` tag (NIP-31) gives a signer's approval prompt a readable summary.
 - The signed message is the SHA-256 of the wrapper bytes (the Nostr event id). Sign with BIP-340 Schnorr.
 - `sig` = `secp256k1:` + `<created_at>` + `:` + 128 lowercase hex digits (the 64-byte BIP-340 signature).
 - `<created_at>` is a decimal integer from 0 to 2^53 - 1 with no leading zeros. It has no meaning to the verifier. Software signers SHOULD use 0. A remote signer MAY use another value.
-- Kind 29944 is in the ephemeral range, so relays do not store a wrapper if someone publishes one. DEFAULT, Rob to confirm the kind.
+- Kind 29944 is in the NIP-01 ephemeral range, so relays do not store a wrapper if someone publishes one, and it is not in the NIPs registry. A NIP-46 signer can grant permission for this kind alone (`sign_event:29944`). Decided 2026-10-28.
 
 A signature is not part of the id.
 Thus two valid files with the same id can have different `sig` bytes when a signer uses random nonces.
@@ -1480,7 +1480,7 @@ The build is on hold. This list is from a read of the code on 2026-10-27.
 
 Each item has a DEFAULT in the text. Rob can change any of them.
 
-1. Curve choice: Ed25519 default, P-256 for hardware device keys. Decided 2026-10-28 (v0.5, C21): secp256k1 BIP-340 keys may sign, through a Nostr wrapper event so NIP-46 and NIP-07 signers work. One dependency (btcec/v2). Rob: confirm kind 29944 and the wrapper shape.
+1. Curve choice: Ed25519 default, P-256 for hardware device keys. Decided 2026-10-28 (v0.5, C21): secp256k1 BIP-340 keys may sign, through a Nostr wrapper event so NIP-46 and NIP-07 signers work. One dependency (btcec/v2). Kind 29944 and the wrapper with its NIP-31 `alt` tag decided 2026-10-28 (CORE.md section 6).
 2. Own record format, with Nostr only as an encrypted carrier later. No NIP-01 event shape in the core.
 3. One identity secret per person now. Per-blob keys come with the sharing extension.
 4. Decided in v0.4: every succession is seed-signed; any fork is a freeze (5.6, 5.7). The lowest-id rule is gone. Rob: confirm, or name what KERI pre-rotation still adds.

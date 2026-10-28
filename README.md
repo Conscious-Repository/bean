@@ -171,7 +171,7 @@ Every record is named by its hash and never edited, so, like git, ordinary comma
 - `local/` holds the signing key and the identity secret, mode 0600.
 - `hlog export` writes plaintext and says so first.
 - A stolen key can add claims but cannot take over the identity: only the paper words can rotate.
-- A Nostr signing key signs a small Nostr event whose content is the record id (kind 29944, not stored by relays). Remote signers such as Amber can sign that shape later without a format change.
+- A Nostr signing key signs a small Nostr event whose content is the record id (kind 29944, which relays do not store, with an `alt` tag saying "hlog record signature"). A remote signer such as Amber can be allowed to sign that kind and nothing else.
 
 ## Documents
 

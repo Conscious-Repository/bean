@@ -133,11 +133,11 @@ def bech32_encode(hrp, data):
 
 # ---- the wrapper event (NIP-01) ----------------------------------------
 
-def wrapper(pk_hex, created_at, kind, record_id):
-    return json.dumps([0, pk_hex, created_at, kind, [], record_id], separators=(",", ":"), ensure_ascii=False).encode()
+def wrapper(pk_hex, created_at, kind, alt, record_id):
+    return json.dumps([0, pk_hex, created_at, kind, [["alt", alt]], record_id], separators=(",", ":"), ensure_ascii=False).encode()
 
 
-def check_sig(kid, record_id, sig_str, kind):
+def check_sig(kid, record_id, sig_str, kind, alt):
     """Return "accept" or "bad signature" for a tagged secp256k1 signature."""
     alg, _, rest = sig_str.partition(":")
     ts, _, hx = rest.partition(":")
@@ -146,7 +146,7 @@ def check_sig(kid, record_id, sig_str, kind):
     if len(hx) != 128 or hx != hx.lower():
         return "bad signature"
     pk_hex = kid.split(":")[1]
-    msg = hashlib.sha256(wrapper(pk_hex, int(ts), kind, record_id)).digest()
+    msg = hashlib.sha256(wrapper(pk_hex, int(ts), kind, alt, record_id)).digest()
     return "accept" if verify(bytes.fromhex(pk_hex), msg, bytes.fromhex(hx)) else "bad signature"
 
 
@@ -166,20 +166,22 @@ with open("vectors/v18-secp256k1.json", encoding="utf-8") as f:
 sk = int(v["secret_key"], 16)
 pk = pubkey(sk)
 kind = v["nostr_kind"]
+alt = v["alt"]
+check("v18 alt tag", alt, "hlog record signature")
 check("v18 kid", "secp256k1:" + pk.hex(), v["kid"])
 check("v18 npub", bech32_encode("npub", pk), v["npub"])
 check("v18 nsec", bech32_encode("nsec", bytes.fromhex(v["secret_key"])), v["nsec"])
 for c in v["cases"]:
     t = c["created_at"]
-    w = wrapper(pk.hex(), t, kind, v["id"])
+    w = wrapper(pk.hex(), t, kind, alt, v["id"])
     check(f"v18 wrapper bytes created_at={t}", w.decode(), c["wrapper_bytes"])
     wid = hashlib.sha256(w).digest()
     check(f"v18 wrapper id created_at={t}", wid.hex(), c["wrapper_id"])
     want = f"secp256k1:{t}:" + sign(sk, wid, bytes.fromhex(c["aux_rand"])).hex()
     check(f"v18 sig created_at={t}", want, c["sig"])
-    check(f"v18 verify created_at={t}", check_sig(v["kid"], v["id"], c["sig"], kind), "accept")
+    check(f"v18 verify created_at={t}", check_sig(v["kid"], v["id"], c["sig"], kind, alt), "accept")
 for r in v["rejects"]:
-    check(f"v18 reject {r['name']}", check_sig(v["kid"], r["id"], r["sig"], kind), r["result"])
+    check(f"v18 reject {r['name']}", check_sig(v["kid"], r["id"], r["sig"], kind, alt), r["result"])
 
 print()
 print("FAILURES:", failures)

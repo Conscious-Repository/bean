@@ -19,15 +19,21 @@ import (
 // Nostr signer (a NIP-46 bunker, a NIP-07 browser extension) can sign a
 // record. The wrapper is
 //
-//	[0, "<pubkey hex>", <created_at>, NostrKind, [], "<record id>"]
+//	[0, "<pubkey hex>", <created_at>, NostrKind, [["alt", WrapperAlt]], "<record id>"]
 //
 // serialized as NIP-01 does, and its SHA-256 is the BIP-340 message.
 // created_at travels in the sig string: secp256k1:<created_at>:<128 hex>.
 
-// NostrKind is the wrapper event kind. It is in the ephemeral range
-// (20000 to 29999), so relays do not store a wrapper if one is ever
-// published. DEFAULT, Rob to confirm.
+// NostrKind is the wrapper event kind. It is in the NIP-01 ephemeral
+// range (20000 to 29999), so relays do not store a wrapper if one is ever
+// published, and it is not in the NIPs registry. A NIP-46 signer can grant
+// permission for this kind alone (sign_event:29944), so a client that logs
+// health records cannot sign anything else in the person's name.
 const NostrKind = 29944
+
+// WrapperAlt is the NIP-31 alt tag: what a signer's approval prompt can
+// show for an event kind it does not know.
+const WrapperAlt = "hlog record signature"
 
 // maxCreatedAt keeps created_at inside the JSON integer range (SPEC 4.1).
 const maxCreatedAt = 1<<53 - 1
@@ -35,7 +41,7 @@ const maxCreatedAt = 1<<53 - 1
 // WrapperBytes is the NIP-01 serialization of the wrapper event. Every
 // field is ASCII, so no escaping is needed.
 func WrapperBytes(pubHex string, createdAt int64, id string) []byte {
-	return []byte(`[0,"` + pubHex + `",` + strconv.FormatInt(createdAt, 10) + `,` + strconv.Itoa(NostrKind) + `,[],"` + id + `"]`)
+	return []byte(`[0,"` + pubHex + `",` + strconv.FormatInt(createdAt, 10) + `,` + strconv.Itoa(NostrKind) + `,[["alt","` + WrapperAlt + `"]],"` + id + `"]`)
 }
 
 // WrapperID is the Nostr event id of the wrapper, the BIP-340 message.

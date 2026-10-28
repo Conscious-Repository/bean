@@ -1,6 +1,6 @@
 # hlog core, in two pages
 
-What two independent implementations must agree on, and nothing else. [SPEC.md](SPEC.md) (v0.5) is the full text with error strings and conformance tests; where they differ, SPEC.md wins and this page has a bug. Draft, not frozen.
+What two independent implementations must agree on, and nothing else. [SPEC.md](SPEC.md) (v0.5) is the full text with error strings and conformance tests; where they differ, SPEC.md wins and this page has a bug. Draft, not frozen; section 6 says when it freezes.
 
 **The idea.** A health log is a folder of signed claims about one person. Nobody edits a file; programs only add. Sync is copying the files the other copy lacks. A person is an identity that outlives their keys. Validity is a pure function of the set of files: no server, no clock, no order.
 
@@ -31,7 +31,7 @@ One JSON object, stored as its RFC 8785 canonical bytes (no BOM, no final newlin
 |---|---|---|
 | `ed25519` | 32 bytes | `ed25519:<128 hex>`, RFC 8032 over the 32 id bytes, verified cofactorless with non-canonical S rejected (as Go's `crypto/ed25519.Verify`). |
 | `p256` | 33-byte compressed point | `p256:<128 hex>` = r‖s, ECDSA with SHA-256 of the 32 id bytes, s ≤ n/2. For hardware device keys. |
-| `secp256k1` | 32-byte BIP-340 x-only key (a Nostr key) | `secp256k1:<created_at>:<128 hex>`, BIP-340 over SHA-256 of the wrapper `[0,"<pubkey hex>",<created_at>,29944,[],"<record id>"]` in NIP-01 serialization (compact JSON; every field is ASCII, so it equals the JCS form). That hash is a Nostr event id, so any Nostr signer can sign. `created_at` is a decimal integer from 0 to 2^53−1 with no leading zeros, meaningless to the verifier. |
+| `secp256k1` | 32-byte BIP-340 x-only key (a Nostr key) | `secp256k1:<created_at>:<128 hex>`, BIP-340 over SHA-256 of the wrapper `[0,"<pubkey hex>",<created_at>,29944,[["alt","hlog record signature"]],"<record id>"]` in NIP-01 serialization (compact JSON; every field is ASCII, so it equals the JCS form). That hash is a Nostr event id, so any Nostr signer can sign. `created_at` is a decimal integer from 0 to 2^53−1 with no leading zeros, meaningless to the verifier. |
 
 **Check order.** Path, size, JSON, duplicate keys, numbers, strings; then `v`, `type`, `author` and `kid` are present; then the id, the key and the signature. These envelope fields never change between versions. Only then the version: an unknown `v` on an `hlog.*` record signed by a key of that identity makes the identity *too new* (do not evaluate it); otherwise the record is skipped and still synced. Then canonical bytes, then fields.
 
@@ -71,9 +71,9 @@ Error and warning strings, and the conformance tests, are in SPEC.md 12.2 and 13
 
 Indexes and caches, the CLI, the MCP server, importers, the type vocabulary, agents (bare-key claims plus an `agent.pair` claim by the subject, a convention), computed results and device capture (SPEC.md extensions). Each can change without a new `v`. Anything that changes the validity of an existing record needs one.
 
-## 6. Questions for Rob
+## 6. Decisions, and when this freezes
 
-1. **Nostr signing.** Is the wrapper `[0, pubkey, created_at, 29944, [], record id]` the right shape for NIP-46 and NIP-07 signers, and is kind 29944 (ephemeral, unassigned as far as we know) acceptable?
-2. **Own record format.** Records are not NIP-01 events; a Nostr key can sign them. Keep it, or make each record an event?
-3. **Seed-only rotation.** Only the paper seed can rotate; any fork freezes the identity. Too strict, or right for health data?
-4. **Freeze.** What must change before `v` becomes `1` and this page stops moving?
+1. **Nostr signing goes through a wrapper event.** Kind 29944 is not in the NIPs registry and is in the NIP-01 ephemeral range, so relays do not store a published wrapper. A NIP-46 signer can grant `sign_event:29944` alone, so a health-logging client cannot sign anything else in the person's name. The NIP-31 `alt` tag lets the signer's prompt say what is being signed. `created_at` rides in `sig` because NIP-46 does not promise a signer keeps the client's value.
+2. **Records are not Nostr events.** Medical records do not belong on relays by default, and they carry structure and device keys a Nostr event cannot. A Nostr key signs them; Nostr can carry them later, encrypted, for sharing.
+3. **Only the paper seed rotates, and a fork freezes.** A custodian can hold the day-to-day signing key while the person keeps the 24 words; leaving is one rotation, with history intact and nothing re-signed. Two holders of the seed is a compromise, and no tie-break lets a thief win.
+4. **Freeze after use, not after review.** When the owner has run a real log for two weeks (lab results, Apple Health, chat and agent logging) and nothing on this page had to change, `v` becomes `1` and every DEFAULT in SPEC.md is final. Review comments are welcome until then.

@@ -56,7 +56,9 @@ M10. Share and trust.
 - `hlog check-bundle <dir>` verifies every signature without a log.
 - `hlog attest <id>` and `hlog trust <identity or npub> <1-100>` write ordinary claims (`about` refs). Readers compute trust; the core does not.
 
-Core spec. Done 2026-10-28: CORE.md, the protocol in two pages, tested by an implementation written from it alone (OPEN_QUESTIONS 85). Next: Rob's review, then freeze the format at `v` = 1.
+Core spec. Done 2026-10-28: CORE.md, the protocol in two pages, tested by an implementation written from it alone (OPEN_QUESTIONS 85). Its open questions are decided (OPEN_QUESTIONS 87 to 90).
+
+Freeze at `v` = 1. When Ben has run his real log for two weeks (lab results, Apple Health, chat and agent logging) and nothing in CORE.md had to change. Then every DEFAULT in SPEC.md is final. Rob reviews before then; his comments can still change the format.
 
 M11. Release.
 - README quick start, `go install` path, name, GitHub home. Publish after Rob reviews (SPEC 19).
