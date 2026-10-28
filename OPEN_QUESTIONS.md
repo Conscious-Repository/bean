@@ -60,3 +60,17 @@ Recorded so the build reflects it. Rob did not review the eight one-pager questi
 - **First use case.** Whoop JSON via API, pulled on a schedule. M4 target confirmed.
 - **Event-driven** downstream processing preferred over cron. App layer; the index could expose a change feed later.
 - **Naming.** Say "core", not "kernel".
+
+## M3 (folder and sync)
+
+19. **Hidden targets live in `local/hidden/<64hex>.json`.** The spec says "hide" without saying how. Moving the file out of `objects/` means sync tools and the verifier of other replicas never see it, and a restore is a rename back. Hidden files are still fed to the local verifier so the tombstone's subject check (6.7) can run.
+
+20. **A local purge leaves no hold entry.** 7.6 step 1 erases at once, so there is nothing for gc to do. The tombstone alone carries the fact.
+
+21. **Sync reads the source with the same loader as the destination**, so the source's hold rules run on the source folder. Syncing from a read-only medium would fail on the first hidden write; add a `-read-only` source mode if that comes up.
+
+22. **`local/cache/index.json`** is the canonical bytes of `{"spec", "records": [...]}` sorted by id with type, subject, author, kid, times, system, ref, valid, hidden, superseded_by, purged_by and error. It is the only index in v0. Query format stays an open question (readers decide).
+
+23. **Export manifest says `hlog-core-v0.4`.** The spec text says v0.3; the string tracks the spec version the writer implements.
+
+24. **`Sync` returns a `Replaced` count** for C13 replacements, in addition to the three counts of 12.3.
