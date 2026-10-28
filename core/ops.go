@@ -31,10 +31,29 @@ func (s *Store) Append(in io.Reader) (AppendResult, error) {
 		return res, err
 	}
 	if l.Local == nil {
+		if _, err := s.Identity(); err == nil {
+			return res, errors.New("no personal key on this replica (agent-only): sign with the agent key instead (-agent)")
+		}
 		return res, ErrNotInitialized
 	}
-	local := l.Local
-	dedupeKey := DedupeKey(local.Secret)
+	return s.appendWith(l, writer{l.Local.Signer, l.Local.Identity, l.Local.Identity, l.Local.Secret}, in)
+}
+
+// writer is who signs appended records: the person, or an agent key that
+// writes as a bare-key author about the person.
+type writer struct {
+	signer   Signer
+	author   string
+	identity string // the default subject
+	secret   []byte // nil on a replica without the identity secret
+}
+
+func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, error) {
+	var res AppendResult
+	var dedupeKey []byte
+	if w.secret != nil {
+		dedupeKey = DedupeKey(w.secret)
+	}
 	purged, err := s.readPurgedRefs()
 	if err != nil {
 		return res, err
@@ -68,10 +87,10 @@ func (s *Store) Append(in io.Reader) (AppendResult, error) {
 		}
 		obj["v"] = 0.0
 		obj["nonce"] = NewNonce()
-		obj["author"] = local.Identity
-		obj["kid"] = local.Signer.Public()
+		obj["author"] = w.author
+		obj["kid"] = w.signer.Public()
 		if _, has := obj["subject"]; !has {
-			obj["subject"] = local.Identity
+			obj["subject"] = w.identity
 		}
 		times, _ := obj["times"].(map[string]any)
 		if times == nil {
@@ -82,6 +101,9 @@ func (s *Store) Append(in io.Reader) (AppendResult, error) {
 		src, _ := obj["source"].(map[string]any)
 		if src == nil {
 			return res, fmt.Errorf("bad field: source: line %d", lineNo)
+		}
+		if _, has := src["ref_input"]; has && dedupeKey == nil {
+			return res, fmt.Errorf("no identity secret on this replica: line %d", lineNo)
 		}
 		if ri, has := src["ref_input"]; has {
 			arr, ok := ri.([]any)
@@ -95,6 +117,9 @@ func (s *Store) Append(in io.Reader) (AppendResult, error) {
 			src["ref"] = nil
 		}
 		// C17: supersede by ref.
+		if _, has := src["supersedes_ref"]; has && dedupeKey == nil {
+			return res, fmt.Errorf("no identity secret on this replica: line %d", lineNo)
+		}
 		if sr, has := src["supersedes_ref"]; has {
 			arr, ok := sr.([]any)
 			if !ok {
@@ -118,7 +143,7 @@ func (s *Store) Append(in io.Reader) (AppendResult, error) {
 				m, _ := x.(map[string]any)
 				if m["rel"] == "supersedes" {
 					tid, _ := m["id"].(string)
-					if t, ok := l.Report.Records[tid]; ok && t.Author != local.Identity {
+					if t, ok := l.Report.Records[tid]; ok && t.Author != w.author {
 						return res, ErrNotAuthor
 					}
 					supersedes[tid] = true
@@ -136,7 +161,7 @@ func (s *Store) Append(in io.Reader) (AppendResult, error) {
 			}
 			seen[key] = true
 		}
-		id, bytes, err := SignRecord(obj, local.Signer)
+		id, bytes, err := SignRecord(obj, w.signer)
 		if err != nil {
 			return res, err
 		}

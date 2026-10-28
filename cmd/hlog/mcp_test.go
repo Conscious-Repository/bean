@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -39,12 +40,15 @@ func mcpStore(t *testing.T) (*core.Store, map[string]string) {
 	return s, ids
 }
 
+// mcpWrite turns on the write tools for rpc and call.
+var mcpWrite bool
+
 // rpc sends lines to the server and returns one decoded response per
 // request that has an id.
 func rpc(t *testing.T, s *core.Store, lines ...string) []map[string]any {
 	t.Helper()
 	var out bytes.Buffer
-	if err := serveMCP(s, strings.NewReader(strings.Join(lines, "\n")+"\n"), &out); err != nil {
+	if err := serveMCP(s, strings.NewReader(strings.Join(lines, "\n")+"\n"), &out, mcpWrite); err != nil {
 		t.Fatal(err)
 	}
 	var resps []map[string]any
@@ -227,5 +231,82 @@ func TestMCPRecordAndBlob(t *testing.T) {
 	}
 	if m, isErr := call(t, s, "get_record", map[string]any{"id": res.IDs[0]}); !isErr {
 		t.Errorf("purged record returned: %v", m)
+	}
+}
+
+func TestMCPWrite(t *testing.T) {
+	s, ids := mcpStore(t)
+	// Read-only server: no log_entry.
+	if r := rpc(t, s, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"log_entry","arguments":{"type":"food","value":"toast"}}}`); r[0]["error"] == nil {
+		t.Fatalf("read-only server wrote: %v", r[0])
+	}
+	mcpWrite = true
+	t.Cleanup(func() { mcpWrite = false })
+	if _, _, err := s.AgentInit("", "claude"); err != nil {
+		t.Fatal(err)
+	}
+	init := rpc(t, s, `{"jsonrpc":"2.0","id":0,"method":"initialize","params":{}}`, `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
+	text := init[0]["result"].(map[string]any)["instructions"].(string)
+	if !strings.Contains(text, "Writing is on") || !strings.Contains(text, "# Type vocabulary") {
+		t.Error("instructions lack the write notes or the vocabulary")
+	}
+	tools := init[1]["result"].(map[string]any)["tools"].([]any)
+	last := tools[len(tools)-1].(map[string]any)
+	if last["name"] != "log_entry" || last["annotations"].(map[string]any)["readOnlyHint"] != false {
+		t.Errorf("last tool %v", last)
+	}
+
+	m, isErr := call(t, s, "log_entry", map[string]any{"type": "food", "value": "ramen, extra broth", "at": "2026-10-27 13:00", "details": map[string]any{"meal": "lunch"}})
+	if isErr {
+		t.Fatal(m)
+	}
+	meal := m["id"].(string)
+	if !strings.HasPrefix(m["author"].(string), "npub1") {
+		t.Errorf("author %v", m["author"])
+	}
+	if m, isErr := call(t, s, "log_entry", map[string]any{"type": "food.estimate", "value": 650, "unit": "kcal"}); !isErr {
+		t.Errorf("estimate without about: %v", m)
+	}
+	m, isErr = call(t, s, "log_entry", map[string]any{"type": "food.estimate", "value": 650, "unit": "kcal", "about": meal[7:17], "details": map[string]any{"sodium_mg": 2400}})
+	if isErr {
+		t.Fatal(m)
+	}
+	g, _ := call(t, s, "get_record", map[string]any{"id": meal})
+	replies := g["replies"].([]any)
+	if len(replies) != 1 || replies[0].(map[string]any)["value"].(map[string]any)["n"] != 650.0 {
+		t.Errorf("replies %v", replies)
+	}
+	if obs := g["record"].(map[string]any)["times"].(map[string]any)["observed"].(map[string]any); obs["start"] != "2026-10-27T13:00:00Z" {
+		t.Errorf("at -> %v", obs)
+	}
+	if m, isErr := call(t, s, "log_entry", map[string]any{"type": "drink.water", "value": 0.5, "unit": "L"}); isErr {
+		t.Errorf("number value: %v", m)
+	}
+	if m, isErr := call(t, s, "log_entry", map[string]any{"type": "hlog.genesis", "value": "x"}); !isErr {
+		t.Errorf("core type written: %v", m)
+	}
+	if m, isErr := call(t, s, "log_entry", map[string]any{"type": "note", "value": "x", "about": ids["ache"], "at": "yesterday"}); !isErr {
+		t.Errorf("bad at accepted: %v", m)
+	}
+
+	dir := t.TempDir()
+	secret := dir + "/secret.txt"
+	png := dir + "/meal.png"
+	os.WriteFile(secret, []byte("not a photo"), 0o600)
+	os.WriteFile(png, []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"), 0o600)
+	if m, isErr := call(t, s, "log_entry", map[string]any{"type": "food", "value": "x", "photo_path": secret}); !isErr || !strings.Contains(m["error"].(string), "not an image") {
+		t.Errorf("text file as photo: %v", m)
+	}
+	m, isErr = call(t, s, "log_entry", map[string]any{"type": "food", "value": "toast", "photo_path": png})
+	if isErr {
+		t.Fatal(m)
+	}
+	g, _ = call(t, s, "get_record", map[string]any{"id": m["id"]})
+	blob := g["blobs"].([]any)[0].(map[string]any)
+	if blob["role"] != "photo" || blob["media_type"] != "image/png" {
+		t.Errorf("blob %v", blob)
+	}
+	if b, _ := call(t, s, "read_blob", map[string]any{"id": blob["id"]}); b["binary"] != true {
+		t.Errorf("photo read as text: %v", b)
 	}
 }

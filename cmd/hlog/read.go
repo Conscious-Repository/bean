@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -65,14 +66,23 @@ func cmdList(s *core.Store, args []string) {
 	if f.Until, err = parseBound(*until); err != nil {
 		fail(err)
 	}
-	if f.Author == "me" {
-		local, err := s.ReadLocal()
+	switch {
+	case f.Author == "me":
+		if f.Author, err = s.Identity(); err != nil {
+			fail(err)
+		}
+	case f.Author == "agent":
+		a, err := s.ReadAgent()
 		if err != nil {
 			fail(err)
 		}
-		f.Author = local.Identity
+		f.Author = a.Signer.Public()
+	default:
+		if f.Author, err = core.KeyFromNpub(f.Author); err != nil {
+			fail(err)
+		}
 	}
-	recs, _, err := s.List(f)
+	recs, l, err := s.List(f)
 	if err != nil {
 		fail(err)
 	}
@@ -82,9 +92,11 @@ func cmdList(s *core.Store, args []string) {
 		}
 		return
 	}
+	me, _ := s.Identity()
+	labels := l.AgentLabels()
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	for _, r := range recs {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", whenText(r), r.Type, valueText(r), r.ID[7:19])
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", whenText(r), r.Type, valueText(r), byText(r, me, labels), r.ID[7:19])
 	}
 	tw.Flush()
 }
@@ -131,12 +143,19 @@ func cmdAdd(s *core.Store, args []string) {
 	at := fs.String("at", "", "observed time: RFC 3339, YYYY-MM-DD HH:MM or YYYY-MM-DD (default now)")
 	note := fs.String("note", "", "free text, stored in context.note")
 	about := fs.String("about", "", "id of a record this claim comments on")
+	photo := fs.String("photo", "", "image file to attach, stored encrypted")
+	agent := fs.Bool("agent", false, "sign with this machine's agent key, not yours")
 	pos, err := parseInterspersed(fs, args)
 	if err != nil || len(pos) != 2 {
 		usage()
 		os.Exit(2)
 	}
-	o := core.AddOptions{Unit: *unit, Note: *note}
+	o := core.AddOptions{Unit: *unit, Note: *note, Agent: *agent}
+	if *photo != "" {
+		if o.Photo, o.PhotoType, err = readImage(*photo); err != nil {
+			fail(err)
+		}
+	}
 	if *at != "" {
 		if o.Start, o.Precision, err = core.ParseWhen(*at, time.Local); err != nil {
 			fail(err)
@@ -159,6 +178,44 @@ func cmdAdd(s *core.Store, args []string) {
 	}
 	fmt.Println(id)
 }
+
+// byText names the author when it is not the person: a paired agent's
+// label, or the start of an unpaired key's npub.
+func byText(r *core.Record, me string, labels map[string]string) string {
+	switch {
+	case r.Author == me:
+		return ""
+	case labels[r.Author] != "":
+		return "[" + labels[r.Author] + "]"
+	case core.Npub(r.Author) != "":
+		return "[unpaired " + core.Npub(r.Author)[:14] + "]"
+	}
+	return "[" + r.Author[:min(18, len(r.Author))] + "]"
+}
+
+// readImage reads an image file for -photo and returns its media type.
+// Anything that does not sniff as an image is refused, so a photo flag
+// cannot pull an arbitrary file into the log.
+func readImage(path string) ([]byte, string, error) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return nil, "", err
+	}
+	if fi.Size() > maxPhoto {
+		return nil, "", fmt.Errorf("photo larger than %d MiB", maxPhoto>>20)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, "", err
+	}
+	mt := http.DetectContentType(data)
+	if !strings.HasPrefix(mt, "image/") {
+		return nil, "", fmt.Errorf("not an image: %s", mt)
+	}
+	return data, mt, nil
+}
+
+const maxPhoto = 25 << 20
 
 // whenText is the observed start cut to its precision, or "-".
 func whenText(r *core.Record) string {
@@ -204,6 +261,9 @@ func valueText(r *core.Record) string {
 		out = "series " + b[:min(12, len(b))]
 	case r.Type == "hlog.genesis" || r.Type == "hlog.succession":
 		out = r.ValueKey()
+	case r.Type == "agent.pair" || r.Type == "device.pair":
+		label, _ := v["label"].(string)
+		out = strings.TrimSpace(label + " " + core.Npub(r.ValueKey()))
 	case len(v) == 1 && v["n"] == nil:
 		if _, has := v["n"]; has {
 			out = "no value"

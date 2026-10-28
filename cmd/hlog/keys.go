@@ -69,13 +69,21 @@ func cmdWhoami(s *core.Store, args []string) {
 		usage()
 		os.Exit(2)
 	}
-	local, err := s.ReadLocal()
+	id, err := s.Identity()
 	if err != nil {
 		fail(err)
 	}
-	fmt.Println("identity", local.Identity)
-	fmt.Println("key", local.Signer.Public())
-	if npub := core.Npub(local.Signer.Public()); npub != "" {
-		fmt.Println("npub", npub)
+	fmt.Println("identity", id)
+	if local, err := s.ReadLocal(); err == nil {
+		fmt.Println("key", local.Signer.Public())
+		if npub := core.Npub(local.Signer.Public()); npub != "" {
+			fmt.Println("npub", npub)
+		}
+	} else {
+		fmt.Println("key none (agent-only replica)")
+	}
+	if a, err := s.ReadAgent(); err == nil {
+		fmt.Println("agent", a.Signer.Public())
+		fmt.Println("agent npub", core.Npub(a.Signer.Public()))
 	}
 }

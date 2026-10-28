@@ -10,7 +10,7 @@ The goal and the decisions behind the current direction are in `ROADMAP.md`. Rea
 
 ## State
 
-- Done: the core (M1 to M5: bytes, verifier, folder and sync, CLI, seed-only rotation), `ls`/`show`/`add` (M6), `hlog-import-labcorp` (part of M7), npub signing (M8), `hlog mcp` (M9), and `hlog restore`.
+- Done: the core (M1 to M5: bytes, verifier, folder and sync, CLI, seed-only rotation), `ls`/`show`/`add` (M6), `hlog-import-labcorp` (part of M7), npub signing (M8), `hlog mcp` (M9) with `-write` for agents, agent keys and agent-only replicas, `add -photo`, the type vocabulary, and `hlog restore`.
 - Next: freeze the record format at v1 and cut a short core spec, Apple Health importer (needs Ben's `export.zip`), multi-column CSV, share bundles and trust claims (M10).
 - Go 1.24+. One dependency, `btcec/v2` (secp256k1). `pdftotext` (poppler) is needed at run time for the Labcorp importer only.
 - Repository: private, `bean` on Ben's GitHub account. Do not make it public until Rob has reviewed the spec (SPEC 19).

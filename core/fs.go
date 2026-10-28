@@ -20,6 +20,7 @@ const (
 	fileIdentity  = "local/identity"
 	fileSecret    = "local/identity-secret"
 	fileSignKey   = "local/signing-key"
+	fileAgentKey  = "local/agent-key"
 	fileHolds     = "local/holds.json"
 	filePurgedRef = "local/purged-refs.jsonl"
 	fileIndex     = "local/cache/index.json"

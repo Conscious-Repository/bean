@@ -285,8 +285,8 @@ type Loaded struct {
 // a timer; a target whose tombstone became invalid is restored.
 func (s *Store) Load() (*Loaded, error) {
 	local, err := s.ReadLocal()
-	if err != nil && !errors.Is(err, ErrNotInitialized) {
-		return nil, err
+	if err != nil && !errors.Is(err, ErrNotInitialized) && !errors.Is(err, os.ErrNotExist) {
+		return nil, err // an agent-only replica has no signing key; it still loads
 	}
 	files, err := readRecordFiles(s.Dir)
 	if err != nil {
@@ -429,11 +429,11 @@ func (s *Store) eraseOrphanBlobs(l *Loaded) (int, error) {
 
 // PutBlob encrypts and stores plaintext (7.3). It returns the blob id.
 func (s *Store) PutBlob(plaintext []byte) (string, error) {
-	local, err := s.ReadLocal()
+	secret, err := s.identitySecret()
 	if err != nil {
 		return "", err
 	}
-	out, err := EncryptBlob(BlobKey(local.Secret), plaintext)
+	out, err := EncryptBlob(BlobKey(secret), plaintext)
 	if err != nil {
 		return "", err
 	}
@@ -446,7 +446,7 @@ func (s *Store) PutBlob(plaintext []byte) (string, error) {
 
 // GetBlob reads and decrypts a blob.
 func (s *Store) GetBlob(id string) ([]byte, error) {
-	local, err := s.ReadLocal()
+	secret, err := s.identitySecret()
 	if err != nil {
 		return nil, err
 	}
@@ -460,7 +460,7 @@ func (s *Store) GetBlob(id string) ([]byte, error) {
 	if HashID(b) != id {
 		return nil, errors.New("blob corrupt: " + id)
 	}
-	pt, err := DecryptBlob(BlobKey(local.Secret), b)
+	pt, err := DecryptBlob(BlobKey(secret), b)
 	if err != nil {
 		return nil, errors.New("blob corrupt: " + id)
 	}

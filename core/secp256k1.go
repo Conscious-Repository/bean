@@ -262,6 +262,19 @@ func ParseNsec(s string) ([]byte, error) {
 	return data, nil
 }
 
+// KeyFromNpub turns "npub1..." into a secp256k1 tagged key. Any other
+// string is returned unchanged, so a tagged key passes through.
+func KeyFromNpub(s string) (string, error) {
+	if !strings.HasPrefix(strings.ToLower(s), "npub1") {
+		return s, nil
+	}
+	hrp, data, err := Bech32Decode(s)
+	if err != nil || hrp != "npub" || len(data) != 32 {
+		return "", errors.New("bad npub")
+	}
+	return "secp256k1:" + hex.EncodeToString(data), nil
+}
+
 // Npub returns the NIP-19 npub of a secp256k1 tagged key, or "".
 func Npub(taggedKey string) string {
 	hx, ok := strings.CutPrefix(taggedKey, "secp256k1:")

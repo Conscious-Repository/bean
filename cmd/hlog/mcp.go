@@ -8,19 +8,31 @@ package main
 
 import (
 	"bufio"
+	_ "embed"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"math"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"bean/core"
 )
+
+//go:embed vocabulary.md
+var vocabulary string
+
+const writeInstructions = `
+Writing is on: log_entry adds a claim signed by this machine's agent key, not the person's key, so readers can tell what came through an AI. It cannot change or delete anything.
+When the person says what they ate, drank, took, did or felt, log it with log_entry: their words in value or note, the time it happened in at.
+Put your own inferences (calories, macros, sodium) in a separate food.estimate entry with about set to the food entry's id.
+Follow the type vocabulary below.`
 
 const mcpVersion = "2025-06-18"
 
@@ -117,27 +129,121 @@ var mcpTools = []mcpTool{
 	},
 }
 
+var writeTools = []mcpTool{
+	{
+		Name:        "log_entry",
+		Description: "Add one entry to the person's log: something they ate, drank, took, did or felt, or an estimate you made about an entry. Signed by this machine's agent key. Returns the new id.",
+		InputSchema: schema(map[string]any{
+			"type":       strProp("Record type from the vocabulary, for example food, drink.water, symptom.headache, food.estimate."),
+			"value":      map[string]any{"type": []string{"string", "number", "boolean"}, "description": "A number with unit, or text in the person's words."},
+			"unit":       strProp("Unit of a number value, for example kg, L, mg, kcal, {score}."),
+			"at":         strProp("When it happened: RFC 3339, YYYY-MM-DD HH:MM or YYYY-MM-DD in the local zone. Omit for now."),
+			"note":       strProp("Free text from the person."),
+			"about":      strProp("Id or 6+ hex prefix of the entry this one is about (required for food.estimate)."),
+			"details":    map[string]any{"type": "object", "description": "Extra fields from the vocabulary, for example meal, dose, protein_g, sodium_mg."},
+			"photo_path": strProp("Absolute path of an image on this machine to attach, stored encrypted."),
+		}, "type", "value"),
+	},
+}
+
 func init() {
 	for i := range mcpTools {
 		mcpTools[i].Annotations = map[string]any{"readOnlyHint": true, "openWorldHint": false}
 	}
+	for i := range writeTools {
+		writeTools[i].Annotations = map[string]any{"readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false}
+	}
+}
+
+func instructions(zone string, write bool) string {
+	text := fmt.Sprintf(mcpInstructions, time.Local.String()+" ("+zone+")")
+	if write {
+		text += writeInstructions
+	}
+	return text + "\n\n" + vocabulary
+}
+
+// toolLogEntry writes one claim with the agent key (hlog add -agent).
+func toolLogEntry(s *core.Store, a toolArgs) (any, error) {
+	if a.Type == "" {
+		return nil, errors.New("type is required")
+	}
+	var value string
+	switch v := a.Value.(type) {
+	case string:
+		value = v
+	case float64:
+		value = strconv.FormatFloat(v, 'g', -1, 64)
+	case bool:
+		value = strconv.FormatBool(v)
+	default:
+		return nil, errors.New("value is required: a string, number or boolean")
+	}
+	o := core.AddOptions{Unit: a.Unit, Note: a.Note, Details: a.Details, Agent: true}
+	if a.At != "" {
+		var err error
+		if o.Start, o.Precision, err = core.ParseWhen(a.At, time.Local); err != nil {
+			return nil, fmt.Errorf("bad at: %q", a.At)
+		}
+	}
+	if a.About != "" {
+		l, err := s.Load()
+		if err != nil {
+			return nil, err
+		}
+		r, err := l.Resolve(a.About)
+		if err != nil {
+			return nil, err
+		}
+		o.About = r.ID
+	} else if a.Type == "food.estimate" {
+		return nil, errors.New("food.estimate needs about: the id of the food entry")
+	}
+	if a.PhotoPath != "" {
+		var err error
+		if o.Photo, o.PhotoType, err = readImage(a.PhotoPath); err != nil {
+			return nil, err
+		}
+	}
+	id, err := s.Add(a.Type, value, o)
+	if err != nil {
+		return nil, err
+	}
+	ag, err := s.ReadAgent()
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"id": id, "type": a.Type, "author": core.Npub(ag.Signer.Public())}, nil
 }
 
 func cmdMCP(s *core.Store, args []string) {
-	if len(args) != 0 {
+	fs := flag.NewFlagSet("mcp", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	write := fs.Bool("write", false, "add log_entry, signed by this machine's agent key")
+	host, _ := os.Hostname()
+	label := fs.String("label", "agent@"+host, "label for the agent key if one is made now")
+	if err := fs.Parse(args); err != nil || fs.NArg() != 0 {
 		usage()
 		os.Exit(2)
 	}
-	if _, err := s.ReadLocal(); err != nil {
+	if _, err := s.Identity(); err != nil {
 		fail(err)
 	}
-	if err := serveMCP(s, os.Stdin, os.Stdout); err != nil {
+	if *write {
+		// Make the agent key on first use. On the person's own machine this
+		// also writes the agent.pair claim. Nothing goes to stdout.
+		if _, _, err := s.AgentInit("", *label); err != nil {
+			fail(err)
+		}
+	}
+	if err := serveMCP(s, os.Stdin, os.Stdout, *write); err != nil {
 		fail(err)
 	}
 }
 
-// serveMCP answers requests from in until it closes.
-func serveMCP(s *core.Store, in io.Reader, out io.Writer) error {
+// serveMCP answers requests from in until it closes. write adds the
+// log_entry tool.
+func serveMCP(s *core.Store, in io.Reader, out io.Writer, write bool) error {
 	sc := bufio.NewScanner(in)
 	sc.Buffer(make([]byte, 1<<20), 16<<20)
 	enc := json.NewEncoder(out)
@@ -157,7 +263,7 @@ func serveMCP(s *core.Store, in io.Reader, out io.Writer) error {
 			continue // a notification, for example notifications/initialized
 		}
 		resp := rpcResponse{JSONRPC: "2.0", ID: req.ID}
-		resp.Result, resp.Error = handleMCP(s, req)
+		resp.Result, resp.Error = handleMCP(s, req, write)
 		if err := enc.Encode(resp); err != nil {
 			return err
 		}
@@ -165,7 +271,7 @@ func serveMCP(s *core.Store, in io.Reader, out io.Writer) error {
 	return sc.Err()
 }
 
-func handleMCP(s *core.Store, req rpcRequest) (any, *rpcError) {
+func handleMCP(s *core.Store, req rpcRequest, write bool) (any, *rpcError) {
 	switch req.Method {
 	case "initialize":
 		var p struct {
@@ -181,12 +287,16 @@ func handleMCP(s *core.Store, req rpcRequest) (any, *rpcError) {
 			"protocolVersion": v,
 			"capabilities":    map[string]any{"tools": map[string]any{}},
 			"serverInfo":      map[string]any{"name": "hlog", "version": core.Adapter},
-			"instructions":    fmt.Sprintf(mcpInstructions, time.Local.String()+" ("+zone+")"),
+			"instructions":    instructions(zone, write),
 		}, nil
 	case "ping":
 		return map[string]any{}, nil
 	case "tools/list":
-		return map[string]any{"tools": mcpTools}, nil
+		tools := mcpTools
+		if write {
+			tools = append(append([]mcpTool{}, mcpTools...), writeTools...)
+		}
+		return map[string]any{"tools": tools}, nil
 	case "tools/call":
 		var p struct {
 			Name      string          `json:"name"`
@@ -198,7 +308,7 @@ func handleMCP(s *core.Store, req rpcRequest) (any, *rpcError) {
 		if len(p.Arguments) == 0 || string(p.Arguments) == "null" {
 			p.Arguments = json.RawMessage("{}")
 		}
-		data, err := callTool(s, p.Name, p.Arguments)
+		data, err := callTool(s, p.Name, p.Arguments, write)
 		if errors.Is(err, errUnknownTool) {
 			return nil, &rpcError{-32602, "unknown tool: " + p.Name}
 		}
@@ -229,9 +339,17 @@ type toolArgs struct {
 	Bucket      string `json:"bucket"`
 	ID          string `json:"id"`
 	MaxBytes    int    `json:"max_bytes"`
+	// log_entry
+	Value     any            `json:"value"`
+	Unit      string         `json:"unit"`
+	At        string         `json:"at"`
+	Note      string         `json:"note"`
+	About     string         `json:"about"`
+	Details   map[string]any `json:"details"`
+	PhotoPath string         `json:"photo_path"`
 }
 
-func callTool(s *core.Store, name string, raw json.RawMessage) (any, error) {
+func callTool(s *core.Store, name string, raw json.RawMessage, write bool) (any, error) {
 	var a toolArgs
 	dec := json.NewDecoder(strings.NewReader(string(raw)))
 	dec.DisallowUnknownFields()
@@ -260,6 +378,10 @@ func callTool(s *core.Store, name string, raw json.RawMessage) (any, error) {
 		return toolGetRecord(s, a.ID)
 	case "read_blob":
 		return toolReadBlob(s, a.ID, a.MaxBytes)
+	case "log_entry":
+		if write {
+			return toolLogEntry(s, a)
+		}
 	}
 	return nil, errUnknownTool
 }

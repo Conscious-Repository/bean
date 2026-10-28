@@ -49,6 +49,8 @@ M9. `hlog mcp`. Done 2026-10-28 (OPEN_QUESTIONS 39 to 43).
 - Read-only MCP over stdio, standard library only. Tools: list types, query by type and time, get record, get blob text, summary statistics.
 - Exit: Claude Code answers "is my resting heart rate trending up this month" from the log. Tested over stdio with the real binary; a live Claude Code run is still to do outside this session.
 
+Agents and chat logging. Done 2026-10-28 (OPEN_QUESTIONS 67 to 75). `hlog mcp -write` adds `log_entry` signed by a per-machine agent key; `hlog agent init` makes an agent-only replica for a cloud agent (Hermes); `hlog agent pair` vouches for one; `add -photo`; the type vocabulary is served to the AI.
+
 M10. Share and trust.
 - `hlog share -type ... -since ... -out bundle/` writes signed record files, the plaintext blobs they name, and a manifest. `-to <npub>` encrypts the bundle to the recipient.
 - `hlog check-bundle <dir>` verifies every signature without a log.

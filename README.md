@@ -59,6 +59,31 @@ hlog show 96d4ef                             # one record, its status and replie
 hlog verify                                  # check every signature and rule
 ```
 
+## Log from chat, through your agents
+
+The point is one canonical log of what you do, so capture has to be as cheap as sending a message. Your AI agents write to the log with their own keys, never yours:
+
+```
+claude mcp add hlog -- hlog -dir ~/health mcp -write -label claude
+```
+
+Then tell Claude "had ramen with extra broth around 1" or "took 400 mg magnesium". It logs the entry with `log_entry`, following the [type vocabulary](cmd/hlog/vocabulary.md), and puts any calorie or sodium estimate in a separate `food.estimate` that points at the meal. In `hlog ls` its entries show as `[claude]`.
+
+An agent on another machine, for example Hermes on a cloud server, gets a copy of the log without your key:
+
+```
+# on the cloud machine, after syncing objects/ and blobs/ there
+hlog -dir ~/health agent init -label hermes          # prints Hermes's npub
+hlog -dir ~/health add -agent food "ramen, extra broth" -at "2026-10-28 13:00"
+
+# on your machine
+hlog agent pair npub1... -label hermes                # you vouch for that key
+```
+
+An agent can add entries. It cannot correct or delete yours, and it cannot sign as you. Record files are plain JSON, so any machine with a copy can read the whole log. Attaching or reading photos there needs your identity secret, which you copy over only if you choose to.
+
+`hlog add -agent` signs a command-line entry with this machine's agent key. `hlog add -photo meal.jpg` attaches an image, stored encrypted.
+
 ## Ask an AI about your log
 
 `hlog mcp` is a read-only [Model Context Protocol](https://modelcontextprotocol.io) server on stdin and stdout.
@@ -81,7 +106,7 @@ For Claude Desktop, add this under `mcpServers`:
 | `get_record` | One record with its status and the records that reply to it. |
 | `read_blob` | The original source file, if it is text. |
 
-The tools cannot write. Whatever they return goes to the model provider. Use a local model if that matters to you.
+Without `-write` the tools cannot write. Whatever they return goes to the model provider. Use a local model if that matters to you.
 
 ## Backups and a lost laptop
 
@@ -108,8 +133,9 @@ hlog -dir ~/health restore        # paste the 24 words
 | Command | Does |
 |---|---|
 | `init` | Create an identity. Prints the 24 words once. `-nostr` signs with a Nostr key. |
-| `whoami` | Identity, signing key and npub. |
-| `add <type> <value>` | Write a claim by hand. `-unit`, `-at`, `-note`, `-about`. |
+| `whoami` | Identity, signing key, npub and agent key. |
+| `add <type> <value>` | Write a claim by hand. `-unit`, `-at`, `-note`, `-about`, `-photo`, `-agent`. |
+| `agent init`, `agent pair <npub>` | Make this machine's agent key; vouch for an agent from your machine. |
 | `append` | Read JSONL records from an importer on stdin, sign and store them. Re-imports add nothing. |
 | `ls`, `show <id>` | Read the log. Any 6+ hex prefix works as an id. |
 | `blob put <file>`, `blob get <id>` | Store or read an encrypted source file. |
@@ -119,7 +145,7 @@ hlog -dir ~/health restore        # paste the 24 words
 | `sync <dir>` | Copy what the other folder has and this one lacks. |
 | `rotate`, `restore` | New signing key from the paper words. `-nostr new` or `-nostr <nsec file>` makes it a Nostr key. |
 | `export <dir>`, `import-export <dir>` | A plaintext copy of everything, and back. |
-| `mcp` | The read-only AI server. |
+| `mcp` | The AI server. Read-only unless `-write`. |
 
 Run `hlog` with no arguments for flags. `-dir` defaults to `$HLOG_DIR`, then the current folder.
 
@@ -151,6 +177,7 @@ Next: Apple Health. Each importer is written against a real export, never from m
 | [ROADMAP.md](ROADMAP.md) | The path to v0.1 and what is decided. |
 | [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) | Every choice made where the spec was silent, numbered. |
 | [HANDOFF.md](HANDOFF.md) | Where things stand, for the next person or agent. |
+| [cmd/hlog/vocabulary.md](cmd/hlog/vocabulary.md) | Which types to use for food, drinks, supplements, exercise, sleep and symptoms. |
 
 ## Development
 

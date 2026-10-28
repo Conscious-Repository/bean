@@ -20,7 +20,12 @@ commands:
   init [-nostr new|-|<nsec file>]
                             create an identity; prints the 24 words once.
                             -nostr signs with a Nostr key: new, or your nsec
-  whoami                    identity, signing key and npub
+  whoami                    identity, signing key, npub and agent key
+  agent init [-label l] [-identity id]
+                            make this machine's agent key (works on a synced
+                            copy without your key); pairs it when it can
+  agent pair <npub> [-label l]
+                            vouch for an agent key from your own machine
   append                    read JSONL partial records on stdin, sign, store
   blob put <file>           encrypt and store a file; prints the blob id
   blob get <id>             decrypt a blob to stdout
@@ -28,7 +33,7 @@ commands:
                             list current records in time order
   show <id>                 one record, its status, blobs and replies;
                             any unique id prefix of 6+ hex digits works
-  add <type> <value> [-unit u] [-at time] [-note t] [-about id]
+  add <type> <value> [-unit u] [-at time] [-note t] [-about id] [-photo f] [-agent]
                             write a claim by hand, for example
                             hlog add symptom.headache 8 -unit {score}
   mcp                       read-only MCP server on stdin/stdout for an AI
@@ -164,6 +169,8 @@ func main() {
 		cmdMCP(s, rest)
 	case "whoami":
 		cmdWhoami(s, rest)
+	case "agent":
+		cmdAgent(s, rest)
 	case "verify":
 		lines, code, err := s.VerifyLines()
 		if err != nil {

@@ -20,8 +20,9 @@ type Filter struct {
 	Since  time.Time // When(r) at or after Since
 	Until  time.Time // When(r) before Until
 	Author string
-	// All includes superseded records, duplicates, tombstones and identity
-	// records. Purged, hidden and invalid records are never listed.
+	// All includes superseded records, duplicates, tombstones, identity
+	// records and pairing claims. Purged, hidden and invalid records are
+	// never listed.
 	All bool
 }
 
@@ -74,6 +75,9 @@ func (l *Loaded) Current(id string) bool {
 	return !dup
 }
 
+// isSetup reports pairing claims: configuration, not things that happened.
+func isSetup(typ string) bool { return typ == "agent.pair" || typ == "device.pair" }
+
 // List returns the matching records in time order, then by id.
 func (s *Store) List(f Filter) ([]*Record, *Loaded, error) {
 	l, err := s.Load()
@@ -82,7 +86,7 @@ func (s *Store) List(f Filter) ([]*Record, *Loaded, error) {
 	}
 	var out []*Record
 	for id, r := range l.Report.Records {
-		if !l.Visible(id) || (!f.All && !l.Current(id)) || !f.match(r) {
+		if !l.Visible(id) || (!f.All && (!l.Current(id) || isSetup(r.Type))) || !f.match(r) {
 			continue
 		}
 		out = append(out, r)
@@ -207,6 +211,14 @@ type AddOptions struct {
 	Start, Precision string
 	Note             string
 	About            string // a record id this claim comments on
+	// Details are extra context keys, for example the protein_g of a
+	// food.estimate. They never replace note.
+	Details map[string]any
+	// Photo is stored as an encrypted blob with role "photo".
+	Photo     []byte
+	PhotoType string // media type, for example image/jpeg
+	// Agent signs with the local agent key instead of the person's.
+	Agent bool
 }
 
 // Add writes one claim that the person types in (hlog add). It goes
@@ -229,13 +241,34 @@ func (s *Store) Add(typ, value string, o AddOptions) (string, error) {
 		"times":  map[string]any{"observed": map[string]any{"start": start, "precision": precision}},
 		"source": map[string]any{"system": "self", "adapter": Adapter, "ref": nil},
 	}
+	ctx := map[string]any{}
+	for k, v := range o.Details {
+		ctx[k] = v
+	}
 	if o.Note != "" {
-		obj["context"] = map[string]any{"note": o.Note}
+		ctx["note"] = o.Note
+	}
+	if len(ctx) > 0 {
+		obj["context"] = ctx
 	}
 	if o.About != "" {
 		obj["refs"] = []any{map[string]any{"rel": "about", "id": o.About}}
 	}
-	res, err := s.Append(strings.NewReader(string(Canonical(obj)) + "\n"))
+	if o.Photo != nil {
+		blob, err := s.PutBlob(o.Photo)
+		if err != nil {
+			return "", err
+		}
+		obj["blobs"] = []any{map[string]any{"hash": blob, "role": "photo", "media_type": o.PhotoType}}
+	}
+	line := strings.NewReader(string(Canonical(obj)) + "\n")
+	var res AppendResult
+	var err error
+	if o.Agent {
+		res, err = s.AppendAsAgent(line)
+	} else {
+		res, err = s.Append(line)
+	}
 	if err != nil {
 		return "", err
 	}
