@@ -37,6 +37,8 @@ M7. Real importers (needs the sample files).
 - `hlog-import-csv -map "<column>=<type>[:<unit>]"`, repeatable, so one row can make several records.
 - Exit: Ben's full Apple Health export and one panel import, re-import adds 0, `verify` passes.
 
+Restore. Done 2026-10-28. `hlog restore` rebuilds `local/` on a new host from the 24 words and a synced backup, then rotates (OPEN_QUESTIONS 52 to 56). Without it the paper seed could not recover a lost laptop.
+
 M8. npub as signing key.
 - Tagged key `secp256k1:<64 hex x-only>`, BIP-340 Schnorr over the 32-byte id. Spec 4.4 and 4.5 change, new vector, second-implementation check.
 - `hlog init -nostr` reads an nsec from stdin or `$HLOG_NSEC_FILE`. The recovery keys stay Ed25519 from the paper seed.

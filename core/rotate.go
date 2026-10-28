@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"os"
 	"sort"
 	"strings"
 )
@@ -43,7 +44,13 @@ func (s *Store) Rotate(words []string, noSeal []string) (RotateResult, error) {
 	if hex.EncodeToString(IdentitySecret(seed)) != hex.EncodeToString(l.Local.Secret) {
 		return res, ErrSeedMismatch
 	}
-	id := l.Local.Identity
+	return s.rotateFrom(l, l.Local.Identity, seed, noSeal)
+}
+
+// rotateFrom writes the succession from the head of identity id and stores
+// the new signing key. The caller has checked the seed.
+func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string) (RotateResult, error) {
+	var res RotateResult
 	if contains(l.Report.Compromised, id) {
 		return res, errors.New("compromised: " + id)
 	}
@@ -94,6 +101,55 @@ func (s *Store) Rotate(words []string, noSeal []string) (RotateResult, error) {
 	}
 	res.Succession, res.NewKey = sid, newSigner.Public()
 	return res, nil
+}
+
+// Restore rebuilds local/ on a new host from the 24 words and a synced
+// copy of the log (ROADMAP.md, before M8). The signing key stayed on the
+// lost host, so Restore always rotates: it finds the identity whose genesis
+// commits to recovery generation 0 of these words, writes the identity
+// secret, and writes a succession to a new signing key exactly as Rotate
+// does, with the same default seals. It returns the identity id.
+func (s *Store) Restore(words []string, noSeal []string) (RotateResult, string, error) {
+	if _, err := os.Stat(s.path(fileIdentity)); err == nil {
+		return RotateResult{}, "", ErrAlreadyInitialized
+	}
+	seed, err := WordsToSeed(words)
+	if err != nil {
+		return RotateResult{}, "", ErrSeedMismatch
+	}
+	defer func() {
+		for i := range seed {
+			seed[i] = 0
+		}
+	}()
+	l, err := s.Load()
+	if err != nil {
+		return RotateResult{}, "", err
+	}
+	c0 := Commitment(RecoverySigner(seed, 0).Public())
+	var id string
+	for _, gid := range sortedKeys(l.Report.Chains) {
+		if chain := l.Report.Chains[gid]; len(chain) > 0 && chain[0].Recovery() == c0 {
+			id = gid
+		}
+	}
+	if id == "" {
+		return RotateResult{}, "", errors.New("input missing: genesis for these words")
+	}
+	secret := IdentitySecret(seed)
+	if err := writeFileAtomic(s.path(fileSecret), []byte(hex.EncodeToString(secret)+"\n"), 0o600); err != nil {
+		return RotateResult{}, "", err
+	}
+	res, err := s.rotateFrom(l, id, seed, noSeal)
+	if err != nil {
+		return res, "", err
+	}
+	// The identity file goes last: until it exists the folder reads as not
+	// initialized, so a failed restore can simply run again.
+	if err := writeFileAtomic(s.path(fileIdentity), []byte(id+"\n"), 0o600); err != nil {
+		return res, "", err
+	}
+	return res, id, nil
 }
 
 // ParseWords splits pasted paper words on whitespace and strips numbering

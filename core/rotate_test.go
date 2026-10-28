@@ -163,3 +163,116 @@ func TestDoubleRotationFreeze(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+// A lost laptop: only the 24 words and a synced copy of objects/ and
+// blobs/ remain. Restore rebuilds local/, keeps the identity id, decrypts
+// the blobs, seals the old key's destructive records, and moves to a new
+// key so the lost one can no longer delete or correct anything.
+func TestRestoreLostLaptop(t *testing.T) {
+	a, id, words := initWithWords(t)
+	blob, err := a.PutBlob([]byte("raw export"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	withBlob := strings.Replace(partial("hrv.rmssd", 1, nil), `"source":`, `"blobs":[{"hash":"`+blob+`","media_type":"text/plain","role":"raw-export"}],"source":`, 1)
+	ids := appendLines(t, a, withBlob, partial("hrv.rmssd", 2, nil), partial("hrv.rmssd", 3, nil)).IDs
+	if _, err := a.Rotate(words, nil); err != nil { // one earlier rotation: restore must use generation 1
+		t.Fatal(err)
+	}
+	purge, err := a.Purge(ids[2], "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lostKey := a.mustLocal(t).Signer.Public()
+
+	// The backup: a new folder with only the synced files, no local/.
+	b := newStore(t)
+	if _, err := b.Sync(a); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.ReadLocal(); err != ErrNotInitialized {
+		t.Fatalf("backup has local/: %v", err)
+	}
+
+	res, got, err := b.Restore(words, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != id {
+		t.Fatalf("restored identity %s, want %s", got, id)
+	}
+	if len(res.Sealed) != 1 || res.Sealed[0] != purge || res.NewKey == lostKey {
+		t.Errorf("restore result %+v", res)
+	}
+	l := verifyOK(t, b)
+	if len(l.Report.Chains[id]) != 3 || l.Local.Identity != id {
+		t.Errorf("chain length %d", len(l.Report.Chains[id]))
+	}
+	if pt, err := b.GetBlob(blob); err != nil || string(pt) != "raw export" {
+		t.Errorf("blob after restore: %q %v", pt, err)
+	}
+	if l.Visible(ids[2]) {
+		t.Error("sealed purge undone")
+	}
+	// The new key writes; dedupe still works because the dedupe key comes
+	// from the same identity secret.
+	if r := appendLines(t, b, partial("hrv.rmssd", 4, nil)); r.Added != 1 {
+		t.Error("append after restore")
+	}
+	if _, err := b.Purge(ids[1], ""); err != nil {
+		t.Errorf("purge with the new key: %v", err)
+	}
+
+	// The lost laptop's key can still add claims (6.5) but its deletions
+	// after the restore are not sealed.
+	thief, err := a.Purge(ids[0], "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.Sync(a); err != nil {
+		t.Fatal(err)
+	}
+	lines, _, _ := b.VerifyLines()
+	if !contains(lines, "error: "+thief+": not sealed") {
+		t.Errorf("thief tombstone:\n%s", strings.Join(lines, "\n"))
+	}
+	if lb, _ := b.Load(); !lb.Visible(ids[0]) {
+		t.Error("thief's purge took effect")
+	}
+}
+
+func TestRestoreErrors(t *testing.T) {
+	a, _, words := initWithWords(t)
+	appendLines(t, a, partial("hrv.rmssd", 1, nil))
+	if _, _, err := a.Restore(words, nil); err != ErrAlreadyInitialized {
+		t.Errorf("restore over local/: %v", err)
+	}
+	b := newStore(t)
+	if _, err := b.Sync(a); err != nil {
+		t.Fatal(err)
+	}
+	_, _, otherWords := initWithWords(t)
+	if _, _, err := b.Restore(otherWords, nil); err == nil || err.Error() != "input missing: genesis for these words" {
+		t.Errorf("other words: %v", err)
+	}
+	bad := append([]string{}, words...)
+	bad[0] = "notaword"
+	if _, _, err := b.Restore(bad, nil); err != ErrSeedMismatch {
+		t.Errorf("bad word: %v", err)
+	}
+	if _, err := b.ReadLocal(); err != ErrNotInitialized {
+		t.Errorf("failed restore left local/ initialized: %v", err)
+	}
+	if _, _, err := newStore(t).Restore(words, nil); err == nil {
+		t.Error("restore into an empty folder")
+	}
+}
+
+func (s *Store) mustLocal(t *testing.T) *Local {
+	t.Helper()
+	l, err := s.ReadLocal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return l
+}

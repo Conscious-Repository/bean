@@ -35,6 +35,9 @@ commands:
   purge [-reason <t>] <id>  tombstone and erase a record
   gc                        erase hidden targets older than the hold
   rotate [-no-seal <id>]... switch to a new signing key; reads the 24 words on stdin
+  restore [-no-seal <id>]...
+                            on a new machine: rebuild local/ from the 24
+                            words and a synced copy of the log, then rotate
   sync <source dir>         copy missing files from another replica
   export <dir>              write a plaintext copy (says so first)
   import-export <dir>       reverse an export
@@ -202,6 +205,33 @@ func main() {
 		}
 		for _, id := range res.NotSealed {
 			fmt.Println("not sealed", id)
+		}
+		fmt.Println("rotated to", res.NewKey)
+		fmt.Printf("sealed %d\n", len(res.Sealed))
+	case "restore":
+		rf := flag.NewFlagSet("restore", flag.ContinueOnError)
+		rf.SetOutput(io.Discard)
+		var noSeal multiFlag
+		rf.Var(&noSeal, "no-seal", "leave this destructive record unsealed (repeatable)")
+		if err := rf.Parse(rest); err != nil || rf.NArg() != 0 {
+			usage()
+			os.Exit(2)
+		}
+		fmt.Fprintln(os.Stderr, "sync every copy of the log you still have into this folder first. paste the 24 words, then end input:")
+		text, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			fail(err)
+		}
+		res, id, err := s.Restore(core.ParseWords(string(text)), noSeal)
+		if err != nil {
+			fail(err)
+		}
+		fmt.Println("identity", id)
+		for _, x := range res.Sealed {
+			fmt.Println("sealed", x)
+		}
+		for _, x := range res.NotSealed {
+			fmt.Println("not sealed", x)
 		}
 		fmt.Println("rotated to", res.NewKey)
 		fmt.Printf("sealed %d\n", len(res.Sealed))

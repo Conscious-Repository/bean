@@ -411,11 +411,13 @@ func VerifyFiles(files map[string][]byte) *Report {
 			}
 		}
 	}
-	// Step 12: duplicates.
+	// Step 12: duplicates. A superseded record is left out: a parser fix
+	// (9.7) keeps the ref of the record it corrects, and grouping the two
+	// would hide the fix as a duplicate whenever its id is the higher one.
 	groups := map[[3]string][]string{}
 	for _, id := range ids {
 		r := rp.Records[id]
-		if rp.Valid[id] && r.Source.Ref != "" && !r.IsIdentity() {
+		if rp.Valid[id] && r.Source.Ref != "" && !r.IsIdentity() && len(rp.Superseded[id]) == 0 {
 			k := [3]string{r.Subject, r.Source.System, r.Source.Ref}
 			groups[k] = append(groups[k], id)
 		}

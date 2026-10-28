@@ -165,3 +165,33 @@ func ids(rs []*Record) []string {
 	}
 	return out
 }
+
+// A parser fix (SPEC.md 9.7) keeps the dedupe ref of the record it
+// corrects. Ids are random, so run it enough times to see both id orders:
+// the fix must never be marked a duplicate of the record it supersedes.
+func TestParserFixIsNotADuplicate(t *testing.T) {
+	ref := []any{"hlog/v0/ref", "id", "test", "r1", 0.0}
+	orders := map[bool]bool{}
+	for i := 0; i < 24; i++ {
+		s, _ := initStore(t)
+		old := appendLines(t, s, partial("hrv.rmssd", 40, ref)).IDs[0]
+		fix := strings.Replace(partial("hrv.rmssd", 41, nil), `"source":{"adapter":"test@1","ref":null,"system":"test"}`,
+			`"source":{"adapter":"test@1","ref_input":["hlog/v0/ref","id","test","r1",0],"supersedes_ref":["hlog/v0/ref","id","test","r1",0],"system":"test"}`, 1)
+		res := appendLines(t, s, fix)
+		if res.Added != 1 {
+			t.Fatalf("fix not added: %+v", res)
+		}
+		fixID := res.IDs[0]
+		orders[fixID > old] = true
+		recs, l, err := s.List(Filter{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(recs) != 1 || recs[0].ID != fixID || l.Report.Duplicates[fixID] != "" {
+			t.Fatalf("fix %s old %s: list %v, duplicates %v", fixID, old, ids(recs), l.Report.Duplicates)
+		}
+	}
+	if len(orders) != 2 {
+		t.Log("only one id order seen; rerun to cover both")
+	}
+}

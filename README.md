@@ -22,6 +22,10 @@ Quick start:
     hlog ls -type 'hrv.*' -since 2026-10-01                    # -json for the stored bytes
     hlog show d1afbb945f                                       # any 6+ hex prefix
 
+Back up `objects/` and `blobs/` anywhere (another machine, a drive); they are signed, and blobs are encrypted. `local/` holds the keys: do not sync it. If the laptop is lost, copy the backup to a new machine and rebuild `local/` from the paper:
+
+    hlog -dir ~/health restore      # paste the 24 words; rotates to a new key, same identity
+
 Import a Labcorp patient report (also what Superpower hands out). Needs `pdftotext` (`brew install poppler`):
 
     BLOB=$(hlog blob put lab-result.pdf)
