@@ -63,7 +63,15 @@
           "n": 42.5,
           "unit": "ms"
         }
-      }
+      },
+      "source_ref_input": [
+        "hlog/v0/ref",
+        "id",
+        "csv",
+        "row-17",
+        0
+      ],
+      "source_ref_key": "dedupe_key in v10-derived-keys.json"
     },
     {
       "file_bytes": "{\"author\":\"sha256:67e0a03dd6581a0c0bf503d880e0fb683e029a0a9ce052ba1743e82c000cc3ba\",\"context\":{\"reason\":\"test\"},\"id\":\"sha256:331844092a02cbf777f8ab1ddf2e541bce1a87a9599c9a5b3f853eb88f6c0c68\",\"kid\":\"ed25519:d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737\",\"nonce\":\"00000000000000000000000000000003\",\"refs\":[{\"id\":\"sha256:52387e61df81dd978648c8a3ca112df7d865a9a2a14df3d0cd94b4b910fd0bc0\",\"rel\":\"purges\"}],\"sig\":\"ed25519:ea91867447d4ee23e745c29304040268d274e4bb70fcc19f40b9184c4c2bc981a596497f2a50f719cc7489e9f7c6c46b4d620b51393b8bc3a035bcba85ce9700\",\"source\":{\"adapter\":\"hlog@0.3.0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:67e0a03dd6581a0c0bf503d880e0fb683e029a0a9ce052ba1743e82c000cc3ba\",\"times\":{\"imported\":\"2026-10-27T12:00:02Z\",\"observed\":null},\"type\":\"hlog.tombstone\",\"v\":0}",

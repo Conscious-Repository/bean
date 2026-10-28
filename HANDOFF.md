@@ -6,7 +6,7 @@ For Ben, or for the next agent that opens this repo. Updated 2026-10-28.
 
 `bean` is the reference implementation of the hlog core specification v0.5 (`SPEC.md`). A health log is a folder of signed, append-only JSON records. Validity is a pure function of the file set. Sync is set union. The identity is the hash of its first record.
 
-The goal and the decisions behind the current direction are in `ROADMAP.md`. Read it first.
+The goal and the decisions behind the current direction are in `ROADMAP.md`. Read it first. `CORE.md` is the protocol in two pages; `SPEC.md` is the full text.
 
 ## State
 

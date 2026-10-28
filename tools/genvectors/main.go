@@ -126,7 +126,10 @@ func main() {
 	recVec := func(name string, r map[string]any) map[string]any {
 		return map[string]any{"name": name, "record": r, "id_bytes": string(core.IDBytes(r)), "id": r["id"], "file_bytes": string(core.Canonical(r))}
 	}
-	write("v4-record-id.json", map[string]any{"spec": "SPEC.md 4.2", "records": []any{recVec("genesis", genesis), recVec("claim", claim), recVec("tombstone", tomb)}})
+	claimVec := recVec("claim", claim)
+	claimVec["source_ref_input"] = core.RefInputNative("csv", "row-17", 0)
+	claimVec["source_ref_key"] = "dedupe_key in v10-derived-keys.json"
+	write("v4-record-id.json", map[string]any{"spec": "SPEC.md 4.2", "records": []any{recVec("genesis", genesis), claimVec, recVec("tombstone", tomb)}})
 
 	// V5: Ed25519.
 	write("v5-ed25519.json", map[string]any{"spec": "SPEC.md 4.5", "private_seed": hex.EncodeToString(signSeed), "kid": kid, "id": claimID, "sig": claim["sig"]})

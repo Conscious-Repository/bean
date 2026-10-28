@@ -56,6 +56,8 @@ M10. Share and trust.
 - `hlog check-bundle <dir>` verifies every signature without a log.
 - `hlog attest <id>` and `hlog trust <identity or npub> <1-100>` write ordinary claims (`about` refs). Readers compute trust; the core does not.
 
+Core spec. Done 2026-10-28: CORE.md, the protocol in two pages, tested by an implementation written from it alone (OPEN_QUESTIONS 85). Next: Rob's review, then freeze the format at `v` = 1.
+
 M11. Release.
 - README quick start, `go install` path, name, GitHub home. Publish after Rob reviews (SPEC 19).
 

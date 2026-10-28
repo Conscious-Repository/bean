@@ -177,7 +177,8 @@ Every record is named by its hash and never edited, so, like git, ordinary comma
 
 | File | For |
 |---|---|
-| [SPEC.md](SPEC.md) | The protocol (v0.5 draft): record format, identity, authority rules, sync, conformance tests. |
+| [CORE.md](CORE.md) | The protocol in two pages: what a second implementation must agree on. Start here. |
+| [SPEC.md](SPEC.md) | The full protocol (v0.5 draft): every rule, error string and conformance test. |
 | [ROADMAP.md](ROADMAP.md) | The path to v0.1 and what is decided. |
 | [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) | Every choice made where the spec was silent, numbered. |
 | [HANDOFF.md](HANDOFF.md) | Where things stand, for the next person or agent. |

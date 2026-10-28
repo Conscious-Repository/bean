@@ -174,3 +174,8 @@ Measured on a 20,000-record log before the pass: `add`, `ls`, `verify` and every
 84. **Leftovers removed:** the `ErrSeedWords` alias (one `ErrSeedMismatch`), `_ = errors.New` in the CLI, an unused field in the Labcorp importer. `Add` moved from `query.go` to `add.go`. `staticcheck` reports nothing; `deadcode` reports only `VerifyFiles`, kept as the pure verifier the spec and a second implementation test against.
 
 After the pass, same log: `ls` 0.43 s (5.5), `add` 0.21 s (4.0), an MCP call 0.23 s (4.0), `verify` 0.6 s warm and 1.2 s cold (4.0). GC tuning was measured and gained nothing, so there is no knob for it.
+
+## CORE.md (2026-10-28)
+
+85. **CORE.md is the protocol in two pages** (about 1,350 words against 14,600 in SPEC.md): only what a second implementation must agree on, plus four questions for Rob. SPEC.md stays authoritative. It was tested by giving a fresh agent only CORE.md and the vectors: its own verifier, with JCS and BIP-340 written from scratch, passed V1 to V5, V7, V12 and V18. The eight things it had to guess (the integer rule, size check order, lowercase signatures, the created_at range, the wrapper serialization, Ed25519 strictness, the dedupe occurrence rule, which hex names the path) are now stated.
+86. **V4 now says how its claim's dedupe ref was made**: `source_ref_input` and the V10 dedupe key. Additive; no record or id changed.
