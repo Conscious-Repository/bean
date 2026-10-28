@@ -16,7 +16,7 @@ func cmdAgent(s *core.Store, args []string) {
 	}
 	fs := flag.NewFlagSet("agent", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	label := fs.String("label", "", "name for the agent, for example hermes")
+	label := fs.String("label", "", "name for the agent, for example server")
 	identity := fs.String("identity", "", "identity id, when the folder holds more than one genesis")
 	pos, err := parseInterspersed(fs, args[1:])
 	if err != nil {

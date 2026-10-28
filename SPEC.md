@@ -1,15 +1,22 @@
 # hlog core specification v0.5, draft
 
-Status: draft for review with Rob Long. This text is not frozen.
-Date: 2026-10-28. v0.4 applied the change set recorded in the build notes (C1 to C20): seed-only rotation, a frozen envelope, verify-before-copy sync, and no erasure on a timer. v0.5 adds C21 (secp256k1 Nostr signing keys, 4.4 and 4.5), C22 (restore on a new host, 5.10) and C23 (superseded records leave duplicate groups, 6.3 step 12). The reference implementation is the `bean` repository.
-Editor: Benjamin Anderson (AION Biosciences, steward).
-License: CC0 1.0 (see section 19).
-Name: "hlog" is a placeholder. The project will take a neutral name.
+Status: draft. This text is not frozen. [CORE.md](CORE.md) section 6 tells when it freezes.
+Date: 2026-10-28.
+Changes: v0.4 applied change notes C1 to C20: seed-only rotation, a fixed envelope, verify before copy in sync, and no erasure on a timer. v0.5 adds three change notes:
 
-This specification uses Simplified Technical English (ASD-STE100 style).
-The key words MUST, MUST NOT, REQUIRED, SHOULD, SHOULD NOT and MAY are used as in RFC 2119 and RFC 8174.
-Text marked "DEFAULT, Rob to confirm" is a concrete decision that the review can change.
-An implementation MUST follow a DEFAULT until the spec changes it.
+- C21: secp256k1 (Nostr) signing keys (4.4, 4.5).
+- C22: restore on a new host (5.10).
+- C23: superseded records are not in duplicate groups (6.3 step 12).
+
+Reference implementation: the `bean` repository.
+License: CC0 1.0 (section 19).
+Name: "hlog" is a temporary name. The project will take a neutral name.
+
+This specification uses Simplified Technical English (ASD-STE100).
+The key words MUST, MUST NOT, REQUIRED, SHOULD, SHOULD NOT and MAY have the meanings in RFC 2119 and RFC 8174.
+Text marked DEFAULT is a decision that can change until the format freezes at version 1.
+An implementation MUST follow a DEFAULT until the specification changes it.
+[CORE.md](CORE.md) gives the rules that two implementations must agree on, in two pages.
 
 ## Contents
 
@@ -32,8 +39,7 @@ An implementation MUST follow a DEFAULT until the spec changes it.
 17. Known limits
 18. Out of scope
 19. Governance and license
-- Appendix A: deltas from the reference code at /workspace/hlog
-- Appendix B: open items
+- Appendix: defaults and open items
 
 ## 1. Scope and goals
 
@@ -56,7 +62,7 @@ Device capture is Extension 2 (section 11).
 A health log is a folder of signed claims about one person.
 The person owns the folder.
 The person syncs the folder by copying files.
-Nobody edits a record. Programs only add records.
+Programs do not change records. Programs only add records.
 
 ### 1.3 Five ideas
 
@@ -73,13 +79,6 @@ Nobody edits a record. Programs only add records.
 - G3. The person MUST be able to leave at any time with plaintext data (`hlog export`).
 - G4. Any index MUST be a cache that a program can rebuild from the files alone.
 - G5. The core MUST be source-agnostic. A device format is an adapter. Special code for one source in the core is a bug.
-
-### 1.5 Customer zero and kill rule
-
-Benjamin Anderson is customer zero.
-He imports his own Oura, Whoop and Apple Health data.
-Kill rule: stop the project if he does not use it every week by week 6.
-This rule is a project rule, not a protocol rule.
 
 ## 2. Terms
 
@@ -134,7 +133,7 @@ Other documents and code comments MUST use these terms with these meanings.
 | adapter | A separate program that reads one source format and writes records as JSONL. |
 | native id | The id that a source system gives to one reading. |
 | dedupe ref | The value of `source.ref`. A keyed hash (section 4.8). |
-| occurrence index | A counter that separates exactly identical readings (section 4.8). |
+| occurrence index | A counter that separates identical readings (section 4.8). |
 | verifier | A program that checks records against this specification. |
 | writer | A program that makes and signs records. |
 | export | A plaintext copy of a log (section 7.9). |
@@ -149,7 +148,7 @@ Other documents and code comments MUST use these terms with these meanings.
 A record is one JSON object.
 A writer MUST store a record as the RFC 8785 canonical bytes of the full object, with `id` and `sig` included (section 4.1).
 The file has no byte order mark and no final newline.
-The maximum file size is 1 MiB. DEFAULT, Rob to confirm.
+The maximum file size is 1 MiB. DEFAULT.
 
 ### 3.2 Fields
 
@@ -157,7 +156,7 @@ The maximum file size is 1 MiB. DEFAULT, Rob to confirm.
 |---|---|---|---|
 | `v` | integer | yes | Record format version. This draft uses `0`. |
 | `nonce` | string | yes | 32 lowercase hex digits (128 bits) from a cryptographic random source. |
-| `type` | string | yes | 1 to 128 characters. Pattern `^[a-z0-9][a-z0-9_-]*(\.[a-z0-9_-]+)*$`. DEFAULT, Rob to confirm. |
+| `type` | string | yes | 1 to 128 characters. Pattern `^[a-z0-9][a-z0-9_-]*(\.[a-z0-9_-]+)*$`. DEFAULT. |
 | `subject` | string | yes, except genesis | An identity id. A genesis MUST NOT have `subject`. |
 | `author` | string | yes | An identity id or a tagged public key (bare key). |
 | `kid` | string | yes | The tagged public key that signed this record. |
@@ -220,7 +219,7 @@ An interval is `{"start": time, "end": time, "precision": p}`. `end` is optional
 `start` and `end` are RFC 3339 date-time strings with a numeric offset or `Z`.
 Fractional seconds are allowed.
 If `end` is present, `end` MUST NOT be earlier than `start`.
-`p` is one of `year`, `month`, `day`, `hour`, `minute`, `second`, `millisecond`. DEFAULT, Rob to confirm.
+`p` is one of `year`, `month`, `day`, `hour`, `minute`, `second`, `millisecond`. DEFAULT.
 
 A writer MUST set `times.observed` to null when the source does not give a time.
 A writer MUST NOT guess or default a time.
@@ -344,7 +343,7 @@ Ed25519:
 
 - `sig` = `ed25519:` + 128 lowercase hex digits (the 64-byte RFC 8032 signature).
 - Sign with RFC 8032 Ed25519 (pure, no prehash, no context).
-- Verify as Go `crypto/ed25519.Verify` does. It rejects a non-canonical `S`. DEFAULT, Rob to confirm.
+- Verify as Go `crypto/ed25519.Verify` does. It rejects a non-canonical `S`. DEFAULT.
 
 P-256:
 
@@ -352,7 +351,7 @@ P-256:
 - The ECDSA hash input is SHA-256 of the 32-byte message. Hardware signers hash the message, so this matches them.
 - `s` MUST be at most n/2 (low-S). A signer MUST replace `s` with `n - s` when `s` is higher. A verifier MUST reject a high `s`.
 - Software signers SHOULD use RFC 6979 deterministic nonces.
-- Hardware signers MAY use random nonces. Most hardware keystores do not let the caller select RFC 6979. DEFAULT, Rob to confirm.
+- Hardware signers MAY use random nonces. Most hardware keystores do not let the caller select RFC 6979. DEFAULT.
 
 secp256k1 (C21):
 
@@ -361,7 +360,8 @@ secp256k1 (C21):
 - The signed message is the SHA-256 of the wrapper bytes (the Nostr event id). Sign with BIP-340 Schnorr.
 - `sig` = `secp256k1:` + `<created_at>` + `:` + 128 lowercase hex digits (the 64-byte BIP-340 signature).
 - `<created_at>` is a decimal integer from 0 to 2^53 - 1 with no leading zeros. It has no meaning to the verifier. Software signers SHOULD use 0. A remote signer MAY use another value.
-- Kind 29944 is in the NIP-01 ephemeral range, so relays do not store a wrapper if someone publishes one, and it is not in the NIPs registry. A NIP-46 signer can grant permission for this kind alone (`sign_event:29944`). Decided 2026-10-28.
+- Kind 29944 is in the NIP-01 ephemeral range. Relays do not store a wrapper if someone publishes one.
+- Kind 29944 is not in the NIPs registry. A NIP-46 signer can give permission for this kind only (`sign_event:29944`).
 
 A signature is not part of the id.
 Thus two valid files with the same id can have different `sig` bytes when a signer uses random nonces.
@@ -410,10 +410,10 @@ Rules:
 5. In one adapter run, two readings are identical when their arrays, without the occurrence, have equal canonical bytes.
 6. The first identical reading gets occurrence 0. The next gets 1, in source order.
 7. Do not use the file hash. Do not use the row position.
-8. An adapter MUST keep the HMAC input stable across adapter versions for the same source reading when the source has a native id. A tuple input changes when a parser fix changes the value; 9.7 handles that case.
-9. Write `source.ref` as `hmac-sha256:` followed by 64 lowercase hex digits. DEFAULT, Rob to confirm.
+8. When the source has a native id, an adapter MUST keep the HMAC input the same across adapter versions for the same source reading. A tuple input changes when a parser fix changes the value. Section 9.7 tells how to handle that case.
+9. Write `source.ref` as `hmac-sha256:` followed by 64 lowercase hex digits. DEFAULT.
 
-Result: two exports that overlap make the same refs for the same readings. The second import adds nothing.
+Thus two exports that overlap make the same refs for the same readings, and the second import adds nothing.
 
 ### 4.9 Blob encryption (AES-SIV)
 
@@ -421,7 +421,7 @@ A writer MUST encrypt every blob before it hashes and stores it.
 
 1. Use AES-SIV as in RFC 5297 with AES-256. This is AES-SIV-CMAC-512.
 2. Use the 64-byte blob key. The first 32 bytes are K1, the CMAC (S2V) key. The last 32 bytes are K2, the CTR key.
-3. Use one associated data string: the ASCII bytes `hlog/v0/blob`. DEFAULT, Rob to confirm.
+3. Use one associated data string: the ASCII bytes `hlog/v0/blob`. DEFAULT.
 4. Use no nonce. The encryption is deterministic.
 5. The blob bytes are `V || C`, with the 16-byte synthetic IV `V` first.
 6. The blob id is `sha256:` + hex SHA-256 of the blob bytes.
@@ -430,7 +430,7 @@ Equal plaintext gives equal blob bytes and an equal blob id for one identity sec
 Go has no AES-SIV in its standard library.
 An implementation MAY use a vetted AES-SIV library or build CMAC (RFC 4493), S2V and CTR from `crypto/aes` and `crypto/cipher`.
 Either way it MUST pass the RFC 5297 Appendix A vectors. The reference implementation builds it and matches OpenSSL on vector V11.
-Implementations MUST support blobs of at least 256 MiB. DEFAULT, Rob to confirm.
+Implementations MUST support blobs of at least 256 MiB. DEFAULT.
 
 ### 4.10 Paper seed encoding
 
@@ -449,7 +449,7 @@ Reasons for this choice:
 Risk: a person can type the words into a crypto wallet by mistake.
 The wallet then sees the seed.
 The CLI MUST tell the person that the words are for hlog only.
-DEFAULT, Rob to confirm.
+DEFAULT.
 
 ## 5. Identity
 
@@ -478,7 +478,7 @@ One host holds the signing key. A second device is paired as a bare device key (
 
 There is one kind of succession. It is signed by the recovery key that the parent commits to (5.5). A signing key cannot write a succession. Error: `bad succession`.
 
-The person rotates when a device is lost, a key is old, or a device leaves. Rotation needs the paper seed. This is deliberate: a stolen device can add claims, but it can never take over the identity, because it cannot write a succession.
+The person rotates when a device is lost, a key is old, or a device leaves. Rotation needs the paper seed. Thus a stolen device can add claims, but it cannot take over the identity, because it cannot write a succession.
 
 ### 5.4 Sealed rotation
 
@@ -493,7 +493,7 @@ The maximum file size of an `hlog.succession` is 16 MiB, so `sealed` can hold ab
 The ids MUST be unique and sorted in ascending order of their ASCII bytes. Error: `bad field: value.sealed`.
 An id in `sealed` that does not name a destructive record of the outgoing key has no effect.
 
-Result: every replica with the same files gets the same answer. No trusted time is necessary.
+Thus every replica with the same files gets the same result. No trusted time is necessary.
 A thief who steals a key cannot keep a destructive record after a rotation, unless the person seals it.
 
 ### 5.5 Write a succession with the paper seed
@@ -538,7 +538,7 @@ For a frozen identity, a verifier MUST:
 5. Restore any target that a now-invalid tombstone hides (7.6).
 
 A frozen identity cannot rotate. The person MUST make a new identity.
-DEFAULT, Rob to confirm (items 2 to 4).
+DEFAULT for items 2 to 4.
 
 ### 5.8 Key rules
 
@@ -561,7 +561,7 @@ A person who lost the host, but has the paper and a copy of `objects/` and `blob
 1. Sync every copy of the log that still exists into one folder. A copy that lacks a succession another device wrote makes a fork, and a fork freezes the identity (5.7).
 2. Enter the 24 words. Find the genesis whose `value.recovery` is the commitment of recovery generation 0 of the words. Error: `input missing: genesis for these words`.
 3. Write `local/identity-secret` from the words.
-4. Write a succession from the chain head to a new signing key exactly as 5.5 steps 2 to 9 do, with the same seals.
+4. Write a succession from the chain head to a new signing key, as 5.5 steps 2 to 9 do, with the same seals.
 5. Write `local/identity` last. Until it exists, the folder is not initialized, so a failed restore can run again.
 
 Restore always rotates. The old signing key stayed on the lost host and is not trusted.
@@ -658,7 +658,7 @@ For each claim D whose `subject` has no genesis in R, report `unresolved subject
 D stays valid. The subject check is a warning because a lab can write about a person whose genesis the replica does not hold.
 
 Step 12. Find duplicates.
-Group valid records that no valid supersede record names by (`subject`, `source.system`, `source.ref`) where `source.ref` is not null. A parser fix (9.7) keeps the ref of the record it corrects; leaving superseded records out keeps the fix from being reported as a duplicate of its own target (C23).
+Group the valid records by (`subject`, `source.system`, `source.ref`) where `source.ref` is not null. Do not include a record that a valid supersede record names (C23). A parser fix (9.7) keeps the ref of the record that it corrects. Without this rule, the verifier could report the fix as a duplicate of its own target.
 In each group, the record with the lowest id is the primary.
 Report the others as `duplicate: <id> of <primary id>`.
 Duplicates stay valid. Indexes and readers SHOULD ignore them.
@@ -757,7 +757,7 @@ Sync from replica A (source) to replica B (destination) is a set union with one 
 
 Sync MUST copy files with an unknown `v`. Newer verifiers need them.
 Sync MUST copy invalid records that pass steps 1 to 12 of 3.8. Validity is a verifier result, not a sync rule. A replica keeps the first file that passes the signature check for an id.
-A succession and a tombstone it invalidates can travel in one sync; the target then comes back on the next sync (step 5). Two passes converge.
+A succession and a tombstone that it invalidates can arrive in the same sync. The target then comes back on the next sync (step 5). Two passes are sufficient.
 Sync with rsync, git, Syncthing or a USB drive is allowed if the person then runs `hlog verify` on each replica. Such tools do not apply the tombstone exception. `hlog verify` then hides or erases the target (7.6).
 
 ### 7.5 Held tombstones
@@ -769,7 +769,7 @@ When a target file arrives in a sync, check the tombstone with the target (6.7 s
 - If the tombstone is valid for the target, do not copy the target. Add the target dedupe ref to `local/purged-refs.jsonl` (7.8).
 - If the tombstone is invalid for the target, copy the target. The tombstone becomes invalid.
 
-Result: a tombstone from a stranger cannot block a record of another subject.
+Thus a tombstone from a stranger cannot block a record of another subject.
 
 ### 7.6 Delete hold
 
@@ -788,7 +788,7 @@ Restore means: move the target back to `objects/` and remove the hold entry.
 After erasure, the replica cannot restore the bytes. Another replica that still holds them can sync them back, because T is now invalid.
 
 Any command that loads the log (`verify`, `append`, `sync`, `export`, `reindex`, `rotate`, `purge`, `gc`) MUST apply this section.
-The hold length is 7 days. DEFAULT, Rob to confirm. Nothing is erased without the person running `gc` or `purge`.
+The hold length is 7 days. DEFAULT. Nothing is erased without the person running `gc` or `purge`.
 
 ### 7.7 Purge
 
@@ -809,7 +809,7 @@ A program MUST NOT tombstone a genesis, a succession or a tombstone.
 Each line is the canonical bytes of `["<subject>", "<source.system>", "<source.ref>"]`.
 A replica writes a line when it erases or does not copy a purged target that has a non-null `source.ref`.
 `hlog append` MUST skip a record whose (`subject`, `source.system`, `source.ref`) is in this file.
-Result: a re-import after a purge adds nothing on this replica.
+Thus a new import after a purge adds nothing on this replica.
 
 ### 7.9 Export
 
@@ -834,7 +834,7 @@ A rebuild from the same files MUST give the same bytes.
 ### 8.1 Known versions
 
 This draft defines record version `v` = 0.
-When the spec freezes, it will define `v` = 1. DEFAULT, Rob to confirm.
+When the spec freezes, it will define `v` = 1. DEFAULT.
 A verifier knows a version only if it implements every rule of that version.
 
 ### 8.2 Unknown version
@@ -847,7 +847,7 @@ A verifier MUST NOT interpret a record whose `v` it does not know.
 The record reached step 13 of 3.8, so its envelope, id and signature are good. The affected identity is:
 
 1. For `hlog.genesis`: the record's own id, when `author` = `kid`.
-2. For other `hlog.*` types: the `author` field, but only when `kid` is a signing key or recovery key of a node in that identity's known succession tree (6.3 step 3). Otherwise the record is skipped and the identity is not too new.
+2. For other `hlog.*` types: the `author` field. This applies only when `kid` is a signing key or a recovery key of that identity. The key must be on a node of its succession tree (6.3 step 3). Otherwise, skip the record. The identity is not too new.
 
 A file that no known key signed cannot make an identity too new. There is no `too new: log`.
 DEFAULT.
@@ -882,7 +882,7 @@ It reads one source file or folder. It writes JSONL to standard output.
     hlog-import-oura export.zip | hlog append
 
 An adapter MUST NOT sign records. `hlog append` signs.
-The core MUST NOT contain code for a specific source. Device formats, including the NMR puck, are adapters.
+The core MUST NOT contain code for a specific source. Device formats are adapters.
 
 ### 9.2 Adapter output
 
@@ -893,17 +893,17 @@ If it has no `subject`, `hlog append` sets the local identity id.
 
 ### 9.3 Blob first
 
-1. Store the raw source file as a blob before any record (`hlog blob put <file>` prints the blob id). DEFAULT, Rob to confirm the command name.
+1. Store the raw source file as a blob before any record (`hlog blob put <file>` prints the blob id). DEFAULT.
 2. Put `{"hash": <blob id>, "role": "raw-export", "media_type": <type>}` in `blobs` of each record from that file.
 
 ### 9.4 Granularity
 
-An adapter MAY write one record per reading, or one record per (source, type, interval) with the readings in a blob series (`value` = `{"blob": <id>}`). High-frequency sources such as watch heart rate SHOULD batch. The interval and the series format are adapter conventions, not core. Open: the data engineer picks the interval.
+An adapter MAY write one record per reading, or one record per (source, type, interval) with the readings in a blob series (`value` = `{"blob": <id>}`). High-frequency sources such as watch heart rate SHOULD batch. The interval and the series format are adapter conventions, not core. The interval is open (Appendix).
 Each record has `source.system`, `source.adapter` as `name@version`, and a dedupe ref in `source.ref` (4.8).
 The adapter does not hold the dedupe key.
 The adapter writes the HMAC input array (4.8) as `source.ref_input`.
 `hlog append` computes `source.ref` from it and removes `source.ref_input` before it signs.
-`source.ref_input` never reaches the log. DEFAULT, Rob to confirm.
+`source.ref_input` never reaches the log. DEFAULT.
 
 ### 9.5 Dedupe
 
@@ -924,13 +924,12 @@ An adapter MUST NOT invent values.
 ### 9.7 Parser fixes
 
 An adapter cannot know record ids. To correct a record, a partial record carries `source.supersedes_ref` = the HMAC input array (4.8) of the record it corrects. `hlog append` resolves it to the valid record with that ref and the same subject and system, adds a `supersedes` ref, and removes `source.supersedes_ref` before signing. If no record matches, `hlog append` skips the line and counts it as skipped.
-When the fixed record keeps the same HMAC input, its dedupe ref equals the old one; `hlog append` MUST NOT skip a record that supersedes the existing record with the same ref. A tuple ref changes when the value changes; that is expected.
+When the fixed record keeps the same HMAC input, its dedupe ref is the same as the old ref. `hlog append` MUST NOT skip a record that supersedes the existing record with the same ref. A tuple ref changes when the value changes. This is correct.
 
-### 9.8 Customer zero adapters
+### 9.8 Adapters
 
-The first adapters are `hlog-import-csv`, `hlog-import-oura`, `hlog-import-whoop` and `hlog-import-apple-health`.
+The reference implementation has `hlog-import-csv` and `hlog-import-labcorp`. Adapters for Apple Health, Oura and Whoop are open (Appendix).
 Each adapter document MUST say which source field is the native id, or that the source has none.
-The mapping for Oura, Whoop and Apple Health is open (Appendix B).
 
 ## 10. Extension 1: computed results
 
@@ -958,7 +957,7 @@ Do not log every computation.
 
     ["hlog/v0/method", <id>, <version>, <sha256 hex of the method spec text>, <sha256 hex of the conformance vector file>]
 
-DEFAULT, Rob to confirm.
+DEFAULT.
 
 ### 10.3 Replay
 
@@ -970,7 +969,7 @@ Replay of result D:
    1. If a valid tombstone names it, or the replica hides it, fail with `input purged: <id>`.
    2. If the record is not in the replica, fail with `input missing: <id>`.
    3. If the record is not valid, fail with `input invalid: <id>`.
-4. Run the method on exactly these inputs with `D.params`. Do not query the log for other records.
+4. Run the method on these inputs only, with `D.params`. Do not query the log for other records.
 5. Compute the canonical bytes of the output.
 6. If they differ from the canonical bytes of `D.value`, fail with `replay mismatch`.
 7. Otherwise print the canonical bytes.
@@ -986,10 +985,9 @@ For an even count, the median is the mean of the two middle values.
 Output: `{"n": <median>, "count": <count>, "unit": <unit of the first input>}`.
 The method spec text and its vectors are published files (section 14).
 
-### 10.5 Product tests
+### 10.5 Application tests
 
-The HRV 72-hour against 28-day comparison is a test for the first tool (`hlog compare`).
-It is not a core test.
+Tests of applications that use computed results, for example a comparison of a 72-hour and a 28-day average, are not core tests.
 
 ## 11. Extension 2: device capture
 
@@ -1013,17 +1011,17 @@ The subject pairs a device with an ordinary claim:
 - `author` = `subject` = the identity id
 - `value` = `{"key": <tagged device key>, "label": <string>}`
 
-To unpair, the subject supersedes the pair claim with `value.key` = the same key and `value.status` = `"unpaired"`. DEFAULT, Rob to confirm.
+To unpair, the subject supersedes the pair claim with `value.key` = the same key and `value.status` = `"unpaired"`. DEFAULT.
 The core does not check pairing. A reader decides by its own policy whether to trust a device record.
 
 ### 11.4 Capture
 
 The device signs each record when it captures the reading.
 `times.observed` uses the device clock.
-`times.imported` is the device clock time when it signs. DEFAULT, Rob to confirm.
+`times.imported` is the device clock time when it signs. DEFAULT.
 `source.ref` is null. The device does not hold the identity secret. The record id is the dedupe key.
 A device record MUST NOT have `blobs`. The device cannot encrypt with the blob key.
-To keep raw device evidence, the host stores the blob and writes its own claim with rel `about` to the device record. DEFAULT, Rob to confirm.
+To keep raw device evidence, the host stores the blob and writes its own claim with rel `about` to the device record. DEFAULT.
 
 ### 11.5 Clock record
 
@@ -1036,13 +1034,13 @@ When the host imports device records, the host writes one claim:
 Both readings are RFC 3339 UTC strings with millisecond precision.
 The host reads both clocks within one transfer session.
 Apps use this record to correct clock drift.
-Nobody changes the original times in device records.
+Do not change the original times in device records.
 
 ### 11.6 Transfer format
 
 The device gives the host a JSONL file of signed records and one `clock.json` with `{"key": <device key>, "device_time": <time>}`.
 `hlog import-device <dir>` checks each signature, writes each record file unchanged, then writes the `device.clock` claim.
-DEFAULT, Rob to confirm.
+DEFAULT.
 
 ## 12. CLI reference
 
@@ -1064,7 +1062,7 @@ Exit codes:
 | 3 | Too new. The command found an identity it cannot process (8.2). For `verify`, other identities were still checked. |
 | 4 | Compromised. A local identity is frozen (5.7). |
 
-If more than one code applies, use the highest. DEFAULT, Rob to confirm.
+If more than one code applies, use the highest. DEFAULT.
 
 Verify output lines:
 
@@ -1088,7 +1086,8 @@ Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <
 
 `hlog init`
 
-- Input: none, or an nsec on standard input with `-nostr -`. Flags: `-nostr new` makes a new secp256k1 signing key; `-nostr <file>` uses the nsec (`nsec1...` or 64 hex digits) in the file; `-nostr -` reads it from standard input. `-p256` (not built) uses a hardware P-256 key if the platform has one.
+- Input: none, or an nsec on standard input with `-nostr -`.
+- Flags: `-nostr new` makes a new secp256k1 signing key. `-nostr <file>` uses the nsec (`nsec1...` or 64 hex digits) in the file. `-nostr -` reads the nsec from standard input. `-p256` (not built) uses a hardware P-256 key if the platform has one.
 - Action: section 5.2.
 - Output: `identity <id>`, then `npub <npub>` for a secp256k1 key, then the 24 words on 24 numbered lines. Then a warning: write the words on paper, and use them for hlog only.
 - Errors: `already initialized` (exit 1).
@@ -1117,7 +1116,7 @@ Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <
 
 `hlog rotate [-no-seal <id>]... [-nostr new|<file>]`
 
-- Input: the 24 words on standard input. Numbering and case are ignored. `-nostr` picks a secp256k1 new key as for `init`; the nsec comes from a file because standard input carries the words.
+- Input: the 24 words on standard input. Numbering and case are ignored. `-nostr` selects a new secp256k1 key, as for `init`. The nsec comes from a file, because standard input carries the words.
 - Action: section 5.5. Seal every valid destructive record of the outgoing key in this replica except the ids that `-no-seal` names.
 - Output: one line `sealed <id>` or `not sealed <id>` per destructive record of the outgoing key, then `rotated to <tagged key>`, then `sealed <n>`. Before reading input, print `sync all devices before you rotate` to standard error.
 - Errors: `seed does not match`, `compromised: <id>` (exit 4), `key reuse`.
@@ -1187,7 +1186,7 @@ Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <
 - Output: JSONL partial records (9.2) on standard output.
 - `hlog-import-csv -type <type> -system <system> -blob <blob id> [-unit <unit>] <file.csv>` reads a header row. It uses column `value`, optional column `time` (RFC 3339) and optional column `id` (native id). Get `<blob id>` from `hlog blob put <file.csv>` first.
 
-Test clock: the reference CLI reads the current time from `$HLOG_NOW` (RFC 3339) when it is set. Tests use it for holds and `times.imported`. DEFAULT, Rob to confirm.
+Test clock: the reference CLI reads the current time from `$HLOG_NOW` (RFC 3339) when it is set. Tests use it for holds and `times.imported`. DEFAULT.
 
 ## 13. Conformance tests
 
@@ -1222,7 +1221,7 @@ Tests 1 to 22 cover the v0.2 acceptance tests 1 to 6 and the new decisions. Test
    - Action: import E on A. Sync A to B. Import E on B.
    - Expected: the second import prints `added 0`.
 6. Overlapping exports.
-   - Setup: file E1 has readings 1 to 10. File E2 has readings 6 to 15. Run the test twice: once with native ids and once without (tuple refs). Include two exactly identical readings in the overlap.
+   - Setup: file E1 has readings 1 to 10. File E2 has readings 6 to 15. Run the test twice: once with native ids and once without (tuple refs). Include two identical readings in the overlap.
    - Action: import E1, then E2.
    - Expected: the log has 15 readings plus the identical duplicate reading, so 16 records. The second import adds only the readings 11 to 15.
 
@@ -1346,33 +1345,33 @@ Tests 1 to 22 cover the v0.2 acceptance tests 1 to 6 and the new decisions. Test
     - Action: copy the files into a new folder in a random order 10 times. Verify each.
     - Expected: identical verify output each time.
 
-## 14. Test vectors to publish
+## 14. Test vectors
 
-The project MUST publish these vectors before v1 is frozen.
-All values are TBD. Nobody has computed them yet.
+The project MUST publish these vectors before the format freezes at version 1.
 Each vector is a JSON file in `vectors/` with inputs and expected outputs.
 Two independent implementations MUST produce each value before the vector is published.
+The reference implementation has published V1 to V12, V17 and V18. Its independent checks are `tools/checkvectors.py` and `tools/checksecp256k1.py`. V13 to V16 are not published yet.
 
 | # | Vector | Inputs | Expected output |
 |---|---|---|---|
-| V1 | JCS numbers | The RFC 8785 number samples, plus -0, 2^53 - 1, 2^53, 1e21, 1e-7 | Canonical strings or `bad number`. TBD |
-| V2 | JCS key order | Keys with non-ASCII and astral characters | Canonical bytes. TBD |
-| V3 | JCS strings | Control characters, `/`, U+007F, a lone surrogate escape | Canonical bytes or `bad string`. TBD |
-| V4 | Record id | Three full records (genesis, claim, tombstone) | Canonical bytes without `id` and `sig`, and the id. TBD |
-| V5 | Ed25519 signature | A fixed private seed and a record id | `kid`, `sig`. TBD |
-| V6 | P-256 signature | A fixed private key, a record id, a low-S and a high-S signature | Accept and reject results. TBD |
-| V7 | Commitment | A tagged recovery public key | Commitment id. TBD |
-| V8 | Paper seed | 32 fixed entropy bytes | The 24 words. TBD |
-| V9 | HKDF | The V8 seed | Identity secret, recovery generations 0, 1 and 2 (tagged public keys). TBD |
-| V10 | Derived keys | The V9 identity secret | Blob key (64 bytes) and dedupe key (32 bytes). TBD |
-| V11 | AES-SIV | The V10 blob key and 3 plaintexts (empty, 1 byte, 1 MiB pattern) | `V || C` and the blob id. TBD |
-| V12 | Dedupe ref | The V10 dedupe key, one native-id input, one tuple input, occurrences 0 and 1 | `source.ref` strings. TBD |
-| V13 | Chain selection | Folders for tests 17 to 22 | Chain ids, head, verify output. TBD |
-| V14 | Sealed rotation | Folders for tests 9, 10, 13 and 20 | Verify output. TBD |
-| V15 | Too new | Folder for test 24 | Verify output and exit code. TBD |
-| V16 | Median method | Input records and `D.value` | Method hash and canonical output. TBD |
-| V17 | Bad files | One file per error string in 3.8 | The error string. TBD |
-| V18 | secp256k1 | A fixed secret key and a record id, created_at 0 and 1761566400, zero aux | `kid`, npub, nsec, wrapper bytes and id, `sig`, and five rejects. Published; checked by `tools/checksecp256k1.py`. |
+| V1 | JCS numbers | The RFC 8785 number samples, plus -0, 2^53 - 1, 2^53, 1e21, 1e-7 | Canonical strings or `bad number`. Published. |
+| V2 | JCS key order | Keys with non-ASCII and astral characters | Canonical bytes. Published. |
+| V3 | JCS strings | Control characters, `/`, U+007F, a lone surrogate escape | Canonical bytes or `bad string`. Published. |
+| V4 | Record id | Three full records (genesis, claim, tombstone) | Canonical bytes without `id` and `sig`, and the id. Published. |
+| V5 | Ed25519 signature | A fixed private seed and a record id | `kid`, `sig`. Published. |
+| V6 | P-256 signature | A fixed private key, a record id, a low-S and a high-S signature | Accept and reject results. Published. |
+| V7 | Commitment | A tagged recovery public key | Commitment id. Published. |
+| V8 | Paper seed | 32 fixed entropy bytes | The 24 words. Published. |
+| V9 | HKDF | The V8 seed | Identity secret, recovery generations 0, 1 and 2 (tagged public keys). Published. |
+| V10 | Derived keys | The V9 identity secret | Blob key (64 bytes) and dedupe key (32 bytes). Published. |
+| V11 | AES-SIV | The V10 blob key and 3 plaintexts (empty, 1 byte, 1 MiB pattern) | `V || C` and the blob id. Published. |
+| V12 | Dedupe ref | The V10 dedupe key, one native-id input, one tuple input, occurrences 0 and 1 | `source.ref` strings. Published. |
+| V13 | Chain selection | Folders for tests 17 to 22 | Chain ids, head, verify output. Not published. |
+| V14 | Sealed rotation | Folders for tests 9, 10, 13 and 20 | Verify output. Not published. |
+| V15 | Too new | Folder for test 24 | Verify output and exit code. Not published. |
+| V16 | Median method | Input records and `D.value` | Method hash and canonical output. Not published. |
+| V17 | Bad files | One file per error string in 3.8 | The error string. Published. |
+| V18 | secp256k1 | A fixed secret key and a record id, created_at 0 and 1761566400, zero aux | `kid`, npub, nsec, wrapper bytes and id, `sig`, and five rejects. Published. Checked by `tools/checksecp256k1.py`. |
 
 The AES-SIV code MUST also pass the RFC 5297 Appendix A vectors. The HKDF code MUST pass the RFC 5869 Appendix A vectors.
 
@@ -1384,7 +1383,7 @@ The AES-SIV code MUST also pass the RFC 5297 Appendix A vectors. The HKDF code M
 - No trusted time. Validity never uses a clock. Only the delete hold uses the local clock, and it never changes validity.
 - Stranger tombstones. A tombstone is checked against its target before sync refuses the target (7.5).
 - Signature malleability. P-256 requires low-S. A replica keeps the first file it gets for an id (4.5).
-- Denial of service. A replica MUST limit record size (3.1). A verifier SHOULD limit the succession tree depth to 10,000 nodes. DEFAULT, Rob to confirm.
+- Denial of service. A replica MUST limit record size (3.1). A verifier SHOULD limit the succession tree depth to 10,000 nodes. DEFAULT.
 - Parser safety. JSON parsing MUST reject duplicate keys and bad numbers before any check uses the value.
 - Equal blobs. Deterministic encryption shows when two blobs of one identity hold the same plaintext (16).
 - Local files. `local/` holds the identity secret and the signing key. File mode MUST be 0600. Backups of `local/` are as sensitive as the keys.
@@ -1392,7 +1391,7 @@ The AES-SIV code MUST also pass the RFC 5297 Appendix A vectors. The HKDF code M
 ## 16. Privacy considerations
 
 - Linkability. The identity id appears in every record and every export. Recipients of two exports can link them. Per-recipient pseudonymous subjects are deferred (18).
-- Equality leak. AES-SIV is deterministic. Anyone who sees two blobs can tell if their plaintexts are equal. The same holds for dedupe refs inside one identity. This is the cost of dedupe and idempotent sync.
+- Equality leak. AES-SIV is deterministic. Anyone who sees two blobs can tell if their plaintexts are equal. The same is true for dedupe refs in one identity. This leak is the cost of dedupe and of a sync that gives the same result when it runs again.
 - Metadata. Record files are plaintext JSON. `type`, `times`, `value` and `context` are visible to anyone with the folder. Only blobs are encrypted. Encryption of records for transport is a sharing extension (18).
 - Identity secret exposure. Whoever has the identity secret can decrypt all blobs and test guesses against dedupe refs. Rotation does not change it. The fix is a new identity and a new log (17).
 - Export. `hlog export` writes plaintext. The person must protect the export folder.
@@ -1400,7 +1399,7 @@ The AES-SIV code MUST also pass the RFC 5297 Appendix A vectors. The HKDF code M
 
 ## 17. Known limits
 
-- Rotation needs the paper seed. A person who loses the paper and the device loses the identity. This is the price of a stolen device never being able to take over.
+- Rotation needs the paper seed. A person who loses the paper and the device loses the identity. This limit is the cost of the rule that a stolen device cannot take over the identity.
 - Records are plaintext on disk. Only blobs are encrypted. Folder-level encryption is the sync tool's job in v0.
 
 1. A rotated-out chain key can still sign a claim that verifies, with any `times.observed`. Witness records are a later extension.
@@ -1423,78 +1422,46 @@ The AES-SIV code MUST also pass the RFC 5297 Appendix A vectors. The HKDF code M
 - Per-recipient pseudonymous subjects (deferred).
 - Grants, sharing, selective disclosure and zero-knowledge proofs.
 - Trusted time, witness records and global ordering.
-- Nostr and Blossom transport (a later extension). `secp256k1` signing keys are in the core since v0.5; publishing records to relays is not.
+- Nostr and Blossom transport (a later extension). `secp256k1` signing keys are in the core since v0.5. Publication of records to relays is not.
 - User interface, servers and accounts.
-- Products: `hlog compare`, the puck app and the clinician view.
+- Applications, for example comparison tools, device apps and clinician views.
 
 ## 19. Governance and license
 
 - This specification is CC0 1.0.
 - The reference code is Apache-2.0.
 - The project takes a neutral name. "hlog" is a placeholder.
-- AION Biosciences stewards the project. AION does not own it.
-- The repository stays private on Benjamin Anderson's GitHub account until the review with Rob Long. A decision to publish comes after that review.
-- Changes to this spec need a written change note and new test vectors when a result changes.
+- AION Biosciences is the steward of the project. AION does not own it.
+- The repository is private until the format freezes. The steward then decides when to publish it.
+- A change to this specification needs a written change note. If a change alters a result, it also needs new test vectors.
 
-## Appendix A: deltas from the reference code at /workspace/hlog
+## Appendix: defaults and open items
 
-The reference code at `/workspace/hlog` implements the earlier v0.1 draft. It does not implement this spec.
-The build is on hold. This list is from a read of the code on 2026-10-27.
+Each item has a DEFAULT in the text, or is open. A DEFAULT can change until the format freezes at version 1 (CORE.md section 6).
 
-| # | Topic | Code now | This spec |
-|---|---|---|---|
-| A1 | Computed results | `derive median` and `replay` are in the core package, and `method`, `inputs`, `as_of`, `excluded` are core fields. | Extension 1 (section 10). |
-| A2 | Median method hash | SHA-256 of a description string. | Hash of the spec text and vector file (10.2). |
-| A3 | Value series | `value.series` `{hash, format, time_column, value_column}` plus `summary`. CSV is blessed. | `{"blob": id, "unit": ...}`. No blessed format. |
-| A4 | Blob encryption | AES-256-GCM with a synthetic IV from HMAC. Key = HMAC of a random local secret with label `blob`. | AES-SIV (RFC 5297) with an HKDF key (4.9). |
-| A5 | Secret | `local/secret` is 32 random bytes in hex. | Identity secret derived from the paper seed (4.7). |
-| A6 | Recovery key | A random key stored in `local/recovery.key` on the device. | Derived from the paper seed. Never stored on a device. |
-| A7 | Commitment | SHA-256 of the 32 raw public key bytes. | SHA-256 of the tagged key string (4.6). |
-| A8 | Recovery commitment on rotation | Each rotation commits to a new recovery key, also for a current-key rotation. | A current-key rotation copies the commitment. Only recovery advances it (5.8). |
-| A9 | Sealed rotation | No `sealed` field. Any chain key can supersede or tombstone at any time. | Head key, or a seal (5.4, 6.3 step 7). |
-| A10 | Forks | A fork is an error (`succession does not extend its identity chain`). No recovery-wins rule. No freeze. | Fork rules, recovery wins, freeze (5.6, 5.7). |
-| A11 | Dedupe ref | HMAC-SHA-256 over the CSV row text (fields joined by 0x1F) or the whole file. Bare hex. Key = HMAC of the local secret with label `ref`. | HMAC over a canonical array with native id or tuple and occurrence. `hmac-sha256:` prefix (4.8). |
-| A12 | Dedupe scope | Unique (`source.system`, `source.ref`). | Unique (`subject`, `source.system`, `source.ref`). Duplicates marked, lowest id primary. |
-| A13 | Purged refs | Not kept. A re-import after a purge brings the data back. | `local/purged-refs.jsonl` (7.8). |
-| A14 | Delete hold | Purge and sync erase at once on every replica. | Hide, 7-day hold, restore (7.6). |
-| A15 | Tombstone targets | A tombstone can name a succession (the subject check passes). Genesis is protected only because it has no subject. | Genesis, succession and tombstone are never targets (6.7). |
-| A16 | Unknown version | Every record with an unknown `v` is skipped. | `hlog.*` makes the identity too new. Others are skipped (8.2). |
-| A17 | Unknown `hlog.*` type and unknown rel | Not checked. | Invalid (3.3, 3.7). |
-| A18 | Tombstone reason | `value.reason`. | `context.reason`. No `value`. |
-| A19 | File bytes | Canonical bytes plus a final newline. Readers do not check that file bytes are canonical. | Canonical bytes, no final newline. `not canonical` error (3.8 step 10). |
-| A20 | JSON parsing | `encoding/json` into `map[string]any`. Duplicate keys are accepted (last wins). Large integers lose precision. | Reject duplicate keys and out-of-range numbers (3.8). |
-| A21 | Strings | Invalid UTF-8 is replaced silently by U+FFFD in the JCS writer. | Reject invalid UTF-8 and lone surrogates. |
-| A22 | Key algorithms | Ed25519 only. | Ed25519 and P-256. `secp256k1` reserved. |
-| A23 | Export | No `export` command. | `hlog export` and `hlog import-export` (7.9). |
-| A24 | Devices | No pairing, no device import, no clock record. | Extension 2 (11). |
-| A25 | Paths | `local/identity`, `local/secret`, `local/signing.key`, `local/recovery.key`, `index.json` at the log root. | `local/identity`, `local/identity-secret`, `local/signing-key`, `local/holds.json`, `local/purged-refs.jsonl`, `local/cache/`. |
-| A26 | Index | `index.json` with a fingerprint of object file names only. | Cache in `local/cache/`. Byte-identical rebuild. |
-| A27 | Adapter | `hlog-import` stores the blob itself (it reads `local/secret`). It has no native id column. | `hlog blob put` plus `hlog-import-csv -blob`. Native id column `id`. `source.ref_input` (9.4). |
-| A28 | Sync | Honors a tombstone unless its target is visible in either replica with another subject. Erases at once. | Same check (7.5). Also hides under hold and records purged refs. |
-| A29 | Exit codes | 0 or 1 only. | 0 to 4 (12.1). |
-| A30 | Test clock | Package variable `Now`. | `$HLOG_NOW` for the CLI. |
-| A31 | Bare-key authors | `kid` must equal `author`. | Same. |
-| A32 | `subject` check | Any non-empty string. | Identity id. Missing genesis is a warning (6.3 step 11). |
+Decided:
 
-## Appendix B: open items
+1. Signing keys: Ed25519 is the default. P-256 is for hardware keys in devices. secp256k1 BIP-340 keys sign through a Nostr wrapper event, so NIP-46 and NIP-07 signers can sign (C21). The wrapper uses kind 29944 and a NIP-31 `alt` tag.
+2. Records have their own format. Nostr can carry them later, encrypted. The core has no NIP-01 event shape.
+3. Every succession is signed with the paper seed. Any fork freezes the identity (5.6, 5.7).
+4. The hold before erasure is 7 days (7.6). The hold controls `gc`. A timer does not erase anything.
+5. One host holds the signing key. Other devices use bare device keys (11.3). Devices do not share a signing key.
 
-Each item has a DEFAULT in the text. Rob can change any of them.
+Defaults:
 
-1. Curve choice: Ed25519 default, P-256 for hardware device keys. Decided 2026-10-28 (v0.5, C21): secp256k1 BIP-340 keys may sign, through a Nostr wrapper event so NIP-46 and NIP-07 signers work. One dependency (btcec/v2). Kind 29944 and the wrapper with its NIP-31 `alt` tag decided 2026-10-28 (CORE.md section 6).
-2. Own record format, with Nostr only as an encrypted carrier later. No NIP-01 event shape in the core.
-3. One identity secret per person now. Per-blob keys come with the sharing extension.
-4. Decided in v0.4: every succession is seed-signed; any fork is a freeze (5.6, 5.7). The lowest-id rule is gone. Rob: confirm, or name what KERI pre-rotation still adds.
-5. Hold length of 7 days (7.6). Decided in v0.4: the hold gates `gc`; nothing is erased on a timer.
-6. Record size limit of 1 MiB (16 MiB for successions) and blob minimum of 256 MiB.
-7. `type` pattern and precision values (3.2, 3.5).
-8. AES-SIV associated data label (4.9) and the `hmac-sha256:` ref prefix (4.8). A vetted AES-SIV library is allowed; the reference build is hand-rolled and matches OpenSSL.
-9. Paper seed as BIP-39 English words over 32 bytes (4.10).
-10. Decided in v0.4: one host holds the signing key; other devices are bare device keys (11.3). No shared signing key.
-11. Native id fields for Oura, Whoop and Apple Health. Nobody has checked these export formats for this spec yet. Decided per adapter from a real export, never from memory.
-16. Batching interval and series format for high-frequency sources (9.4). Data engineer to pick.
-17. Measurement uncertainty convention (for example `context.cv`) for the NMR source. Adapter-level.
-18. Query format for the index (7.10). Readers decide; v0 ships `local/cache/index.json` only.
-12. Device record `times.imported` and blob handling (11.4).
-13. Method hash input (10.2).
-14. Exit code priority (12.1).
-15. Record version number at freeze (8.1).
+6. One identity secret for each person. Keys for each blob come with the sharing extension.
+7. Record size limit 1 MiB, succession size limit 16 MiB, blob minimum 256 MiB (3.1, 4.9).
+8. The `type` pattern and the precision values (3.2, 3.5).
+9. The AES-SIV associated data label (4.9) and the `hmac-sha256:` ref prefix (4.8). An implementation can use a tested AES-SIV library. The reference implementation builds AES-SIV and agrees with OpenSSL.
+10. The paper seed as 24 BIP-39 English words over 32 bytes (4.10).
+11. The `times.imported` of device records and the blobs of device records (11.4).
+12. The input to the method hash (10.2).
+13. The order of exit codes (12.1).
+14. The record version number at the freeze (8.1).
+
+Open:
+
+15. Native id fields for Apple Health, Oura and Whoop. Each adapter decides from a real export file, never from memory.
+16. Batch interval and series format for sources with many readings (9.4).
+17. A convention for measurement uncertainty, for example `context.cv`. This is an adapter convention.
+18. A query format for the index (7.10). Readers decide. Version 0 has `local/cache/index.json` only.

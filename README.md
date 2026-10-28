@@ -8,7 +8,7 @@ sha256:1b59a10ca53607dac3516c7a8c8798b34597b54f97b704075cd00217c2ecee29
 $ hlog ls -since 2026-10-01
 2026-10-24 15:00  symptom.headache  7 {score}  # after a salty lunch   1b59a10ca536
 2026-10-27        weight            81.2 kg                            31fe480169a8
-2026-10-28 13:00  food              ramen, extra broth       [claude]  f21a3641fc82
+2026-10-28 13:00  food              ramen, extra broth    [assistant]  f21a3641fc82
 ```
 
 `bean` is the reference implementation of the **hlog** protocol ([CORE.md](CORE.md) in two pages, [SPEC.md](SPEC.md) in full). The command is `hlog`. Both names are placeholders.
@@ -30,7 +30,6 @@ $ hlog ls -since 2026-10-01
 |---|---|---|
 | Go 1.24 or later | Building `hlog` | `brew install go` |
 | `pdftotext` | The Labcorp importer only | `brew install poppler` |
-| Claude Code or Claude Desktop | Logging from chat (optional) | [claude.com/claude-code](https://claude.com/claude-code) |
 
 Build and install the commands. The repository is private for now, so you need access to it on GitHub.
 
@@ -141,23 +140,23 @@ The CSV needs a header row and a `value` column. A `time` column (RFC 3339) and 
 
 Apple Health. Each importer is written against a real export file. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
-## Log from chat
+## Log from an AI assistant
 
-Let Claude read your log and add to it:
+`hlog mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server. Any AI client that supports MCP can use it to read your log and add to it. The server runs this command:
 
 ```
-claude mcp add hlog -- hlog -dir ~/health mcp -write -label claude
+hlog -dir ~/health mcp -write -label assistant
 ```
 
-Then tell Claude what happened: "had ramen with extra broth around 1", "took 400 mg magnesium", "is my resting heart rate going up this month?". Claude logs your words with the right type and time. It puts a calorie or sodium estimate in a separate record that points to the meal, so your words are never changed. Its records show as `[claude]` in `hlog ls`.
-
-For Claude Desktop, add this to `mcpServers` in its settings file:
+Add it to your client as an MCP server that uses stdio. Most clients take a JSON entry of this form:
 
 ```json
-"hlog": {"command": "/Users/you/go/bin/hlog", "args": ["-dir", "/Users/you/health", "mcp", "-write", "-label", "claude"]}
+"hlog": {"command": "/Users/you/go/bin/hlog", "args": ["-dir", "/Users/you/health", "mcp", "-write", "-label", "assistant"]}
 ```
 
-Without `-write`, the server can only read. With `-write`, Claude signs with its own **agent key**, not yours. An agent can add records about you. It cannot correct or delete your records, and it cannot sign as you. Whatever the server returns goes to the AI provider; use a local model if that matters to you.
+Then tell the assistant what happened, for example "had ramen with extra broth around 1" or "took 400 mg magnesium". You can also ask questions: "is my resting heart rate going up this month?" The assistant logs your words with the correct type and time. It puts a calorie or sodium estimate in a separate record that points to the meal. Your words do not change. Its records show as `[assistant]` in `hlog ls`. Use a different `-label` for each assistant.
+
+Without `-write`, the server can only read. With `-write`, the assistant signs with its own **agent key**, not your key. An agent can add records about you. It cannot correct or delete your records, and it cannot sign as you. The server sends the records it returns to the AI provider. Use a local model if that is a problem for you.
 
 ## More than one machine
 
@@ -184,23 +183,23 @@ Never use `rsync --delete`: the log only grows, and deletions travel as records.
 
 ### Run an agent on another machine
 
-For example Hermes on a cloud server. The server gets a copy of the log and its own agent key, but not your key and not your 24 words.
+For example, an assistant on a cloud server. The server gets a copy of the log and its own agent key, but not your key and not your 24 words.
 
 1. Copy `objects/` and `blobs/` to the server, as above.
 2. On the server, make the agent key:
 
    ```
-   hlog -dir ~/health agent init -label hermes
+   hlog -dir ~/health agent init -label server
    ```
 
    It prints the agent's npub and the command for the next step.
 3. On your own machine, trust the agent:
 
    ```
-   hlog agent pair npub1... -label hermes
+   hlog agent pair npub1... -label server
    ```
 
-4. The agent logs with `hlog add -agent ...`, `hlog append -agent`, or `hlog mcp -write`. Sync both ways as above. Its records show as `[hermes]`.
+4. The agent logs with `hlog add -agent ...`, `hlog append -agent`, or `hlog mcp -write`. Sync both ways as above. Its records show as `[server]`.
 
 Anyone who can read the server's folder can read your records: they are plain JSON. Photos and other stored files stay encrypted unless you also copy `local/identity-secret` to the server.
 

@@ -111,7 +111,7 @@ Reads and checks every file and signature, and every stored file's hash. Run it 
 
 ### `mcp [-write] [-label <name>]`
 
-Runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdin and stdout, for an AI client such as Claude. Without `-write` it can only read. Its tools:
+Runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdin and stdout, for any AI client that supports MCP. Without `-write` it can only read. Its tools:
 
 | Tool | Returns |
 |---|---|
