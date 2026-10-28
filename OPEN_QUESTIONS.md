@@ -74,3 +74,13 @@ Recorded so the build reflects it. Rob did not review the eight one-pager questi
 23. **Export manifest says `hlog-core-v0.4`.** The spec text says v0.3; the string tracks the spec version the writer implements.
 
 24. **`Sync` returns a `Replaced` count** for C13 replacements, in addition to the three counts of 12.3.
+
+## M4 (CLI and CSV adapter)
+
+25. **`hlog blob get <id>`** is added (not in 12.3). Export covers exit, but a person who wants one raw file back should not need a whole export.
+
+26. **CSV adapter fields.** `value` parses as a number into `{"n": ...}`, else as `{"text": ...}`; empty is `{"n": null}` (9.6). Unknown columns are copied into `context` as strings. Identical readings without a native id get increasing occurrence numbers within one file so they are not merged (4.8 rule 6).
+
+27. **`hlog append` prints the counts before the error** when it stops early, since records before the error stay written (12.3).
+
+28. **Exit codes for `purge`, `append`, and others** are 1 on any error; only `verify` uses 3 and 4. `fail()` maps a `too new:` or `compromised:` message to 3 or 4 for commands that surface them later (M5).
