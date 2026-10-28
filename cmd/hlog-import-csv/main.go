@@ -8,6 +8,7 @@ package main
 
 import (
 	"encoding/csv"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -19,17 +20,22 @@ import (
 	"bean/core"
 )
 
-const version = "hlog-import-csv@0.4.0"
+const version = "hlog-import-csv@0.5.0"
+
+type options struct {
+	typ, system, blob, unit, precision string
+}
 
 func main() {
 	fs := flag.NewFlagSet("hlog-import-csv", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	typ := fs.String("type", "", "record type, for example hrv.rmssd")
-	system := fs.String("system", "csv", "source.system")
-	blob := fs.String("blob", "", "blob id of the raw file, from hlog blob put")
-	unit := fs.String("unit", "", "unit of value")
-	precision := fs.String("precision", "second", "precision of the time column")
-	if err := fs.Parse(os.Args[1:]); err != nil || *typ == "" || fs.NArg() != 1 {
+	var o options
+	fs.StringVar(&o.typ, "type", "", "record type, for example hrv.rmssd")
+	fs.StringVar(&o.system, "system", "csv", "source.system")
+	fs.StringVar(&o.blob, "blob", "", "blob id of the raw file, from hlog blob put")
+	fs.StringVar(&o.unit, "unit", "", "unit of value")
+	fs.StringVar(&o.precision, "precision", "second", "precision of the time column")
+	if err := fs.Parse(os.Args[1:]); err != nil || o.typ == "" || fs.NArg() != 1 {
 		fmt.Fprintln(os.Stderr, "usage: hlog-import-csv -type <type> [-system <system>] [-blob <blob id>] [-unit <unit>] [-precision <p>] <file.csv>")
 		os.Exit(2)
 	}
@@ -39,12 +45,19 @@ func main() {
 		os.Exit(1)
 	}
 	defer f.Close()
-	r := csv.NewReader(f)
+	if err := convert(f, os.Stdout, o); err != nil {
+		fmt.Fprintf(os.Stderr, "hlog-import-csv: %s\n", err)
+		os.Exit(1)
+	}
+}
+
+// convert writes one partial record per CSV row.
+func convert(in io.Reader, out io.Writer, o options) error {
+	r := csv.NewReader(in)
 	r.FieldsPerRecord = -1
 	header, err := r.Read()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "hlog-import-csv: %s\n", err)
-		os.Exit(1)
+		return err
 	}
 	col := map[string]int{}
 	for i, h := range header {
@@ -52,23 +65,18 @@ func main() {
 	}
 	vi, ok := col["value"]
 	if !ok {
-		fmt.Fprintln(os.Stderr, "hlog-import-csv: no value column")
-		os.Exit(1)
+		return errors.New("no value column")
 	}
 	ti, hasTime := col["time"]
 	ii, hasID := col["id"]
 	occurrence := map[string]int{} // for identical readings without a native id
-	out := os.Stdout
-	line := 1
-	for {
+	for line := 2; ; line++ {
 		row, err := r.Read()
 		if err == io.EOF {
-			break
+			return nil
 		}
-		line++
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "hlog-import-csv: line %d: %s\n", line, err)
-			os.Exit(1)
+			return fmt.Errorf("line %d: %s", line, err)
 		}
 		get := func(i int) string {
 			if i < len(row) {
@@ -76,27 +84,25 @@ func main() {
 			}
 			return ""
 		}
-		// value (9.6: null when the source has none; never invent)
-		var value any
+		// SPEC.md 3.4 shapes; 9.6: null when the source has none, never invent.
+		value := map[string]any{"n": nil}
 		if v := get(vi); v != "" {
 			if n, err := strconv.ParseFloat(v, 64); err == nil {
 				value = map[string]any{"n": n}
-				if *unit != "" {
-					value.(map[string]any)["unit"] = *unit
+				if o.unit != "" {
+					value["unit"] = o.unit
 				}
 			} else {
-				value = map[string]any{"text": v}
+				value = map[string]any{"s": v}
 			}
-		} else {
-			value = map[string]any{"n": nil}
 		}
 		context := map[string]any{}
 		var observed any
-		if hasTime {
-			raw := get(ti)
-			if t, err := time.Parse(time.RFC3339Nano, raw); err == nil && raw != "" {
-				observed = map[string]any{"start": t.UTC().Format(time.RFC3339Nano), "precision": *precision}
-			} else if raw != "" {
+		if raw := get(ti); hasTime && raw != "" {
+			// Keep the time as written, with its own offset.
+			if _, err := time.Parse(time.RFC3339Nano, raw); err == nil {
+				observed = map[string]any{"start": raw, "precision": o.precision}
+			} else {
 				context["raw_time"] = raw
 			}
 		}
@@ -108,16 +114,16 @@ func main() {
 				context[name] = v
 			}
 		}
-		src := map[string]any{"system": *system, "adapter": version}
+		src := map[string]any{"system": o.system, "adapter": version}
 		if hasID && get(ii) != "" {
-			src["ref_input"] = core.RefInputNative(*system, get(ii), 0)
+			src["ref_input"] = core.RefInputNative(o.system, get(ii), 0)
 		} else {
 			key := string(core.Canonical([]any{observed, value}))
-			src["ref_input"] = core.RefInputTuple(*system, *typ, observed, value, occurrence[key])
+			src["ref_input"] = core.RefInputTuple(o.system, o.typ, observed, value, occurrence[key])
 			occurrence[key]++
 		}
 		rec := map[string]any{
-			"type":   *typ,
+			"type":   o.typ,
 			"value":  value,
 			"times":  map[string]any{"observed": observed},
 			"source": src,
@@ -125,10 +131,11 @@ func main() {
 		if len(context) > 0 {
 			rec["context"] = context
 		}
-		if *blob != "" {
-			rec["blobs"] = []any{map[string]any{"hash": *blob, "role": "raw-export", "media_type": "text/csv"}}
+		if o.blob != "" {
+			rec["blobs"] = []any{map[string]any{"hash": o.blob, "role": "raw-export", "media_type": "text/csv"}}
 		}
-		out.Write(core.Canonical(rec))
-		out.Write([]byte{'\n'})
+		if _, err := out.Write(append(core.Canonical(rec), '\n')); err != nil {
+			return err
+		}
 	}
 }

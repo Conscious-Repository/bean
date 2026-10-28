@@ -186,17 +186,8 @@ func toolLogEntry(s *core.Store, a toolArgs) (any, error) {
 			return nil, fmt.Errorf("bad at: %q", a.At)
 		}
 	}
-	if a.About != "" {
-		l, err := s.Load()
-		if err != nil {
-			return nil, err
-		}
-		r, err := l.Resolve(a.About)
-		if err != nil {
-			return nil, err
-		}
-		o.About = r.ID
-	} else if a.Type == "food.estimate" {
+	o.About = a.About
+	if a.About == "" && a.Type == "food.estimate" {
 		return nil, errors.New("food.estimate needs about: the id of the food entry")
 	}
 	if a.PhotoPath != "" {

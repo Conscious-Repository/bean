@@ -19,7 +19,7 @@ Written 2026-10-28 after a review of the repo, the Rob conversation (2026-10-27)
 ## Gaps found by using it as a new person
 
 - No way to read records back. Fixed in M6.
-- `hlog-import-csv` takes one `value` column. A real multi-column export fails with `no value column`. It also writes text values as `{"text"}`, not the spec's `{"s"}`.
+- `hlog-import-csv` takes one `value` column. A real multi-column export fails with `no value column`. (Its `{"text"}` values are fixed to `{"s"}`: OPEN_QUESTIONS 79.)
 - No quick manual entry. Fixed in M6.
 - After `purge` and `gc`, the summary reports the tombstone as `1 held` forever. Spec-correct, reads like a fault.
 

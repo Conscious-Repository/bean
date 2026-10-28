@@ -22,7 +22,7 @@ func newStore(t *testing.T) *Store {
 func initStore(t *testing.T) (*Store, string) {
 	t.Helper()
 	s := newStore(t)
-	id, words, err := s.Init()
+	id, words, err := s.Init(NewKey{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func fileSet(t *testing.T, s *Store) string {
 
 func TestInitAndAppend(t *testing.T) {
 	s, id := initStore(t)
-	if _, _, err := s.Init(); err != ErrAlreadyInitialized {
+	if _, _, err := s.Init(NewKey{}); err != ErrAlreadyInitialized {
 		t.Errorf("second init: %v", err)
 	}
 	res := appendLines(t, s, partial("hrv.rmssd", 40, []any{"hlog/v0/ref", "id", "test", "1", 0.0}))

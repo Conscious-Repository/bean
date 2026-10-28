@@ -8,8 +8,6 @@ import (
 	"strings"
 )
 
-var ErrSeedMismatch = ErrSeedWords
-
 // RotateResult is the output of Rotate.
 type RotateResult struct {
 	Succession string
@@ -22,12 +20,7 @@ type RotateResult struct {
 // random signing key (SPEC.md 5.3 to 5.5 as changed by C5 and C6). words
 // are the 24 paper words. Every valid destructive record of the outgoing key
 // in this replica is sealed unless its id is in noSeal.
-func (s *Store) Rotate(words []string, noSeal []string) (RotateResult, error) {
-	return s.RotateTo(words, noSeal, NewKey{})
-}
-
-// RotateTo is Rotate with a chosen new signing key.
-func (s *Store) RotateTo(words []string, noSeal []string, key NewKey) (RotateResult, error) {
+func (s *Store) Rotate(words []string, noSeal []string, key NewKey) (RotateResult, error) {
 	var res RotateResult
 	l, err := s.Load()
 	if err != nil {
@@ -119,12 +112,7 @@ func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string, k
 // commits to recovery generation 0 of these words, writes the identity
 // secret, and writes a succession to a new signing key exactly as Rotate
 // does, with the same default seals. It returns the identity id.
-func (s *Store) Restore(words []string, noSeal []string) (RotateResult, string, error) {
-	return s.RestoreTo(words, noSeal, NewKey{})
-}
-
-// RestoreTo is Restore with a chosen new signing key.
-func (s *Store) RestoreTo(words []string, noSeal []string, key NewKey) (RotateResult, string, error) {
+func (s *Store) Restore(words []string, noSeal []string, key NewKey) (RotateResult, string, error) {
 	if _, err := os.Stat(s.path(fileIdentity)); err == nil {
 		return RotateResult{}, "", ErrAlreadyInitialized
 	}

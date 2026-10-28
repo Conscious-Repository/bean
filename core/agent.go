@@ -166,11 +166,12 @@ func (s *Store) Pair(key, label string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if l.Local == nil {
-		return "", ErrNotInitialized
+	w, err := s.writerFor(l, false)
+	if err != nil {
+		return "", err
 	}
 	for id, r := range l.Report.Records {
-		if r.Type == "agent.pair" && r.Author == l.Local.Identity && l.Current(id) && r.ValueKey() == key {
+		if r.Type == "agent.pair" && r.Author == w.author && l.Current(id) && r.ValueKey() == key {
 			return id, nil
 		}
 	}
@@ -184,7 +185,7 @@ func (s *Store) Pair(key, label string) (string, error) {
 		"times":  map[string]any{"observed": nil},
 		"source": map[string]any{"system": "self", "adapter": Adapter, "ref": nil},
 	}
-	res, err := s.appendWith(l, writer{l.Local.Signer, l.Local.Identity, l.Local.Identity, l.Local.Secret}, strings.NewReader(string(Canonical(obj))+"\n"))
+	res, err := s.appendWith(l, w, strings.NewReader(string(Canonical(obj))+"\n"))
 	if err != nil {
 		return "", err
 	}
@@ -221,9 +222,9 @@ func (s *Store) AppendAsAgent(in io.Reader) (AppendResult, error) {
 	if err != nil {
 		return AppendResult{}, err
 	}
-	a, err := s.ReadAgent()
+	w, err := s.writerFor(l, true)
 	if err != nil {
 		return AppendResult{}, err
 	}
-	return s.appendWith(l, writer{a.Signer, a.Signer.Public(), a.Identity, a.Secret}, in)
+	return s.appendWith(l, w, in)
 }

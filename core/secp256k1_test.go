@@ -106,7 +106,7 @@ func TestSecp256k1Signatures(t *testing.T) {
 func TestNostrLog(t *testing.T) {
 	sec, _ := hex.DecodeString("67dea2ed018072d675f5415ecfaed7d2597555e202d85b3d65ea4e58d2d92ffa")
 	s := newStore(t)
-	id, words, err := s.InitWith(NewKey{Alg: "secp256k1", Secret: sec})
+	id, words, err := s.Init(NewKey{Alg: "secp256k1", Secret: sec})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestNostrLog(t *testing.T) {
 	}
 
 	// Rotate to a new random npub; the purge by the old npub is sealed.
-	res, err := s.RotateTo(words, nil, NewKey{Alg: "secp256k1"})
+	res, err := s.Rotate(words, nil, NewKey{Alg: "secp256k1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestNostrLog(t *testing.T) {
 	}
 	appendLines(t, s, partial("hrv.rmssd", 3, nil))
 	verifyOK(t, s)
-	if _, err := s.RotateTo(words, nil, NewKey{Alg: "secp256k1", Secret: sec}); err == nil || err.Error() != "key reuse" {
+	if _, err := s.Rotate(words, nil, NewKey{Alg: "secp256k1", Secret: sec}); err == nil || err.Error() != "key reuse" {
 		t.Errorf("rotate back to the first npub: %v", err)
 	}
 
@@ -147,13 +147,13 @@ func TestNostrLog(t *testing.T) {
 	if _, err := b.Sync(s); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := b.RestoreTo(words, nil, NewKey{Alg: "secp256k1", Secret: sec}); err == nil || err.Error() != "key reuse" {
+	if _, _, err := b.Restore(words, nil, NewKey{Alg: "secp256k1", Secret: sec}); err == nil || err.Error() != "key reuse" {
 		t.Errorf("restore to a used npub: %v", err)
 	}
 	if _, err := b.ReadLocal(); err != ErrNotInitialized {
 		t.Errorf("failed restore left local/: %v", err)
 	}
-	if _, got, err := b.RestoreTo(words, nil, NewKey{}); err != nil || got != id {
+	if _, got, err := b.Restore(words, nil, NewKey{}); err != nil || got != id {
 		t.Fatalf("restore: %s %v", got, err)
 	}
 	if lb := verifyOK(t, b); len(lb.Report.Chains[id]) != 3 {

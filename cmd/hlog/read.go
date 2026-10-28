@@ -161,17 +161,7 @@ func cmdAdd(s *core.Store, args []string) {
 			fail(err)
 		}
 	}
-	if *about != "" {
-		l, err := s.Load()
-		if err != nil {
-			fail(err)
-		}
-		r, err := l.Resolve(*about)
-		if err != nil {
-			fail(err)
-		}
-		o.About = r.ID
-	}
+	o.About = *about
 	id, err := s.Add(pos[0], pos[1], o)
 	if err != nil {
 		fail(err)

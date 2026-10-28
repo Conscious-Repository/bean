@@ -2,7 +2,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -26,7 +25,7 @@ commands:
                             copy without your key); pairs it when it can
   agent pair <npub> [-label l]
                             vouch for an agent key from your own machine
-  append                    read JSONL partial records on stdin, sign, store
+  append [-agent]           read JSONL partial records on stdin, sign, store
   blob put <file>           encrypt and store a file; prints the blob id
   blob get <id>             decrypt a blob to stdout
   ls [-type t] [-since d] [-until d] [-author a] [-all] [-json]
@@ -115,7 +114,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		id, words, err := s.InitWith(key)
+		id, words, err := s.Init(key)
 		if err != nil {
 			fail(err)
 		}
@@ -128,7 +127,18 @@ func main() {
 		}
 		fmt.Fprintln(os.Stderr, "write these 24 words on paper. use them for hlog only. they are shown once.")
 	case "append":
-		res, err := s.Append(os.Stdin)
+		af := flag.NewFlagSet("append", flag.ContinueOnError)
+		af.SetOutput(io.Discard)
+		agent := af.Bool("agent", false, "sign with this machine's agent key")
+		if err := af.Parse(rest); err != nil || af.NArg() != 0 {
+			usage()
+			os.Exit(2)
+		}
+		appendFn := s.Append
+		if *agent {
+			appendFn = s.AppendAsAgent
+		}
+		res, err := appendFn(os.Stdin)
 		fmt.Printf("added %d, skipped %d\n", res.Added, res.Skipped)
 		if err != nil {
 			fail(err)
@@ -224,7 +234,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		res, err := s.RotateTo(core.ParseWords(string(text)), noSeal, key)
+		res, err := s.Rotate(core.ParseWords(string(text)), noSeal, key)
 		if err != nil {
 			fail(err)
 		}
@@ -255,7 +265,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		res, id, err := s.RestoreTo(core.ParseWords(string(text)), noSeal, key)
+		res, id, err := s.Restore(core.ParseWords(string(text)), noSeal, key)
 		if err != nil {
 			fail(err)
 		}
@@ -308,5 +318,4 @@ func main() {
 		usage()
 		os.Exit(2)
 	}
-	_ = errors.New
 }

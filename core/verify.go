@@ -4,8 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 )
 
 // Sizes (SPEC.md 3.1, change set C6).
@@ -37,7 +40,12 @@ type FileResult struct {
 
 // CheckFile applies SPEC.md 3.8 steps 1 to 15 (order from change set C2:
 // envelope, id and signature come before the version check).
-func CheckFile(path string, data []byte) FileResult {
+func CheckFile(path string, data []byte) FileResult { return checkFile(path, data, false) }
+
+// checkFile is CheckFile. proven skips only the signature arithmetic of
+// step 12, for bytes this replica already proved (the object cache);
+// every other step still runs.
+func checkFile(path string, data []byte, proven bool) FileResult {
 	m := pathPattern.FindStringSubmatch(path)
 	if m == nil {
 		return FileResult{Err: ErrBadPath}
@@ -86,8 +94,10 @@ func CheckFile(path string, data []byte) FileResult {
 	if r.Sig, ok = obj["sig"].(string); !ok {
 		return FileResult{Err: ErrBadSignature}
 	}
-	if err := Verify(r.Kid, r.ID, r.Sig); err != nil {
-		return FileResult{Err: err}
+	if !proven {
+		if err := Verify(r.Kid, r.ID, r.Sig); err != nil {
+			return FileResult{Err: err}
+		}
 	}
 	// 13. version
 	if !knownVersions[r.V] {
@@ -131,7 +141,34 @@ func (rp *Report) fail(id, msg string) {
 
 // VerifyFiles runs SPEC.md section 6 on a set of files (path -> bytes). The
 // result depends only on the set.
-func VerifyFiles(files map[string][]byte) *Report {
+func VerifyFiles(files map[string][]byte) *Report { return verifyFiles(files, nil) }
+
+// checkAll runs checkFile on every path on all CPUs. Results are by index,
+// so the outcome does not depend on scheduling.
+func checkAll(paths []string, files map[string][]byte, proven map[string]bool) []FileResult {
+	out := make([]FileResult, len(paths))
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	for w := 0; w < runtime.GOMAXPROCS(0); w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				i := int(next.Add(1) - 1)
+				if i >= len(paths) {
+					return
+				}
+				out[i] = checkFile(paths[i], files[paths[i]], proven[paths[i]])
+			}
+		}()
+	}
+	wg.Wait()
+	return out
+}
+
+// verifyFiles is VerifyFiles; proven names paths whose signatures this
+// replica has already checked.
+func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 	rp := &Report{
 		Records: map[string]*Record{}, Valid: map[string]bool{}, Errors: map[string]string{},
 		Warnings: map[string][]string{}, Chains: map[string][]*Record{}, Superseded: map[string][]string{},
@@ -145,8 +182,8 @@ func VerifyFiles(files map[string][]byte) *Report {
 
 	// Step 1: check files.
 	var unknown []*Record
-	for _, p := range paths {
-		fr := CheckFile(p, files[p])
+	for i, fr := range checkAll(paths, files, proven) {
+		p := paths[i]
 		switch {
 		case fr.Err != nil:
 			rp.Errors[p] = fr.Err.Error()

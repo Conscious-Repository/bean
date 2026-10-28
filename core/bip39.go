@@ -46,7 +46,8 @@ func hexString(b []byte) string {
 	return string(out)
 }
 
-var ErrSeedWords = errors.New("seed does not match")
+// ErrSeedMismatch: the words are not a valid seed, or not this identity's.
+var ErrSeedMismatch = errors.New("seed does not match")
 
 // SeedToWords encodes 32 entropy bytes as 24 BIP-39 English words
 // (SPEC.md 4.10). No PBKDF2 and no passphrase.
@@ -71,13 +72,13 @@ func SeedToWords(entropy []byte) ([]string, error) {
 // WordsToSeed decodes 24 words to 32 entropy bytes and checks the checksum.
 func WordsToSeed(words []string) ([]byte, error) {
 	if len(words) != 24 {
-		return nil, ErrSeedWords
+		return nil, ErrSeedMismatch
 	}
 	bits := make([]byte, 33)
 	for i, w := range words {
 		idx, ok := wordIndex[strings.ToLower(strings.TrimSpace(w))]
 		if !ok {
-			return nil, ErrSeedWords
+			return nil, ErrSeedMismatch
 		}
 		for j := 0; j < 11; j++ {
 			bit := i*11 + j
@@ -89,7 +90,7 @@ func WordsToSeed(words []string) ([]byte, error) {
 	entropy := bits[:32]
 	sum := sha256.Sum256(entropy)
 	if sum[0] != bits[32] {
-		return nil, ErrSeedWords
+		return nil, ErrSeedMismatch
 	}
 	return entropy, nil
 }

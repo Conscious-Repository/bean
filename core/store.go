@@ -141,12 +141,10 @@ func (k NewKey) signer() (Signer, string, error) {
 	return nil, "", ErrUnsupportedKeyAlgorithm
 }
 
-// Init creates an identity with a new random Ed25519 signing key.
-func (s *Store) Init() (string, []string, error) { return s.InitWith(NewKey{}) }
-
-// InitWith creates an identity (SPEC.md 5.2). It returns the identity id
-// and the 24 words, which the caller shows once.
-func (s *Store) InitWith(key NewKey) (string, []string, error) {
+// Init creates an identity (SPEC.md 5.2) with the given signing key; the
+// zero NewKey is a new random Ed25519 key. It returns the identity id and
+// the 24 words, which the caller shows once.
+func (s *Store) Init(key NewKey) (string, []string, error) {
 	if _, err := os.Stat(s.path(fileIdentity)); err == nil {
 		return "", nil, ErrAlreadyInitialized
 	}
@@ -282,32 +280,29 @@ type Loaded struct {
 
 // Load reads the folder, verifies it, and applies the hold rules (SPEC.md
 // 7.6 as changed by C14): a newly purged target is hidden, never erased on
-// a timer; a target whose tombstone became invalid is restored.
-func (s *Store) Load() (*Loaded, error) {
+// a timer; a target whose tombstone became invalid is restored. It skips
+// the signature check of files the object cache vouches for (cache.go).
+func (s *Store) Load() (*Loaded, error) { return s.load(false) }
+
+// load is Load; full proves every file and rebuilds the object cache.
+func (s *Store) load(full bool) (*Loaded, error) {
 	local, err := s.ReadLocal()
 	if err != nil && !errors.Is(err, ErrNotInitialized) && !errors.Is(err, os.ErrNotExist) {
 		return nil, err // an agent-only replica has no signing key; it still loads
 	}
-	files, err := readRecordFiles(s.Dir)
+	disk, hidden, files, proven, cacheLen, err := s.readObjects(full)
+	for try := 0; errors.Is(err, errMoved) && try < 5; try++ {
+		disk, hidden, files, proven, cacheLen, err = s.readObjects(full)
+	}
 	if err != nil {
 		return nil, err
-	}
-	hiddenFiles, err := readHiddenFiles(s.Dir)
-	if err != nil {
-		return nil, err
-	}
-	hidden := map[string]bool{}
-	for p, b := range hiddenFiles {
-		if _, dup := files[p]; !dup {
-			files[p] = b
-		}
-		hidden["sha256:"+p[8:10]+p[11:73]] = true
 	}
 	holds, err := s.readHolds()
 	if err != nil {
 		return nil, err
 	}
-	rp := VerifyFiles(files)
+	rp := verifyFiles(files, proven)
+	s.writeObjCache(disk, files, rp, proven, cacheLen)
 	changed := false
 	// New valid purges: hide the target.
 	for target, tid := range rp.Purged {
@@ -324,7 +319,8 @@ func (s *Store) Load() (*Loaded, error) {
 		if err := os.MkdirAll(s.path(dirHidden), 0o700); err != nil {
 			return nil, err
 		}
-		if err := os.Rename(s.path(PathOf(target)), hiddenPath(s.Dir, target)); err != nil {
+		// Another hlog process (an MCP server, say) may have moved it first.
+		if err := os.Rename(s.path(PathOf(target)), hiddenPath(s.Dir, target)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return nil, err
 		}
 		hidden[target] = true
@@ -343,7 +339,7 @@ func (s *Store) Load() (*Loaded, error) {
 		if err := os.MkdirAll(filepath.Dir(s.path(PathOf(target))), 0o700); err != nil {
 			return nil, err
 		}
-		if err := os.Rename(hiddenPath(s.Dir, target), s.path(PathOf(target))); err != nil {
+		if err := os.Rename(hiddenPath(s.Dir, target), s.path(PathOf(target))); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return nil, err
 		}
 		delete(hidden, target)
@@ -470,7 +466,7 @@ func (s *Store) GetBlob(id string) ([]byte, error) {
 // VerifyLines runs verify (12.1 output) including blob checks and hidden
 // warnings. It returns the lines and the exit code.
 func (s *Store) VerifyLines() ([]string, int, error) {
-	l, err := s.Load()
+	l, err := s.load(true)
 	if err != nil {
 		return nil, 1, err
 	}

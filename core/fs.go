@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 )
 
 // Files and directories (SPEC.md 7.1).
@@ -26,22 +27,50 @@ const (
 	fileIndex     = "local/cache/index.json"
 )
 
-// writeFileAtomic writes data to a temporary name in the same directory and
-// renames it. It creates parent directories with mode 0700.
+// writeFileAtomic writes data to a temporary name in the same directory,
+// flushes it to disk, renames it, and flushes the directory, so a crash
+// leaves either the old state or the whole new file, never an empty one.
+// It creates parent directories with mode 0700.
 func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
 	var rnd [8]byte
 	if _, err := rand.Read(rnd[:]); err != nil {
 		return err
 	}
-	tmp := filepath.Join(filepath.Dir(path), ".tmp-"+hex.EncodeToString(rnd[:]))
-	if err := os.WriteFile(tmp, data, mode); err != nil {
+	tmp := filepath.Join(dir, ".tmp-"+hex.EncodeToString(rnd[:]))
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+	if err != nil {
 		return err
 	}
-	if err := os.Rename(tmp, path); err != nil {
+	_, err = f.Write(data)
+	if err == nil {
+		err = syncFile(f)
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Rename(tmp, path)
+	}
+	if err != nil {
 		os.Remove(tmp)
+		return err
+	}
+	return syncDir(dir)
+}
+
+// syncDir flushes a directory entry after a rename. Some systems cannot
+// open a directory for sync; that is not an error there.
+func syncDir(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return nil
+	}
+	defer d.Close()
+	if err := syncFile(d); err != nil && !errors.Is(err, os.ErrInvalid) && !errors.Is(err, syscall.EINVAL) && !errors.Is(err, syscall.ENOTSUP) {
 		return err
 	}
 	return nil
@@ -85,48 +114,6 @@ func listShardFiles(root, dir string) ([]string, error) {
 		}
 	}
 	sort.Strings(out)
-	return out, nil
-}
-
-// readRecordFiles loads every objects/ file as path -> bytes.
-func readRecordFiles(root string) (map[string][]byte, error) {
-	paths, err := listShardFiles(root, dirObjects)
-	if err != nil {
-		return nil, err
-	}
-	out := make(map[string][]byte, len(paths))
-	for _, p := range paths {
-		b, err := os.ReadFile(filepath.Join(root, p))
-		if err != nil {
-			return nil, err
-		}
-		out[p] = b
-	}
-	return out, nil
-}
-
-// readHiddenFiles loads local/hidden/<64hex>.json as the objects/ path each
-// file would have, so the verifier sees hidden targets as stored records.
-func readHiddenFiles(root string) (map[string][]byte, error) {
-	entries, err := os.ReadDir(filepath.Join(root, dirHidden))
-	if errors.Is(err, os.ErrNotExist) {
-		return map[string][]byte{}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	out := map[string][]byte{}
-	for _, e := range entries {
-		name := e.Name()
-		if e.IsDir() || !strings.HasSuffix(name, ".json") || len(name) != 69 {
-			continue
-		}
-		b, err := os.ReadFile(filepath.Join(root, dirHidden, name))
-		if err != nil {
-			return nil, err
-		}
-		out[PathOf("sha256:"+name[:64])] = b
-	}
 	return out, nil
 }
 

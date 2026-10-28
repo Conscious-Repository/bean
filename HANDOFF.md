@@ -29,7 +29,7 @@ demo.sh                  two-folder walkthrough; run it after any change
 ## Checks before every commit
 
 ```
-gofmt -l . && go vet ./... && go test ./... && ./demo.sh
+gofmt -l . && go vet ./... && go test -race ./... && ./demo.sh
 python3 -I tools/checksecp256k1.py   # and tools/checkvectors.py when vectors change
 ```
 
@@ -48,5 +48,6 @@ python3 -I tools/checksecp256k1.py   # and tools/checkvectors.py when vectors ch
 - `local/` never syncs. If you copy a folder with `cp -r`, delete `local/cache`, `local/holds.json` and `local/purged-refs.jsonl` on the copy.
 - Records are plaintext JSON. Only blobs are encrypted. Keep the folder on an encrypted volume.
 - `$HLOG_NOW` overrides the clock for every command. Unset it outside tests.
-- `hlog ls` and every MCP call verify the whole folder each time. Fine for thousands of records; measure after the Apple Health import.
+- Ordinary commands trust `local/cache/objects` for files whose size and modification time have not changed (OPEN_QUESTIONS 76). An edit that keeps both is caught only by `hlog verify`, which is the fsck: run it after copying a log by hand or restoring from a backup.
+- Speed at 20,000 records: `ls` 0.4 s, `add` and MCP calls 0.2 s, `verify` 0.6 to 1.2 s. Measure again after a real Apple Health import.
 - `SPEC.md` and `AGENT_BRIEF.md` are read-only files. The brief's milestone list is out of date; `ROADMAP.md` replaces it.

@@ -17,7 +17,7 @@ func mcpStore(t *testing.T) (*core.Store, map[string]string) {
 	time.Local = time.UTC
 	s := core.Open(t.TempDir())
 	s.Now = func() time.Time { return time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC) }
-	if _, _, err := s.Init(); err != nil {
+	if _, _, err := s.Init(core.NewKey{}); err != nil {
 		t.Fatal(err)
 	}
 	ids := map[string]string{}

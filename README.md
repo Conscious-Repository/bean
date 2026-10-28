@@ -56,7 +56,7 @@ hlog ls                                      # everything current, in time order
 hlog ls -type 'lab.*'                        # flags show as High / Low
 hlog ls -type weight -since 2026-10-01 -json # stored bytes, for jq or a script
 hlog show 96d4ef                             # one record, its status and replies
-hlog verify                                  # check every signature and rule
+hlog verify                                  # re-prove every file: the fsck
 ```
 
 ## Log from chat, through your agents
@@ -136,7 +136,7 @@ hlog -dir ~/health restore        # paste the 24 words
 | `whoami` | Identity, signing key, npub and agent key. |
 | `add <type> <value>` | Write a claim by hand. `-unit`, `-at`, `-note`, `-about`, `-photo`, `-agent`. |
 | `agent init`, `agent pair <npub>` | Make this machine's agent key; vouch for an agent from your machine. |
-| `append` | Read JSONL records from an importer on stdin, sign and store them. Re-imports add nothing. |
+| `append` | Read JSONL records from an importer on stdin, sign and store them. Re-imports add nothing. `-agent` signs with the agent key. |
 | `ls`, `show <id>` | Read the log. Any 6+ hex prefix works as an id. |
 | `blob put <file>`, `blob get <id>` | Store or read an encrypted source file. |
 | `verify` | Check the whole folder. Exit 0 is clean. |
@@ -159,6 +159,10 @@ An importer reads one source format and writes JSONL to stdout. It never signs; 
 | `hlog-import-csv` | A CSV with a `value` column and optional `time` and `id` columns. One type per file. |
 
 Next: Apple Health. Each importer is written against a real export, never from memory.
+
+## Speed
+
+Every record is named by its hash and never edited, so, like git, ordinary commands trust a file that has not changed since this machine last proved it, and only `hlog verify` re-proves everything. At 20,000 records `add` and an AI's query take about 0.2 s, `ls` 0.4 s and `verify` about 1 s. Writes are flushed to disk before they count.
 
 ## Privacy and security
 
@@ -184,7 +188,7 @@ Next: Apple Health. Each importer is written against a real export, never from m
 Standard library plus one dependency, `btcec/v2`, for secp256k1 (Nostr) signatures.
 
 ```
-go test ./...                       # unit, conformance and RFC vector tests
+go test -race ./...                 # unit, conformance, RFC vector and concurrency tests
 go vet ./... && gofmt -l .
 ./demo.sh                           # two-folder walkthrough: import, sync, purge, gc, export
 go run ./tools/genvectors           # regenerate vectors/

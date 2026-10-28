@@ -105,7 +105,6 @@ type Result struct {
 	Value, Flag, Units   string
 	Ref, Previous        string
 	Comment              []string
-	valueSeen            bool
 }
 
 // Report is the parsed report.
@@ -216,7 +215,6 @@ func (r *Result) fill(toks []token, c columns) bool {
 		}
 	}
 	r.Units, r.Ref = strings.Join(units, " "), strings.Join(ref, " ")
-	r.valueSeen = true
 	return true
 }
 

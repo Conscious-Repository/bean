@@ -30,13 +30,29 @@ func (s *Store) Append(in io.Reader) (AppendResult, error) {
 	if err != nil {
 		return res, err
 	}
+	w, err := s.writerFor(l, false)
+	if err != nil {
+		return res, err
+	}
+	return s.appendWith(l, w, in)
+}
+
+// writerFor is the person (agent false) or this machine's agent key.
+func (s *Store) writerFor(l *Loaded, agent bool) (writer, error) {
+	if agent {
+		a, err := s.ReadAgent()
+		if err != nil {
+			return writer{}, err
+		}
+		return writer{a.Signer, a.Signer.Public(), a.Identity, a.Secret}, nil
+	}
 	if l.Local == nil {
 		if _, err := s.Identity(); err == nil {
-			return res, errors.New("no personal key on this replica (agent-only): sign with the agent key instead (-agent)")
+			return writer{}, errors.New("no personal key on this replica (agent-only): sign with the agent key instead (-agent)")
 		}
-		return res, ErrNotInitialized
+		return writer{}, ErrNotInitialized
 	}
-	return s.appendWith(l, writer{l.Local.Signer, l.Local.Identity, l.Local.Identity, l.Local.Secret}, in)
+	return writer{l.Local.Signer, l.Local.Identity, l.Local.Identity, l.Local.Secret}, nil
 }
 
 // writer is who signs appended records: the person, or an agent key that
