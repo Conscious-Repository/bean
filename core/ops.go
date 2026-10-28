@@ -379,7 +379,7 @@ func (s *Store) Export(dir string) (records, blobs int, err error) {
 	if list == nil {
 		list = []any{}
 	}
-	man := map[string]any{"spec": "hlog-core-v0.4", "identity": l.Local.Identity, "records": float64(records), "blobs": list}
+	man := map[string]any{"spec": "hlog-core-v0.5", "identity": l.Local.Identity, "records": float64(records), "blobs": list}
 	if err := writeFileAtomic(filepath.Join(dir, "manifest.json"), Canonical(man), 0o600); err != nil {
 		return 0, 0, err
 	}
@@ -471,7 +471,7 @@ func (s *Store) Reindex() (int, error) {
 	if rows == nil {
 		rows = []any{}
 	}
-	idx := map[string]any{"spec": "hlog-core-v0.4", "records": rows}
+	idx := map[string]any{"spec": "hlog-core-v0.5", "records": rows}
 	if err := writeFileAtomic(s.path(fileIndex), append(Canonical(idx), '\n'), 0o600); err != nil {
 		return 0, err
 	}

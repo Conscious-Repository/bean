@@ -39,9 +39,9 @@ M7. Real importers (needs the sample files).
 
 Restore. Done 2026-10-28. `hlog restore` rebuilds `local/` on a new host from the 24 words and a synced backup, then rotates (OPEN_QUESTIONS 52 to 56). Without it the paper seed could not recover a lost laptop.
 
-M8. npub as signing key.
-- Tagged key `secp256k1:<64 hex x-only>`, BIP-340 Schnorr over the 32-byte id. Spec 4.4 and 4.5 change, new vector, second-implementation check.
-- `hlog init -nostr` reads an nsec from stdin or `$HLOG_NSEC_FILE`. The recovery keys stay Ed25519 from the paper seed.
+M8. npub as signing key. Done 2026-10-28 (SPEC v0.5 C21, OPEN_QUESTIONS 58 to 66). Signs through a Nostr wrapper event so NIP-46 can come later without a format change.
+- Tagged key `secp256k1:<64 hex x-only>`, BIP-340 Schnorr over the Nostr event id of a wrapper whose content is the record id. Spec 4.4 and 4.5 changed, vector V18, independent check `tools/checksecp256k1.py`.
+- `hlog init -nostr new|-|<nsec file>`; `rotate` and `restore` take `-nostr new|<nsec file>`. The recovery keys stay Ed25519 from the paper seed.
 - `hlog whoami` prints identity id and npub.
 - Later: NIP-46 remote signing (Amber), so the nsec never sits on the host.
 

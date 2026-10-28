@@ -1,7 +1,6 @@
 package core
 
 import (
-	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"os"
@@ -24,6 +23,11 @@ type RotateResult struct {
 // are the 24 paper words. Every valid destructive record of the outgoing key
 // in this replica is sealed unless its id is in noSeal.
 func (s *Store) Rotate(words []string, noSeal []string) (RotateResult, error) {
+	return s.RotateTo(words, noSeal, NewKey{})
+}
+
+// RotateTo is Rotate with a chosen new signing key.
+func (s *Store) RotateTo(words []string, noSeal []string, key NewKey) (RotateResult, error) {
 	var res RotateResult
 	l, err := s.Load()
 	if err != nil {
@@ -44,12 +48,12 @@ func (s *Store) Rotate(words []string, noSeal []string) (RotateResult, error) {
 	if hex.EncodeToString(IdentitySecret(seed)) != hex.EncodeToString(l.Local.Secret) {
 		return res, ErrSeedMismatch
 	}
-	return s.rotateFrom(l, l.Local.Identity, seed, noSeal)
+	return s.rotateFrom(l, l.Local.Identity, seed, noSeal, key)
 }
 
 // rotateFrom writes the succession from the head of identity id and stores
 // the new signing key. The caller has checked the seed.
-func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string) (RotateResult, error) {
+func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string, key NewKey) (RotateResult, error) {
 	var res RotateResult
 	if contains(l.Report.Compromised, id) {
 		return res, errors.New("compromised: " + id)
@@ -80,11 +84,17 @@ func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string) (
 	}
 	sort.Strings(res.Sealed)
 	sort.Strings(res.NotSealed)
-	skSeed := make([]byte, 32)
-	if _, err := rand.Read(skSeed); err != nil {
+	newSigner, keyLine, err := key.signer()
+	if err != nil {
 		return res, err
 	}
-	newSigner := NewEd25519Signer(skSeed)
+	// 5.8: a key on the path from genesis cannot come back. The verifier
+	// would reject the succession; refuse before writing it.
+	for _, n := range chain {
+		if n.ValueKey() == newSigner.Public() || n.Kid == newSigner.Public() {
+			return res, errors.New("key reuse")
+		}
+	}
 	succ := NewSuccession(id, rec.Public(), head.ID, newSigner.Public(), Commitment(RecoverySigner(seed, gen+1).Public()), res.Sealed, Adapter, s.nowString())
 	sid, bytes, err := SignRecord(succ, rec)
 	if err != nil {
@@ -96,7 +106,7 @@ func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string) (
 	if _, err := writeIfAbsent(s.path(PathOf(sid)), bytes, 0o600); err != nil {
 		return res, err
 	}
-	if err := writeFileAtomic(s.path(fileSignKey), []byte("ed25519:"+hex.EncodeToString(skSeed)+"\n"), 0o600); err != nil {
+	if err := writeFileAtomic(s.path(fileSignKey), []byte(keyLine), 0o600); err != nil {
 		return res, err
 	}
 	res.Succession, res.NewKey = sid, newSigner.Public()
@@ -110,6 +120,11 @@ func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string) (
 // secret, and writes a succession to a new signing key exactly as Rotate
 // does, with the same default seals. It returns the identity id.
 func (s *Store) Restore(words []string, noSeal []string) (RotateResult, string, error) {
+	return s.RestoreTo(words, noSeal, NewKey{})
+}
+
+// RestoreTo is Restore with a chosen new signing key.
+func (s *Store) RestoreTo(words []string, noSeal []string, key NewKey) (RotateResult, string, error) {
 	if _, err := os.Stat(s.path(fileIdentity)); err == nil {
 		return RotateResult{}, "", ErrAlreadyInitialized
 	}
@@ -140,7 +155,7 @@ func (s *Store) Restore(words []string, noSeal []string) (RotateResult, string, 
 	if err := writeFileAtomic(s.path(fileSecret), []byte(hex.EncodeToString(secret)+"\n"), 0o600); err != nil {
 		return RotateResult{}, "", err
 	}
-	res, err := s.rotateFrom(l, id, seed, noSeal)
+	res, err := s.rotateFrom(l, id, seed, noSeal, key)
 	if err != nil {
 		return res, "", err
 	}

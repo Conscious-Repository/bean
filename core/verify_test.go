@@ -386,7 +386,7 @@ func TestBadFiles(t *testing.T) {
 		{"bad type", PathOf(good), []byte(`{"v":0}`), "bad type"},
 		{"id mismatch", PathOf(good), bytes.Replace(gb, []byte(`"n":40`), []byte(`"n":41`), 1), "id mismatch"},
 	}
-	p, b := mk(func(m map[string]any) { m["kid"] = "secp256k1:00"; m["author"] = m["kid"] }, true)
+	p, b := mk(func(m map[string]any) { m["kid"] = "x25519:00"; m["author"] = m["kid"] }, true)
 	cases = append(cases, struct {
 		name, path string
 		data       []byte

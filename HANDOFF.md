@@ -4,15 +4,15 @@ For Ben, or for the next agent that opens this repo. Updated 2026-10-28.
 
 ## What this is
 
-`bean` is the reference implementation of the hlog core specification v0.4 (`SPEC.md`). A health log is a folder of signed, append-only JSON records. Validity is a pure function of the file set. Sync is set union. The identity is the hash of its first record.
+`bean` is the reference implementation of the hlog core specification v0.5 (`SPEC.md`). A health log is a folder of signed, append-only JSON records. Validity is a pure function of the file set. Sync is set union. The identity is the hash of its first record.
 
 The goal and the decisions behind the current direction are in `ROADMAP.md`. Read it first.
 
 ## State
 
-- Done: the core (M1 to M5: bytes, verifier, folder and sync, CLI, seed-only rotation), `ls`/`show`/`add` (M6), `hlog-import-labcorp` (part of M7), `hlog mcp` (M9), and `hlog restore`.
-- Next: Apple Health importer (needs Ben's `export.zip`), multi-column CSV, npub signing (M8), share bundles and trust claims (M10).
-- Go 1.24+, standard library only, no dependencies. `pdftotext` (poppler) is needed at run time for the Labcorp importer only.
+- Done: the core (M1 to M5: bytes, verifier, folder and sync, CLI, seed-only rotation), `ls`/`show`/`add` (M6), `hlog-import-labcorp` (part of M7), npub signing (M8), `hlog mcp` (M9), and `hlog restore`.
+- Next: freeze the record format at v1 and cut a short core spec, Apple Health importer (needs Ben's `export.zip`), multi-column CSV, share bundles and trust claims (M10).
+- Go 1.24+. One dependency, `btcec/v2` (secp256k1). `pdftotext` (poppler) is needed at run time for the Labcorp importer only.
 - Repository: private, `bean` on Ben's GitHub account. Do not make it public until Rob has reviewed the spec (SPEC 19).
 
 ```
@@ -30,11 +30,12 @@ demo.sh                  two-folder walkthrough; run it after any change
 
 ```
 gofmt -l . && go vet ./... && go test ./... && ./demo.sh
+python3 -I tools/checksecp256k1.py   # and tools/checkvectors.py when vectors change
 ```
 
 ## Rules that kept the code small
 
-- Standard library first. Ask before any dependency (M8 is allowed one, for secp256k1).
+- Standard library first. Ask before any dependency. The one allowed so far is `btcec/v2` (M8).
 - Tests and vectors before code. Every crypto primitive has an RFC vector; every behavior has a conformance test.
 - The core knows no source. Each importer is its own `cmd/hlog-import-*`, written against a real export, never from memory.
 - Anything the spec does not say gets the simplest deterministic rule and a numbered entry in `OPEN_QUESTIONS.md`. Spec errors found in testing go there too (see 57).

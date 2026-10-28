@@ -10,6 +10,8 @@ import (
 	"errors"
 	"math/big"
 	"strings"
+
+	"github.com/btcsuite/btcd/btcec/v2"
 )
 
 var (
@@ -21,8 +23,10 @@ var (
 // Key is a parsed tagged public key (SPEC.md 4.4).
 type Key struct {
 	Alg   string
+	hex   string
 	ed    ed25519.PublicKey
 	ecdsa *ecdsa.PublicKey
+	secp  *btcec.PublicKey
 }
 
 // ParseKey parses "<alg>:<lowercase hex>".
@@ -48,6 +52,12 @@ func ParseKey(tagged string) (*Key, error) {
 			return nil, ErrBadKey
 		}
 		return &Key{Alg: alg, ecdsa: &ecdsa.PublicKey{Curve: elliptic.P256(), X: x, Y: y}}, nil
+	case "secp256k1":
+		pk, err := parseSecp256k1Key(hx)
+		if err != nil {
+			return nil, err
+		}
+		return &Key{Alg: alg, hex: hx, secp: pk}, nil
 	default:
 		return nil, ErrUnsupportedKeyAlgorithm
 	}
@@ -65,7 +75,8 @@ func TagP256(pub *ecdsa.PublicKey) string {
 
 // Verify checks sig over the id bytes for the tagged key (SPEC.md 4.5).
 // It returns bad signature on any failure, including a tag mismatch and a
-// high-S P-256 signature.
+// high-S P-256 signature. A secp256k1 signature is over a Nostr wrapper
+// event (secp256k1.go).
 func Verify(taggedKey, id, sig string) error {
 	k, err := ParseKey(taggedKey)
 	if err != nil {
@@ -75,7 +86,13 @@ func Verify(taggedKey, id, sig string) error {
 		return ErrBadSignature
 	}
 	alg, hx, ok := strings.Cut(sig, ":")
-	if !ok || alg != k.Alg || !isLowerHex(hx, 128) {
+	if !ok || alg != k.Alg {
+		return ErrBadSignature
+	}
+	if k.Alg == "secp256k1" {
+		return verifySecp256k1(k.hex, k.secp, id, hx)
+	}
+	if !isLowerHex(hx, 128) {
 		return ErrBadSignature
 	}
 	raw, _ := hex.DecodeString(hx)

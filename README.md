@@ -2,7 +2,7 @@
 
 Your health record as a folder you own. Every reading, lab result, symptom and note is a small signed JSON file. You can copy the folder anywhere, check it without any server, and hand it to an AI or a doctor on your terms.
 
-`bean` is the reference implementation of the **hlog core specification** ([SPEC.md](SPEC.md), v0.4 draft). The command is `hlog`. Both names are placeholders.
+`bean` is the reference implementation of the **hlog core specification** ([SPEC.md](SPEC.md), v0.5 draft). The command is `hlog`. Both names are placeholders.
 
 > **Status: pre-release, private.** The spec is a draft awaiting review. The record format may change before v1, so keep your source files (PDFs, exports) and treat your first log as provisional. See [ROADMAP.md](ROADMAP.md).
 
@@ -29,6 +29,8 @@ go build -o ~/bin/ ./cmd/...        # hlog, hlog-import-csv, hlog-import-labcorp
 hlog -dir ~/health init             # prints your identity and 24 words, once
 export HLOG_DIR=~/health
 ```
+
+To sign with a Nostr key instead, use `init -nostr new` (a new npub just for this log) or `init -nostr <file>` (an nsec you already have). `hlog whoami` prints the npub. A dedicated npub is the safer choice for now: the nsec sits in `local/`, and once a key is rotated out it can never sign this log again.
 
 Write the 24 words on paper. They are the only way to recover the identity on a new machine. They are for hlog only: never type them into a crypto wallet.
 
@@ -105,7 +107,8 @@ hlog -dir ~/health restore        # paste the 24 words
 
 | Command | Does |
 |---|---|
-| `init` | Create an identity. Prints the 24 words once. |
+| `init` | Create an identity. Prints the 24 words once. `-nostr` signs with a Nostr key. |
+| `whoami` | Identity, signing key and npub. |
 | `add <type> <value>` | Write a claim by hand. `-unit`, `-at`, `-note`, `-about`. |
 | `append` | Read JSONL records from an importer on stdin, sign and store them. Re-imports add nothing. |
 | `ls`, `show <id>` | Read the log. Any 6+ hex prefix works as an id. |
@@ -114,7 +117,7 @@ hlog -dir ~/health restore        # paste the 24 words
 | `purge <id>` | Delete a record everywhere it syncs. The bytes are erased here at once. |
 | `gc` | Erase records hidden by someone else's purge after 7 days. |
 | `sync <dir>` | Copy what the other folder has and this one lacks. |
-| `rotate`, `restore` | New signing key from the paper words. |
+| `rotate`, `restore` | New signing key from the paper words. `-nostr new` or `-nostr <nsec file>` makes it a Nostr key. |
 | `export <dir>`, `import-export <dir>` | A plaintext copy of everything, and back. |
 | `mcp` | The read-only AI server. |
 
@@ -138,26 +141,28 @@ Next: Apple Health. Each importer is written against a real export, never from m
 - `local/` holds the signing key and the identity secret, mode 0600.
 - `hlog export` writes plaintext and says so first.
 - A stolen key can add claims but cannot take over the identity: only the paper words can rotate.
+- A Nostr signing key signs a small Nostr event whose content is the record id (kind 29944, not stored by relays). Remote signers such as Amber can sign that shape later without a format change.
 
 ## Documents
 
 | File | For |
 |---|---|
-| [SPEC.md](SPEC.md) | The protocol: record format, identity, authority rules, sync, conformance tests. |
+| [SPEC.md](SPEC.md) | The protocol (v0.5 draft): record format, identity, authority rules, sync, conformance tests. |
 | [ROADMAP.md](ROADMAP.md) | The path to v0.1 and what is decided. |
 | [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md) | Every choice made where the spec was silent, numbered. |
 | [HANDOFF.md](HANDOFF.md) | Where things stand, for the next person or agent. |
 
 ## Development
 
-Standard library only. No dependencies.
+Standard library plus one dependency, `btcec/v2`, for secp256k1 (Nostr) signatures.
 
 ```
 go test ./...                       # unit, conformance and RFC vector tests
 go vet ./... && gofmt -l .
 ./demo.sh                           # two-folder walkthrough: import, sync, purge, gc, export
 go run ./tools/genvectors           # regenerate vectors/
-python3 -I tools/checkvectors.py    # independent check (needs the cryptography package)
+python3 -I tools/checkvectors.py    # independent check (needs cryptography with AES-SIV)
+python3 -I tools/checksecp256k1.py  # independent BIP-340 and npub check, pure Python
 ```
 
 `core/` is the protocol: canonical JSON, signatures, the verifier, the folder. It knows no data source. `cmd/` holds the CLI and the importers. Test data is synthetic. Never commit real health data, keys or paper words.

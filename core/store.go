@@ -84,6 +84,10 @@ func (s *Store) ReadLocal() (*Local, error) {
 	switch alg {
 	case "ed25519":
 		l.Signer = NewEd25519Signer(raw)
+	case "secp256k1":
+		if l.Signer, err = NewSecp256k1Signer(raw); err != nil {
+			return nil, err
+		}
 	case "p256":
 		l.Signer, err = NewP256Signer(raw)
 		if err != nil {
@@ -95,9 +99,54 @@ func (s *Store) ReadLocal() (*Local, error) {
 	return l, nil
 }
 
-// Init creates an identity (SPEC.md 5.2). It returns the identity id and
-// the 24 words, which the caller shows once.
-func (s *Store) Init() (string, []string, error) {
+// NewKey is the signing key that init, rotate and restore install. The
+// zero value is a new random Ed25519 key. Alg "secp256k1" with a Secret is
+// an existing Nostr key (the bytes of an nsec); without a Secret it is a
+// new random one.
+type NewKey struct {
+	Alg    string
+	Secret []byte
+}
+
+// signer makes the key and the line for local/signing-key.
+func (k NewKey) signer() (Signer, string, error) {
+	alg := k.Alg
+	if alg == "" {
+		alg = "ed25519"
+	}
+	secret := k.Secret
+	for secret == nil {
+		b := make([]byte, 32)
+		if _, err := rand.Read(b); err != nil {
+			return nil, "", err
+		}
+		if alg == "secp256k1" {
+			if _, err := NewSecp256k1Signer(b); err != nil {
+				continue // zero or above the curve order: draw again
+			}
+		}
+		secret = b
+	}
+	line := alg + ":" + hex.EncodeToString(secret) + "\n"
+	switch alg {
+	case "ed25519":
+		if len(secret) != 32 {
+			return nil, "", ErrBadKey
+		}
+		return NewEd25519Signer(secret), line, nil
+	case "secp256k1":
+		sg, err := NewSecp256k1Signer(secret)
+		return sg, line, err
+	}
+	return nil, "", ErrUnsupportedKeyAlgorithm
+}
+
+// Init creates an identity with a new random Ed25519 signing key.
+func (s *Store) Init() (string, []string, error) { return s.InitWith(NewKey{}) }
+
+// InitWith creates an identity (SPEC.md 5.2). It returns the identity id
+// and the 24 words, which the caller shows once.
+func (s *Store) InitWith(key NewKey) (string, []string, error) {
 	if _, err := os.Stat(s.path(fileIdentity)); err == nil {
 		return "", nil, ErrAlreadyInitialized
 	}
@@ -108,11 +157,10 @@ func (s *Store) Init() (string, []string, error) {
 	words, _ := SeedToWords(seed)
 	secret := IdentitySecret(seed)
 	recovery := RecoverySigner(seed, 0).Public()
-	skSeed := make([]byte, 32)
-	if _, err := rand.Read(skSeed); err != nil {
+	signer, keyLine, err := key.signer()
+	if err != nil {
 		return "", nil, err
 	}
-	signer := NewEd25519Signer(skSeed)
 	g := NewGenesis(signer.Public(), Commitment(recovery), Adapter, s.nowString())
 	id, bytes, err := SignRecord(g, signer)
 	if err != nil {
@@ -127,7 +175,7 @@ func (s *Store) Init() (string, []string, error) {
 	if err := writeFileAtomic(s.path(fileSecret), []byte(hex.EncodeToString(secret)+"\n"), 0o600); err != nil {
 		return "", nil, err
 	}
-	if err := writeFileAtomic(s.path(fileSignKey), []byte("ed25519:"+hex.EncodeToString(skSeed)+"\n"), 0o600); err != nil {
+	if err := writeFileAtomic(s.path(fileSignKey), []byte(keyLine), 0o600); err != nil {
 		return "", nil, err
 	}
 	if err := writeFileAtomic(s.path(fileIdentity), []byte(id+"\n"), 0o600); err != nil {

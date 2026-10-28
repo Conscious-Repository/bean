@@ -1,7 +1,7 @@
-# hlog core specification v0.4, draft
+# hlog core specification v0.5, draft
 
 Status: draft for review with Rob Long. This text is not frozen.
-Date: 2026-10-28. v0.4 applies the change set recorded in the build notes (C1 to C20): seed-only rotation, a frozen envelope, verify-before-copy sync, and no erasure on a timer. The reference implementation is the `bean` repository.
+Date: 2026-10-28. v0.4 applied the change set recorded in the build notes (C1 to C20): seed-only rotation, a frozen envelope, verify-before-copy sync, and no erasure on a timer. v0.5 adds C21 (secp256k1 Nostr signing keys, 4.4 and 4.5), C22 (restore on a new host, 5.10) and C23 (superseded records leave duplicate groups, 6.3 step 12). The reference implementation is the `bean` repository.
 Editor: Benjamin Anderson (AION Biosciences, steward).
 License: CC0 1.0 (see section 19).
 Name: "hlog" is a placeholder. The project will take a neutral name.
@@ -329,9 +329,9 @@ A tagged key is `<alg>:<lowercase hex>`.
 |---|---|---|---|
 | `ed25519` | 32-byte RFC 8032 public key | 64 | Default. All writers and verifiers MUST support it. |
 | `p256` | 33-byte SEC1 compressed point (prefix 0x02 or 0x03) | 66 | Allowed for hardware-backed device keys. Verifiers MUST support it. |
-| `secp256k1` | Reserved for a future Nostr transport extension | none | Verifiers MUST reject it at `v` 0 with `unsupported key algorithm`. |
+| `secp256k1` | 32-byte BIP-340 x-only public key (the Nostr public key) | 64 | Allowed for signing keys and bare-key authors, so a Nostr key can sign records. Verifiers MUST support it. A recovery key is never secp256k1. |
 
-A verifier MUST reject uppercase hex, a wrong length or an invalid point. Error: `bad key`.
+A verifier MUST reject uppercase hex, a wrong length or an invalid point. Error: `bad key`. For `secp256k1`, the point is invalid when BIP-340 `lift_x` fails.
 A verifier MUST reject any other tag. Error: `unsupported key algorithm`.
 
 ### 4.5 Signatures
@@ -353,6 +353,15 @@ P-256:
 - `s` MUST be at most n/2 (low-S). A signer MUST replace `s` with `n - s` when `s` is higher. A verifier MUST reject a high `s`.
 - Software signers SHOULD use RFC 6979 deterministic nonces.
 - Hardware signers MAY use random nonces. Most hardware keystores do not let the caller select RFC 6979. DEFAULT, Rob to confirm.
+
+secp256k1 (C21):
+
+- The signature is a Nostr event signature, so any Nostr signer (a NIP-46 remote signer, a NIP-07 browser extension) can sign a record.
+- The wrapper event is `[0, <public key hex>, <created_at>, 29944, [], <record id>]`. Its bytes are the NIP-01 serialization: a JSON array with no whitespace. Every field is ASCII, so nothing is escaped.
+- The signed message is the SHA-256 of the wrapper bytes (the Nostr event id). Sign with BIP-340 Schnorr.
+- `sig` = `secp256k1:` + `<created_at>` + `:` + 128 lowercase hex digits (the 64-byte BIP-340 signature).
+- `<created_at>` is a decimal integer from 0 to 2^53 - 1 with no leading zeros. It has no meaning to the verifier. Software signers SHOULD use 0. A remote signer MAY use another value.
+- Kind 29944 is in the ephemeral range, so relays do not store a wrapper if someone publishes one. DEFAULT, Rob to confirm the kind.
 
 A signature is not part of the id.
 Thus two valid files with the same id can have different `sig` bytes when a signer uses random nonces.
@@ -457,12 +466,12 @@ Devices hold the identity secret and the current signing key. Devices never hold
 1. Get a new paper seed (4.10).
 2. Show the 24 words to the person once.
 3. Derive the identity secret and recovery key generation 0 (4.7).
-4. Make a new random signing key. Use Ed25519 unless the device uses a hardware P-256 key.
+4. Make a new random signing key. Use Ed25519 unless the device uses a hardware P-256 key or the person brings a Nostr key (secp256k1, from an nsec).
 5. Write a genesis with `value.key` = the signing public key and `value.recovery` = the commitment to recovery generation 0.
 6. Store the identity id, the identity secret and the signing private key in `local/`.
 7. Erase the paper seed and the recovery private key from memory and disk.
 
-The signing key is random. The paper seed does not derive it.
+The signing key is random or the person's own Nostr key. The paper seed does not derive it.
 One host holds the signing key. A second device is paired as a bare device key (11.3). Copying the signing key between devices is not supported in v0.
 
 ### 5.3 Rotation
@@ -544,6 +553,18 @@ It never appears in the log.
 It derives the blob key and the dedupe key.
 Each device of the person holds it in `local/identity-secret`.
 If the identity secret leaks, the person MUST make a new identity and a new log, and re-encrypt all data into it.
+
+### 5.10 Restore on a new host (C22)
+
+A person who lost the host, but has the paper and a copy of `objects/` and `blobs/`, restores:
+
+1. Sync every copy of the log that still exists into one folder. A copy that lacks a succession another device wrote makes a fork, and a fork freezes the identity (5.7).
+2. Enter the 24 words. Find the genesis whose `value.recovery` is the commitment of recovery generation 0 of the words. Error: `input missing: genesis for these words`.
+3. Write `local/identity-secret` from the words.
+4. Write a succession from the chain head to a new signing key exactly as 5.5 steps 2 to 9 do, with the same seals.
+5. Write `local/identity` last. Until it exists, the folder is not initialized, so a failed restore can run again.
+
+Restore always rotates. The old signing key stayed on the lost host and is not trusted.
 
 ## 6. Authority rules
 
@@ -637,7 +658,7 @@ For each claim D whose `subject` has no genesis in R, report `unresolved subject
 D stays valid. The subject check is a warning because a lab can write about a person whose genesis the replica does not hold.
 
 Step 12. Find duplicates.
-Group valid records by (`subject`, `source.system`, `source.ref`) where `source.ref` is not null.
+Group valid records that no valid supersede record names by (`subject`, `source.system`, `source.ref`) where `source.ref` is not null. A parser fix (9.7) keeps the ref of the record it corrects; leaving superseded records out keeps the fix from being reported as a duplicate of its own target (C23).
 In each group, the record with the lowest id is the primary.
 Report the others as `duplicate: <id> of <primary id>`.
 Duplicates stay valid. Indexes and readers SHOULD ignore them.
@@ -690,7 +711,7 @@ A verifier reports a purged target that is hidden and past its hold as `hidden p
 | `blobs/<h0h1>/<h2..h63>` | One blob (`V || C`). No file extension. | yes |
 | `local/identity` | The identity id, ASCII, one line. | never |
 | `local/identity-secret` | 64 lowercase hex digits, one line. File mode 0600. | never |
-| `local/signing-key` | `<alg>:<hex private key>`, one line. File mode 0600. For Ed25519, the hex is the 32-byte seed. For P-256 hardware keys, it is a key handle. | never |
+| `local/signing-key` | `<alg>:<hex private key>`, one line. File mode 0600. For Ed25519, the hex is the 32-byte seed. For secp256k1, it is the 32-byte secret key (the bytes of an nsec). For P-256 hardware keys, it is a key handle. | never |
 | `local/holds.json` | Hold state (7.6). | never |
 | `local/hidden/<64 hex>.json` | Hidden records (7.6). | never |
 | `local/purged-refs.jsonl` | Purged dedupe refs (7.8). | never |
@@ -796,7 +817,7 @@ Result: a re-import after a purge adds nothing on this replica.
 
 1. Write each record file that is not purged or hidden to `<dir>/records/<64 hex>.json`. Use the stored bytes.
 2. Decrypt each blob that an exported record names. Write the plaintext to `<dir>/blobs/<64 hex of the blob id>`.
-3. Write `<dir>/manifest.json` with the canonical bytes of `{"spec": "hlog-core-v0.4", "identity": <id>, "records": <count>, "blobs": [{"id": <blob id>, "plaintext_sha256": <hex>, "media_type": <string>}]}`. Sort `blobs` by `id`.
+3. Write `<dir>/manifest.json` with the canonical bytes of `{"spec": "hlog-core-v0.5", "identity": <id>, "records": <count>, "blobs": [{"id": <blob id>, "plaintext_sha256": <hex>, "media_type": <string>}]}`. Sort `blobs` by `id`.
 
 The export is not encrypted. The CLI MUST say this before it writes.
 `hlog import-export <dir>` reverses the export for a log with the same identity secret.
@@ -1067,9 +1088,9 @@ Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <
 
 `hlog init`
 
-- Input: none. Flags: `-p256` uses a hardware P-256 key if the platform has one.
+- Input: none, or an nsec on standard input with `-nostr -`. Flags: `-nostr new` makes a new secp256k1 signing key; `-nostr <file>` uses the nsec (`nsec1...` or 64 hex digits) in the file; `-nostr -` reads it from standard input. `-p256` (not built) uses a hardware P-256 key if the platform has one.
 - Action: section 5.2.
-- Output: `identity <id>`, then the 24 words on 24 numbered lines. Then a warning: write the words on paper, and use them for hlog only.
+- Output: `identity <id>`, then `npub <npub>` for a secp256k1 key, then the 24 words on 24 numbered lines. Then a warning: write the words on paper, and use them for hlog only.
 - Errors: `already initialized` (exit 1).
 
 `hlog append`
@@ -1094,12 +1115,23 @@ Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <
 - Action: delete `local/cache/` and rebuild it.
 - Output: `indexed <n> records`.
 
-`hlog rotate [-no-seal <id>]...`
+`hlog rotate [-no-seal <id>]... [-nostr new|<file>]`
 
-- Input: the 24 words on standard input. Numbering and case are ignored.
+- Input: the 24 words on standard input. Numbering and case are ignored. `-nostr` picks a secp256k1 new key as for `init`; the nsec comes from a file because standard input carries the words.
 - Action: section 5.5. Seal every valid destructive record of the outgoing key in this replica except the ids that `-no-seal` names.
 - Output: one line `sealed <id>` or `not sealed <id>` per destructive record of the outgoing key, then `rotated to <tagged key>`, then `sealed <n>`. Before reading input, print `sync all devices before you rotate` to standard error.
-- Errors: `seed does not match`, `compromised: <id>` (exit 4).
+- Errors: `seed does not match`, `compromised: <id>` (exit 4), `key reuse`.
+
+`hlog restore [-no-seal <id>]... [-nostr new|<file>]`
+
+- Input: the 24 words on standard input.
+- Action: section 5.10.
+- Output: `identity <id>`, then the `rotate` output.
+- Errors: `already initialized`, `seed does not match`, `input missing: genesis for these words`, `compromised: <id>` (exit 4), `key reuse`.
+
+`hlog whoami`
+
+- Output: `identity <id>`, `key <tagged key>`, and `npub <npub>` for a secp256k1 key.
 
 `hlog gc`
 
@@ -1340,6 +1372,7 @@ Two independent implementations MUST produce each value before the vector is pub
 | V15 | Too new | Folder for test 24 | Verify output and exit code. TBD |
 | V16 | Median method | Input records and `D.value` | Method hash and canonical output. TBD |
 | V17 | Bad files | One file per error string in 3.8 | The error string. TBD |
+| V18 | secp256k1 | A fixed secret key and a record id, created_at 0 and 1761566400, zero aux | `kid`, npub, nsec, wrapper bytes and id, `sig`, and five rejects. Published; checked by `tools/checksecp256k1.py`. |
 
 The AES-SIV code MUST also pass the RFC 5297 Appendix A vectors. The HKDF code MUST pass the RFC 5869 Appendix A vectors.
 
@@ -1390,7 +1423,7 @@ The AES-SIV code MUST also pass the RFC 5297 Appendix A vectors. The HKDF code M
 - Per-recipient pseudonymous subjects (deferred).
 - Grants, sharing, selective disclosure and zero-knowledge proofs.
 - Trusted time, witness records and global ordering.
-- Nostr and Blossom transport (a later extension, with `secp256k1` keys).
+- Nostr and Blossom transport (a later extension). `secp256k1` signing keys are in the core since v0.5; publishing records to relays is not.
 - User interface, servers and accounts.
 - Products: `hlog compare`, the puck app and the clinician view.
 
@@ -1447,7 +1480,7 @@ The build is on hold. This list is from a read of the code on 2026-10-27.
 
 Each item has a DEFAULT in the text. Rob can change any of them.
 
-1. Curve choice: Ed25519 default, P-256 for hardware device keys, `secp256k1` reserved. Decided 2026-10-28: a Schnorr/secp256k1 signing key (a Nostr key) is added as an extension after v0, when a reader or signer needs one. It needs a dependency; the core stays at zero until then.
+1. Curve choice: Ed25519 default, P-256 for hardware device keys. Decided 2026-10-28 (v0.5, C21): secp256k1 BIP-340 keys may sign, through a Nostr wrapper event so NIP-46 and NIP-07 signers work. One dependency (btcec/v2). Rob: confirm kind 29944 and the wrapper shape.
 2. Own record format, with Nostr only as an encrypted carrier later. No NIP-01 event shape in the core.
 3. One identity secret per person now. Per-blob keys come with the sharing extension.
 4. Decided in v0.4: every succession is seed-signed; any fork is a freeze (5.6, 5.7). The lowest-id rule is gone. Rob: confirm, or name what KERI pre-rotation still adds.

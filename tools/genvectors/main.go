@@ -265,7 +265,7 @@ func genV17(signer core.Signer, claim map[string]any) {
 	add("bad v", path, `{"v":"0"}`)
 	add("bad type", path, `{"v":0}`)
 	add("id mismatch", path, strings.Replace(string(good), `"n":42.5`, `"n":42.6`, 1))
-	p, b := mut(func(m map[string]any) { m["kid"] = "secp256k1:00"; m["author"] = m["kid"] }, true)
+	p, b := mut(func(m map[string]any) { m["kid"] = "x25519:00"; m["author"] = m["kid"] }, true)
 	add("unsupported key algorithm", p, b)
 	p, b = mut(func(m map[string]any) { m["kid"] = "ed25519:00"; m["author"] = m["kid"] }, true)
 	add("bad key", p, b)
@@ -276,3 +276,56 @@ func genV17(signer core.Signer, claim map[string]any) {
 }
 
 var extra []func(core.Signer, map[string]any)
+
+func init() { extra = append(extra, genV18) }
+
+// genV18 writes the secp256k1 (Nostr key) vector.
+func genV18(_ core.Signer, claim map[string]any) {
+	claimID := claim["id"].(string)
+	// V18: secp256k1 (Nostr) keys. The signature is BIP-340 over the Nostr
+	// event id of a wrapper whose content is the record id (change note C21).
+	secp := make([]byte, 32)
+	secp[31] = 3 // the BIP-340 test vector 0 key
+	var zero [32]byte
+	ss, err := core.NewSecp256k1Signer(secp)
+	if err != nil {
+		panic(err)
+	}
+	skid := ss.Public()
+	pubHex := strings.TrimPrefix(skid, "secp256k1:")
+	var sigCases []any
+	var firstSig string
+	for _, created := range []int64{0, 1761566400} {
+		sg, err := core.SignSecp256k1With(secp, claimID, created, zero)
+		if err != nil {
+			panic(err)
+		}
+		if err := core.Verify(skid, claimID, sg); err != nil {
+			panic("V18 does not verify: " + err.Error())
+		}
+		if firstSig == "" {
+			firstSig = sg
+		}
+		wid := core.WrapperID(pubHex, created, claimID)
+		sigCases = append(sigCases, map[string]any{"created_at": float64(created), "wrapper_bytes": string(core.WrapperBytes(pubHex, created, claimID)), "wrapper_id": hex.EncodeToString(wid[:]), "aux_rand": hex.EncodeToString(zero[:]), "sig": sg})
+	}
+	sigHex := firstSig[len("secp256k1:0:"):]
+	var rejects []any
+	for _, r := range []struct{ name, id, sig string }{
+		{"other record id", core.HashID([]byte("another record")), firstSig},
+		{"created_at changed", claimID, "secp256k1:1:" + sigHex},
+		{"created_at with a leading zero", claimID, "secp256k1:00:" + sigHex},
+		{"no created_at", claimID, "secp256k1:" + sigHex},
+		{"uppercase hex", claimID, "secp256k1:0:" + strings.ToUpper(sigHex)},
+	} {
+		if core.Verify(skid, r.id, r.sig) == nil {
+			panic("V18 reject accepted: " + r.name)
+		}
+		rejects = append(rejects, map[string]any{"name": r.name, "id": r.id, "sig": r.sig, "result": "bad signature"})
+	}
+	write("v18-secp256k1.json", map[string]any{
+		"spec": "SPEC.md 4.4 and 4.5, change note C21", "secret_key": hex.EncodeToString(secp),
+		"nsec": core.Bech32Encode("nsec", secp), "npub": core.Npub(skid), "kid": skid,
+		"nostr_kind": float64(core.NostrKind), "id": claimID, "cases": sigCases, "rejects": rejects,
+	})
+}

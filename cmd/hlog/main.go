@@ -17,7 +17,10 @@ func usage() {
 	fmt.Fprintln(os.Stderr, `usage: hlog [-dir <path>] <command> [args]
 
 commands:
-  init                      create an identity; prints the 24 words once
+  init [-nostr new|-|<nsec file>]
+                            create an identity; prints the 24 words once.
+                            -nostr signs with a Nostr key: new, or your nsec
+  whoami                    identity, signing key and npub
   append                    read JSONL partial records on stdin, sign, store
   blob put <file>           encrypt and store a file; prints the blob id
   blob get <id>             decrypt a blob to stdout
@@ -34,8 +37,9 @@ commands:
   reindex                   rebuild local/cache
   purge [-reason <t>] <id>  tombstone and erase a record
   gc                        erase hidden targets older than the hold
-  rotate [-no-seal <id>]... switch to a new signing key; reads the 24 words on stdin
-  restore [-no-seal <id>]...
+  rotate [-no-seal <id>]... [-nostr new|<nsec file>]
+                            switch to a new signing key; reads the 24 words on stdin
+  restore [-no-seal <id>]... [-nostr new|<nsec file>]
                             on a new machine: rebuild local/ from the 24
                             words and a synced copy of the log, then rotate
   sync <source dir>         copy missing files from another replica
@@ -95,15 +99,25 @@ func main() {
 	cmd, rest := args[0], args[1:]
 	switch cmd {
 	case "init":
-		if len(rest) != 0 {
+		inf := flag.NewFlagSet("init", flag.ContinueOnError)
+		inf.SetOutput(io.Discard)
+		nostr := inf.String("nostr", "", "new, -, or a file holding an nsec")
+		if err := inf.Parse(rest); err != nil || inf.NArg() != 0 {
 			usage()
 			os.Exit(2)
 		}
-		id, words, err := s.Init()
+		key, err := nostrKey(*nostr, true)
+		if err != nil {
+			fail(err)
+		}
+		id, words, err := s.InitWith(key)
 		if err != nil {
 			fail(err)
 		}
 		fmt.Println("identity", id)
+		if local, err := s.ReadLocal(); err == nil && core.Npub(local.Signer.Public()) != "" {
+			fmt.Println("npub", core.Npub(local.Signer.Public()))
+		}
 		for i, w := range words {
 			fmt.Printf("%2d. %s\n", i+1, w)
 		}
@@ -148,6 +162,8 @@ func main() {
 		cmdAdd(s, rest)
 	case "mcp":
 		cmdMCP(s, rest)
+	case "whoami":
+		cmdWhoami(s, rest)
 	case "verify":
 		lines, code, err := s.VerifyLines()
 		if err != nil {
@@ -187,16 +203,21 @@ func main() {
 		rf.SetOutput(io.Discard)
 		var noSeal multiFlag
 		rf.Var(&noSeal, "no-seal", "leave this destructive record unsealed (repeatable)")
+		nostr := rf.String("nostr", "", "new, or a file holding an nsec")
 		if err := rf.Parse(rest); err != nil || rf.NArg() != 0 {
 			usage()
 			os.Exit(2)
+		}
+		key, err := nostrKey(*nostr, false)
+		if err != nil {
+			fail(err)
 		}
 		fmt.Fprintln(os.Stderr, "sync all devices before you rotate. paste the 24 words, then end input:")
 		text, err := io.ReadAll(os.Stdin)
 		if err != nil {
 			fail(err)
 		}
-		res, err := s.Rotate(core.ParseWords(string(text)), noSeal)
+		res, err := s.RotateTo(core.ParseWords(string(text)), noSeal, key)
 		if err != nil {
 			fail(err)
 		}
@@ -213,16 +234,21 @@ func main() {
 		rf.SetOutput(io.Discard)
 		var noSeal multiFlag
 		rf.Var(&noSeal, "no-seal", "leave this destructive record unsealed (repeatable)")
+		nostr := rf.String("nostr", "", "new, or a file holding an nsec")
 		if err := rf.Parse(rest); err != nil || rf.NArg() != 0 {
 			usage()
 			os.Exit(2)
+		}
+		key, err := nostrKey(*nostr, false)
+		if err != nil {
+			fail(err)
 		}
 		fmt.Fprintln(os.Stderr, "sync every copy of the log you still have into this folder first. paste the 24 words, then end input:")
 		text, err := io.ReadAll(os.Stdin)
 		if err != nil {
 			fail(err)
 		}
-		res, id, err := s.Restore(core.ParseWords(string(text)), noSeal)
+		res, id, err := s.RestoreTo(core.ParseWords(string(text)), noSeal, key)
 		if err != nil {
 			fail(err)
 		}

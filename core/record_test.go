@@ -52,13 +52,25 @@ func TestTaggedKeys(t *testing.T) {
 	bad := []struct{ k, want string }{
 		{"ed25519:" + strings.ToUpper(tk[8:]), "bad key"},
 		{tk[:len(tk)-2], "bad key"},
-		{"secp256k1:" + tk[8:], "unsupported key algorithm"},
+		{"x25519:" + tk[8:], "unsupported key algorithm"},
+		{"secp256k1:" + strings.Repeat("0", 64), "bad key"},       // x = 0 is not on the curve
+		{"secp256k1:" + strings.Repeat("0", 63) + "5", "bad key"}, // nor is x = 5
+		{"secp256k1:" + strings.Repeat("f", 64), "bad key"},       // x above the field size
+		{"secp256k1:" + strings.Repeat("0", 63) + "1", ""},        // x = 1 is on the curve
+		{"secp256k1:" + strings.ToUpper(strings.Repeat("0", 63)+"a"), "bad key"},
+		{"secp256k1:" + strings.Repeat("0", 62), "bad key"},
 		{"rsa:00", "unsupported key algorithm"},
 		{"p256:" + strings.Repeat("00", 33), "bad key"},
 		{"p256:" + strings.Repeat("00", 32), "bad key"},
 	}
 	for _, b := range bad {
 		_, err := ParseKey(b.k)
+		if b.want == "" {
+			if err != nil {
+				t.Errorf("%s: %v", b.k, err)
+			}
+			continue
+		}
 		if err == nil || err.Error() != b.want {
 			t.Errorf("%s: got %v want %s", b.k, err, b.want)
 		}

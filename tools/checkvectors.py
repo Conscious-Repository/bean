@@ -14,12 +14,18 @@ import sys
 from decimal import Decimal
 
 from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, ed25519, utils
 from cryptography.hazmat.primitives.ciphers.aead import AESSIV
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 MAX_SAFE = 2**53 - 1
+
+
+def raw_pub(pub):
+    """Raw public key bytes; works before cryptography 40 added public_bytes_raw."""
+    return pub.public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+
 P256_N = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
 failures = 0
 
@@ -222,7 +228,7 @@ for r in v4["records"]:
 
 v5 = load("v5-ed25519.json")
 priv = ed25519.Ed25519PrivateKey.from_private_bytes(bytes.fromhex(v5["private_seed"]))
-check("v5 kid", "ed25519:" + priv.public_key().public_bytes_raw().hex(), v5["kid"])
+check("v5 kid", "ed25519:" + raw_pub(priv.public_key()).hex(), v5["kid"])
 check("v5 sig", "ed25519:" + priv.sign(id_raw(v5["id"])).hex(), v5["sig"])
 
 v6 = load("v6-p256.json")
@@ -264,7 +270,7 @@ check("v9 identity_secret", isec.hex(), v9["identity_secret"])
 for g in range(3):
     rs = hk(seed, f"hlog/v0/recovery-key/{g}", 32)
     check(f"v9 recovery seed {g}", rs.hex(), v9["recovery_private_seeds"][g])
-    pub = ed25519.Ed25519PrivateKey.from_private_bytes(rs).public_key().public_bytes_raw().hex()
+    pub = raw_pub(ed25519.Ed25519PrivateKey.from_private_bytes(rs).public_key()).hex()
     check(f"v9 recovery key {g}", "ed25519:" + pub, v9["recovery_keys"][g])
 
 v10 = load("v10-derived-keys.json")
