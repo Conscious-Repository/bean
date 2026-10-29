@@ -34,7 +34,7 @@ $ hlog ls -since 2026-10-01
 Build and install the commands. The repository is private for now, so you need access to it on GitHub.
 
 ```
-git clone https://github.com/consciousrepo/bean.git
+git clone https://github.com/Conscious-Repository/bean.git
 cd bean
 go install ./cmd/...
 ```

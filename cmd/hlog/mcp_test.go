@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/consciousrepo/bean/core"
+	"github.com/Conscious-Repository/bean/core"
 )
 
 func mcpStore(t *testing.T) (*core.Store, map[string]string) {

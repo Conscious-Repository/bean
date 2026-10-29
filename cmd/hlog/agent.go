@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/consciousrepo/bean/core"
+	"github.com/Conscious-Repository/bean/core"
 )
 
 // cmdAgent is hlog agent init and hlog agent pair.

@@ -22,7 +22,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/consciousrepo/bean/core"
+	"github.com/Conscious-Repository/bean/core"
 )
 
 //go:embed vocabulary.md

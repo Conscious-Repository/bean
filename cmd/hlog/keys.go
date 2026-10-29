@@ -7,7 +7,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/consciousrepo/bean/core"
+	"github.com/Conscious-Repository/bean/core"
 )
 
 // nostrKey reads the -nostr flag of init, rotate and restore:

@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/consciousrepo/bean/core"
+	"github.com/Conscious-Repository/bean/core"
 )
 
 const version = "hlog-import-csv@0.5.0"

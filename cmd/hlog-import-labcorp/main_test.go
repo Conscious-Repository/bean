@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/consciousrepo/bean/core"
+	"github.com/Conscious-Repository/bean/core"
 )
 
 // The fixture is synthetic: a made-up person and values laid out as

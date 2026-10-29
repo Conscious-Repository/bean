@@ -34,7 +34,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/consciousrepo/bean/core"
+	"github.com/Conscious-Repository/bean/core"
 )
 
 const (

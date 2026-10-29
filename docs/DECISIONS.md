@@ -211,3 +211,7 @@ Method: clone the repo into an empty home folder and follow the README word for 
 101. **CORE.md and SPEC.md are in Simplified Technical English.** Numbered steps for procedures, one statement per sentence, no descriptive sentence over 25 words, no bold run-in labels, no summary lines that start "Result:", and no filler ("exactly", "deliberate", "this is the price of"). CORE.md keeps every fact that the independent implementation needed (DECISIONS 85).
 102. **SPEC.md holds only the protocol.** Removed: the review-specific wording ("DEFAULT, Rob to confirm" is now "DEFAULT", which can change until the v1 freeze), the editor's name, the "customer zero" project rule (it is in docs/ROADMAP.md), internal product names, and Appendix A, the differences from the v0.1 prototype. Appendix A moved to docs/history/spec-v0.1-deltas.md. Appendix B became "Appendix: defaults and open items", sorted into decided, default and open. Section 14 now says which vectors are published (V1 to V12, V17, V18); it said all were TBD.
 103. **The user documents name no AI product.** The README section is "Log from an AI assistant": `hlog mcp` works with any MCP client, with one generic JSON entry. Examples use the labels `assistant` and `server`.
+
+## Repository home, 2026-10-28
+
+104. **The repository moved to the Conscious-Repository organization**: github.com/Conscious-Repository/bean, still private. The module path follows it (`github.com/Conscious-Repository/bean`), which replaces the path in 92. GitHub redirects the old URL, but clones should update their remote.

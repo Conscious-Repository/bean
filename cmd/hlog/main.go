@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/consciousrepo/bean/core"
+	"github.com/Conscious-Repository/bean/core"
 )
 
 const help = `hlog keeps your health record as a folder of signed records.
