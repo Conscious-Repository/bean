@@ -1,4 +1,4 @@
-// Command hlog is the reference CLI (SPEC.md section 12).
+// Command bean is the reference CLI (SPEC.md section 12).
 package main
 
 import (
@@ -14,9 +14,9 @@ import (
 	"github.com/Conscious-Repository/bean/core"
 )
 
-const help = `hlog keeps your health record as a folder of signed records.
+const help = `bean keeps your health record as a folder of signed records.
 
-usage: hlog [-dir <folder>] <command> [arguments]
+usage: bean [-dir <folder>] <command> [arguments]
 
 Start
   init [-nostr new|-|<file>]    Create your identity and log. Shows 24 words once.
@@ -58,7 +58,7 @@ Other
   help                          Show this help.
   version                       Show the version.
 
--dir defaults to $HLOG_DIR, then the current folder.
+-dir defaults to $BEAN_DIR, then the current folder.
 An id can be shortened to its first 6 or more hex digits.
 Full reference: docs/COMMANDS.md`
 
@@ -92,7 +92,7 @@ var current string
 // usage reports a usage error for the current command and exits 2.
 func usage() {
 	if line, ok := syntax[current]; ok {
-		fmt.Fprintf(os.Stderr, "usage: hlog [-dir <folder>] %s\nrun hlog help for all commands\n", line)
+		fmt.Fprintf(os.Stderr, "usage: bean [-dir <folder>] %s\nrun bean help for all commands\n", line)
 	} else {
 		fmt.Fprintln(os.Stderr, help)
 	}
@@ -108,9 +108,9 @@ func (m *multiFlag) String() string     { return strings.Join(*m, ",") }
 func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
 
 func fail(err error) {
-	fmt.Fprintf(os.Stderr, "hlog: %s\n", err)
+	fmt.Fprintf(os.Stderr, "bean: %s\n", err)
 	if errors.Is(err, core.ErrNotInitialized) {
-		fmt.Fprintf(os.Stderr, "hlog: no log in %s: run hlog init, or point -dir or HLOG_DIR at your log\n", logDir)
+		fmt.Fprintf(os.Stderr, "bean: no log in %s: run bean init, or point -dir or BEAN_DIR at your log\n", logDir)
 	}
 	code := 1
 	msg := err.Error()
@@ -124,7 +124,7 @@ func fail(err error) {
 }
 
 func main() {
-	fs := flag.NewFlagSet("hlog", flag.ContinueOnError)
+	fs := flag.NewFlagSet("bean", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	dir := fs.String("dir", "", "log folder")
 	if err := fs.Parse(os.Args[1:]); errors.Is(err, flag.ErrHelp) {
@@ -134,7 +134,7 @@ func main() {
 		usage()
 	}
 	if *dir == "" {
-		*dir = os.Getenv("HLOG_DIR")
+		*dir = os.Getenv("BEAN_DIR")
 	}
 	if *dir == "" {
 		*dir = "."
@@ -149,10 +149,10 @@ func main() {
 		logDir = *dir
 	}
 	s := core.Open(*dir)
-	if now := os.Getenv("HLOG_NOW"); now != "" {
+	if now := os.Getenv("BEAN_NOW"); now != "" {
 		t, err := time.Parse(time.RFC3339, now)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "hlog: bad HLOG_NOW")
+			fmt.Fprintln(os.Stderr, "bean: bad BEAN_NOW")
 			os.Exit(2)
 		}
 		s.Now = func() time.Time { return t }
@@ -160,7 +160,7 @@ func main() {
 	cmd, rest := args[0], args[1:]
 	current = cmd
 	if _, known := syntax[cmd]; !known {
-		fmt.Fprintf(os.Stderr, "hlog: unknown command %q\nrun hlog help for all commands\n", cmd)
+		fmt.Fprintf(os.Stderr, "bean: unknown command %q\nrun bean help for all commands\n", cmd)
 		os.Exit(2)
 	}
 	if needsLog[cmd] && !hasLog(s) {
@@ -170,7 +170,7 @@ func main() {
 	case "help":
 		fmt.Println(help)
 	case "version":
-		fmt.Printf("hlog %s (spec v0.5)\n", core.Version)
+		fmt.Printf("bean %s (spec v0.5)\n", core.Version)
 	case "init":
 		inf := flag.NewFlagSet("init", flag.ContinueOnError)
 		inf.SetOutput(io.Discard)
@@ -193,7 +193,7 @@ func main() {
 		for i, w := range words {
 			fmt.Printf("%2d. %s\n", i+1, w)
 		}
-		fmt.Fprintln(os.Stderr, "Write these 24 words on paper now. hlog shows them only once. They recover your identity on a new machine. Use them only for hlog: never type them into a crypto wallet.")
+		fmt.Fprintln(os.Stderr, "Write these 24 words on paper now. bean shows them only once. They recover your identity on a new machine. Use them only for bean: never type them into a crypto wallet.")
 	case "append":
 		af := flag.NewFlagSet("append", flag.ContinueOnError)
 		af.SetOutput(io.Discard)
@@ -358,7 +358,7 @@ func main() {
 		if len(rest) != 1 {
 			usage()
 		}
-		fmt.Fprintln(os.Stderr, "hlog: the export is not encrypted")
+		fmt.Fprintln(os.Stderr, "bean: the export is not encrypted")
 		r, b, err := s.Export(rest[0])
 		if err != nil {
 			fail(err)

@@ -1,4 +1,4 @@
-// Package core implements the hlog core specification: canonical JSON,
+// Package core implements the bean core specification: canonical JSON,
 // record ids, keys and signatures, key derivation, blob encryption, paper
 // seeds and dedupe refs. It uses no network and no clock.
 package core
@@ -328,7 +328,7 @@ func (p *parser) number() (any, bool) {
 	return f, true
 }
 
-// numberInRange applies the hlog integer rule: a number that canonicalizes to
+// numberInRange applies the bean integer rule: a number that canonicalizes to
 // an integer literal must be within -(2^53-1) to 2^53-1.
 func numberInRange(f float64) bool {
 	if f == math.Trunc(f) && math.Abs(f) < 1e21 {

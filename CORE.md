@@ -1,4 +1,4 @@
-# hlog core
+# bean core
 
 This document gives the rules that two independent implementations must agree on. [SPEC.md](SPEC.md) (version 0.5) gives all rules, the error strings and the conformance tests. If the two documents are different, SPEC.md is correct. This is a draft. Section 6 tells when it freezes.
 
@@ -26,7 +26,7 @@ A health log is a folder of signed claims about one person. Programs add files t
 |---|---|
 | `v` | Format version. This draft uses `0`. |
 | `nonce` | 32 lowercase hex digits. Make a new random value for each record. |
-| `type` | Matches `^[a-z0-9][a-z0-9_-]*(\.[a-z0-9_-]+)*$`. 128 characters or less. Types that start with `hlog.` are reserved. |
+| `type` | Matches `^[a-z0-9][a-z0-9_-]*(\.[a-z0-9_-]+)*$`. 128 characters or less. Types that start with `bean.` are reserved. |
 | `subject` | The identity id that the claim is about. Only a genesis has no `subject`. |
 | `author` | An identity id, or a tagged key used directly. A key used directly is a bare key, for example the key of a device or an agent. |
 | `kid` | The tagged public key that made `sig`. |
@@ -52,7 +52,7 @@ A tagged key is `<alg>:<lowercase hex>`. The signed message comes from the 32 by
 The wrapper event lets any Nostr signer sign a record:
 
 ```
-[0,"<public key hex>",<created_at>,29944,[["alt","hlog record signature"]],"<record id>"]
+[0,"<public key hex>",<created_at>,29944,[["alt","bean record signature"]],"<record id>"]
 ```
 
 1. Serialize the wrapper as NIP-01 does: compact JSON. All fields are ASCII, so this is the same as the RFC 8785 form.
@@ -67,7 +67,7 @@ Check each file in this order. Stop at the first failure.
 2. `v`, `type`, `author` and `kid` are present.
 3. The id, the key and the signature.
 4. The version. The earlier checks use only the envelope fields. These fields do not change between versions. An unknown version has two cases:
-   - The type starts with `hlog.` and a key of that identity signed the record. The identity is too new. Do not evaluate its records.
+   - The type starts with `bean.` and a key of that identity signed the record. The identity is too new. Do not evaluate its records.
    - Any other type. Skip the record, but sync it.
 5. The canonical bytes.
 6. The fields.
@@ -78,15 +78,15 @@ Check each file in this order. Stop at the first failure.
 
 | Type | Rules |
 |---|---|
-| `hlog.genesis` | No `subject` and no `refs`. `author`, `kid` and `value.key` are the same key. `value.recovery` is the commitment to recovery key 0. The id of the genesis is the identity id. It does not change. |
-| `hlog.succession` | `subject` and `author` are the identity id. One `succeeds` ref names the parent. `value` is `{"key", "recovery", "sealed"}`: the new signing key, the commitment to recovery key g+1, and a sorted list of ids. Recovery key g signs it. g is the position of the parent on the chain. The genesis has position 0. |
+| `bean.genesis` | No `subject` and no `refs`. `author`, `kid` and `value.key` are the same key. `value.recovery` is the commitment to recovery key 0. The id of the genesis is the identity id. It does not change. |
+| `bean.succession` | `subject` and `author` are the identity id. One `succeeds` ref names the parent. `value` is `{"key", "recovery", "sealed"}`: the new signing key, the commitment to recovery key g+1, and a sorted list of ids. Recovery key g signs it. g is the position of the parent on the chain. The genesis has position 0. |
 
 ### 2.2 Paper seed and derived keys
 
 1. The paper seed is 32 random bytes. Show it as 24 BIP-39 words. Do not use the BIP-39 PBKDF2 step or a passphrase.
 2. Derive keys with HKDF-SHA-256 and an empty salt. The `info` labels are:
-   - From the paper seed: `hlog/v0/identity-secret` (32 bytes) and `hlog/v0/recovery-key/<g>` (the 32-byte seed of an Ed25519 key).
-   - From the identity secret: `hlog/v0/blob-key` (64 bytes) and `hlog/v0/dedupe-key` (32 bytes).
+   - From the paper seed: `bean/v0/identity-secret` (32 bytes) and `bean/v0/recovery-key/<g>` (the 32-byte seed of an Ed25519 key).
+   - From the identity secret: `bean/v0/blob-key` (64 bytes) and `bean/v0/dedupe-key` (32 bytes).
 3. A commitment is `sha256:` and the hex SHA-256 of the ASCII text of a tagged recovery key.
 4. Devices do not store the paper seed. Only the paper seed can change the signing key.
 
@@ -104,8 +104,8 @@ Check each file in this order. Stop at the first failure.
 | Action | Who | Key |
 |---|---|---|
 | Add a claim | Any author. Readers decide whom to trust. | A key on the chain of the author, or a bare key with `kid` equal to `author`. |
-| Correct (a record with a `supersedes` ref) | The author of the target. The target must not be an `hlog.*` record. | The head key, or an older key on the chain whose next succession lists the record in `sealed`. |
-| Delete (an `hlog.tombstone` with one `purges` ref and `author` equal to `subject`) | The subject of the target. The target must not be a genesis, a succession or a tombstone. | The same as for a correction. |
+| Correct (a record with a `supersedes` ref) | The author of the target. The target must not be an `bean.*` record. | The head key, or an older key on the chain whose next succession lists the record in `sealed`. |
+| Delete (an `bean.tombstone` with one `purges` ref and `author` equal to `subject`) | The subject of the target. The target must not be a genesis, a succession or a tombstone. | The same as for a correction. |
 | Rotate | The identity. | The recovery key to which the head commits. |
 
 More rules:
@@ -129,7 +129,7 @@ More rules:
 ### 4.2 Blobs
 
 1. A blob is a raw source file, for example a PDF.
-2. Encrypt it with AES-SIV (RFC 5297, AES-256) with the 64-byte blob key and the associated data `hlog/v0/blob`. Do not use a nonce.
+2. Encrypt it with AES-SIV (RFC 5297, AES-256) with the 64-byte blob key and the associated data `bean/v0/blob`. Do not use a nonce.
 3. Store the bytes `V‖C` at `blobs/<2 hex>/<62 hex>`. The name is the SHA-256 of these bytes.
 4. The encryption is deterministic, so the same file gives the same blob on every copy.
 
@@ -138,8 +138,8 @@ More rules:
 Dedupe refs let two copies import the same export without duplicates.
 
 1. `source.ref` is `hmac-sha256:` and the hex HMAC-SHA-256, with the dedupe key, of the canonical bytes of one array.
-2. If the source gives an id for the reading, the array is `["hlog/v0/ref","id",<system>,<native id>,<occurrence>]`. The native id is a JSON string. Write a numeric id in decimal.
-3. If the source gives no id, the array is `["hlog/v0/ref","tuple",<system>,<type>,<observed>,<value>,<occurrence>]`. `<observed>` and `<value>` are the `times.observed` and `value` of the record. `<observed>` can be null.
+2. If the source gives an id for the reading, the array is `["bean/v0/ref","id",<system>,<native id>,<occurrence>]`. The native id is a JSON string. Write a numeric id in decimal.
+3. If the source gives no id, the array is `["bean/v0/ref","tuple",<system>,<type>,<observed>,<value>,<occurrence>]`. `<observed>` and `<value>` are the `times.observed` and `value` of the record. `<observed>` can be null.
 4. `<occurrence>` starts at 0. It counts readings in one import whose arrays, without the occurrence, are the same. Count in source order.
 
 The error strings, the warning strings and the conformance tests are in SPEC.md sections 12.2 and 13.

@@ -1,5 +1,5 @@
 {
-  "commitment": "sha256:e4e4606c8299c3edc0e76d14cfc4f91dc8d38873a34b005acb0f93574f8f852b",
+  "commitment": "sha256:74d72968e6e27788e8da90f03fd3fbe0461443b8640a5abd8fe671d3e0de0d12",
   "spec": "SPEC.md 4.6",
-  "tagged_key": "ed25519:f614779432b8577f16173b540ba2900d3cc7f8f0c7b2559a83d1404180a5c978"
+  "tagged_key": "ed25519:79cf5a243b14f49ccfb35b93398031d4fda9faefb558474e9439fde6cc69844c"
 }

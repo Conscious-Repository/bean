@@ -1,22 +1,22 @@
 # Security
 
-This page says what hlog protects, what it does not protect, and where each key lives. [SPEC.md](SPEC.md) sections 15 and 16 have the full analysis.
+This page says what bean protects, what it does not protect, and where each key lives. [SPEC.md](SPEC.md) sections 15 and 16 have the full analysis.
 
-## What hlog protects
+## What bean protects
 
-- **Authorship and integrity.** Every record is signed and named by the hash of its content. If one byte changes, `hlog verify` reports it. A copy of the log cannot be changed without detection.
-- **Your identity against a stolen device.** A device holds your signing key, not your 24 words. A thief with the device can add records in your name. The thief cannot take over your identity: only the 24 words can change the key (`hlog rotate` or `hlog restore`).
+- **Authorship and integrity.** Every record is signed and named by the hash of its content. If one byte changes, `bean verify` reports it. A copy of the log cannot be changed without detection.
+- **Your identity against a stolen device.** A device holds your signing key, not your 24 words. A thief with the device can add records in your name. The thief cannot take over your identity: only the 24 words can change the key (`bean rotate` or `bean restore`).
 - **Your records against a thief's deletions.** When you rotate, the deletions and corrections that your copy already has stay valid. Any that the old key made elsewhere, or that you exclude with `-no-seal`, stop being valid. A thief's deletions die this way.
 - **Your records against your agents.** An agent signs with its own key. It can add records about you. It cannot correct, delete or sign as you.
-- **Your exit.** `hlog export` writes everything as plaintext. No service is needed to read your data.
+- **Your exit.** `bean export` writes everything as plaintext. No service is needed to read your data.
 
-## What hlog does not protect
+## What bean does not protect
 
 - **Records are plain JSON on disk.** Anyone who can read the folder can read the types, times and values. Keep the log on an encrypted disk (FileVault on macOS). A machine that holds a copy, for example a cloud server for an agent, can read the whole log.
 - **Stored files are encrypted with one key per identity.** If `local/identity-secret` leaks, anyone with the files can decrypt them. Rotation does not change this key. Make a new identity if it leaks.
 - **The 24 words are the master key.** Whoever has them can take over your identity. If two people rotate from the same point, the identity freezes and you must make a new one.
 - **If you lose the 24 words and the machine, you lose the identity.** Your records stay readable on any copy, but you cannot change keys again.
-- **An AI client sees what it reads.** `hlog mcp` sends the records it returns to the AI provider. Use a local model if that matters to you.
+- **An AI client sees what it reads.** `bean mcp` sends the records it returns to the AI provider. Use a local model if that matters to you.
 - **Times are claims.** `times.observed` says when the author says something happened. A key that you rotated out can still sign records with old times.
 - **Equal files look equal.** Encryption is deterministic, so someone with the files can see that two of them hold the same content.
 
@@ -29,7 +29,7 @@ This page says what hlog protects, what it does not protect, and where each key 
 | Identity secret | `local/identity-secret`, mode 0600 | Decrypt stored files; make dedupe refs. |
 | Agent key | `local/agent-key`, one per machine | Add records about you, as the agent. |
 
-`local/` never syncs. A backup of `local/` is as sensitive as the keys in it. You do not need one: the 24 words rebuild `local/` (`hlog restore`).
+`local/` never syncs. A backup of `local/` is as sensitive as the keys in it. You do not need one: the 24 words rebuild `local/` (`bean restore`).
 
 ## Report a problem
 

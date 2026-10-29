@@ -126,7 +126,7 @@ func TestParallelMatchesSerial(t *testing.T) {
 	}
 }
 
-// Two hlog processes (a CLI and an MCP server) load at once after a purge
+// Two bean processes (a CLI and an MCP server) load at once after a purge
 // arrives by sync. Both must succeed and agree.
 func TestConcurrentLoads(t *testing.T) {
 	a, _ := initStore(t)

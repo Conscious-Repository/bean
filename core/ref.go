@@ -10,14 +10,14 @@ import (
 // RefInputNative builds the HMAC input array for a source with a native id
 // (SPEC.md 4.8).
 func RefInputNative(system, nativeID string, occurrence int) []any {
-	return []any{"hlog/v0/ref", "id", system, nativeID, float64(occurrence)}
+	return []any{"bean/v0/ref", "id", system, nativeID, float64(occurrence)}
 }
 
 // RefInputTuple builds the HMAC input array for a source without a native
 // id. observed is the exact times.observed value (or nil) and value the
 // exact value object of the record.
 func RefInputTuple(system, typ string, observed, value any, occurrence int) []any {
-	return []any{"hlog/v0/ref", "tuple", system, typ, observed, value, float64(occurrence)}
+	return []any{"bean/v0/ref", "tuple", system, typ, observed, value, float64(occurrence)}
 }
 
 // DedupeRef computes "hmac-sha256:" + hex HMAC-SHA-256 over the canonical

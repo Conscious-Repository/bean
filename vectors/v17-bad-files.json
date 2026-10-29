@@ -3,73 +3,73 @@
     {
       "name": "bad path",
       "path": "objects/zz/00000000000000000000000000000000000000000000000000000000000000.json",
-      "bytes": "{\"author\":\"sha256:67e0a03dd6581a0c0bf503d880e0fb683e029a0a9ce052ba1743e82c000cc3ba\",\"context\":{\"coding\":{\"loinc\":\"80404-7\"}},\"id\":\"sha256:52387e61df81dd978648c8a3ca112df7d865a9a2a14df3d0cd94b4b910fd0bc0\",\"kid\":\"ed25519:d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:054b9695223a6a955997980f8cdfb321c50a5e2e6f0515d1b8454f9a119b7f9e9617f208a01a2d64d67ce8ebc0dd003a41f836d0ad1ed8afce9c21eefafeb609\",\"source\":{\"adapter\":\"hlog-import-csv@0.3.0\",\"ref\":\"hmac-sha256:4397cbc6b8b68ac27c106a73efbb0fcccdd1b4e469ca1c3235adf167ef21fd21\",\"system\":\"csv\"},\"subject\":\"sha256:67e0a03dd6581a0c0bf503d880e0fb683e029a0a9ce052ba1743e82c000cc3ba\",\"times\":{\"imported\":\"2026-10-27T12:00:01Z\",\"observed\":{\"precision\":\"minute\",\"start\":\"2026-10-26T03:00:00Z\"}},\"type\":\"hrv.rmssd\",\"v\":0,\"value\":{\"n\":42.5,\"unit\":\"ms\"}}",
+      "bytes": "{\"author\":\"sha256:8c5c860010625d4719f9721bdcace326d48057f0903df8afcdaf4b9e992f5a6a\",\"context\":{\"coding\":{\"loinc\":\"80404-7\"}},\"id\":\"sha256:32cdd23f42757d9df3c837b0d2a9434708d4d56792cb1a2271164e4634e49a0e\",\"kid\":\"ed25519:d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:70edf1f0cd7fb5ab0337176ecb01c28743618e31890b8b97479cbcb33fff3986750581469126aceb71d92a680e4146412bc602e64857ac8477712debd88c5e0f\",\"source\":{\"adapter\":\"bean-import-csv@0.3.0\",\"ref\":\"hmac-sha256:a71d613423dcc61a131575de4a5cd185fd3f20ab9e6a61ff7a8298f135a7837c\",\"system\":\"csv\"},\"subject\":\"sha256:8c5c860010625d4719f9721bdcace326d48057f0903df8afcdaf4b9e992f5a6a\",\"times\":{\"imported\":\"2026-10-27T12:00:01Z\",\"observed\":{\"precision\":\"minute\",\"start\":\"2026-10-26T03:00:00Z\"}},\"type\":\"hrv.rmssd\",\"v\":0,\"value\":{\"n\":42.5,\"unit\":\"ms\"}}",
       "error": "bad path"
     },
     {
       "name": "bad json",
-      "path": "objects/52/387e61df81dd978648c8a3ca112df7d865a9a2a14df3d0cd94b4b910fd0bc0.json",
+      "path": "objects/32/cdd23f42757d9df3c837b0d2a9434708d4d56792cb1a2271164e4634e49a0e.json",
       "bytes": "{",
       "error": "bad json"
     },
     {
       "name": "duplicate key",
-      "path": "objects/52/387e61df81dd978648c8a3ca112df7d865a9a2a14df3d0cd94b4b910fd0bc0.json",
+      "path": "objects/32/cdd23f42757d9df3c837b0d2a9434708d4d56792cb1a2271164e4634e49a0e.json",
       "bytes": "{\"v\":0,\"v\":0}",
       "error": "duplicate key"
     },
     {
       "name": "bad number",
-      "path": "objects/52/387e61df81dd978648c8a3ca112df7d865a9a2a14df3d0cd94b4b910fd0bc0.json",
+      "path": "objects/32/cdd23f42757d9df3c837b0d2a9434708d4d56792cb1a2271164e4634e49a0e.json",
       "bytes": "{\"v\":9007199254740992}",
       "error": "bad number"
     },
     {
       "name": "bad string",
-      "path": "objects/52/387e61df81dd978648c8a3ca112df7d865a9a2a14df3d0cd94b4b910fd0bc0.json",
+      "path": "objects/32/cdd23f42757d9df3c837b0d2a9434708d4d56792cb1a2271164e4634e49a0e.json",
       "bytes": "{\"v\":\"\\udc00\"}",
       "error": "bad string"
     },
     {
       "name": "bad v",
-      "path": "objects/52/387e61df81dd978648c8a3ca112df7d865a9a2a14df3d0cd94b4b910fd0bc0.json",
+      "path": "objects/32/cdd23f42757d9df3c837b0d2a9434708d4d56792cb1a2271164e4634e49a0e.json",
       "bytes": "{\"v\":\"0\"}",
       "error": "bad v"
     },
     {
       "name": "bad type",
-      "path": "objects/52/387e61df81dd978648c8a3ca112df7d865a9a2a14df3d0cd94b4b910fd0bc0.json",
+      "path": "objects/32/cdd23f42757d9df3c837b0d2a9434708d4d56792cb1a2271164e4634e49a0e.json",
       "bytes": "{\"v\":0}",
       "error": "bad type"
     },
     {
       "name": "id mismatch",
-      "path": "objects/52/387e61df81dd978648c8a3ca112df7d865a9a2a14df3d0cd94b4b910fd0bc0.json",
-      "bytes": "{\"author\":\"sha256:67e0a03dd6581a0c0bf503d880e0fb683e029a0a9ce052ba1743e82c000cc3ba\",\"context\":{\"coding\":{\"loinc\":\"80404-7\"}},\"id\":\"sha256:52387e61df81dd978648c8a3ca112df7d865a9a2a14df3d0cd94b4b910fd0bc0\",\"kid\":\"ed25519:d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:054b9695223a6a955997980f8cdfb321c50a5e2e6f0515d1b8454f9a119b7f9e9617f208a01a2d64d67ce8ebc0dd003a41f836d0ad1ed8afce9c21eefafeb609\",\"source\":{\"adapter\":\"hlog-import-csv@0.3.0\",\"ref\":\"hmac-sha256:4397cbc6b8b68ac27c106a73efbb0fcccdd1b4e469ca1c3235adf167ef21fd21\",\"system\":\"csv\"},\"subject\":\"sha256:67e0a03dd6581a0c0bf503d880e0fb683e029a0a9ce052ba1743e82c000cc3ba\",\"times\":{\"imported\":\"2026-10-27T12:00:01Z\",\"observed\":{\"precision\":\"minute\",\"start\":\"2026-10-26T03:00:00Z\"}},\"type\":\"hrv.rmssd\",\"v\":0,\"value\":{\"n\":42.6,\"unit\":\"ms\"}}",
+      "path": "objects/32/cdd23f42757d9df3c837b0d2a9434708d4d56792cb1a2271164e4634e49a0e.json",
+      "bytes": "{\"author\":\"sha256:8c5c860010625d4719f9721bdcace326d48057f0903df8afcdaf4b9e992f5a6a\",\"context\":{\"coding\":{\"loinc\":\"80404-7\"}},\"id\":\"sha256:32cdd23f42757d9df3c837b0d2a9434708d4d56792cb1a2271164e4634e49a0e\",\"kid\":\"ed25519:d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:70edf1f0cd7fb5ab0337176ecb01c28743618e31890b8b97479cbcb33fff3986750581469126aceb71d92a680e4146412bc602e64857ac8477712debd88c5e0f\",\"source\":{\"adapter\":\"bean-import-csv@0.3.0\",\"ref\":\"hmac-sha256:a71d613423dcc61a131575de4a5cd185fd3f20ab9e6a61ff7a8298f135a7837c\",\"system\":\"csv\"},\"subject\":\"sha256:8c5c860010625d4719f9721bdcace326d48057f0903df8afcdaf4b9e992f5a6a\",\"times\":{\"imported\":\"2026-10-27T12:00:01Z\",\"observed\":{\"precision\":\"minute\",\"start\":\"2026-10-26T03:00:00Z\"}},\"type\":\"hrv.rmssd\",\"v\":0,\"value\":{\"n\":42.6,\"unit\":\"ms\"}}",
       "error": "id mismatch"
     },
     {
       "name": "unsupported key algorithm",
-      "path": "objects/8b/fa3e7075e5156421b501c621b1fe3f1dd5d6f12f2f6b4e438cf9865259dd29.json",
-      "bytes": "{\"author\":\"x25519:00\",\"context\":{\"coding\":{\"loinc\":\"80404-7\"}},\"id\":\"sha256:8bfa3e7075e5156421b501c621b1fe3f1dd5d6f12f2f6b4e438cf9865259dd29\",\"kid\":\"x25519:00\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:a11af761c7269767dff74d35a4b8ab98f0c2c5f0c836ab64ac1bcaed9d186f7be0468143331aaf110de6f0c9e4a451a9ad934c0c85560e90f98a17636b1fe40d\",\"source\":{\"adapter\":\"hlog-import-csv@0.3.0\",\"ref\":\"hmac-sha256:4397cbc6b8b68ac27c106a73efbb0fcccdd1b4e469ca1c3235adf167ef21fd21\",\"system\":\"csv\"},\"subject\":\"sha256:67e0a03dd6581a0c0bf503d880e0fb683e029a0a9ce052ba1743e82c000cc3ba\",\"times\":{\"imported\":\"2026-10-27T12:00:01Z\",\"observed\":{\"precision\":\"minute\",\"start\":\"2026-10-26T03:00:00Z\"}},\"type\":\"hrv.rmssd\",\"v\":0,\"value\":{\"n\":42.5,\"unit\":\"ms\"}}",
+      "path": "objects/23/6badcaa2714b56b1ebf7f2e5ed1ae8ede612676973a628d6f652eb3e0c1284.json",
+      "bytes": "{\"author\":\"x25519:00\",\"context\":{\"coding\":{\"loinc\":\"80404-7\"}},\"id\":\"sha256:236badcaa2714b56b1ebf7f2e5ed1ae8ede612676973a628d6f652eb3e0c1284\",\"kid\":\"x25519:00\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:576102cc5a1a66da6588696ab85823a753a3e8fdd621a28325defeb91c551cf0c8b669c4be9b776a5dcfa6eb1c2f56a9bad6e108585121728d0645ec0246e305\",\"source\":{\"adapter\":\"bean-import-csv@0.3.0\",\"ref\":\"hmac-sha256:a71d613423dcc61a131575de4a5cd185fd3f20ab9e6a61ff7a8298f135a7837c\",\"system\":\"csv\"},\"subject\":\"sha256:8c5c860010625d4719f9721bdcace326d48057f0903df8afcdaf4b9e992f5a6a\",\"times\":{\"imported\":\"2026-10-27T12:00:01Z\",\"observed\":{\"precision\":\"minute\",\"start\":\"2026-10-26T03:00:00Z\"}},\"type\":\"hrv.rmssd\",\"v\":0,\"value\":{\"n\":42.5,\"unit\":\"ms\"}}",
       "error": "unsupported key algorithm"
     },
     {
       "name": "bad key",
-      "path": "objects/63/25f2c7fd8130344e8123751fe422328b4a33a87b7ec2506e5bb70def0ea662.json",
-      "bytes": "{\"author\":\"ed25519:00\",\"context\":{\"coding\":{\"loinc\":\"80404-7\"}},\"id\":\"sha256:6325f2c7fd8130344e8123751fe422328b4a33a87b7ec2506e5bb70def0ea662\",\"kid\":\"ed25519:00\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:1c91edb2566f5aa6a688d916634e69bf30d81d03bb951af3038594a8a5efa9a36031c888944c2297a09cfde6aae8d5dc75893e960ca1d3a9c2399dbc5e8c5c04\",\"source\":{\"adapter\":\"hlog-import-csv@0.3.0\",\"ref\":\"hmac-sha256:4397cbc6b8b68ac27c106a73efbb0fcccdd1b4e469ca1c3235adf167ef21fd21\",\"system\":\"csv\"},\"subject\":\"sha256:67e0a03dd6581a0c0bf503d880e0fb683e029a0a9ce052ba1743e82c000cc3ba\",\"times\":{\"imported\":\"2026-10-27T12:00:01Z\",\"observed\":{\"precision\":\"minute\",\"start\":\"2026-10-26T03:00:00Z\"}},\"type\":\"hrv.rmssd\",\"v\":0,\"value\":{\"n\":42.5,\"unit\":\"ms\"}}",
+      "path": "objects/07/b28d63efca7a308a4e7ac5cf7417736f1033375f6374dcdc2ef75d747dc256.json",
+      "bytes": "{\"author\":\"ed25519:00\",\"context\":{\"coding\":{\"loinc\":\"80404-7\"}},\"id\":\"sha256:07b28d63efca7a308a4e7ac5cf7417736f1033375f6374dcdc2ef75d747dc256\",\"kid\":\"ed25519:00\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:3458623bc965cf5e06e55baba45cec21058a3d77ff95155c47fe8231902b8d67a1908db6d543a423db678a6d06c2caa1552f330149954dc8ab1c1bbf0f6fa307\",\"source\":{\"adapter\":\"bean-import-csv@0.3.0\",\"ref\":\"hmac-sha256:a71d613423dcc61a131575de4a5cd185fd3f20ab9e6a61ff7a8298f135a7837c\",\"system\":\"csv\"},\"subject\":\"sha256:8c5c860010625d4719f9721bdcace326d48057f0903df8afcdaf4b9e992f5a6a\",\"times\":{\"imported\":\"2026-10-27T12:00:01Z\",\"observed\":{\"precision\":\"minute\",\"start\":\"2026-10-26T03:00:00Z\"}},\"type\":\"hrv.rmssd\",\"v\":0,\"value\":{\"n\":42.5,\"unit\":\"ms\"}}",
       "error": "bad key"
     },
     {
       "name": "bad signature",
-      "path": "objects/52/387e61df81dd978648c8a3ca112df7d865a9a2a14df3d0cd94b4b910fd0bc0.json",
-      "bytes": "{\"author\":\"sha256:67e0a03dd6581a0c0bf503d880e0fb683e029a0a9ce052ba1743e82c000cc3ba\",\"context\":{\"coding\":{\"loinc\":\"80404-7\"}},\"id\":\"sha256:52387e61df81dd978648c8a3ca112df7d865a9a2a14df3d0cd94b4b910fd0bc0\",\"kid\":\"ed25519:d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\",\"source\":{\"adapter\":\"hlog-import-csv@0.3.0\",\"ref\":\"hmac-sha256:4397cbc6b8b68ac27c106a73efbb0fcccdd1b4e469ca1c3235adf167ef21fd21\",\"system\":\"csv\"},\"subject\":\"sha256:67e0a03dd6581a0c0bf503d880e0fb683e029a0a9ce052ba1743e82c000cc3ba\",\"times\":{\"imported\":\"2026-10-27T12:00:01Z\",\"observed\":{\"precision\":\"minute\",\"start\":\"2026-10-26T03:00:00Z\"}},\"type\":\"hrv.rmssd\",\"v\":0,\"value\":{\"n\":42.5,\"unit\":\"ms\"}}",
+      "path": "objects/32/cdd23f42757d9df3c837b0d2a9434708d4d56792cb1a2271164e4634e49a0e.json",
+      "bytes": "{\"author\":\"sha256:8c5c860010625d4719f9721bdcace326d48057f0903df8afcdaf4b9e992f5a6a\",\"context\":{\"coding\":{\"loinc\":\"80404-7\"}},\"id\":\"sha256:32cdd23f42757d9df3c837b0d2a9434708d4d56792cb1a2271164e4634e49a0e\",\"kid\":\"ed25519:d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\",\"source\":{\"adapter\":\"bean-import-csv@0.3.0\",\"ref\":\"hmac-sha256:a71d613423dcc61a131575de4a5cd185fd3f20ab9e6a61ff7a8298f135a7837c\",\"system\":\"csv\"},\"subject\":\"sha256:8c5c860010625d4719f9721bdcace326d48057f0903df8afcdaf4b9e992f5a6a\",\"times\":{\"imported\":\"2026-10-27T12:00:01Z\",\"observed\":{\"precision\":\"minute\",\"start\":\"2026-10-26T03:00:00Z\"}},\"type\":\"hrv.rmssd\",\"v\":0,\"value\":{\"n\":42.5,\"unit\":\"ms\"}}",
       "error": "bad signature"
     },
     {
       "name": "not canonical",
-      "path": "objects/52/387e61df81dd978648c8a3ca112df7d865a9a2a14df3d0cd94b4b910fd0bc0.json",
-      "bytes": "{\"author\":\"sha256:67e0a03dd6581a0c0bf503d880e0fb683e029a0a9ce052ba1743e82c000cc3ba\",\"context\":{\"coding\":{\"loinc\":\"80404-7\"}},\"id\":\"sha256:52387e61df81dd978648c8a3ca112df7d865a9a2a14df3d0cd94b4b910fd0bc0\",\"kid\":\"ed25519:d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:054b9695223a6a955997980f8cdfb321c50a5e2e6f0515d1b8454f9a119b7f9e9617f208a01a2d64d67ce8ebc0dd003a41f836d0ad1ed8afce9c21eefafeb609\",\"source\":{\"adapter\":\"hlog-import-csv@0.3.0\",\"ref\":\"hmac-sha256:4397cbc6b8b68ac27c106a73efbb0fcccdd1b4e469ca1c3235adf167ef21fd21\",\"system\":\"csv\"},\"subject\":\"sha256:67e0a03dd6581a0c0bf503d880e0fb683e029a0a9ce052ba1743e82c000cc3ba\",\"times\":{\"imported\":\"2026-10-27T12:00:01Z\",\"observed\":{\"precision\":\"minute\",\"start\":\"2026-10-26T03:00:00Z\"}},\"type\":\"hrv.rmssd\",\"v\":0,\"value\":{\"n\": 42.5,\"unit\":\"ms\"}}",
+      "path": "objects/32/cdd23f42757d9df3c837b0d2a9434708d4d56792cb1a2271164e4634e49a0e.json",
+      "bytes": "{\"author\":\"sha256:8c5c860010625d4719f9721bdcace326d48057f0903df8afcdaf4b9e992f5a6a\",\"context\":{\"coding\":{\"loinc\":\"80404-7\"}},\"id\":\"sha256:32cdd23f42757d9df3c837b0d2a9434708d4d56792cb1a2271164e4634e49a0e\",\"kid\":\"ed25519:d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:70edf1f0cd7fb5ab0337176ecb01c28743618e31890b8b97479cbcb33fff3986750581469126aceb71d92a680e4146412bc602e64857ac8477712debd88c5e0f\",\"source\":{\"adapter\":\"bean-import-csv@0.3.0\",\"ref\":\"hmac-sha256:a71d613423dcc61a131575de4a5cd185fd3f20ab9e6a61ff7a8298f135a7837c\",\"system\":\"csv\"},\"subject\":\"sha256:8c5c860010625d4719f9721bdcace326d48057f0903df8afcdaf4b9e992f5a6a\",\"times\":{\"imported\":\"2026-10-27T12:00:01Z\",\"observed\":{\"precision\":\"minute\",\"start\":\"2026-10-26T03:00:00Z\"}},\"type\":\"hrv.rmssd\",\"v\":0,\"value\":{\"n\": 42.5,\"unit\":\"ms\"}}",
       "error": "not canonical"
     }
   ],

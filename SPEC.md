@@ -1,16 +1,17 @@
-# hlog core specification v0.5, draft
+# bean core specification v0.5, draft
 
 Status: draft. This text is not frozen. [CORE.md](CORE.md) section 6 tells when it freezes.
 Date: 2026-10-28.
-Changes: v0.4 applied change notes C1 to C20: seed-only rotation, a fixed envelope, verify before copy in sync, and no erasure on a timer. v0.5 adds three change notes:
+Changes: v0.4 applied change notes C1 to C20: seed-only rotation, a fixed envelope, verify before copy in sync, and no erasure on a timer. v0.5 adds four change notes:
 
 - C21: secp256k1 (Nostr) signing keys (4.4, 4.5).
 - C22: restore on a new host (5.10).
 - C23: superseded records are not in duplicate groups (6.3 step 12).
+- C24: the protocol name is bean. The HKDF labels (4.7), the dedupe ref label (4.8), the blob label (4.9), the reserved types (3.3) and the wrapper `alt` tag (4.5) say `bean`. Keys, ids and vectors from builds before C24 do not match.
 
 Reference implementation: the `bean` repository.
 License: CC0 1.0 (section 19).
-Name: "hlog" is a temporary name. The project will take a neutral name.
+Name: bean.
 
 This specification uses Simplified Technical English (ASD-STE100).
 The key words MUST, MUST NOT, REQUIRED, SHOULD, SHOULD NOT and MAY have the meanings in RFC 2119 and RFC 8174.
@@ -45,7 +46,7 @@ An implementation MUST follow a DEFAULT until the specification changes it.
 
 ### 1.1 Scope
 
-This specification defines the hlog core.
+This specification defines the bean core.
 The core is the smallest set of rules that two independent implementations must agree on.
 The core has three parts:
 
@@ -76,7 +77,7 @@ Programs do not change records. Programs only add records.
 
 - G1. Two conforming verifiers that hold the same set of files MUST get the same validity result for every record.
 - G2. The verifier MUST NOT need a network, an account, a server or a trusted clock.
-- G3. The person MUST be able to leave at any time with plaintext data (`hlog export`).
+- G3. The person MUST be able to leave at any time with plaintext data (`bean export`).
 - G4. Any index MUST be a cache that a program can rebuild from the files alone.
 - G5. The core MUST be source-agnostic. A device format is an adapter. Special code for one source in the core is a bug.
 
@@ -91,10 +92,10 @@ Other documents and code comments MUST use these terms with these meanings.
 | replica | One copy of a log on one machine. |
 | record | One JSON object stored as one file in `objects/`. |
 | claim | A record that is not a destructive record and not an identity record. |
-| identity record | A record of type `hlog.genesis` or `hlog.succession`. |
-| destructive record | A record that has a `supersedes` ref, or a record of type `hlog.tombstone`. |
+| identity record | A record of type `bean.genesis` or `bean.succession`. |
+| destructive record | A record that has a `supersedes` ref, or a record of type `bean.tombstone`. |
 | supersede record | A record that has one or more `supersedes` refs. |
-| tombstone | A record of type `hlog.tombstone`. It has one `purges` ref. |
+| tombstone | A record of type `bean.tombstone`. It has one `purges` ref. |
 | target | The record that a `supersedes` ref or a `purges` ref names. |
 | blob | One encrypted file in `blobs/` that holds raw evidence. |
 | id | The string `sha256:` followed by 64 lowercase hex digits. It names a record or a blob. |
@@ -105,8 +106,8 @@ Other documents and code comments MUST use these terms with these meanings.
 | paper seed | 32 random bytes, written on paper as 24 words. Devices never store it. |
 | identity | A person or agent. Its identity id is the id of its genesis record. |
 | identity secret | 32 bytes that the paper seed derives. It derives the blob key and the dedupe key. |
-| genesis | The first record of an identity. Type `hlog.genesis`. |
-| succession | A record that names the next signing key of an identity. Type `hlog.succession`. |
+| genesis | The first record of an identity. Type `bean.genesis`. |
+| succession | A record that names the next signing key of an identity. Type `bean.succession`. |
 | node | A genesis or a succession, seen as a point in the succession tree. |
 | succession tree | All well-signed nodes of one identity, linked by `succeeds` refs. |
 | parent | The node that a succession names in its `succeeds` ref. |
@@ -125,7 +126,7 @@ Other documents and code comments MUST use these terms with these meanings.
 | valid | A record that passes every check in sections 3 and 6. |
 | invalid | A record that fails a check. A verifier reports it with an error string. |
 | held | A destructive record whose target is not in the replica. The verifier keeps it and checks it again when the target arrives. |
-| too new | The state of an identity after the verifier finds an `hlog.*` record with an unknown `v`. |
+| too new | The state of an identity after the verifier finds an `bean.*` record with an unknown `v`. |
 | skip | To keep a file, sync it, and not interpret it. |
 | hide | To stop showing, serving and syncing a target. The bytes stay on disk. |
 | erase | To delete the bytes of a target from disk. |
@@ -138,7 +139,7 @@ Other documents and code comments MUST use these terms with these meanings.
 | writer | A program that makes and signs records. |
 | export | A plaintext copy of a log (section 7.9). |
 | index | A cache that a program builds from the files. It is never the truth. |
-| host | The machine that runs `hlog` and holds the identity secret. |
+| host | The machine that runs `bean` and holds the identity secret. |
 | device | A capture machine with its own key, for example a sensor (Extension 2). |
 
 ## 3. Record format
@@ -183,18 +184,18 @@ These keys are conventions. The core does not check them.
 
 | Type | Purpose | Extra constraints |
 |---|---|---|
-| `hlog.genesis` | Starts an identity. | No `subject`. `author` = `kid` = `value.key`. No `refs`. `value` = `{"key": tagged key, "recovery": commitment}`. `times.observed` = null. `source` = `{"system":"self","adapter":<name@version>,"ref":null}`. |
-| `hlog.succession` | Names the next signing key. | `subject` = `author` = the identity id. Exactly one ref, rel `succeeds`. `value` = `{"key": tagged key, "recovery": commitment, "sealed": [ids]}`. |
-| `hlog.tombstone` | Deletes a target. | `subject` = `author`. Exactly one ref, rel `purges`. No `value`. No `blobs`. An optional reason goes in `context.reason` (string, at most 200 characters). |
+| `bean.genesis` | Starts an identity. | No `subject`. `author` = `kid` = `value.key`. No `refs`. `value` = `{"key": tagged key, "recovery": commitment}`. `times.observed` = null. `source` = `{"system":"self","adapter":<name@version>,"ref":null}`. |
+| `bean.succession` | Names the next signing key. | `subject` = `author` = the identity id. Exactly one ref, rel `succeeds`. `value` = `{"key": tagged key, "recovery": commitment, "sealed": [ids]}`. |
+| `bean.tombstone` | Deletes a target. | `subject` = `author`. Exactly one ref, rel `purges`. No `value`. No `blobs`. An optional reason goes in `context.reason` (string, at most 200 characters). |
 
-Any other type that starts with `hlog.` is reserved for future core versions.
+Any other type that starts with `bean.` is reserved for future core versions.
 A writer MUST NOT make one.
-At `v` 0, a verifier MUST treat an unknown `hlog.*` type as invalid with error `unknown core type`.
+At `v` 0, a verifier MUST treat an unknown `bean.*` type as invalid with error `unknown core type`.
 
 ### 3.4 value
 
 `value` is an object.
-For types outside `hlog.*`, these shapes are RECOMMENDED:
+For types outside `bean.*`, these shapes are RECOMMENDED:
 
 | Shape | Meaning |
 |---|---|
@@ -203,7 +204,7 @@ For types outside `hlog.*`, these shapes are RECOMMENDED:
 | `{"b": boolean}` | A boolean. |
 | `{"blob": id, "unit": string}` | A series or a large payload in a blob. |
 
-The core checks only one rule for `value` outside `hlog.*`.
+The core checks only one rule for `value` outside `bean.*`.
 If `value.blob` is present, it MUST be an id that is also a `hash` in `blobs`.
 Otherwise the record is invalid with error `blob not listed`.
 The core does not bless a series format. The method that reads the blob defines the format.
@@ -228,7 +229,7 @@ A writer puts an unparseable source time in `context.raw_time` as a string.
 ### 3.6 source
 
 `source.system` is a string of 1 to 64 characters, for example `oura` or `self`.
-`source.adapter` is `name@version`, for example `hlog-import-oura@1.0.0`.
+`source.adapter` is `name@version`, for example `bean-import-oura@1.0.0`.
 `source.ref` is a dedupe ref (section 4.8) or null.
 `source.ref` is null for a record that the author makes directly, with no source file.
 `source.ref` is null for a device-signed record (section 11).
@@ -247,8 +248,8 @@ The core knows four rel values:
 
 A record with any other rel is invalid with error `unknown rel`.
 Attestations, disputes and notes are ordinary claims with rel `about` and a type that says what they are.
-`succeeds` is allowed only on `hlog.succession`.
-`purges` is allowed only on `hlog.tombstone`.
+`succeeds` is allowed only on `bean.succession`.
+`purges` is allowed only on `bean.tombstone`.
 A record MUST NOT have two refs with the same rel and id.
 
 ### 3.8 Validation order
@@ -265,7 +266,7 @@ At the first failure, the verifier reports the error string and stops checking t
 5. Every number is an integer in the range -(2^53 - 1) to 2^53 - 1, or a finite double that canonicalizes (section 4.1). An integer is a number whose canonical form has no `.` and no `e`. Error: `bad number`.
 6. No string holds an escaped lone surrogate. Error: `bad string`.
 7. `v` is present and is a non-negative integer. Error: `bad v`.
-8. `type` is present and is a string. If `type` is not `hlog.succession`, the file size is at most 1 MiB. Error: `bad type`, `too large`.
+8. `type` is present and is a string. If `type` is not `bean.succession`, the file size is at most 1 MiB. Error: `bad type`, `too large`.
 9. `author` and `kid` are present and are strings. Error: `bad field: author`, `bad field: kid`.
 10. `id` is a string equal to the recomputed id and to the id from the path. Error: `id mismatch`.
 11. `kid` parses as a supported tagged key. Error: `unsupported key algorithm` or `bad key`.
@@ -295,7 +296,7 @@ These rules apply:
 7. Write numbers with the ECMAScript `Number.prototype.toString` algorithm (RFC 8785 section 3.2.2.3).
 8. Write `-0` as `0`.
 
-Number rules for hlog:
+Number rules for bean:
 
 - A parser MUST read every JSON number as an IEEE 754 double.
 - A verifier MUST reject an integer outside -(2^53 - 1) to 2^53 - 1. Error: `bad number`.
@@ -356,7 +357,7 @@ P-256:
 secp256k1 (C21):
 
 - The signature is a Nostr event signature, so any Nostr signer (a NIP-46 remote signer, a NIP-07 browser extension) can sign a record.
-- The wrapper event is `[0, <public key hex>, <created_at>, 29944, [["alt","hlog record signature"]], <record id>]`. Its bytes are the NIP-01 serialization: a JSON array with no whitespace. Every field is ASCII, so nothing is escaped. The `alt` tag (NIP-31) gives a signer's approval prompt a readable summary.
+- The wrapper event is `[0, <public key hex>, <created_at>, 29944, [["alt","bean record signature"]], <record id>]`. Its bytes are the NIP-01 serialization: a JSON array with no whitespace. Every field is ASCII, so nothing is escaped. The `alt` tag (NIP-31) gives a signer's approval prompt a readable summary.
 - The signed message is the SHA-256 of the wrapper bytes (the Nostr event id). Sign with BIP-340 Schnorr.
 - `sig` = `secp256k1:` + `<created_at>` + `:` + 128 lowercase hex digits (the 64-byte BIP-340 signature).
 - `<created_at>` is a decimal integer from 0 to 2^53 - 1 with no leading zeros. It has no meaning to the verifier. Software signers SHOULD use 0. A remote signer MAY use another value.
@@ -380,10 +381,10 @@ The `info` value is the ASCII label below, with no terminator.
 
 | Input key material | info label | Output length | Output use |
 |---|---|---|---|
-| paper seed (32 bytes) | `hlog/v0/identity-secret` | 32 | identity secret |
-| paper seed (32 bytes) | `hlog/v0/recovery-key/<g>` | 32 | Ed25519 private seed of recovery key generation `g` |
-| identity secret (32 bytes) | `hlog/v0/blob-key` | 64 | AES-SIV key (section 4.9) |
-| identity secret (32 bytes) | `hlog/v0/dedupe-key` | 32 | HMAC key for dedupe refs (section 4.8) |
+| paper seed (32 bytes) | `bean/v0/identity-secret` | 32 | identity secret |
+| paper seed (32 bytes) | `bean/v0/recovery-key/<g>` | 32 | Ed25519 private seed of recovery key generation `g` |
+| identity secret (32 bytes) | `bean/v0/blob-key` | 64 | AES-SIV key (section 4.9) |
+| identity secret (32 bytes) | `bean/v0/dedupe-key` | 32 | HMAC key for dedupe refs (section 4.8) |
 
 `<g>` is a decimal integer with no leading zeros, starting at `0`.
 Generation 0 is committed in the genesis. Each recovery uses generation `g` and commits generation `g + 1` (section 5.5).
@@ -395,11 +396,11 @@ The HMAC input is the canonical bytes (4.1) of one JSON array.
 
 If the source gives a native id:
 
-    ["hlog/v0/ref", "id", <source.system>, <native id as string>, <occurrence>]
+    ["bean/v0/ref", "id", <source.system>, <native id as string>, <occurrence>]
 
 If the source gives no native id:
 
-    ["hlog/v0/ref", "tuple", <source.system>, <type>, <times.observed>, <value>, <occurrence>]
+    ["bean/v0/ref", "tuple", <source.system>, <type>, <times.observed>, <value>, <occurrence>]
 
 Rules:
 
@@ -421,7 +422,7 @@ A writer MUST encrypt every blob before it hashes and stores it.
 
 1. Use AES-SIV as in RFC 5297 with AES-256. This is AES-SIV-CMAC-512.
 2. Use the 64-byte blob key. The first 32 bytes are K1, the CMAC (S2V) key. The last 32 bytes are K2, the CTR key.
-3. Use one associated data string: the ASCII bytes `hlog/v0/blob`. DEFAULT.
+3. Use one associated data string: the ASCII bytes `bean/v0/blob`. DEFAULT.
 4. Use no nonce. The encryption is deterministic.
 5. The blob bytes are `V || C`, with the 16-byte synthetic IV `V` first.
 6. The blob id is `sha256:` + hex SHA-256 of the blob bytes.
@@ -448,7 +449,7 @@ Reasons for this choice:
 
 Risk: a person can type the words into a crypto wallet by mistake.
 The wallet then sees the seed.
-The CLI MUST tell the person that the words are for hlog only.
+The CLI MUST tell the person that the words are for bean only.
 DEFAULT.
 
 ## 5. Identity
@@ -486,8 +487,8 @@ A destructive record signed by the head key is valid.
 A destructive record signed by an older chain key is valid only when the succession that ends that key seals it.
 The succession that ends a key is the next node on the chain after the node that names the key.
 Only that succession can seal records of that key.
-`hlog rotate` MUST print every destructive record of the outgoing key and seal all of them by default. `-no-seal <id>` excludes one.
-The maximum file size of an `hlog.succession` is 16 MiB, so `sealed` can hold about 230,000 ids. DEFAULT.
+`bean rotate` MUST print every destructive record of the outgoing key and seal all of them by default. `-no-seal <id>` excludes one.
+The maximum file size of an `bean.succession` is 16 MiB, so `sealed` can hold about 230,000 ids. DEFAULT.
 
 `value.sealed` is an array of record ids.
 The ids MUST be unique and sorted in ascending order of their ASCII bytes. Error: `bad field: value.sealed`.
@@ -680,7 +681,7 @@ See 17.
 For each supersede record D, for each `supersedes` target T:
 
 1. If T is not in R, D is held for this target. D is valid. Report `held: <D id>` as a warning.
-2. If T is an `hlog.*` record, D is invalid. Error: `bad target`.
+2. If T is an `bean.*` record, D is invalid. Error: `bad target`.
 3. If `T.author` is not equal to `D.author`, D is invalid. Error: `not author`.
 4. Otherwise the target is superseded. Readers SHOULD show D in place of T. T stays in the log.
 5. When two or more valid supersede records name the same target and none supersedes another, readers SHOULD show the one with the lowest id. The verifier reports the others as `superseded by sibling: <lowest id>` (a warning). DEFAULT.
@@ -694,12 +695,12 @@ For each tombstone D with target T:
 
 1. `D.author` MUST equal `D.subject`. Otherwise D is invalid. Error: `not subject`.
 2. If T is not in R, D is held. D is valid. Section 7.5 tells how sync uses a held tombstone.
-3. If T is an `hlog.genesis`, `hlog.succession` or `hlog.tombstone`, D is invalid. Error: `bad target`.
+3. If T is an `bean.genesis`, `bean.succession` or `bean.tombstone`, D is invalid. Error: `bad target`.
 4. If `T.subject` is not equal to `D.subject`, D is invalid. Error: `not subject`.
 5. Otherwise D is a valid tombstone for T. T is purged.
 
 A purged target is not valid data. A reader MUST NOT show it.
-A verifier reports a purged target that is hidden and past its hold as `hidden pending gc: <id>` (a warning). `hlog gc` erases it (7.6).
+A verifier reports a purged target that is hidden and past its hold as `hidden pending gc: <id>` (a warning). `bean gc` erases it (7.6).
 
 ## 7. Folder layout and sync
 
@@ -758,7 +759,7 @@ Sync from replica A (source) to replica B (destination) is a set union with one 
 Sync MUST copy files with an unknown `v`. Newer verifiers need them.
 Sync MUST copy invalid records that pass steps 1 to 12 of 3.8. Validity is a verifier result, not a sync rule. A replica keeps the first file that passes the signature check for an id.
 A succession and a tombstone that it invalidates can arrive in the same sync. The target then comes back on the next sync (step 5). Two passes are sufficient.
-Sync with rsync, git, Syncthing or a USB drive is allowed if the person then runs `hlog verify` on each replica. Such tools do not apply the tombstone exception. `hlog verify` then hides or erases the target (7.6).
+Sync with rsync, git, Syncthing or a USB drive is allowed if the person then runs `bean verify` on each replica. Such tools do not apply the tombstone exception. `bean verify` then hides or erases the target (7.6).
 
 ### 7.5 Held tombstones
 
@@ -775,12 +776,12 @@ Thus a tombstone from a stranger cannot block a record of another subject.
 
 When a replica first finds a valid tombstone T for a target that it stores:
 
-1. If this replica wrote T (`hlog purge`), erase the target at once.
+1. If this replica wrote T (`bean purge`), erase the target at once.
 2. Otherwise hide the target at once: move it to `local/hidden/`. Hidden records are still input to the local verifier (6.2) and never sync.
 3. Record the receipt time in `local/holds.json` as `{"<T id>": {"target": "<target id>", "received": "<UTC time>"}}`.
 4. A replica MUST NOT erase a hidden target on a timer.
-5. `hlog gc` erases every target hidden for at least 7 days under a still-valid tombstone, and every blob that no valid, unpurged record names.
-6. `hlog verify` reports each hidden target as `hidden pending gc: <id>` (a warning).
+5. `bean gc` erases every target hidden for at least 7 days under a still-valid tombstone, and every blob that no valid, unpurged record names.
+6. `bean verify` reports each hidden target as `hidden pending gc: <id>` (a warning).
 
 When T becomes invalid while the target is hidden, restore the target.
 T can become invalid after a rotation that does not seal T, or a freeze.
@@ -792,7 +793,7 @@ The hold length is 7 days. DEFAULT. Nothing is erased without the person running
 
 ### 7.7 Purge
 
-`hlog purge <id>` does these steps:
+`bean purge <id>` does these steps:
 
 1. Check that the local identity is the subject of the target.
 2. Write a tombstone signed by the head key.
@@ -808,19 +809,19 @@ A program MUST NOT tombstone a genesis, a succession or a tombstone.
 `local/purged-refs.jsonl` has one line per purged target.
 Each line is the canonical bytes of `["<subject>", "<source.system>", "<source.ref>"]`.
 A replica writes a line when it erases or does not copy a purged target that has a non-null `source.ref`.
-`hlog append` MUST skip a record whose (`subject`, `source.system`, `source.ref`) is in this file.
+`bean append` MUST skip a record whose (`subject`, `source.system`, `source.ref`) is in this file.
 Thus a new import after a purge adds nothing on this replica.
 
 ### 7.9 Export
 
-`hlog export <dir>` writes a plaintext copy of the log for exit.
+`bean export <dir>` writes a plaintext copy of the log for exit.
 
 1. Write each record file that is not purged or hidden to `<dir>/records/<64 hex>.json`. Use the stored bytes.
 2. Decrypt each blob that an exported record names. Write the plaintext to `<dir>/blobs/<64 hex of the blob id>`.
-3. Write `<dir>/manifest.json` with the canonical bytes of `{"spec": "hlog-core-v0.5", "identity": <id>, "records": <count>, "blobs": [{"id": <blob id>, "plaintext_sha256": <hex>, "media_type": <string>}]}`. Sort `blobs` by `id`.
+3. Write `<dir>/manifest.json` with the canonical bytes of `{"spec": "bean-core-v0.5", "identity": <id>, "records": <count>, "blobs": [{"id": <blob id>, "plaintext_sha256": <hex>, "media_type": <string>}]}`. Sort `blobs` by `id`.
 
 The export is not encrypted. The CLI MUST say this before it writes.
-`hlog import-export <dir>` reverses the export for a log with the same identity secret.
+`bean import-export <dir>` reverses the export for a log with the same identity secret.
 It encrypts each blob again. The deterministic encryption gives the same blob ids.
 
 ### 7.10 Indexes
@@ -841,13 +842,13 @@ A verifier knows a version only if it implements every rule of that version.
 
 A verifier MUST NOT interpret a record whose `v` it does not know.
 
-- If `type` starts with `hlog.`, the affected identity is too new.
+- If `type` starts with `bean.`, the affected identity is too new.
 - Otherwise the verifier skips the record.
 
 The record reached step 13 of 3.8, so its envelope, id and signature are good. The affected identity is:
 
-1. For `hlog.genesis`: the record's own id, when `author` = `kid`.
-2. For other `hlog.*` types: the `author` field. This applies only when `kid` is a signing key or a recovery key of that identity. The key must be on a node of its succession tree (6.3 step 3). Otherwise, skip the record. The identity is not too new.
+1. For `bean.genesis`: the record's own id, when `author` = `kid`.
+2. For other `bean.*` types: the `author` field. This applies only when `kid` is a signing key or a recovery key of that identity. The key must be on a node of its succession tree (6.3 step 3). Otherwise, skip the record. The identity is not too new.
 
 A file that no known key signed cannot make an identity too new. There is no `too new: log`.
 DEFAULT.
@@ -869,31 +870,31 @@ At a known `v`, a verifier MUST keep unknown fields, include them in the hash an
 
 A change that changes the validity of an existing record needs a new `v`.
 A new optional field that verifiers can ignore does not need a new `v`.
-A new `hlog.*` type needs a new `v`.
+A new `bean.*` type needs a new `v`.
 
 ## 9. Adapters
 
 ### 9.1 Contract
 
-An adapter is a separate program. Its name is `hlog-import-<source>`.
+An adapter is a separate program. Its name is `bean-import-<source>`.
 It reads one source file or folder. It writes JSONL to standard output.
-`hlog append` reads that JSONL, completes, signs and stores each record.
+`bean append` reads that JSONL, completes, signs and stores each record.
 
-    hlog-import-oura export.zip | hlog append
+    bean-import-oura export.zip | bean append
 
-An adapter MUST NOT sign records. `hlog append` signs.
+An adapter MUST NOT sign records. `bean append` signs.
 The core MUST NOT contain code for a specific source. Device formats are adapters.
 
 ### 9.2 Adapter output
 
 Each JSONL line is a partial record. It MUST have `type`, `times.observed`, `source` and, for a reading, `value`.
 It MAY have `context`, `refs` with rel `about` or `supersedes`, and `blobs`.
-It MUST NOT have `v`, `nonce`, `author`, `kid`, `id`, `sig` or `times.imported`. `hlog append` sets them.
-If it has no `subject`, `hlog append` sets the local identity id.
+It MUST NOT have `v`, `nonce`, `author`, `kid`, `id`, `sig` or `times.imported`. `bean append` sets them.
+If it has no `subject`, `bean append` sets the local identity id.
 
 ### 9.3 Blob first
 
-1. Store the raw source file as a blob before any record (`hlog blob put <file>` prints the blob id). DEFAULT.
+1. Store the raw source file as a blob before any record (`bean blob put <file>` prints the blob id). DEFAULT.
 2. Put `{"hash": <blob id>, "role": "raw-export", "media_type": <type>}` in `blobs` of each record from that file.
 
 ### 9.4 Granularity
@@ -902,18 +903,18 @@ An adapter MAY write one record per reading, or one record per (source, type, in
 Each record has `source.system`, `source.adapter` as `name@version`, and a dedupe ref in `source.ref` (4.8).
 The adapter does not hold the dedupe key.
 The adapter writes the HMAC input array (4.8) as `source.ref_input`.
-`hlog append` computes `source.ref` from it and removes `source.ref_input` before it signs.
+`bean append` computes `source.ref` from it and removes `source.ref_input` before it signs.
 `source.ref_input` never reaches the log. DEFAULT.
 
 ### 9.5 Dedupe
 
-`hlog append` MUST skip a record when:
+`bean append` MUST skip a record when:
 
 - the index has a valid record with the same (`subject`, `source.system`, `source.ref`), or
 - `local/purged-refs.jsonl` has that triple, or
 - an earlier line of the same input has that triple.
 
-`hlog append` reports the count of added and skipped records.
+`bean append` reports the count of added and skipped records.
 
 ### 9.6 Unknown values
 
@@ -923,12 +924,12 @@ An adapter MUST NOT invent values.
 
 ### 9.7 Parser fixes
 
-An adapter cannot know record ids. To correct a record, a partial record carries `source.supersedes_ref` = the HMAC input array (4.8) of the record it corrects. `hlog append` resolves it to the valid record with that ref and the same subject and system, adds a `supersedes` ref, and removes `source.supersedes_ref` before signing. If no record matches, `hlog append` skips the line and counts it as skipped.
-When the fixed record keeps the same HMAC input, its dedupe ref is the same as the old ref. `hlog append` MUST NOT skip a record that supersedes the existing record with the same ref. A tuple ref changes when the value changes. This is correct.
+An adapter cannot know record ids. To correct a record, a partial record carries `source.supersedes_ref` = the HMAC input array (4.8) of the record it corrects. `bean append` resolves it to the valid record with that ref and the same subject and system, adds a `supersedes` ref, and removes `source.supersedes_ref` before signing. If no record matches, `bean append` skips the line and counts it as skipped.
+When the fixed record keeps the same HMAC input, its dedupe ref is the same as the old ref. `bean append` MUST NOT skip a record that supersedes the existing record with the same ref. A tuple ref changes when the value changes. This is correct.
 
 ### 9.8 Adapters
 
-The reference implementation has `hlog-import-csv` and `hlog-import-labcorp`. Adapters for Apple Health, Oura and Whoop are open (Appendix).
+The reference implementation has `bean-import-csv` and `bean-import-labcorp`. Adapters for Apple Health, Oura and Whoop are open (Appendix).
 Each adapter document MUST say which source field is the native id, or that the source has none.
 
 ## 10. Extension 1: computed results
@@ -955,7 +956,7 @@ Do not log every computation.
 
 `method.hash` is `sha256:` + hex SHA-256 of the canonical bytes of:
 
-    ["hlog/v0/method", <id>, <version>, <sha256 hex of the method spec text>, <sha256 hex of the conformance vector file>]
+    ["bean/v0/method", <id>, <version>, <sha256 hex of the method spec text>, <sha256 hex of the conformance vector file>]
 
 DEFAULT.
 
@@ -1039,17 +1040,17 @@ Do not change the original times in device records.
 ### 11.6 Transfer format
 
 The device gives the host a JSONL file of signed records and one `clock.json` with `{"key": <device key>, "device_time": <time>}`.
-`hlog import-device <dir>` checks each signature, writes each record file unchanged, then writes the `device.clock` claim.
+`bean import-device <dir>` checks each signature, writes each record file unchanged, then writes the `device.clock` claim.
 DEFAULT.
 
 ## 12. CLI reference
 
 ### 12.1 General
 
-The reference CLI is `hlog`. It uses Go `flag` syntax.
-Every command takes `-dir <path>`. The default is `$HLOG_DIR`, then the current directory.
+The reference CLI is `bean`. It uses Go `flag` syntax.
+Every command takes `-dir <path>`. The default is `$BEAN_DIR`, then the current directory.
 Commands write results to standard output and errors to standard error.
-An error line is `hlog: <error string>`.
+An error line is `bean: <error string>`.
 Every command that loads the log applies the hold rules (7.6) first.
 
 Exit codes:
@@ -1084,109 +1085,109 @@ Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <
 
 ### 12.3 Commands
 
-`hlog init`
+`bean init`
 
 - Input: none, or an nsec on standard input with `-nostr -`.
 - Flags: `-nostr new` makes a new secp256k1 signing key. `-nostr <file>` uses the nsec (`nsec1...` or 64 hex digits) in the file. `-nostr -` reads the nsec from standard input. `-p256` (not built) uses a hardware P-256 key if the platform has one.
 - Action: section 5.2.
-- Output: `identity <id>`, then `npub <npub>` for a secp256k1 key, then the 24 words on 24 numbered lines. Then a warning: write the words on paper, and use them for hlog only.
+- Output: `identity <id>`, then `npub <npub>` for a secp256k1 key, then the 24 words on 24 numbered lines. Then a warning: write the words on paper, and use them for bean only.
 - Errors: `already initialized` (exit 1).
 
-`hlog append`
+`bean append`
 
 - Input: JSONL partial records on standard input (9.2).
 - Action: fill `v`, `nonce`, `author`, `kid`, `times.imported`, and `subject` if absent. Compute `source.ref` from `source.ref_input`. Check dedupe (9.5). Check authority for supersedes (6.6). Sign and write.
 - Output: `added <n>, skipped <m>`.
 - Errors: `bad json` with the line number, `not author`, `not initialized`. On the first error, stop. Records before the error stay written.
 
-`hlog blob put <file>`
+`bean blob put <file>`
 
 - Action: encrypt and store the file (7.3).
 - Output: the blob id.
 
-`hlog verify`
+`bean verify`
 
 - Action: section 6 and the hold rules. Check every blob hash (`blob corrupt: <id>`) and every named blob (`blob missing: <id>`, a warning when the record is purged).
 - Output: 12.1 verify lines.
 
-`hlog reindex`
+`bean reindex`
 
 - Action: delete `local/cache/` and rebuild it.
 - Output: `indexed <n> records`.
 
-`hlog rotate [-no-seal <id>]... [-nostr new|<file>]`
+`bean rotate [-no-seal <id>]... [-nostr new|<file>]`
 
 - Input: the 24 words on standard input. Numbering and case are ignored. `-nostr` selects a new secp256k1 key, as for `init`. The nsec comes from a file, because standard input carries the words.
 - Action: section 5.5. Seal every valid destructive record of the outgoing key in this replica except the ids that `-no-seal` names.
 - Output: one line `sealed <id>` or `not sealed <id>` per destructive record of the outgoing key, then `rotated to <tagged key>`, then `sealed <n>`. Before reading input, print `sync all devices before you rotate` to standard error.
 - Errors: `seed does not match`, `compromised: <id>` (exit 4), `key reuse`.
 
-`hlog restore [-no-seal <id>]... [-nostr new|<file>]`
+`bean restore [-no-seal <id>]... [-nostr new|<file>]`
 
 - Input: the 24 words on standard input.
 - Action: section 5.10.
 - Output: `identity <id>`, then the `rotate` output.
 - Errors: `already initialized`, `seed does not match`, `input missing: genesis for these words`, `compromised: <id>` (exit 4), `key reuse`.
 
-`hlog whoami`
+`bean whoami`
 
 - Output: `identity <id>`, `key <tagged key>`, and `npub <npub>` for a secp256k1 key.
 
-`hlog gc`
+`bean gc`
 
 - Action: section 7.6 step 5.
 - Output: `erased <r> records, <b> blobs`.
 
-`hlog blob get <id>`
+`bean blob get <id>`
 
 - Action: decrypt one blob to standard output.
 - Errors: `blob missing: <id>`, `blob corrupt: <id>`.
 
-`hlog purge [-reason <text>] <id>`
+`bean purge [-reason <text>] <id>`
 
 - Action: section 7.7.
 - Errors: `not subject`, `bad target`, `input missing: <id>` when the target is not in the replica.
 
-`hlog sync <source dir>`
+`bean sync <source dir>`
 
 - Action: section 7.4 into the `-dir` log.
 - Output: `copied <r> records, <b> blobs, refused <p> purged`, then `replaced <n> bad copies` when n > 0.
 
-`hlog export <dir>`
+`bean export <dir>`
 
 - Action: section 7.9. `<dir>` MUST be empty or absent.
 - Output: `exported <r> records, <b> blobs (plaintext)`.
 
-`hlog import-export <dir>`
+`bean import-export <dir>`
 
 - Action: section 7.9 reverse. The log MUST have the same identity secret.
 - Output: `added <r> records, <b> blobs`.
 
-`hlog pair <tagged key> [-label <text>]` (Extension 2)
+`bean pair <tagged key> [-label <text>]` (Extension 2)
 
 - Action: write a `device.pair` claim (11.3).
 
-`hlog import-device <dir>` (Extension 2)
+`bean import-device <dir>` (Extension 2)
 
 - Action: section 11.6.
 - Output: `added <n>, clock offset <ms> ms`.
 
-`hlog derive median -type <type> [-as-of <time>]` (Extension 1)
+`bean derive median -type <type> [-as-of <time>]` (Extension 1)
 
 - Action: select candidate records of `<type>` with `subject` = local identity and `times.imported` at or before `-as-of` (default: now). Order them by `times.imported`, then by id. Exclude superseded and duplicate records, and records whose `value.n` is not a number, with reasons. Write the result record (10.2).
 - Output: the result id.
 
-`hlog replay <id>` (Extension 1)
+`bean replay <id>` (Extension 1)
 
 - Action: section 10.3.
 - Output: `replay ok <canonical bytes>`.
 
-`hlog-import-<source> [flags] <file>`
+`bean-import-<source> [flags] <file>`
 
 - Output: JSONL partial records (9.2) on standard output.
-- `hlog-import-csv -type <type> -system <system> -blob <blob id> [-unit <unit>] <file.csv>` reads a header row. It uses column `value`, optional column `time` (RFC 3339) and optional column `id` (native id). Get `<blob id>` from `hlog blob put <file.csv>` first.
+- `bean-import-csv -type <type> -system <system> -blob <blob id> [-unit <unit>] <file.csv>` reads a header row. It uses column `value`, optional column `time` (RFC 3339) and optional column `id` (native id). Get `<blob id>` from `bean blob put <file.csv>` first.
 
-Test clock: the reference CLI reads the current time from `$HLOG_NOW` (RFC 3339) when it is set. Tests use it for holds and `times.imported`. DEFAULT.
+Test clock: the reference CLI reads the current time from `$BEAN_NOW` (RFC 3339) when it is set. Tests use it for holds and `times.imported`. DEFAULT.
 
 ## 13. Conformance tests
 
@@ -1248,7 +1249,7 @@ Tests 1 to 22 cover the v0.2 acceptance tests 1 to 6 and the new decisions. Test
 
 11. Propagate.
     - Setup: synced replicas A and B of identity I. Claim T on both.
-    - Action: purge T on A. Sync A to B. Set `HLOG_NOW` 8 days later on B. Verify B.
+    - Action: purge T on A. Sync A to B. Set `BEAN_NOW` 8 days later on B. Verify B.
     - Expected: A has erased T at once. B hides T after sync and erases it after 7 days. Verify passes on both.
 12. Stale replica.
     - Setup: C is a copy of A from before the purge in test 11.
@@ -1302,22 +1303,22 @@ Tests 1 to 22 cover the v0.2 acceptance tests 1 to 6 and the new decisions. Test
     - Expected: verify passes with the file counted as skipped. Sync copies the file.
 24. Unknown version, core type, per identity.
     - Setup: identities I and J in one log.
-    - Action: add an `hlog.succession` file with `v` = 99 and `author` = I.
+    - Action: add an `bean.succession` file with `v` = 99 and `author` = I.
     - Expected: `too new: <I>`. Exit 3. All records of J are still checked. A file error in J is still reported.
 
 ### Delete hold
 
 25. Rotation within the hold restores.
     - Setup: replicas A and B. A thief with I's head key writes tombstone D for T on A. Sync A to B. B hides T.
-    - Action: on day 3 (`HLOG_NOW`), rotate on A with `-no-seal D`. Sync A to B.
+    - Action: on day 3 (`BEAN_NOW`), rotate on A with `-no-seal D`. Sync A to B.
     - Expected: D is `not sealed`. B moves T back to `objects/` and removes the hold. `gc` on day 30 erases nothing.
 25b. No erase without gc.
     - Setup: as test 11 after the sync to B.
-    - Action: set `HLOG_NOW` 8 days later. Run `verify` on B, then `gc`.
+    - Action: set `BEAN_NOW` 8 days later. Run `verify` on B, then `gc`.
     - Expected: `verify` warns `hidden pending gc: <T>` and erases nothing. `gc` erases T and prints `erased 1 records`.
 31. Too-new file without a chain signature.
     - Setup: identities I and J.
-    - Action: add an `hlog.succession` file with `v` = 99, `author` = I, signed by J's key.
+    - Action: add an `bean.succession` file with `v` = 99, `author` = I, signed by J's key.
     - Expected: no `too new` line. The file is skipped.
 
 ### Exit and devices
@@ -1394,7 +1395,7 @@ The AES-SIV code MUST also pass the RFC 5297 Appendix A vectors. The HKDF code M
 - Equality leak. AES-SIV is deterministic. Anyone who sees two blobs can tell if their plaintexts are equal. The same is true for dedupe refs in one identity. This leak is the cost of dedupe and of a sync that gives the same result when it runs again.
 - Metadata. Record files are plaintext JSON. `type`, `times`, `value` and `context` are visible to anyone with the folder. Only blobs are encrypted. Encryption of records for transport is a sharing extension (18).
 - Identity secret exposure. Whoever has the identity secret can decrypt all blobs and test guesses against dedupe refs. Rotation does not change it. The fix is a new identity and a new log (17).
-- Export. `hlog export` writes plaintext. The person must protect the export folder.
+- Export. `bean export` writes plaintext. The person must protect the export folder.
 - Tombstones. A tombstone shows that a record with that id existed. It does not show the content.
 
 ## 17. Known limits
@@ -1430,7 +1431,6 @@ The AES-SIV code MUST also pass the RFC 5297 Appendix A vectors. The HKDF code M
 
 - This specification is CC0 1.0.
 - The reference code is Apache-2.0.
-- The project takes a neutral name. "hlog" is a placeholder.
 - AION Biosciences is the steward of the project. AION does not own it.
 - The repository is private until the format freezes. The steward then decides when to publish it.
 - A change to this specification needs a written change note. If a change alters a result, it also needs new test vectors.

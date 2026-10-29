@@ -19,7 +19,7 @@ import (
 // are named by their hash and never edited, so a file whose size and
 // modification time match the cache still holds the bytes this replica
 // already proved, and ordinary commands skip its signature check. Every
-// other check still runs. hlog verify ignores the cache, proves every
+// other check still runs. bean verify ignores the cache, proves every
 // file, and rebuilds it: verify is the fsck.
 //
 // Each line is "<path on disk>\t<size>\t<mtime ns>\t<file bytes>". Only
@@ -104,7 +104,7 @@ func (s *Store) listObjects() ([]diskObject, map[string]bool, error) {
 	return out, hiddenIDs, nil
 }
 
-// errMoved: a listed file was gone when read. Another hlog process hid or
+// errMoved: a listed file was gone when read. Another bean process hid or
 // restored it in between; list again.
 var errMoved = errors.New("record moved while reading")
 
@@ -197,7 +197,7 @@ func (s *Store) readObjects(full bool) ([]diskObject, map[string]bool, map[strin
 // that is exactly what the cache already held (every entry was used and
 // none is new). It is best effort: a log on read-only media still loads.
 func (s *Store) writeObjCache(disk []diskObject, files map[string][]byte, rp *Report, proven map[string]bool, cacheLen int) {
-	racy := time.Now().Add(-racyWindow).UnixNano() // file times are wall-clock, not $HLOG_NOW
+	racy := time.Now().Add(-racyWindow).UnixNano() // file times are wall-clock, not $BEAN_NOW
 	good := map[string]bool{}
 	for _, r := range rp.Records {
 		good[r.Path] = true

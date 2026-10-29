@@ -117,7 +117,7 @@ func TestAgentOnlyReplica(t *testing.T) {
 	if _, err := cloud.Add("food", "toast", AddOptions{Agent: true, Photo: []byte("\x89PNG\r\n\x1a\n"), PhotoType: "image/png"}); err == nil || !strings.Contains(err.Error(), "no identity secret") {
 		t.Errorf("photo without the identity secret: %v", err)
 	}
-	if _, err := cloud.AppendAsAgent(strings.NewReader(partial("hrv.rmssd", 41, []any{"hlog/v0/ref", "id", "x", "1", 0.0}) + "\n")); err == nil || !strings.Contains(err.Error(), "no identity secret") {
+	if _, err := cloud.AppendAsAgent(strings.NewReader(partial("hrv.rmssd", 41, []any{"bean/v0/ref", "id", "x", "1", 0.0}) + "\n")); err == nil || !strings.Contains(err.Error(), "no identity secret") {
 		t.Errorf("dedupe ref without the identity secret: %v", err)
 	}
 	if _, err := cloud.Add("symptom.headache", "3", AddOptions{}); err == nil {

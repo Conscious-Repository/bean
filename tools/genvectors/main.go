@@ -61,7 +61,7 @@ func jcs(inputs []string) []jcsCase {
 }
 
 func main() {
-	// V1: numbers. RFC 8785 Appendix B samples by literal, plus hlog range cases.
+	// V1: numbers. RFC 8785 Appendix B samples by literal, plus bean range cases.
 	write("v1-jcs-numbers.json", map[string]any{
 		"spec":  "SPEC.md 4.1",
 		"cases": jcs([]string{"0", "-0", "0.0", "1", "1.0", "1e0", "5e-324", "1.7976931348623157e308", "1e400", "9007199254740991", "-9007199254740991", "9007199254740992", "-9007199254740992", "9.007199254740992e15", "1e21", "1e+21", "999999999999999900000", "1e-7", "0.000001", "1E-7", "333333333.3333332", "333333333.33333325", "2.5", "100", "1e2", "-1.5e-10", "123456789012345680000"}),
@@ -88,11 +88,11 @@ func main() {
 
 	// V4: three records. Nonces are fixed so the vector is reproducible.
 	genesis := map[string]any{
-		"v": 0.0, "nonce": "00000000000000000000000000000001", "type": "hlog.genesis",
+		"v": 0.0, "nonce": "00000000000000000000000000000001", "type": "bean.genesis",
 		"author": kid, "kid": kid,
 		"value":  map[string]any{"key": kid, "recovery": commit0},
 		"times":  map[string]any{"observed": nil, "imported": "2026-10-27T12:00:00Z"},
-		"source": map[string]any{"system": "self", "adapter": "hlog@0.3.0", "ref": nil},
+		"source": map[string]any{"system": "self", "adapter": "bean@0.3.0", "ref": nil},
 	}
 	genesisID := core.RecordID(genesis)
 	sig, _ := signer.Sign(genesisID)
@@ -104,7 +104,7 @@ func main() {
 		"subject": genesisID, "author": genesisID, "kid": kid,
 		"value":   map[string]any{"n": 42.5, "unit": "ms"},
 		"times":   map[string]any{"observed": map[string]any{"start": "2026-10-26T03:00:00Z", "precision": "minute"}, "imported": "2026-10-27T12:00:01Z"},
-		"source":  map[string]any{"system": "csv", "adapter": "hlog-import-csv@0.3.0", "ref": claimRef},
+		"source":  map[string]any{"system": "csv", "adapter": "bean-import-csv@0.3.0", "ref": claimRef},
 		"context": map[string]any{"coding": map[string]any{"loinc": "80404-7"}},
 	}
 	claimID := core.RecordID(claim)
@@ -112,11 +112,11 @@ func main() {
 	claim["id"], claim["sig"] = claimID, sig
 
 	tomb := map[string]any{
-		"v": 0.0, "nonce": "00000000000000000000000000000003", "type": "hlog.tombstone",
+		"v": 0.0, "nonce": "00000000000000000000000000000003", "type": "bean.tombstone",
 		"subject": genesisID, "author": genesisID, "kid": kid,
 		"refs":    []any{map[string]any{"rel": "purges", "id": claimID}},
 		"times":   map[string]any{"observed": nil, "imported": "2026-10-27T12:00:02Z"},
-		"source":  map[string]any{"system": "self", "adapter": "hlog@0.3.0", "ref": nil},
+		"source":  map[string]any{"system": "self", "adapter": "bean@0.3.0", "ref": nil},
 		"context": map[string]any{"reason": "test"},
 	}
 	tombID := core.RecordID(tomb)

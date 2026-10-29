@@ -9,7 +9,7 @@ import (
 	"github.com/Conscious-Repository/bean/core"
 )
 
-// cmdAgent is hlog agent init and hlog agent pair.
+// cmdAgent is bean agent init and bean agent pair.
 func cmdAgent(s *core.Store, args []string) {
 	if len(args) == 0 {
 		usage()
@@ -36,7 +36,7 @@ func cmdAgent(s *core.Store, args []string) {
 		if pairID != "" {
 			fmt.Println("paired", pairID)
 		} else {
-			fmt.Fprintf(os.Stderr, "Not paired: this copy has no personal key. On your own machine, run:\n  hlog agent pair %s -label %q\n", core.Npub(pub), *label)
+			fmt.Fprintf(os.Stderr, "Not paired: this copy has no personal key. On your own machine, run:\n  bean agent pair %s -label %q\n", core.Npub(pub), *label)
 		}
 	case "pair":
 		if len(pos) != 1 {

@@ -7,7 +7,7 @@ import (
 )
 
 // RFC 8785 Appendix B number samples (ES Number.prototype.toString), plus the
-// hlog-specific range rule from SPEC.md 4.1.
+// bean-specific range rule from SPEC.md 4.1.
 func TestFormatNumberRFC8785(t *testing.T) {
 	cases := []struct {
 		bits uint64

@@ -17,7 +17,7 @@ import (
 const Version = "0.5.0"
 
 // Adapter is the source.adapter string the core writes on its own records.
-const Adapter = "hlog@" + Version
+const Adapter = "bean@" + Version
 
 // HoldDays is the delete hold (SPEC.md 7.6). With change set C14 it gates
 // gc, not an automatic erase.
@@ -34,7 +34,7 @@ var (
 // Store is one replica folder.
 type Store struct {
 	Dir string
-	// Now returns the current time. Tests and $HLOG_NOW inject it.
+	// Now returns the current time. Tests and $BEAN_NOW inject it.
 	Now func() time.Time
 }
 
@@ -323,7 +323,7 @@ func (s *Store) load(full bool) (*Loaded, error) {
 		if err := os.MkdirAll(s.path(dirHidden), 0o700); err != nil {
 			return nil, err
 		}
-		// Another hlog process (an MCP server, say) may have moved it first.
+		// Another bean process (an MCP server, say) may have moved it first.
 		if err := os.Rename(s.path(PathOf(target)), hiddenPath(s.Dir, target)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return nil, err
 		}

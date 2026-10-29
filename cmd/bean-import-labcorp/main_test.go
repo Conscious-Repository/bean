@@ -208,7 +208,7 @@ func TestRecords(t *testing.T) {
 		t.Errorf("observed = %v", obs)
 	}
 	for _, r := range recs {
-		// The specimen id is the native id. It travels to hlog append in
+		// The specimen id is the native id. It travels to bean append in
 		// source.ref_input, which append turns into the HMAC dedupe ref
 		// and removes before signing (SPEC.md 9.4).
 		src := r["source"].(map[string]any)

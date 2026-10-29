@@ -1,4 +1,4 @@
-// Command hlog-import-labcorp turns a Labcorp patient report ("Enterprise
+// Command bean-import-labcorp turns a Labcorp patient report ("Enterprise
 // Report Version 2.00", the PDF that Labcorp, Superpower and other
 // services hand to patients) into JSONL partial records (SPEC.md 9). It
 // never signs and never holds the dedupe key.
@@ -38,34 +38,34 @@ import (
 )
 
 const (
-	version = "hlog-import-labcorp@0.1.0"
+	version = "bean-import-labcorp@0.1.0"
 	system  = "labcorp"
 )
 
 func main() {
-	fs := flag.NewFlagSet("hlog-import-labcorp", flag.ContinueOnError)
+	fs := flag.NewFlagSet("bean-import-labcorp", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	blob := fs.String("blob", "", "blob id of the PDF, from hlog blob put")
+	blob := fs.String("blob", "", "blob id of the PDF, from bean blob put")
 	tz := fs.String("tz", "", "IANA zone of the collection site, for example America/Chicago")
 	if err := fs.Parse(os.Args[1:]); err != nil || fs.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: hlog-import-labcorp [-blob <blob id>] [-tz <zone>] <report.pdf | report.txt>")
+		fmt.Fprintln(os.Stderr, "usage: bean-import-labcorp [-blob <blob id>] [-tz <zone>] <report.pdf | report.txt>")
 		os.Exit(2)
 	}
 	text, err := readText(fs.Arg(0))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "hlog-import-labcorp: %s\n", err)
+		fmt.Fprintf(os.Stderr, "bean-import-labcorp: %s\n", err)
 		os.Exit(1)
 	}
 	var loc *time.Location
 	if *tz != "" {
 		if loc, err = time.LoadLocation(*tz); err != nil {
-			fmt.Fprintf(os.Stderr, "hlog-import-labcorp: bad -tz: %s\n", err)
+			fmt.Fprintf(os.Stderr, "bean-import-labcorp: bad -tz: %s\n", err)
 			os.Exit(2)
 		}
 	}
 	rep, err := parseReport(text)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "hlog-import-labcorp: %s\n", err)
+		fmt.Fprintf(os.Stderr, "bean-import-labcorp: %s\n", err)
 		os.Exit(1)
 	}
 	missing := 0
@@ -75,7 +75,7 @@ func main() {
 		}
 		os.Stdout.Write(append(core.Canonical(rec), '\n'))
 	}
-	fmt.Fprintf(os.Stderr, "hlog-import-labcorp: %d results, %d without a value, collected %s\n", len(rep.Results), missing, rep.Collected)
+	fmt.Fprintf(os.Stderr, "bean-import-labcorp: %d results, %d without a value, collected %s\n", len(rep.Results), missing, rep.Collected)
 }
 
 func readText(path string) (string, error) {

@@ -215,3 +215,7 @@ Method: clone the repo into an empty home folder and follow the README word for 
 ## Repository home, 2026-10-28
 
 104. **The repository moved to the Conscious-Repository organization**: github.com/Conscious-Repository/bean, still private. The module path follows it (`github.com/Conscious-Repository/bean`), which replaces the path in 92. GitHub redirects the old URL, but clones should update their remote.
+
+## Protocol name, 2026-10-28
+
+105. **The protocol name is bean.** Wire labels are renamed from hlog to bean before the first real data. Keys and ids from builds before this change do not match. The name is part of key derivation (the HKDF labels), the record types (`bean.genesis`, `bean.succession`, `bean.tombstone`), the dedupe ref and blob labels, and the Nostr wrapper's `alt` tag. After real data exists, a rename would give different keys from the same 24 words: restore would fail, blobs would not decrypt, re-imports would duplicate and signatures would change. No real log exists yet, so the cost is code, vectors and docs. The commands are `bean`, `bean-import-csv` and `bean-import-labcorp`, and the environment variables are `BEAN_DIR` and `BEAN_NOW`, with no fallback to the old names. SPEC.md change note C24. The two-week freeze clock in CORE.md section 6 is not reset: no real use has started. Earlier entries in this file keep the name hlog, because they describe the past.

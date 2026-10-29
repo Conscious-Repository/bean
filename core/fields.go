@@ -37,11 +37,11 @@ type Source struct {
 }
 
 // IsIdentity reports whether the record is a genesis or a succession.
-func (r *Record) IsIdentity() bool { return r.Type == "hlog.genesis" || r.Type == "hlog.succession" }
+func (r *Record) IsIdentity() bool { return r.Type == "bean.genesis" || r.Type == "bean.succession" }
 
 // IsDestructive reports whether the record supersedes or is a tombstone.
 func (r *Record) IsDestructive() bool {
-	if r.Type == "hlog.tombstone" {
+	if r.Type == "bean.tombstone" {
 		return true
 	}
 	for _, ref := range r.Refs {
@@ -115,7 +115,7 @@ func (r *Record) checkFields() error {
 	}
 	// subject
 	subj, hasSubj := m["subject"]
-	if r.Type == "hlog.genesis" {
+	if r.Type == "bean.genesis" {
 		if hasSubj {
 			return badField("subject")
 		}
@@ -203,7 +203,7 @@ func (r *Record) checkFields() error {
 			if !knownRels[rel] {
 				return ErrUnknownRel
 			}
-			if (rel == "succeeds" && r.Type != "hlog.succession") || (rel == "purges" && r.Type != "hlog.tombstone") {
+			if (rel == "succeeds" && r.Type != "bean.succession") || (rel == "purges" && r.Type != "bean.tombstone") {
 				return badField("refs")
 			}
 			rf := Ref{rel, id}
@@ -251,7 +251,7 @@ func (r *Record) checkFields() error {
 
 func (r *Record) checkReservedType() error {
 	switch r.Type {
-	case "hlog.genesis":
+	case "bean.genesis":
 		key := r.ValueKey()
 		if r.Value == nil || len(r.Value) != 2 || !IsTaggedKey(key) || !IsID(r.Recovery()) {
 			return badField("value")
@@ -268,7 +268,7 @@ func (r *Record) checkReservedType() error {
 		if r.Source.System != "self" || r.Source.Ref != "" {
 			return badField("source")
 		}
-	case "hlog.succession":
+	case "bean.succession":
 		if r.Subject != r.Author || !IsID(r.Author) {
 			return badField("author")
 		}
@@ -290,7 +290,7 @@ func (r *Record) checkReservedType() error {
 			}
 			prev = s
 		}
-	case "hlog.tombstone":
+	case "bean.tombstone":
 		if r.Subject != r.Author {
 			return badField("author")
 		}
@@ -307,7 +307,7 @@ func (r *Record) checkReservedType() error {
 			}
 		}
 	default:
-		if strings.HasPrefix(r.Type, "hlog.") {
+		if strings.HasPrefix(r.Type, "bean.") {
 			return ErrUnknownCoreType
 		}
 		if b, has := r.Value["blob"]; has {

@@ -109,7 +109,7 @@ func TestInitAndAppend(t *testing.T) {
 	if _, _, err := s.Init(NewKey{}); err != ErrAlreadyInitialized {
 		t.Errorf("second init: %v", err)
 	}
-	res := appendLines(t, s, partial("hrv.rmssd", 40, []any{"hlog/v0/ref", "id", "test", "1", 0.0}))
+	res := appendLines(t, s, partial("hrv.rmssd", 40, []any{"bean/v0/ref", "id", "test", "1", 0.0}))
 	if res.Added != 1 {
 		t.Fatalf("added %d", res.Added)
 	}
@@ -167,7 +167,7 @@ func TestReindex(t *testing.T) {
 	s, _ := initStore(t)
 	var lines []string
 	for i := 0; i < 10; i++ {
-		lines = append(lines, partial("hrv.rmssd", float64(i), []any{"hlog/v0/ref", "id", "test", fmt.Sprint(i), 0.0}))
+		lines = append(lines, partial("hrv.rmssd", float64(i), []any{"bean/v0/ref", "id", "test", fmt.Sprint(i), 0.0}))
 	}
 	res := appendLines(t, s, lines...)
 	sup := map[string]any{"type": "hrv.rmssd", "value": map[string]any{"n": 99.0}, "times": map[string]any{"observed": nil},
@@ -187,7 +187,7 @@ func TestReindex(t *testing.T) {
 	if !bytes.Equal(first, second) {
 		t.Error("index bytes differ")
 	}
-	if !strings.Contains(string(first), `"superseded_by"`) || !strings.Contains(string(first), `"hlog.tombstone"`) {
+	if !strings.Contains(string(first), `"superseded_by"`) || !strings.Contains(string(first), `"bean.tombstone"`) {
 		t.Error("index lacks supersede or tombstone")
 	}
 }
@@ -231,12 +231,12 @@ func TestDedupeImports(t *testing.T) {
 		b := cloneLocal(t, a)
 		mk := func(i int) string {
 			if native {
-				return partial("hr.bpm", float64(60+i), []any{"hlog/v0/ref", "id", "test", fmt.Sprint(i), 0.0})
+				return partial("hr.bpm", float64(60+i), []any{"bean/v0/ref", "id", "test", fmt.Sprint(i), 0.0})
 			}
 			obs := map[string]any{"start": fmt.Sprintf("2026-10-%02dT00:00:00Z", i), "precision": "day"}
 			m := map[string]any{"type": "hr.bpm", "value": map[string]any{"n": float64(60 + i), "unit": "bpm"},
 				"times":  map[string]any{"observed": obs},
-				"source": map[string]any{"system": "test", "adapter": "t@1", "ref_input": []any{"hlog/v0/ref", "tuple", "test", "hr.bpm", obs, map[string]any{"n": float64(60 + i), "unit": "bpm"}, 0.0}}}
+				"source": map[string]any{"system": "test", "adapter": "t@1", "ref_input": []any{"bean/v0/ref", "tuple", "test", "hr.bpm", obs, map[string]any{"n": float64(60 + i), "unit": "bpm"}, 0.0}}}
 			return string(Canonical(m))
 		}
 		var e1, e2 []string
@@ -274,7 +274,7 @@ func TestDedupeImports(t *testing.T) {
 // after purge. With C14, B hides and only gc erases.
 func TestPurgePropagation(t *testing.T) {
 	a, _ := initStore(t)
-	res := appendLines(t, a, partial("hrv.rmssd", 1, []any{"hlog/v0/ref", "id", "test", "T", 0.0}))
+	res := appendLines(t, a, partial("hrv.rmssd", 1, []any{"bean/v0/ref", "id", "test", "T", 0.0}))
 	tgt := res.IDs[0]
 	b := cloneLocal(t, a)
 	c := cloneLocal(t, a) // stale copy from before the purge
@@ -332,7 +332,7 @@ func TestPurgePropagation(t *testing.T) {
 	}
 	// Test 15: re-import after purge adds nothing on A and on B.
 	for _, s := range []*Store{a, b} {
-		rr := appendLines(t, s, partial("hrv.rmssd", 1, []any{"hlog/v0/ref", "id", "test", "T", 0.0}))
+		rr := appendLines(t, s, partial("hrv.rmssd", 1, []any{"bean/v0/ref", "id", "test", "T", 0.0}))
 		if rr.Added != 0 || rr.Skipped != 1 {
 			t.Errorf("re-import added %d", rr.Added)
 		}

@@ -1,31 +1,31 @@
 # Command reference
 
-Every command and flag of `hlog` and the importers. For a first run, read the [README](../README.md) first.
+Every command and flag of `bean` and the importers. For a first run, read the [README](../README.md) first.
 
 ## Conventions
 
 ```
-hlog [-dir <folder>] <command> [arguments]
+bean [-dir <folder>] <command> [arguments]
 ```
 
-- `-dir` is the log folder. If you do not give it, `hlog` uses `$HLOG_DIR`, then the current folder.
+- `-dir` is the log folder. If you do not give it, `bean` uses `$BEAN_DIR`, then the current folder.
 - Flags can come before or after the arguments of `add` and `ls`. For other commands, put flags first.
 - An **id** is `sha256:` and 64 hex digits. Commands that take an id also take its first 6 or more hex digits, if no other record starts with them.
 - A **time** is RFC 3339 (`2026-10-28T13:00:00-05:00`), `YYYY-MM-DD HH:MM`, or `YYYY-MM-DD`. The last two use your local time zone.
-- Output goes to stdout. Errors go to stderr and start with `hlog:`.
+- Output goes to stdout. Errors go to stderr and start with `bean:`.
 
 | Exit code | Meaning |
 |---|---|
 | 0 | Success. For `verify`: no errors. |
 | 1 | The command failed, or `verify` found errors. |
 | 2 | Usage error: unknown command, bad flag or bad argument. |
-| 3 | The log has a record of a newer format version than this `hlog` knows. Update `hlog`. |
+| 3 | The log has a record of a newer format version than this `bean` knows. Update `bean`. |
 | 4 | Your identity is frozen: two rotations were made from the same point. Make a new identity. |
 
 | Environment variable | Meaning |
 |---|---|
-| `HLOG_DIR` | The log folder, if `-dir` is not given. |
-| `HLOG_NOW` | Overrides the clock (RFC 3339). For tests only. |
+| `BEAN_DIR` | The log folder, if `-dir` is not given. |
+| `BEAN_NOW` | Overrides the clock (RFC 3339). For tests only. |
 
 ## Start
 
@@ -38,7 +38,7 @@ Creates your identity and an empty log in the folder. Prints `identity <id>`, th
 - `-nostr <file>`: use the Nostr secret key in the file (`nsec1...` or 64 hex digits).
 - `-nostr -`: type or paste the secret key. The terminal does not show it.
 
-Write the 24 words on paper. `hlog` shows them only once. They are the only way to recover your identity on a new machine. Do not type them into a crypto wallet.
+Write the 24 words on paper. `bean` shows them only once. They are the only way to recover your identity on a new machine. Do not type them into a crypto wallet.
 
 ### `whoami`
 
@@ -50,7 +50,7 @@ Prints your identity id and your signing key. It also prints the npub of a Nostr
 
 Adds one record about you. Prints its id.
 
-- `<type>` names what the record is, for example `food` or `symptom.headache`. Lowercase letters, digits, `_`, `-` and dots. See the [type vocabulary](../cmd/hlog/vocabulary.md).
+- `<type>` names what the record is, for example `food` or `symptom.headache`. Lowercase letters, digits, `_`, `-` and dots. See the [type vocabulary](../cmd/bean/vocabulary.md).
 - `<value>`: a number becomes `{"n": ...}`, `true`, `false`, `yes` or `no` becomes `{"b": ...}`, and anything else becomes text, `{"s": ...}`. Put text with spaces in quotes.
 
 | Flag | Meaning |
@@ -92,7 +92,7 @@ Prints one record in full, its status (`valid`, `superseded by ...`, `purged by 
 
 ### `blob get <id>`
 
-Writes the decrypted file to stdout: `hlog blob get <id> > report.pdf`.
+Writes the decrypted file to stdout: `bean blob get <id> > report.pdf`.
 
 ### `verify`
 
@@ -129,12 +129,12 @@ With `-write`, the first start makes the agent key of this machine and, on your 
 Makes the agent key of this machine. Prints the agent key and its npub.
 
 - On your own machine it also trusts the key (writes an `agent.pair` record).
-- On a copy without your key, for example a cloud server, it prints the `hlog agent pair` command to run on your own machine.
+- On a copy without your key, for example a cloud server, it prints the `bean agent pair` command to run on your own machine.
 - In a folder with copied records but no identity, it takes the only identity there. Use `-identity` if there are several.
 
 ### `agent pair <npub> [-label <name>]`
 
-Run on your own machine. Records that you trust this agent key to write about you. `hlog ls` then shows its records with the label.
+Run on your own machine. Records that you trust this agent key to write about you. `bean ls` then shows its records with the label.
 
 ## Copies and keys
 
@@ -180,16 +180,16 @@ Print the help or the version.
 
 ## Importers
 
-Importers read one source format and write records to stdout for `hlog append`. They never sign and never see your keys.
+Importers read one source format and write records to stdout for `bean append`. They never sign and never see your keys.
 
-### `hlog-import-labcorp [-blob <id>] [-tz <zone>] <report.pdf | report.txt>`
+### `bean-import-labcorp [-blob <id>] [-tz <zone>] <report.pdf | report.txt>`
 
 Reads a Labcorp patient report, which is also what Superpower gives you. Needs `pdftotext` (`brew install poppler`), or the text it makes. One record per result: type `lab.<test name>`, value and unit, and the flag, reference interval, panel, lab and comments. Your name, birth date and patient ids are not copied.
 
-- `-blob`: the blob id of the PDF, from `hlog blob put`.
+- `-blob`: the blob id of the PDF, from `bean blob put`.
 - `-tz`: the time zone where the sample was taken, for example `America/Chicago`. Without it, only the day is recorded, because the report does not say the zone.
 
-### `hlog-import-csv -type <type> [-unit <unit>] [-system <name>] [-blob <id>] [-precision <p>] <file.csv>`
+### `bean-import-csv -type <type> [-unit <unit>] [-system <name>] [-blob <id>] [-precision <p>] <file.csv>`
 
 Reads a CSV file with a header row. Column `value` is required. Column `time` (RFC 3339) and column `id` (the source's id for the row) are optional. Other columns go into `context`. One type per file.
 

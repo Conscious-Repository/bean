@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Writing a claim by hand or through an agent (hlog add, MCP log_entry).
+// Writing a claim by hand or through an agent (bean add, MCP log_entry).
 
 // ManualValue turns a typed-in value into a value object (SPEC.md 3.4):
 // a number with an optional unit, true or false, or text.
@@ -29,7 +29,7 @@ func ManualValue(text, unit string) map[string]any {
 	return map[string]any{"s": text}
 }
 
-// ParseWhen reads the -at flag of hlog add. It accepts RFC 3339 (second
+// ParseWhen reads the -at flag of bean add. It accepts RFC 3339 (second
 // precision), "YYYY-MM-DD HH:MM" or "YYYY-MM-DDTHH:MM" in loc (minute),
 // and "YYYY-MM-DD" (day). It returns the start string and the precision.
 func ParseWhen(s string, loc *time.Location) (string, string, error) {
@@ -68,7 +68,7 @@ type AddOptions struct {
 	Agent bool
 }
 
-// Add writes one claim that the person types in (hlog add), or that an
+// Add writes one claim that the person types in (bean add), or that an
 // agent logs (o.Agent). It loads the log once and goes through the same
 // path as Append, so every check and the dedupe rules apply. It returns
 // the record id.

@@ -73,7 +73,7 @@ func checkFile(path string, data []byte, proven bool) FileResult {
 	if r.Type, ok = obj["type"].(string); !ok {
 		return FileResult{Err: ErrBadType}
 	}
-	if r.Type != "hlog.succession" && len(data) > MaxRecordSize {
+	if r.Type != "bean.succession" && len(data) > MaxRecordSize {
 		return FileResult{Err: ErrTooLarge}
 	}
 	// 9. envelope strings
@@ -203,7 +203,7 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 	genesis := map[string]*Record{}
 	for _, id := range ids {
 		r := rp.Records[id]
-		if r.Type == "hlog.genesis" {
+		if r.Type == "bean.genesis" {
 			genesis[id] = r
 		}
 	}
@@ -216,7 +216,7 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 		pending := []*Record{}
 		for _, id := range ids {
 			r := rp.Records[id]
-			if r.Type == "hlog.succession" && r.Author == gid {
+			if r.Type == "bean.succession" && r.Author == gid {
 				pending = append(pending, r)
 			}
 		}
@@ -246,16 +246,16 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 		}
 		nodes[gid], nodeKeys[gid] = n, keys
 	}
-	// Too new (SPEC.md 8.2 with change set C15): an unknown-v hlog.* record
+	// Too new (SPEC.md 8.2 with change set C15): an unknown-v bean.* record
 	// counts only when its signer is a key of the identity's known tree.
 	tooNew := map[string]bool{}
 	for _, r := range unknown {
-		if !strings.HasPrefix(r.Type, "hlog.") {
+		if !strings.HasPrefix(r.Type, "bean.") {
 			rp.Skipped++
 			continue
 		}
 		rp.Skipped++
-		if r.Type == "hlog.genesis" {
+		if r.Type == "bean.genesis" {
 			if r.Author == r.Kid {
 				tooNew[r.ID] = true
 			}
@@ -272,7 +272,7 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 	// Drop everything of a too-new identity.
 	for _, id := range ids {
 		r := rp.Records[id]
-		if tooNew[r.Author] || tooNew[r.Subject] || (r.Type == "hlog.genesis" && tooNew[r.ID]) {
+		if tooNew[r.Author] || tooNew[r.Subject] || (r.Type == "bean.genesis" && tooNew[r.ID]) {
 			delete(rp.Records, id)
 			rp.Skipped++
 		}
@@ -385,7 +385,7 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 			case !ok:
 				rp.warn(id, "held: "+id)
 				rp.Held[id] = true
-			case strings.HasPrefix(target.Type, "hlog."):
+			case strings.HasPrefix(target.Type, "bean."):
 				rp.fail(id, "bad target")
 			case target.Author != r.Author:
 				rp.fail(id, "not author")
@@ -398,7 +398,7 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 	// Step 10: tombstones.
 	for _, id := range ids {
 		r := rp.Records[id]
-		if !rp.Valid[id] || r.Type != "hlog.tombstone" {
+		if !rp.Valid[id] || r.Type != "bean.tombstone" {
 			continue
 		}
 		t := r.Targets("purges")[0]
@@ -407,7 +407,7 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 		case !ok:
 			rp.warn(id, "held: "+id)
 			rp.Held[id] = true
-		case target.IsIdentity() || target.Type == "hlog.tombstone":
+		case target.IsIdentity() || target.Type == "bean.tombstone":
 			rp.fail(id, "bad target")
 		case target.Subject != r.Subject:
 			rp.fail(id, "not subject")
@@ -499,7 +499,7 @@ func checkSuccession(s, p *Record, tree map[string]*Record) error {
 		if x.ValueKey() == s.ValueKey() || x.Kid == s.ValueKey() {
 			return errors.New("key reuse")
 		}
-		if x.Type == "hlog.genesis" {
+		if x.Type == "bean.genesis" {
 			break
 		}
 		x = tree[x.Targets("succeeds")[0]]

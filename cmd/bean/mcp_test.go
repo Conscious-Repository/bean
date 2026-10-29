@@ -282,7 +282,7 @@ func TestMCPWrite(t *testing.T) {
 	if m, isErr := call(t, s, "log_entry", map[string]any{"type": "drink.water", "value": 0.5, "unit": "L"}); isErr {
 		t.Errorf("number value: %v", m)
 	}
-	if m, isErr := call(t, s, "log_entry", map[string]any{"type": "hlog.genesis", "value": "x"}); !isErr {
+	if m, isErr := call(t, s, "log_entry", map[string]any{"type": "bean.genesis", "value": "x"}); !isErr {
 		t.Errorf("core type written: %v", m)
 	}
 	if m, isErr := call(t, s, "log_entry", map[string]any{"type": "note", "value": "x", "about": ids["ache"], "at": "yesterday"}); !isErr {

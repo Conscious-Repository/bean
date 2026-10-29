@@ -8,10 +8,10 @@ import (
 
 // HKDF labels (SPEC.md 4.7).
 const (
-	labelIdentitySecret = "hlog/v0/identity-secret"
-	labelRecoveryKey    = "hlog/v0/recovery-key/" // + generation
-	labelBlobKey        = "hlog/v0/blob-key"
-	labelDedupeKey      = "hlog/v0/dedupe-key"
+	labelIdentitySecret = "bean/v0/identity-secret"
+	labelRecoveryKey    = "bean/v0/recovery-key/" // + generation
+	labelBlobKey        = "bean/v0/blob-key"
+	labelDedupeKey      = "bean/v0/dedupe-key"
 )
 
 func hkdfSHA256(ikm, salt []byte, info string, n int) ([]byte, error) {
