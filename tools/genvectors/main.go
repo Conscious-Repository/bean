@@ -61,7 +61,7 @@ func jcs(inputs []string) []jcsCase {
 }
 
 func main() {
-	// V1: numbers. RFC 8785 Appendix B samples by literal, plus hlog range cases.
+	// V1: numbers. RFC 8785 Appendix B samples by literal, plus bean range cases.
 	write("v1-jcs-numbers.json", map[string]any{
 		"spec":  "SPEC.md 4.1",
 		"cases": jcs([]string{"0", "-0", "0.0", "1", "1.0", "1e0", "5e-324", "1.7976931348623157e308", "1e400", "9007199254740991", "-9007199254740991", "9007199254740992", "-9007199254740992", "9.007199254740992e15", "1e21", "1e+21", "999999999999999900000", "1e-7", "0.000001", "1E-7", "333333333.3333332", "333333333.33333325", "2.5", "100", "1e2", "-1.5e-10", "123456789012345680000"}),

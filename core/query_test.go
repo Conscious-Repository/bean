@@ -196,7 +196,7 @@ func TestParserFixIsNotADuplicate(t *testing.T) {
 	}
 }
 
-// hlog add -corrects: a correction replaces the person's own entry; ls
+// bean add -corrects: a correction replaces the person's own entry; ls
 // shows only the new one; an agent cannot correct the person's entry.
 func TestAddCorrects(t *testing.T) {
 	s, _ := initStore(t)

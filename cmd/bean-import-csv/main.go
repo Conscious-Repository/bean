@@ -1,4 +1,4 @@
-// Command hlog-import-csv turns a CSV file into JSONL partial records
+// Command bean-import-csv turns a CSV file into JSONL partial records
 // (SPEC.md 9 and 12.3). It never signs and never holds the dedupe key.
 //
 // The CSV has a header row. Column "value" is required. Optional columns:
@@ -27,26 +27,26 @@ type options struct {
 }
 
 func main() {
-	fs := flag.NewFlagSet("hlog-import-csv", flag.ContinueOnError)
+	fs := flag.NewFlagSet("bean-import-csv", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	var o options
 	fs.StringVar(&o.typ, "type", "", "record type, for example hrv.rmssd")
 	fs.StringVar(&o.system, "system", "csv", "source.system")
-	fs.StringVar(&o.blob, "blob", "", "blob id of the raw file, from hlog blob put")
+	fs.StringVar(&o.blob, "blob", "", "blob id of the raw file, from bean blob put")
 	fs.StringVar(&o.unit, "unit", "", "unit of value")
 	fs.StringVar(&o.precision, "precision", "second", "precision of the time column")
 	if err := fs.Parse(os.Args[1:]); err != nil || o.typ == "" || fs.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: hlog-import-csv -type <type> [-system <system>] [-blob <blob id>] [-unit <unit>] [-precision <p>] <file.csv>")
+		fmt.Fprintln(os.Stderr, "usage: bean-import-csv -type <type> [-system <system>] [-blob <blob id>] [-unit <unit>] [-precision <p>] <file.csv>")
 		os.Exit(2)
 	}
 	f, err := os.Open(fs.Arg(0))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "hlog-import-csv: %s\n", err)
+		fmt.Fprintf(os.Stderr, "bean-import-csv: %s\n", err)
 		os.Exit(1)
 	}
 	defer f.Close()
 	if err := convert(f, os.Stdout, o); err != nil {
-		fmt.Fprintf(os.Stderr, "hlog-import-csv: %s\n", err)
+		fmt.Fprintf(os.Stderr, "bean-import-csv: %s\n", err)
 		os.Exit(1)
 	}
 }

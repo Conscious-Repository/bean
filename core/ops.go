@@ -22,7 +22,7 @@ type AppendResult struct {
 var forbiddenPartial = []string{"v", "nonce", "author", "kid", "id", "sig"}
 
 // Append reads JSONL partial records (SPEC.md 9.2), completes, dedupes,
-// signs and writes them (12.3 hlog append). On the first error it stops;
+// signs and writes them (12.3 bean append). On the first error it stops;
 // records before it stay written.
 func (s *Store) Append(in io.Reader) (AppendResult, error) {
 	var res AppendResult

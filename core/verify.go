@@ -246,7 +246,7 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 		}
 		nodes[gid], nodeKeys[gid] = n, keys
 	}
-	// Too new (SPEC.md 8.2 with change set C15): an unknown-v hlog.* record
+	// Too new (SPEC.md 8.2 with change set C15): an unknown-v bean.* record
 	// counts only when its signer is a key of the identity's known tree.
 	tooNew := map[string]bool{}
 	for _, r := range unknown {

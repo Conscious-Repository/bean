@@ -8,11 +8,11 @@ import (
 	"testing"
 )
 
-// The test binary runs main() when HLOG_TEST_MAIN is set, so these tests
+// The test binary runs main() when BEAN_TEST_MAIN is set, so these tests
 // drive the real CLI: arguments, exit codes, stdout and stderr.
 func TestMain(m *testing.M) {
-	if os.Getenv("HLOG_TEST_MAIN") == "1" {
-		os.Args = append([]string{"hlog"}, os.Args[1:]...)
+	if os.Getenv("BEAN_TEST_MAIN") == "1" {
+		os.Args = append([]string{"bean"}, os.Args[1:]...)
 		main()
 		os.Exit(0)
 	}
@@ -22,7 +22,7 @@ func TestMain(m *testing.M) {
 func run(t *testing.T, dir, stdin string, args ...string) (string, string, int) {
 	t.Helper()
 	cmd := exec.Command(os.Args[0], args...)
-	cmd.Env = append(os.Environ(), "HLOG_TEST_MAIN=1", "HLOG_DIR="+dir, "HLOG_NOW=")
+	cmd.Env = append(os.Environ(), "BEAN_TEST_MAIN=1", "BEAN_DIR="+dir, "BEAN_NOW=")
 	cmd.Stdin = strings.NewReader(stdin)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
@@ -40,24 +40,24 @@ func TestCLIHelpAndErrors(t *testing.T) {
 	dir := t.TempDir()
 	for _, args := range [][]string{{"help"}, {"-h"}, {"--help"}} {
 		out, _, code := run(t, dir, "", args...)
-		if code != 0 || !strings.Contains(out, "usage: hlog [-dir <folder>] <command>") || !strings.Contains(out, "docs/COMMANDS.md") {
+		if code != 0 || !strings.Contains(out, "usage: bean [-dir <folder>] <command>") || !strings.Contains(out, "docs/COMMANDS.md") {
 			t.Errorf("%v: exit %d\n%s", args, code, out)
 		}
 	}
-	if out, _, code := run(t, dir, "", "version"); code != 0 || !strings.HasPrefix(out, "hlog 0.5.0") {
+	if out, _, code := run(t, dir, "", "version"); code != 0 || !strings.HasPrefix(out, "bean 0.5.0") {
 		t.Errorf("version: %d %q", code, out)
 	}
-	if _, errs, code := run(t, dir, ""); code != 2 || !strings.Contains(errs, "usage: hlog") {
+	if _, errs, code := run(t, dir, ""); code != 2 || !strings.Contains(errs, "usage: bean") {
 		t.Errorf("no command: %d %q", code, errs)
 	}
 	if _, errs, code := run(t, dir, "", "lst"); code != 2 || !strings.Contains(errs, `unknown command "lst"`) || strings.Contains(errs, "Start") {
 		t.Errorf("unknown command: %d %q", code, errs)
 	}
-	if _, errs, code := run(t, dir, "", "ls"); code != 1 || !strings.Contains(errs, "hlog: not initialized") || !strings.Contains(errs, "no log in") {
+	if _, errs, code := run(t, dir, "", "ls"); code != 1 || !strings.Contains(errs, "bean: not initialized") || !strings.Contains(errs, "no log in") {
 		t.Errorf("ls in an empty folder: %d %q", code, errs)
 	}
 	run(t, dir, "", "init") // usage errors are checked inside a log
-	if _, errs, code := run(t, dir, "", "purge"); code != 2 || !strings.Contains(errs, "usage: hlog [-dir <folder>] purge [-reason <text>] <id>") {
+	if _, errs, code := run(t, dir, "", "purge"); code != 2 || !strings.Contains(errs, "usage: bean [-dir <folder>] purge [-reason <text>] <id>") {
 		t.Errorf("purge usage: %d %q", code, errs)
 	}
 }

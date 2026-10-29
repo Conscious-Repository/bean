@@ -22,7 +22,7 @@ import (
 // as device.pair (SPEC.md 11.3). The core does not check pairing.
 
 // ErrNoAgent is returned when local/agent-key does not exist.
-var ErrNoAgent = errors.New("no agent key: run hlog agent init")
+var ErrNoAgent = errors.New("no agent key: run bean agent init")
 
 // Identity returns the local identity id.
 func (s *Store) Identity() (string, error) {

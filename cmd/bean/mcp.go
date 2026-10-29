@@ -1,9 +1,9 @@
 package main
 
-// hlog mcp (docs/ROADMAP.md M9): a read-only Model Context Protocol server on
+// bean mcp (docs/ROADMAP.md M9): a read-only Model Context Protocol server on
 // standard input and output, so an AI client can ask questions of the log.
 // JSON-RPC 2.0, one message per line. Standard library only. Every tool
-// call loads and verifies the folder, as hlog ls does, so a client never
+// call loads and verifies the folder, as bean ls does, so a client never
 // sees a record that fails verification or one that was purged.
 
 import (
@@ -164,7 +164,7 @@ func instructions(zone string, write bool) string {
 	return text + "\n\n" + vocabulary
 }
 
-// toolLogEntry writes one claim with the agent key (hlog add -agent).
+// toolLogEntry writes one claim with the agent key (bean add -agent).
 func toolLogEntry(s *core.Store, a toolArgs) (any, error) {
 	if a.Type == "" {
 		return nil, errors.New("type is required")
@@ -277,7 +277,7 @@ func handleMCP(s *core.Store, req rpcRequest, write bool) (any, *rpcError) {
 		return map[string]any{
 			"protocolVersion": v,
 			"capabilities":    map[string]any{"tools": map[string]any{}},
-			"serverInfo":      map[string]any{"name": "hlog", "version": core.Adapter},
+			"serverInfo":      map[string]any{"name": "bean", "version": core.Adapter},
 			"instructions":    instructions(zone, write),
 		}, nil
 	case "ping":

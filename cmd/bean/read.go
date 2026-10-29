@@ -17,7 +17,7 @@ import (
 )
 
 // parseInterspersed lets flags come before or after the positional
-// arguments, so "hlog add symptom.headache 8 -unit {score}" works.
+// arguments, so "bean add symptom.headache 8 -unit {score}" works.
 func parseInterspersed(fs *flag.FlagSet, args []string) ([]string, error) {
 	var pos []string
 	for {
@@ -33,7 +33,7 @@ func parseInterspersed(fs *flag.FlagSet, args []string) ([]string, error) {
 	}
 }
 
-// parseBound reads a -since or -until value as hlog add -at does.
+// parseBound reads a -since or -until value as bean add -at does.
 func parseBound(s string) (time.Time, error) {
 	if s == "" {
 		return time.Time{}, nil
