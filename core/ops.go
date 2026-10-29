@@ -214,7 +214,7 @@ func (s *Store) Purge(id, reason string) (string, error) {
 		return "", err
 	}
 	id = target.ID
-	if target.IsIdentity() || target.Type == "hlog.tombstone" {
+	if target.IsIdentity() || target.Type == "bean.tombstone" {
 		return "", ErrBadTarget
 	}
 	if target.Subject != l.Local.Identity {
@@ -279,7 +279,7 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 	for _, l := range []*Loaded{a, b} {
 		for _, id := range sortedKeys(l.Report.Records) {
 			r := l.Report.Records[id]
-			if r.Type == "hlog.tombstone" && l.Report.Valid[id] {
+			if r.Type == "bean.tombstone" && l.Report.Valid[id] {
 				tombs[r.Targets("purges")[0]] = r
 			}
 		}
@@ -311,7 +311,7 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 		}
 		if t, ok := tombs[id]; ok && !fr.Unknown { // 3.2 and 7.5
 			target := fr.Record
-			if !target.IsIdentity() && target.Type != "hlog.tombstone" && target.Subject == t.Subject {
+			if !target.IsIdentity() && target.Type != "bean.tombstone" && target.Subject == t.Subject {
 				if err := s.addPurgedRef(target); err != nil {
 					return res, err
 				}
@@ -422,7 +422,7 @@ func (s *Store) Export(dir string) (records, blobs int, err error) {
 	if list == nil {
 		list = []any{}
 	}
-	man := map[string]any{"spec": "hlog-core-v0.5", "identity": l.Local.Identity, "records": float64(records), "blobs": list}
+	man := map[string]any{"spec": "bean-core-v0.5", "identity": l.Local.Identity, "records": float64(records), "blobs": list}
 	if err := writeFileAtomic(filepath.Join(dir, "manifest.json"), Canonical(man), 0o600); err != nil {
 		return 0, 0, err
 	}
@@ -514,7 +514,7 @@ func (s *Store) Reindex() (int, error) {
 	if rows == nil {
 		rows = []any{}
 	}
-	idx := map[string]any{"spec": "hlog-core-v0.5", "records": rows}
+	idx := map[string]any{"spec": "bean-core-v0.5", "records": rows}
 	if err := writeFileAtomic(s.path(fileIndex), append(Canonical(idx), '\n'), 0o600); err != nil {
 		return 0, err
 	}

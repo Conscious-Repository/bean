@@ -160,7 +160,7 @@ func TestDedupeRef(t *testing.T) {
 	if d == e {
 		t.Error("observed time ignored")
 	}
-	if in := RefInputNative("oura", "12345", 0); string(Canonical(in)) != `["hlog/v0/ref","id","oura","12345",0]` {
+	if in := RefInputNative("oura", "12345", 0); string(Canonical(in)) != `["bean/v0/ref","id","oura","12345",0]` {
 		t.Errorf("input %s", Canonical(in))
 	}
 }

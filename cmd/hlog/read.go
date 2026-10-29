@@ -247,7 +247,7 @@ func valueText(r *core.Record) string {
 		b, _ := v["blob"].(string)
 		b = strings.TrimPrefix(b, "sha256:")
 		out = "series " + b[:min(12, len(b))]
-	case r.Type == "hlog.genesis" || r.Type == "hlog.succession":
+	case r.Type == "bean.genesis" || r.Type == "bean.succession":
 		out = r.ValueKey()
 	case r.Type == "agent.pair" || r.Type == "device.pair":
 		label, _ := v["label"].(string)

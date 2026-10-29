@@ -58,7 +58,7 @@ func TestAddAndList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Add("hlog.genesis", "1", AddOptions{}); err == nil {
+	if _, err := s.Add("bean.genesis", "1", AddOptions{}); err == nil {
 		t.Error("Add wrote a core type")
 	}
 	if _, err := s.Add("Bad Type", "1", AddOptions{}); err == nil {
@@ -107,9 +107,9 @@ func TestAddAndList(t *testing.T) {
 
 func TestListHidesSupersededAndPurged(t *testing.T) {
 	s, _ := initStore(t)
-	res := appendLines(t, s, partial("hrv.rmssd", 40, []any{"hlog/v0/ref", "id", "test", "a", 0.0}), partial("hrv.rmssd", 50, []any{"hlog/v0/ref", "id", "test", "b", 0.0}))
+	res := appendLines(t, s, partial("hrv.rmssd", 40, []any{"bean/v0/ref", "id", "test", "a", 0.0}), partial("hrv.rmssd", 50, []any{"bean/v0/ref", "id", "test", "b", 0.0}))
 	old, gone := res.IDs[0], res.IDs[1]
-	fix := strings.Replace(partial("hrv.rmssd", 41, []any{"hlog/v0/ref", "id", "test", "a", 0.0}), `"source":`, `"refs":[{"id":"`+old+`","rel":"supersedes"}],"source":`, 1)
+	fix := strings.Replace(partial("hrv.rmssd", 41, []any{"bean/v0/ref", "id", "test", "a", 0.0}), `"source":`, `"refs":[{"id":"`+old+`","rel":"supersedes"}],"source":`, 1)
 	fixID := appendLines(t, s, fix).IDs[0]
 	if _, err := s.Purge(gone, ""); err != nil {
 		t.Fatal(err)
@@ -148,7 +148,7 @@ func TestResolvePrefix(t *testing.T) {
 			t.Errorf("Resolve(%q) = %v", in, err)
 		}
 	}
-	if r, err := l.Resolve(ident); err != nil || r.Type != "hlog.genesis" {
+	if r, err := l.Resolve(ident); err != nil || r.Type != "bean.genesis" {
 		t.Errorf("Resolve(identity) = %v", err)
 	}
 	for _, in := range []string{id[7:12], "zzzzzz", "ffffffffffff0000"} {
@@ -170,13 +170,13 @@ func ids(rs []*Record) []string {
 // corrects. Ids are random, so run it enough times to see both id orders:
 // the fix must never be marked a duplicate of the record it supersedes.
 func TestParserFixIsNotADuplicate(t *testing.T) {
-	ref := []any{"hlog/v0/ref", "id", "test", "r1", 0.0}
+	ref := []any{"bean/v0/ref", "id", "test", "r1", 0.0}
 	orders := map[bool]bool{}
 	for i := 0; i < 24; i++ {
 		s, _ := initStore(t)
 		old := appendLines(t, s, partial("hrv.rmssd", 40, ref)).IDs[0]
 		fix := strings.Replace(partial("hrv.rmssd", 41, nil), `"source":{"adapter":"test@1","ref":null,"system":"test"}`,
-			`"source":{"adapter":"test@1","ref_input":["hlog/v0/ref","id","test","r1",0],"supersedes_ref":["hlog/v0/ref","id","test","r1",0],"system":"test"}`, 1)
+			`"source":{"adapter":"test@1","ref_input":["bean/v0/ref","id","test","r1",0],"supersedes_ref":["bean/v0/ref","id","test","r1",0],"system":"test"}`, 1)
 		res := appendLines(t, s, fix)
 		if res.Added != 1 {
 			t.Fatalf("fix not added: %+v", res)

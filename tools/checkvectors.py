@@ -265,17 +265,17 @@ def hk(ikm, info, n):
 
 v9 = load("v9-hkdf.json")
 seed = bytes.fromhex(v9["paper_seed"])
-isec = hk(seed, "hlog/v0/identity-secret", 32)
+isec = hk(seed, "bean/v0/identity-secret", 32)
 check("v9 identity_secret", isec.hex(), v9["identity_secret"])
 for g in range(3):
-    rs = hk(seed, f"hlog/v0/recovery-key/{g}", 32)
+    rs = hk(seed, f"bean/v0/recovery-key/{g}", 32)
     check(f"v9 recovery seed {g}", rs.hex(), v9["recovery_private_seeds"][g])
     pub = raw_pub(ed25519.Ed25519PrivateKey.from_private_bytes(rs).public_key()).hex()
     check(f"v9 recovery key {g}", "ed25519:" + pub, v9["recovery_keys"][g])
 
 v10 = load("v10-derived-keys.json")
-blob_key = hk(isec, "hlog/v0/blob-key", 64)
-dedupe_key = hk(isec, "hlog/v0/dedupe-key", 32)
+blob_key = hk(isec, "bean/v0/blob-key", 64)
+dedupe_key = hk(isec, "bean/v0/dedupe-key", 32)
 check("v10 blob_key", blob_key.hex(), v10["blob_key"])
 check("v10 dedupe_key", dedupe_key.hex(), v10["dedupe_key"])
 

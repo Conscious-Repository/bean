@@ -2,29 +2,29 @@
   "cases": [
     {
       "input": [
-        "hlog/v0/ref",
+        "bean/v0/ref",
         "id",
         "oura",
         "12345",
         0
       ],
-      "input_canonical": "[\"hlog/v0/ref\",\"id\",\"oura\",\"12345\",0]",
-      "ref": "hmac-sha256:f6618e6ee8569732605bd77f78b83547682bc4c60fe998239c77912d63148b38"
+      "input_canonical": "[\"bean/v0/ref\",\"id\",\"oura\",\"12345\",0]",
+      "ref": "hmac-sha256:c496773f2f14d894b77707e913825d1890cf64e2c305bcb9c44c1239fe55e5fa"
     },
     {
       "input": [
-        "hlog/v0/ref",
+        "bean/v0/ref",
         "id",
         "oura",
         "12345",
         1
       ],
-      "input_canonical": "[\"hlog/v0/ref\",\"id\",\"oura\",\"12345\",1]",
-      "ref": "hmac-sha256:73e16ee4cb268115af73314946f8d150b8a13269d42519cdefa5005f26707db8"
+      "input_canonical": "[\"bean/v0/ref\",\"id\",\"oura\",\"12345\",1]",
+      "ref": "hmac-sha256:c07ecc1a8caa96026d1d708a3b839570148c05e9ad45fc02618d178fbb0b3dc8"
     },
     {
       "input": [
-        "hlog/v0/ref",
+        "bean/v0/ref",
         "tuple",
         "csv",
         "hrv.rmssd",
@@ -38,12 +38,12 @@
         },
         0
       ],
-      "input_canonical": "[\"hlog/v0/ref\",\"tuple\",\"csv\",\"hrv.rmssd\",{\"precision\":\"minute\",\"start\":\"2026-10-26T03:00:00Z\"},{\"n\":42.5,\"unit\":\"ms\"},0]",
-      "ref": "hmac-sha256:7c88e3b17ebd4b8e19d28fe227a6fd99cfb4c1bb3d4304a301380245b7d08334"
+      "input_canonical": "[\"bean/v0/ref\",\"tuple\",\"csv\",\"hrv.rmssd\",{\"precision\":\"minute\",\"start\":\"2026-10-26T03:00:00Z\"},{\"n\":42.5,\"unit\":\"ms\"},0]",
+      "ref": "hmac-sha256:7aadc6f574dbff72c0d9b370ac8e4bbfcaddb3195bd8457549d28c6324979813"
     },
     {
       "input": [
-        "hlog/v0/ref",
+        "bean/v0/ref",
         "tuple",
         "csv",
         "hrv.rmssd",
@@ -57,12 +57,12 @@
         },
         1
       ],
-      "input_canonical": "[\"hlog/v0/ref\",\"tuple\",\"csv\",\"hrv.rmssd\",{\"precision\":\"minute\",\"start\":\"2026-10-26T03:00:00Z\"},{\"n\":42.5,\"unit\":\"ms\"},1]",
-      "ref": "hmac-sha256:2aee88c91cb444878824efe3e996f852cee61ac2e4930183c41d3a450bf75cb9"
+      "input_canonical": "[\"bean/v0/ref\",\"tuple\",\"csv\",\"hrv.rmssd\",{\"precision\":\"minute\",\"start\":\"2026-10-26T03:00:00Z\"},{\"n\":42.5,\"unit\":\"ms\"},1]",
+      "ref": "hmac-sha256:497f1db5505f9db7ce1dc01f9e67015c2ef33235ea2d828fee7268f5b8eca2db"
     },
     {
       "input": [
-        "hlog/v0/ref",
+        "bean/v0/ref",
         "tuple",
         "csv",
         "hrv.rmssd",
@@ -73,10 +73,10 @@
         },
         0
       ],
-      "input_canonical": "[\"hlog/v0/ref\",\"tuple\",\"csv\",\"hrv.rmssd\",null,{\"n\":42.5,\"unit\":\"ms\"},0]",
-      "ref": "hmac-sha256:96cc74216ef7f43466fd325b754175a9219a432154387c3a3b809393cbb5996c"
+      "input_canonical": "[\"bean/v0/ref\",\"tuple\",\"csv\",\"hrv.rmssd\",null,{\"n\":42.5,\"unit\":\"ms\"},0]",
+      "ref": "hmac-sha256:d58fcb07c8c8dd7bdc780df58e0c0cfc52f4f1ec1155db3323f66a4e46db47cc"
     }
   ],
-  "dedupe_key": "0393a84276c7d110e46081c6728709a3f220f5b2396cec98d487cacc8a8fc06b",
+  "dedupe_key": "caf0f2df1e10f8280845943d3d1d5a50549ee21f2873d106dfab80cb3c09c8e6",
   "spec": "SPEC.md 4.8"
 }

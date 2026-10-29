@@ -10,7 +10,7 @@ import (
 // AES-SIV (RFC 5297) built from CMAC (RFC 4493), S2V and AES-CTR.
 
 // BlobAD is the single associated data string for blobs (SPEC.md 4.9).
-const BlobAD = "hlog/v0/blob"
+const BlobAD = "bean/v0/blob"
 
 var ErrBlobCorrupt = errors.New("blob corrupt")
 

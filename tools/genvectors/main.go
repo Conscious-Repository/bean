@@ -88,11 +88,11 @@ func main() {
 
 	// V4: three records. Nonces are fixed so the vector is reproducible.
 	genesis := map[string]any{
-		"v": 0.0, "nonce": "00000000000000000000000000000001", "type": "hlog.genesis",
+		"v": 0.0, "nonce": "00000000000000000000000000000001", "type": "bean.genesis",
 		"author": kid, "kid": kid,
 		"value":  map[string]any{"key": kid, "recovery": commit0},
 		"times":  map[string]any{"observed": nil, "imported": "2026-10-27T12:00:00Z"},
-		"source": map[string]any{"system": "self", "adapter": "hlog@0.3.0", "ref": nil},
+		"source": map[string]any{"system": "self", "adapter": "bean@0.3.0", "ref": nil},
 	}
 	genesisID := core.RecordID(genesis)
 	sig, _ := signer.Sign(genesisID)
@@ -104,7 +104,7 @@ func main() {
 		"subject": genesisID, "author": genesisID, "kid": kid,
 		"value":   map[string]any{"n": 42.5, "unit": "ms"},
 		"times":   map[string]any{"observed": map[string]any{"start": "2026-10-26T03:00:00Z", "precision": "minute"}, "imported": "2026-10-27T12:00:01Z"},
-		"source":  map[string]any{"system": "csv", "adapter": "hlog-import-csv@0.3.0", "ref": claimRef},
+		"source":  map[string]any{"system": "csv", "adapter": "bean-import-csv@0.3.0", "ref": claimRef},
 		"context": map[string]any{"coding": map[string]any{"loinc": "80404-7"}},
 	}
 	claimID := core.RecordID(claim)
@@ -112,11 +112,11 @@ func main() {
 	claim["id"], claim["sig"] = claimID, sig
 
 	tomb := map[string]any{
-		"v": 0.0, "nonce": "00000000000000000000000000000003", "type": "hlog.tombstone",
+		"v": 0.0, "nonce": "00000000000000000000000000000003", "type": "bean.tombstone",
 		"subject": genesisID, "author": genesisID, "kid": kid,
 		"refs":    []any{map[string]any{"rel": "purges", "id": claimID}},
 		"times":   map[string]any{"observed": nil, "imported": "2026-10-27T12:00:02Z"},
-		"source":  map[string]any{"system": "self", "adapter": "hlog@0.3.0", "ref": nil},
+		"source":  map[string]any{"system": "self", "adapter": "bean@0.3.0", "ref": nil},
 		"context": map[string]any{"reason": "test"},
 	}
 	tombID := core.RecordID(tomb)

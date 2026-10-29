@@ -38,7 +38,7 @@ import (
 )
 
 const (
-	version = "hlog-import-labcorp@0.1.0"
+	version = "bean-import-labcorp@0.1.0"
 	system  = "labcorp"
 )
 

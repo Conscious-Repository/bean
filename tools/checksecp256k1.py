@@ -167,7 +167,7 @@ sk = int(v["secret_key"], 16)
 pk = pubkey(sk)
 kind = v["nostr_kind"]
 alt = v["alt"]
-check("v18 alt tag", alt, "hlog record signature")
+check("v18 alt tag", alt, "bean record signature")
 check("v18 kid", "secp256k1:" + pk.hex(), v["kid"])
 check("v18 npub", bech32_encode("npub", pk), v["npub"])
 check("v18 nsec", bech32_encode("nsec", bytes.fromhex(v["secret_key"])), v["nsec"])

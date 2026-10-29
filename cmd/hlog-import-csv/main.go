@@ -20,7 +20,7 @@ import (
 	"github.com/Conscious-Repository/bean/core"
 )
 
-const version = "hlog-import-csv@0.5.0"
+const version = "bean-import-csv@0.5.0"
 
 type options struct {
 	typ, system, blob, unit, precision string

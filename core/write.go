@@ -32,7 +32,7 @@ func SignRecord(obj map[string]any, s Signer) (string, []byte, error) {
 // NewGenesis builds an unsigned genesis object (SPEC.md 3.3, 5.2 step 5).
 func NewGenesis(signingKey, recoveryCommitment, adapter, imported string) map[string]any {
 	return map[string]any{
-		"v": 0.0, "nonce": NewNonce(), "type": "hlog.genesis",
+		"v": 0.0, "nonce": NewNonce(), "type": "bean.genesis",
 		"author": signingKey, "kid": signingKey,
 		"value":  map[string]any{"key": signingKey, "recovery": recoveryCommitment},
 		"times":  map[string]any{"observed": nil, "imported": imported},
@@ -43,7 +43,7 @@ func NewGenesis(signingKey, recoveryCommitment, adapter, imported string) map[st
 // NewTombstone builds an unsigned tombstone (SPEC.md 3.3).
 func NewTombstone(identity, kid, target, reason, adapter, imported string) map[string]any {
 	t := map[string]any{
-		"v": 0.0, "nonce": NewNonce(), "type": "hlog.tombstone",
+		"v": 0.0, "nonce": NewNonce(), "type": "bean.tombstone",
 		"subject": identity, "author": identity, "kid": kid,
 		"refs":   []any{map[string]any{"rel": "purges", "id": target}},
 		"times":  map[string]any{"observed": nil, "imported": imported},
@@ -63,7 +63,7 @@ func NewSuccession(identity, kid, parent, newKey, newCommitment string, sealed [
 		s[i] = x
 	}
 	return map[string]any{
-		"v": 0.0, "nonce": NewNonce(), "type": "hlog.succession",
+		"v": 0.0, "nonce": NewNonce(), "type": "bean.succession",
 		"subject": identity, "author": identity, "kid": kid,
 		"refs":   []any{map[string]any{"rel": "succeeds", "id": parent}},
 		"value":  map[string]any{"key": newKey, "recovery": newCommitment, "sealed": s},
@@ -73,4 +73,4 @@ func NewSuccession(identity, kid, parent, newKey, newCommitment string, sealed [
 }
 
 // IsCoreType reports whether a type is reserved for the core.
-func IsCoreType(t string) bool { return strings.HasPrefix(t, "hlog.") }
+func IsCoreType(t string) bool { return strings.HasPrefix(t, "bean.") }

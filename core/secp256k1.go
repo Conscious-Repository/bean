@@ -33,7 +33,7 @@ const NostrKind = 29944
 
 // WrapperAlt is the NIP-31 alt tag: what a signer's approval prompt can
 // show for an event kind it does not know.
-const WrapperAlt = "hlog record signature"
+const WrapperAlt = "bean record signature"
 
 // maxCreatedAt keeps created_at inside the JSON integer range (SPEC 4.1).
 const maxCreatedAt = 1<<53 - 1

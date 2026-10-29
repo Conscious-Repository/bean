@@ -223,14 +223,14 @@ func TestUnknownVersion(t *testing.T) {
 		t.Errorf("skipped %d toonew %v", rp.Skipped, rp.TooNew)
 	}
 	// 31: core type, v 99, signed by a key that is not I's.
-	s := map[string]any{"v": 99.0, "nonce": l.nonce(), "type": "hlog.succession", "subject": i.id, "author": i.id, "kid": j.signer.Public()}
+	s := map[string]any{"v": 99.0, "nonce": l.nonce(), "type": "bean.succession", "subject": i.id, "author": i.id, "kid": j.signer.Public()}
 	l.put(s, j.signer)
 	rp = l.verify()
 	if len(rp.TooNew) != 0 {
 		t.Errorf("stranger-signed future succession made I too new")
 	}
 	// 24: core type, v 99, signed by I's chain key.
-	s2 := map[string]any{"v": 99.0, "nonce": l.nonce(), "type": "hlog.succession", "subject": i.id, "author": i.id, "kid": i.signer.Public()}
+	s2 := map[string]any{"v": 99.0, "nonce": l.nonce(), "type": "bean.succession", "subject": i.id, "author": i.id, "kid": i.signer.Public()}
 	l.put(s2, i.signer)
 	// A broken file of J must still be reported.
 	l.files["objects/00/"+strings.Repeat("0", 62)+".json"] = []byte("{")
@@ -427,7 +427,7 @@ func TestBadFiles(t *testing.T) {
 		{"bad field: source.ref", func(m map[string]any) { m["source"].(map[string]any)["ref"] = "abc" }, "bad field: source.ref"},
 		{"unknown rel", func(m map[string]any) { m["refs"] = []any{map[string]any{"rel": "attests", "id": good}} }, "unknown rel"},
 		{"bad field: refs", func(m map[string]any) { m["refs"] = []any{map[string]any{"rel": "purges", "id": good}} }, "bad field: refs"},
-		{"unknown core type", func(m map[string]any) { m["type"] = "hlog.future" }, "unknown core type"},
+		{"unknown core type", func(m map[string]any) { m["type"] = "bean.future" }, "unknown core type"},
 		{"blob not listed", func(m map[string]any) { m["value"] = map[string]any{"blob": good} }, "blob not listed"},
 	}
 	for _, fc := range fieldCases {
