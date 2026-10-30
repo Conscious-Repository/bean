@@ -87,6 +87,9 @@ Programs do not change records. Programs only add records.
 - G3. The person MUST be able to leave at any time with plaintext data (`bean export`).
 - G4. Any index MUST be a cache that a program can rebuild from the files alone.
 - G5. The core MUST be source-agnostic. A device format is an adapter. Special code for one source in the core is a bug.
+- G6. No program erases user data without a direct command from the person on that replica (`purge`, `gc`; 7.6).
+- G7. A reader MUST be able to build the trajectory of one stream (subject, source system, type) over `times.observed` from the files alone (meeting R10).
+- G8. The core MUST NOT depend on any one company. Apps and subscriptions are layers above the core (meeting R18).
 
 ## 2. Terms
 
