@@ -289,7 +289,9 @@ func (s *Store) RestoreIdentity(words []string, noSeal []string, key NewKey, ide
 	// C29: an identity halted only by its head key has no chain here, but
 	// the 24 words may go past the halt. Look at it with the halt ignored.
 	for _, gid := range l.Report.TooNew {
-		if len(l.Report.HeadHalt[gid]) == 0 {
+		// Check the dropped genesis first: anyone can add halted identities
+		// of their own, and judging each again costs a full verify.
+		if g := l.Report.Dropped[gid]; len(l.Report.HeadHalt[gid]) == 0 || g == nil || g.Recovery() != c0 {
 			continue
 		}
 		if chain := l.past(gid).Report.Chains[gid]; len(chain) > 0 && chain[0].Recovery() == c0 {

@@ -396,3 +396,26 @@ func verifyLines(t *testing.T, s *Store) string {
 	sort.Strings(lines)
 	return strings.Join(lines, "\n")
 }
+
+// Strangers' halted identities in the backup do not match the words and
+// do not stop the restore.
+func TestRestorePastHaltAmongStrangers(t *testing.T) {
+	a, id, words := initWithWords(t)
+	appendLines(t, a, partial("hr", 1, nil))
+	thiefHalt(t, a, id, a.mustLocal(t).Signer)
+	for i := 0; i < 3; i++ {
+		o, oid, _ := initWithWords(t)
+		thiefHalt(t, o, oid, o.mustLocal(t).Signer)
+		if _, err := a.Sync(o); err != nil {
+			t.Fatal(err)
+		}
+	}
+	b := newStore(t)
+	if _, err := b.Sync(a); err != nil {
+		t.Fatal(err)
+	}
+	if _, got, err := b.Restore(words, nil, NewKey{}); err != nil || got != id {
+		t.Fatalf("restore %s: %v", got, err)
+	}
+	mustTooNew(t, b, id, false)
+}
