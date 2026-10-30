@@ -89,6 +89,9 @@ Programs do not change records. Programs only add records.
 - G3. The person MUST be able to leave at any time with plaintext data (`bean export`).
 - G4. Any index MUST be a cache that a program can rebuild from the files alone.
 - G5. The core MUST be source-agnostic. A device format is an adapter. Special code for one source in the core is a bug.
+- G6. No program erases user data without a direct command from the person on that replica (`purge`, `gc`; 7.6).
+- G7. A reader MUST be able to build the trajectory of one stream (subject, source system, type) over `times.observed` from the files alone (meeting R10).
+- G8. The core MUST NOT depend on any one company. Apps and subscriptions are layers above the core (meeting R18).
 
 ## 2. Terms
 
@@ -442,7 +445,7 @@ A writer MUST encrypt every blob before it hashes and stores it.
 Equal plaintext gives equal blob bytes and an equal blob id for one identity secret.
 Go has no AES-SIV in its standard library.
 An implementation MAY use a vetted AES-SIV library or build CMAC (RFC 4493), S2V and CTR from `crypto/aes` and `crypto/cipher`.
-Either way it MUST pass the RFC 5297 Appendix A vectors. The reference implementation builds it and matches OpenSSL on vector V11.
+Every implementation MUST match vector V11 (14). Code that builds AES-SIV from CMAC, S2V and CTR MUST also pass the RFC 4493 and RFC 5297 Appendix A vectors. A library that accepts only 64-byte keys cannot run RFC 5297 Appendix A, whose keys are 32 bytes. For such a library the gate is V11 plus the 512-bit-key groups of the Wycheproof AES-SIV-CMAC tests (change K7 of draft v0.7). The reference implementation builds AES-SIV, passes RFC 4493 and RFC 5297, and matches OpenSSL on V11.
 Implementations MUST support blobs of at least 256 MiB. DEFAULT.
 
 ### 4.10 Paper seed encoding
@@ -590,6 +593,18 @@ A person who lost the host, but has the paper and a copy of `objects/` and `blob
 4. Write a succession from the chain head to a new signing key, as 5.5 steps 2 to 9 do, with the same seals.
 5. Write `local/identity` last. Until it exists, the folder is not initialized, so a failed restore can run again.
 
+### 5.11 Custodians, agents and exit
+
+This section applies meeting decisions R15 and R16. It adds no record type.
+
+1. A custodian is a host that holds the signing key and the identity secret for a person, for example a hosted service. Section 5.2 applies to it. It is the one host of that identity.
+2. A copy of a secret cannot be taken back. A custodian that hands over its key or the paper seed can keep a copy. Thus a handover is not an exit.
+3. To leave a custodian, the person makes a new identity on a host that the person controls (5.2). The data is copied as new records that the new identity signs. The new records have new ids, because `author` is part of the hashed bytes (4.2).
+4. After the exit, a former custodian or another service can still write about the person with its own key, as a device (11.3) or an agent (item 5). It never holds the secret of the new identity.
+5. An AI agent writes with its own key (`bean agent`): a bare key or its own identity. It MUST NOT hold or use the signing key of a person. Its claims about a person have `author` = the agent key and `subject` = the person, so readers can see which records an agent wrote.
+6. A frozen identity (5.7) uses the same exit as item 3.
+7. The new identity MAY write one ordinary claim with rel `about` to the genesis of the old identity, to link the two. Each re-signed copy MAY have rel `about` to its original id. The claim type is a vocabulary term (9.9), not a `bean.*` type. The core gives these claims no special meaning. A dedicated exit record is not part of v0.
+
 Restore always rotates. The old signing key stayed on the lost host and is not trusted.
 
 ## 6. Authority rules
@@ -729,6 +744,11 @@ For each tombstone D with target T:
 
 A purged target is not valid data. A reader MUST NOT show it.
 A verifier reports every purged target that is hidden in this replica as `hidden pending gc: <id>` (a warning), from the moment it is hidden (7.6 step 6). `bean gc` erases it (7.6).
+
+### 6.8 Trust is reader policy
+
+The core checks signatures and the rules of this section. It does not rank authors.
+A reader decides how much to trust a claim from another author: a device, an agent, a lab, a doctor or a peer. Trust levels and webs of trust are reader policy, not protocol.
 
 ## 7. Folder layout and sync
 
@@ -970,7 +990,28 @@ When the fixed record keeps the same HMAC input, its dedupe ref is the same as t
 ### 9.8 Adapters
 
 The reference implementation has `bean-import-csv` and `bean-import-labcorp`. Adapters for Apple Health, Oura and Whoop are open (Appendix).
+The first planned source is Whoop: JSON from the Whoop API, fetched on a schedule by a separate job (9.10), stored as a blob first (9.3), then parsed (meeting R1 to R3). Its field mapping and native ids come from real responses, not from memory.
 Each adapter document MUST say which source field is the native id, or that the source has none.
+
+### 9.9 Vocabulary and uncertainty
+
+The type vocabulary is one document (`cmd/bean/vocabulary.md`): each `type`, its `value`, its unit and the suggested `context` keys (meeting R6, R7). The verifier does not check it. A new term is added to the document before an adapter uses it. A term is never redefined: a changed meaning is a new term.
+
+Measurement uncertainty travels with the data (meeting R8). `context.uncertainty` is optional. Its form is `{"kind": "cv" | "sd", "value": <number>, "unit": <string>, "source": <string>}`; `unit` and `source` are optional. `"cv"` is the coefficient of variation as a fraction. `"sd"` is the standard deviation in `unit`, or in the unit of the value when `unit` is absent. `source` names the calibration or the document that gives the value. Two kinds cover the calibration data that device makers publish. An adapter writes it only from a published or measured number.
+
+### 9.10 Credentials
+
+A tool that fetches from a source API reads its credentials from the environment (meeting R12).
+Credentials MUST NOT be in a record, a blob, an adapter output line or a tool binary.
+A fetch job MUST remove credentials and authorization headers before it saves a response for import.
+A fetch job is a separate program, not part of the core (18).
+
+### 9.11 Signed source files and multi-file sources
+
+Both cases use the existing blob and claim rules, so the core needs no special case.
+
+1. A source file that comes with a detached signature file (for example `scan.dcm` and `scan.dcm.sig`): store both as blobs. Put both in `blobs` of each claim from that file. Use role `raw-export` for the file and role `signature` for the signature file. The core does not check the detached signature. Device signing of records is Extension 2 (11).
+2. A source with many files (for example a hospital export): write one claim per source file, with that file as a blob. Normal dedupe (9.5) applies. There is no manifest record type.
 
 ## 10. Extension 1: computed results
 
@@ -1476,7 +1517,7 @@ The reference implementation has published V1 to V12 and V17 to V22. Its indepen
 | V22 | Too-new gate (K1) and going past a halt (C29) | One identity with records of `v` = 99 by the head key, a retired key, recovery keys 0 and 1 and a stranger, with and without a rotation | Too-new identities, `ungated` ids, valid ids, and the halting records that 5.5 step 4a passes, per scenario. Published. |
 | V18 | secp256k1 | A fixed secret key and a record id, created_at 0 and 1761566400, zero aux | `kid`, npub, nsec, wrapper bytes and id, `sig`, and five rejects. Published. Checked by `tools/checksecp256k1.py`. |
 
-The AES-SIV code MUST also pass the RFC 5297 Appendix A vectors. The HKDF code MUST pass the RFC 5869 Appendix A vectors.
+Hand-built AES-SIV code MUST also pass the RFC 4493 and RFC 5297 Appendix A vectors (4.9). The HKDF code MUST pass the RFC 5869 Appendix A vectors.
 
 ## 15. Security considerations
 
@@ -1527,8 +1568,15 @@ The AES-SIV code MUST also pass the RFC 5297 Appendix A vectors. The HKDF code M
 - A blessed series format.
 - A type registry. Type conventions are plain documents.
 - Per-recipient pseudonymous subjects (deferred).
-- Grants, sharing, selective disclosure and zero-knowledge proofs.
+- Grants, sharing, selective disclosure and zero-knowledge proofs. Version 0 serves one person first. Direction for later: encrypt a share to the recipient's key, with no central password-gated link.
+- Encryption of records at rest. Use operating system disk encryption or the sync tool. It needs key management that version 0 does not have. Revisit at version 1.
+- Remote signing (a NIP-46 style signer for the signing key). One host per identity keeps version 0 simple. The Nostr wrapper (4.5) lets a NIP-46 signer sign, but bean does not require one.
+- Standing shares to research parties.
 - Trusted time, witness records and global ordering.
+- Multi-signature thresholds, delegation and witnesses as in KERI.
+- A database in the core. Indexes are rebuildable caches (7.10).
+- Fetching from source APIs inside the core. A fetch job is a separate program (9.10).
+- Work on bean as a formal standard before the personal use case works (meeting R19).
 - Nostr and Blossom transport (a later extension). `secp256k1` signing keys are in the core since v0.5. Publication of records to relays is not.
 - User interface, servers and accounts.
 - Applications, for example comparison tools, device apps and clinician views.
@@ -1569,5 +1617,5 @@ Open:
 
 15. Native id fields for Apple Health, Oura and Whoop. Each adapter decides from a real export file, never from memory.
 16. Batch interval and series format for sources with many readings (9.4).
-17. A convention for measurement uncertainty, for example `context.cv`. This is an adapter convention.
+17. Measurement uncertainty: decided, `context.uncertainty` (9.9).
 18. A query format for the index (7.10). Readers decide. Version 0 has `local/cache/index.json` only.
