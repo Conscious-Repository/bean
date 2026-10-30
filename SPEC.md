@@ -15,7 +15,8 @@ On 2026-10-30 the audit of `b7a1626` added three change notes. They change which
 - C26: a retired key writes nothing valid. A succession seals every valid record of the outgoing key, not only the destructive ones. A record of an older chain key that the next succession does not seal is invalid (5.4, 5.5 step 6, 6.3 step 7, 6.5). Benjamin decision.
 - C27: duplicate groups include the author (6.3 step 12). A record of one key is never a duplicate of a record of another key.
 - C28: seal continuations. A rotation that must seal more ids than one succession holds writes the rest in `bean.seal` records, signed by the same recovery key (3.3, 5.4, 6.3 steps 5b and 7). The succession says how many there are in `value.parts`. Only a complete set seals anything. A succession without `value.parts` is unchanged, so logs that never needed a continuation do not change. Benjamin decision, 2026-10-30.
-- K1 (PROPOSED, prototype on branch audit-2, needs Benjamin's decision): the too-new gate key set (8.2). Only the head key or a recovery key that a chain node commits to can make an identity too new. Other well-signed records give `ungated: <id>`. This is the K1 decision of draft v0.7, which the repository had not taken over. It changes results only for logs with a `bean.*` record of an unknown `v`; no vector changes.
+- K1: the too-new gate key set (8.2). Benjamin decision, 2026-10-30. Only the head key or a recovery key that a chain node commits to can make an identity too new. Other well-signed records give `ungated: <id>`. This is the K1 decision of draft v0.7, which the repository had not taken over. It changes results only for logs with a `bean.*` record of an unknown `v`. Vector V22.
+- C29: the 24 words go past a halt by the head key (5.5 step 4a, 8.2). A thief with the current signing key could halt the identity for good, because `rotate` refused a too-new identity. Now `rotate` and `restore` go past a halt when every record that halts the identity is signed by its head key. The succession retires that key, so on every verifier the records become `ungated` and the halt ends. A halt in which a recovery key took part still needs an update. The verifier rules do not change. Benjamin decision, 2026-10-30: fix now.
 
 Reference implementation: the `bean` repository.
 License: CC0 1.0 (section 19).
@@ -528,6 +529,7 @@ The person rotates when a device is lost, a key is stolen, or a device leaves. S
 2. The parent is the chain head (6.3). Its position on the chain, counting the genesis as 0, is the recovery generation `g`.
 3. Check that the identity secret derived from the words equals `local/identity-secret`, and that the commitment of recovery generation `g` equals the parent's `value.recovery`. Error: `seed does not match`.
 4. If the identity is frozen (5.7), stop. Error: `compromised: <id>`.
+4a. If the identity is too new (8.2), stop with `too new: <id>` (exit 3), except in this case (C29): every record that makes the identity too new is signed by the head key, none by a recovery key and none is a genesis. Then evaluate the identity as if those records were ungated, apply step 4 to that result, and go on. The halting records are records of the parent key in this replica, so step 6 seals them unless the person excludes them. Before the first write, check that the folder with the new succession and parts is not too new for the identity and that the succession is its head; else stop with `too new: <id>`. The succession retires the head key, so the halting records are ungated (8.2 condition 3) on every verifier, in any order of arrival.
 5. Make a new signing key.
 6. Write a succession with:
    - `refs` = `[{"rel":"succeeds","id":<parent id>}]`.
@@ -898,7 +900,7 @@ For a too-new identity, the verifier MUST:
 3. Not erase or hide anything for that identity.
 4. Process all other identities as usual.
 
-Commands that write for a too-new identity MUST stop with exit code 3.
+Commands that write for a too-new identity, or a record whose `subject` is a too-new identity, MUST stop with exit code 3. The one exception is a rotation past a halt by the head key (5.5 step 4a, C29).
 
 ### 8.3 Unknown fields
 
@@ -1171,7 +1173,7 @@ Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <
 
 - Input: the 24 words on standard input. Numbering and case are ignored. `-nostr` selects a new secp256k1 key, as for `init`. The nsec comes from a file, because standard input carries the words.
 - Action: section 5.5. Seal every valid record of the outgoing key in this replica except the ids that `-no-seal` names (C26).
-- Output: one line `sealed <id>` or `not sealed <id>` per record of the outgoing key, then one line `seal part <id>` per seal continuation (C28, only above the limit of one succession), then `rotated to <tagged key>`, then `sealed <n>`. Before reading input, print `sync all devices before you rotate` to standard error.
+- Output: one line `sealed <id>` or `not sealed <id>` per record of the outgoing key, then one line `seal part <id>` per seal continuation (C28, only above the limit of one succession), then one line `past halt <id>` per record that halted the identity (C29, 5.5 step 4a), then `rotated to <tagged key>`, then `sealed <n>`. Before reading input, print `sync all devices before you rotate` to standard error.
 - Errors: `seed does not match`, `compromised: <id>` (exit 4), `key reuse`.
 
 `bean restore [-no-seal <id>]... [-nostr new|<file>] [-identity <id>]`
@@ -1447,7 +1449,7 @@ Tests 1 to 22 cover the v0.2 acceptance tests 1 to 6 and the new decisions. Test
 The project MUST publish these vectors before the format freezes at version 1.
 Each vector is a JSON file in `vectors/` with inputs and expected outputs.
 Two independent implementations MUST produce each value before the vector is published.
-The reference implementation has published V1 to V12 and V17 to V21. Its independent checks are `tools/checkvectors.py` and `tools/checksecp256k1.py`. V13 to V16 are not published yet.
+The reference implementation has published V1 to V12 and V17 to V22. Its independent checks are `tools/checkvectors.py` and `tools/checksecp256k1.py`. V13 to V16 are not published yet.
 
 | # | Vector | Inputs | Expected output |
 |---|---|---|---|
@@ -1471,6 +1473,7 @@ The reference implementation has published V1 to V12 and V17 to V21. Its indepen
 | V19 | Retired-key seals (C26) | A fixed identity, a rotation that seals some claims, and claims of the retired key | Valid or `not sealed` per record. Published. |
 | V20 | Duplicates per author (C27) | Records of two authors with one ref | The duplicate lines. Published. |
 | V21 | Seal continuations (C28) | A fixed identity, a succession with 2 parts, a duplicate part, a forged part and a part for a missing succession | Valid, `bad seal`, `not sealed`, held or incomplete per record and per scenario. Published. |
+| V22 | Too-new gate (K1) and going past a halt (C29) | One identity with records of `v` = 99 by the head key, a retired key, recovery keys 0 and 1 and a stranger, with and without a rotation | Too-new identities, `ungated` ids, valid ids, and the halting records that 5.5 step 4a passes, per scenario. Published. |
 | V18 | secp256k1 | A fixed secret key and a record id, created_at 0 and 1761566400, zero aux | `kid`, npub, nsec, wrapper bytes and id, `sig`, and five rejects. Published. Checked by `tools/checksecp256k1.py`. |
 
 The AES-SIV code MUST also pass the RFC 5297 Appendix A vectors. The HKDF code MUST pass the RFC 5869 Appendix A vectors.
@@ -1514,7 +1517,7 @@ The AES-SIV code MUST also pass the RFC 5297 Appendix A vectors. The HKDF code M
 10. The folder lock does not work across hosts on a network or synced folder, and the reference implementation has none on Windows (7.11). Give each host its own folder.
 11. The vectors have no Ed25519 edge cases yet: non-canonical `A`, small-order `A` or `R`, and `S` ≥ L. A second implementation that does not use the same rules as Go `crypto/ed25519` (4.5) can disagree on such signatures.
 12. Every command reads and checks the whole log. Time and memory grow with the number of records: about 1 s and 0.2 GB of live heap at 50,000 records on a laptop-class machine. Batch dense series (9.4).
-13. A thief with the head signing key can write one `bean.*` record with an unknown `v` and halt the identity (8.2): `rotate` refuses a too-new identity, and no bean reads an invented version. The paper seed does not end this theft yet. A fix is open (DECISIONS 138).
+13. A thief with the head signing key can halt the identity with one `bean.*` record of an unknown `v` (8.2) until the person rotates with the paper seed (5.5 step 4a, C29). Until then every copy that has the record refuses writes for the identity. When the fork point of a frozen identity signs the halt, `verify` reports `too new`, not `compromised`; `rotate` reports `compromised`.
 
 ## 18. Out of scope
 

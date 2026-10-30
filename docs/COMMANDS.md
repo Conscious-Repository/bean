@@ -156,7 +156,7 @@ Reads an export into a log that has the same identity secret.
 
 ### `rotate [-no-seal <id>]... [-nostr new|<file>]`
 
-Changes your signing key. Reads the 24 words from stdin. Sync every copy first. Every record made with the old key that this folder has stays valid, because the new succession seals it; `-no-seal` excludes one (for example one that a thief made). Records the old key makes after the rotation are not valid. `-nostr` makes the new key a Nostr key, from a file because stdin carries the words. Above 200,000 records it also prints one `seal part <id>` line per extra seal record (C28); copy those with the rest of the log. It refuses above 200,200,000 records (`too large`).
+Changes your signing key. Reads the 24 words from stdin. Sync every copy first. Every record made with the old key that this folder has stays valid, because the new succession seals it; `-no-seal` excludes one (for example one that a thief made). Records the old key makes after the rotation are not valid. `-nostr` makes the new key a Nostr key, from a file because stdin carries the words. Above 200,000 records it also prints one `seal part <id>` line per extra seal record (C28); copy those with the rest of the log. It refuses above 200,200,000 records (`too large`). If a thief with your current key halted the log (`too new`), rotate goes past the halt and prints one `past halt <id>` line per halting record; the rotation retires that key, so the halt ends on every copy. A halt from a newer bean of your own (signed with the 24 words) is not passed: update bean.
 
 ### `restore [-no-seal <id>]... [-nostr new|<file>] [-identity <id>]`
 
