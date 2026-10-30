@@ -129,6 +129,13 @@ type Report struct {
 	Incomplete  []string             // chain successions whose seal set is incomplete (C28)
 	Duplicates  map[string]string    // duplicate id -> primary id
 	Skipped     int
+	// HeadHalt: too-new identity -> the ids of the records that halt it,
+	// when every one of them is signed by the head key (8.2, C29). Only
+	// then may rotate and restore go past the halt.
+	HeadHalt map[string][]string
+	// Dropped: records of too-new identities, which 6.3 does not evaluate.
+	// A crashed rotation still needs to find its own seal parts there.
+	Dropped map[string]*Record
 }
 
 func (rp *Report) warn(id, msg string) { rp.Warnings[id] = append(rp.Warnings[id], msg) }
@@ -142,7 +149,7 @@ func (rp *Report) fail(id, msg string) {
 
 // VerifyFiles runs SPEC.md section 6 on a set of files (path -> bytes). The
 // result depends only on the set.
-func VerifyFiles(files map[string][]byte) *Report { return verifyFiles(files, nil) }
+func VerifyFiles(files map[string][]byte) *Report { return verifyFiles(files, nil, "") }
 
 // checkAll runs checkFile on every path on all CPUs. Results are by index,
 // so the outcome does not depend on scheduling.
@@ -168,12 +175,16 @@ func checkAll(paths []string, files map[string][]byte, proven map[string]bool) [
 }
 
 // verifyFiles is VerifyFiles; proven names paths whose signatures this
-// replica has already checked.
-func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
+// replica has already checked. past is empty, or an identity whose halt by
+// head-key records is ignored: rotate and restore use it to evaluate the
+// identity before they write the succession that ends the halt (C29). It
+// is never used for a verdict that is reported.
+func verifyFiles(files map[string][]byte, proven map[string]bool, past string) *Report {
 	rp := &Report{
 		Records: map[string]*Record{}, Valid: map[string]bool{}, Errors: map[string]string{},
 		Warnings: map[string][]string{}, Chains: map[string][]*Record{}, Superseded: map[string][]string{},
 		Purged: map[string]string{}, Held: map[string]bool{}, Duplicates: map[string]string{},
+		HeadHalt: map[string][]string{}, Dropped: map[string]*Record{},
 	}
 	paths := make([]string, 0, len(files))
 	for p := range files {
@@ -249,6 +260,7 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 	// seed holder can change the rules for an identity; a rotated-out key,
 	// a stranger or a forged file cannot halt it.
 	tooNew := map[string]bool{}
+	byRecovery := map[string]bool{} // halted by a record of a recovery key or a genesis
 	var ungated []*Record
 	for _, r := range unknown {
 		rp.Skipped++
@@ -258,6 +270,7 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 		if r.Type == "bean.genesis" {
 			if r.Author == r.Kid {
 				tooNew[r.ID] = true
+				byRecovery[r.ID] = true
 			}
 			continue
 		}
@@ -265,10 +278,26 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 		if !ok {
 			continue
 		}
-		if gates(g, nodes[r.Author], r.Kid) {
+		switch gates(g, nodes[r.Author], r.Kid) {
+		case gateHead:
+			if r.Author == past {
+				ungated = append(ungated, r)
+				continue
+			}
 			tooNew[r.Author] = true
-		} else {
+			rp.HeadHalt[r.Author] = append(rp.HeadHalt[r.Author], r.ID)
+		case gateRecovery:
+			tooNew[r.Author] = true
+			byRecovery[r.Author] = true
+		default:
 			ungated = append(ungated, r)
+		}
+	}
+	for gid, ids := range rp.HeadHalt {
+		if byRecovery[gid] {
+			delete(rp.HeadHalt, gid) // only an update can go past the seed holder
+		} else {
+			sort.Strings(ids)
 		}
 	}
 	// A too-new identity has no warnings of its own records (8.2 item 2).
@@ -285,6 +314,7 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 	for _, id := range ids {
 		r := rp.Records[id]
 		if tooNew[r.Author] || tooNew[r.Subject] || (r.Type == "bean.genesis" && tooNew[r.ID]) {
+			rp.Dropped[id] = r
 			delete(rp.Records, id)
 			rp.Skipped++
 		}
@@ -495,16 +525,23 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 	return rp
 }
 
-// gates reports whether kid may halt the identity of genesis g (SPEC.md 8.2,
+// Results of gates.
+const (
+	gateNone     = iota // kid cannot halt the identity: ungated
+	gateHead            // kid is the head key
+	gateRecovery        // kid is a recovery key that a chain node commits to
+)
+
+// gates says whether kid may halt the identity of genesis g (SPEC.md 8.2,
 // K1): kid is the head key, or a recovery key that a node of the chain
 // commits to. The chain is followed from g through single children; at a
 // fork the fork point is the head (6.3 step 5).
-func gates(g *Record, n map[string]*Record, kid string) bool {
+func gates(g *Record, n map[string]*Record, kid string) int {
 	c := Commitment(kid)
 	x := g
 	for {
 		if x.Recovery() == c {
-			return true
+			return gateRecovery
 		}
 		var next *Record
 		count := 0
@@ -515,7 +552,10 @@ func gates(g *Record, n map[string]*Record, kid string) bool {
 			}
 		}
 		if count != 1 {
-			return x.ValueKey() == kid
+			if x.ValueKey() == kid {
+				return gateHead
+			}
+			return gateNone
 		}
 		x = next
 	}

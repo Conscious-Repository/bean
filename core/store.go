@@ -328,7 +328,7 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 	if err != nil {
 		return nil, err
 	}
-	rp := verifyFiles(files, proven)
+	rp := verifyFiles(files, proven, "")
 	if readOnly {
 		for target := range rp.Purged {
 			hidden[target] = true

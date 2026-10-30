@@ -479,6 +479,46 @@ for sc in v21["scenarios"]:
         check(f"v21 {sc['name']}: {e['name']}", result.get(e["id"]), e["result"])
     check(f"v21 {sc['name']}: incomplete", sorted(incomplete), sc["incomplete"])
 
+# ---- too-new gate K1 and the halt passed by the 24 words C29 (2026-10-30) --
+
+v22 = load("v22-too-new-gate.json")
+for sc in v22["scenarios"]:
+    allrecs = load_files(sc["files"])
+    known = {i: r for i, r in allrecs.items() if r["v"] == 0}
+    unknown = {i: r for i, r in allrecs.items() if r["v"] != 0}
+    gid, chain = chain_of(known)
+    head_key = chain[-1][1]["value"]["key"]
+    commits = {n["value"]["recovery"] for _, n in chain}
+    gating, ungated = {}, []
+    for i, r in sorted(unknown.items()):
+        if not r["type"].startswith("bean.") or r["author"] != gid:
+            continue
+        c = "sha256:" + hashlib.sha256(r["kid"].encode("ascii")).hexdigest()
+        if c in commits:
+            gating[i] = "recovery"
+        elif r["kid"] == head_key:
+            gating[i] = "head"
+        else:
+            ungated.append(i)
+    too_new = [gid] if gating else []
+    valid = []
+    if not too_new:
+        pos = {node["value"]["key"]: p for p, (_, node) in enumerate(chain)}
+        on_chain = {i for i, _ in chain}
+        for i, r in known.items():
+            if r["type"] in ("bean.genesis", "bean.succession"):
+                if i in on_chain:
+                    valid.append(i)
+                continue
+            p = pos.get(r["kid"])
+            if p is not None and (p == len(chain) - 1 or i in chain[p + 1][1]["value"]["sealed"]):
+                valid.append(i)
+    past = sorted(gating) if gating and all(v == "head" for v in gating.values()) else []
+    check(f"v22 {sc['name']}: too new", too_new, sc["too_new"])
+    check(f"v22 {sc['name']}: ungated", sorted(ungated), sc["ungated"])
+    check(f"v22 {sc['name']}: valid", sorted(valid), sc["valid"])
+    check(f"v22 {sc['name']}: rotate past", past, sc["rotate_past"])
+
 print()
 print("FAILURES:", failures)
 sys.exit(1 if failures else 0)

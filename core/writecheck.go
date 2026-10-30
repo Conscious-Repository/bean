@@ -51,6 +51,11 @@ func (l *Loaded) canWriteRecord(r *Record) error {
 	if r.IsIdentity() {
 		return errors.New("bad type: identity records are written only by init, rotate and restore")
 	}
+	// 8.2: nothing about a too-new identity is evaluated, so a record
+	// about it (an agent's, say) would be skipped, not stored.
+	if contains(l.Report.TooNew, r.Subject) {
+		return errors.New("too new: " + r.Subject + ": this log has records from a newer bean; update bean before you write")
+	}
 	for _, t := range r.Targets("supersedes") {
 		if target, ok := l.Report.Records[t]; ok {
 			if IsCoreType(target.Type) {

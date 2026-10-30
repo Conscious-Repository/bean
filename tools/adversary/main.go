@@ -3,6 +3,7 @@
 //
 //	adversary stranger-genesis <log>          a genesis with a copied recovery commitment
 //	adversary old-key-claim <log> <old copy>  a claim signed by the key in <old copy>/local
+//	adversary halt <log> <stolen copy>        a bean.tombstone of an unknown v, signed by the key in <stolen copy>/local
 package main
 
 import (
@@ -16,7 +17,7 @@ import (
 
 func main() {
 	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "usage: adversary stranger-genesis <log> | old-key-claim <log> <old copy>")
+		fmt.Fprintln(os.Stderr, "usage: adversary stranger-genesis <log> | old-key-claim <log> <old copy> | halt <log> <stolen copy>")
 		os.Exit(2)
 	}
 	dir := os.Args[2]
@@ -42,6 +43,17 @@ func main() {
 			"author": old.Identity, "kid": old.Signer.Public(), "value": map[string]any{"n": 1.0, "unit": "kg"},
 			"times":  map[string]any{"observed": nil, "imported": "2026-10-30T12:00:00Z"},
 			"source": map[string]any{"system": "self", "adapter": "adversary@1", "ref": nil}}
+		id, b, err := core.SignRecord(obj, old.Signer)
+		must(err)
+		put(dir, id, b)
+	case "halt":
+		if len(os.Args) != 4 {
+			os.Exit(2)
+		}
+		old, err := core.Open(os.Args[3]).ReadLocal()
+		must(err)
+		obj := core.NewTombstone(old.Identity, old.Signer.Public(), old.Identity, "", "adversary@1", "2026-10-30T12:00:00Z")
+		obj["v"] = 99.0
 		id, b, err := core.SignRecord(obj, old.Signer)
 		must(err)
 		put(dir, id, b)

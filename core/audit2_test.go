@@ -25,7 +25,13 @@ func futureRecord(t *testing.T, s *Store, id string, signer Signer) string {
 func TestRotateRestoreTooNewError(t *testing.T) {
 	a, id, words := initWithWords(t)
 	appendLines(t, a, partial("hr", 1, nil))
-	futureRecord(t, a, id, a.mustLocal(t).Signer)
+	// A halt by the recovery key (a newer bean rotated): only an update can
+	// go past it. A halt by the head key alone is C29 (thief_test.go).
+	seed, err := WordsToSeed(words)
+	if err != nil {
+		t.Fatal(err)
+	}
+	futureRecord(t, a, id, RecoverySigner(seed, 0))
 	if _, err := a.Rotate(words, nil, NewKey{}); err == nil || !strings.HasPrefix(err.Error(), "too new: "+id) {
 		t.Fatalf("rotate: %v, want too new", err)
 	}

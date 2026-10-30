@@ -59,4 +59,9 @@ TS=$(cd $Q && grep -rl bean.tombstone objects | head -1); mkdir -p $L/$(dirname 
 rm -f $L/$(echo $C | sed 's/sha256:\(..\)\(.*\)/objects\/\1\/\2.json/')
 mkdir -p $L/objects/00; printf '{"a":1}' > $L/objects/00/$(printf '0%.0s' $(seq 62)).json
 printf 'x' > $L/objects/zz.json
+# 10. a thief with the current key halts one log; the 24 words go past it in another (C29)
+L=$OUT/halt-open; newlog $L; claim 1 1 | bean -dir $L append >/dev/null; adversary halt $L $L >/dev/null
+L=$OUT/halt-passed; newlog $L; claim 1 1 | bean -dir $L append >/dev/null
+S=$OUT/halt-stolen; mkdir -p $S; cp -r $L/local $S/; adversary halt $L $S >/dev/null
+bean -dir $L rotate <$L.words >/dev/null 2>&1; claim 2 2 | bean -dir $L append >/dev/null; adversary halt $L $S >/dev/null
 ls -d $OUT/*/ | grep -v bin
