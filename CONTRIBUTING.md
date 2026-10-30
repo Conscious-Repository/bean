@@ -12,10 +12,10 @@ go test -race ./...                  # unit, conformance, vector, CLI and concur
 go vet ./... && gofmt -l .           # gofmt must print nothing
 ./demo.sh                            # two-folder walkthrough: import, sync, purge, gc, export
 python3 -I tools/checksecp256k1.py   # independent BIP-340 and npub check, pure Python
-python3 -I tools/checkvectors.py     # independent check of V1 to V17; needs a cryptography package with AES-SIV
+python3 -I tools/checkvectors.py     # independent check of V1 to V20; needs a cryptography package with AES-SIV
 ```
 
-Run all of them before every commit. When you change a test vector, run `go run ./tools/genvectors` and both Python checks. Vector V6 has a random P-256 nonce; restore it with `git checkout vectors/v6-p256.json` unless you meant to change it.
+Run all of them before every commit; `make check` runs them, plus staticcheck, govulncheck and a check that `tools/genvectors` reproduces every vector byte for byte. `make fuzz` runs the fuzz targets (2 minutes each) and `make smoke` runs the end-to-end and adversarial suite in `tools/smoke.sh`. When you change a test vector, run `go run ./tools/genvectors` and both Python checks. Every vector is reproducible; V6 uses an RFC 6979 nonce since 2026-10-30.
 
 ## Layout
 
@@ -29,7 +29,7 @@ cmd/bean-import-csv/      CSV importer
 cmd/bean-import-labcorp/  Labcorp patient report importer
 tools/genvectors/         writes vectors/
 tools/check*.py           independent second implementations
-vectors/                  published test vectors V1 to V18
+vectors/                  published test vectors V1 to V12 and V17 to V20
 ```
 
 ## Rules
