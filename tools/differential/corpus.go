@@ -30,6 +30,11 @@ type gen struct {
 	ids   []string          // every record id written, in order
 	byKid map[string][]string
 	subj  map[string]string // id -> subject
+	// secret is each signer's key line; local is the first identity's
+	// local/ folder and words, when the log has one.
+	secret map[string]string
+	local  map[string]string
+	words  []string
 }
 
 func main() {
@@ -45,7 +50,7 @@ func main() {
 	seed, _ := strconv.ParseInt(os.Args[3], 10, 64)
 	for i := 0; i < count; i++ {
 		g := &gen{r: rand.New(rand.NewSource(seed + int64(i))), dir: filepath.Join(os.Args[1], fmt.Sprintf("rand-%04d", i)),
-			files: map[string][]byte{}, byKid: map[string][]string{}, subj: map[string]string{}}
+			files: map[string][]byte{}, byKid: map[string][]string{}, subj: map[string]string{}, secret: map[string]string{}}
 		g.log()
 		g.write()
 	}
@@ -56,7 +61,9 @@ func (g *gen) chance(p float64) bool { return g.r.Float64() < p }
 func (g *gen) signer() core.Signer {
 	g.n++
 	h := sha256.Sum256([]byte(fmt.Sprintf("%s/%d/%d", g.dir, g.n, g.r.Int63())))
-	return core.NewEd25519Signer(h[:])
+	s := core.NewEd25519Signer(h[:])
+	g.secret[s.Public()] = fmt.Sprintf("ed25519:%x\n", h)
+	return s
 }
 
 func (g *gen) put(obj map[string]any, s core.Signer) string {
@@ -172,6 +179,13 @@ func (g *gen) identity(strangers []core.Signer) {
 		keys = append(keys, next)
 		parent = sid
 	}
+	// The first identity of most logs is the local one, so the
+	// differential can rotate it with its words.
+	if g.local == nil && g.chance(0.7) {
+		g.words, _ = core.SeedToWords(seed)
+		g.local = map[string]string{"identity": gid + "\n", "identity-secret": fmt.Sprintf("%x\n", core.IdentitySecret(seed)),
+			"signing-key": g.secret[keys[len(keys)-1].Public()]}
+	}
 	for _, st := range strangers {
 		if g.chance(0.3) {
 			g.claim(gid, st.Public(), st)
@@ -217,6 +231,20 @@ func (g *gen) write() {
 		}
 	}
 	if err := os.MkdirAll(filepath.Join(g.dir, "objects"), 0o755); err != nil {
+		panic(err)
+	}
+	if g.local == nil {
+		return
+	}
+	if err := os.MkdirAll(filepath.Join(g.dir, "local"), 0o700); err != nil {
+		panic(err)
+	}
+	for name, text := range g.local {
+		if err := os.WriteFile(filepath.Join(g.dir, "local", name), []byte(text), 0o600); err != nil {
+			panic(err)
+		}
+	}
+	if err := os.WriteFile(g.dir+".words", []byte(strings.Join(g.words, " ")+"\n"), 0o600); err != nil {
 		panic(err)
 	}
 }
