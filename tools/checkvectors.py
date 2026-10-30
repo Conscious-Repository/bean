@@ -410,6 +410,75 @@ for i, r in sorted(recs.items()):
 dups = sorted([{"id": i, "primary": g[0]} for g in groups.values() for i in g[1:]], key=lambda d: d["id"])
 check("v20 duplicates", json.dumps(dups, sort_keys=True), json.dumps(sorted(v20["expected_duplicates"], key=lambda d: d["id"]), sort_keys=True))
 
+# ---- seal continuations C28 (2026-10-30) -------------------------------
+
+
+def seal_fields_ok(r):
+    """The bean.seal field rules of SPEC 3.3, checked here on their own."""
+    v = r.get("value")
+    if not isinstance(v, dict) or set(v) != {"part", "sealed"}:
+        return False
+    part, ids = v["part"], v["sealed"]
+    if not isinstance(part, int) or isinstance(part, bool) or not 1 <= part <= v21["parts_limit"]:
+        return False
+    if not isinstance(ids, list) or not ids or ids != sorted(set(ids)):
+        return False
+    return (r["subject"] == r["author"] and r.get("blobs") is None and r["times"]["observed"] is None
+            and r["source"]["system"] == "self" and r["source"]["ref"] is None
+            and len(r["refs"]) == 1 and r["refs"][0]["rel"] == "seals")
+
+
+v21 = load("v21-seal-continuations.json")
+for sc in v21["scenarios"]:
+    recs = load_files(sc["files"])
+    gid, chain = chain_of(recs)
+    on_chain = {i for i, _ in chain}
+    pos = {node["value"]["key"]: p for p, (_, node) in enumerate(chain)}
+    result, slots = {}, {}
+    for i, r in recs.items():
+        if r["type"] != "bean.seal":
+            continue
+        check(f"v21 {sc['name']} fields of {i[:15]}", seal_fields_ok(r), True)
+        sid = r["refs"][0]["id"]
+        s = recs.get(sid)
+        if s is None:
+            result[i] = "held"
+        elif (s["type"] != "bean.succession" or sid not in on_chain or sid == gid or r["subject"] != s["subject"]
+              or r["kid"] != s["kid"] or r["value"]["part"] > s["value"].get("parts", 0)):
+            result[i] = "bad seal"
+        else:
+            slots.setdefault((sid, r["value"]["part"]), []).append(i)
+    seal_set, incomplete = {}, []
+    for sid, s in chain[1:]:
+        ids, complete = set(s["value"]["sealed"]), True
+        for k in range(1, s["value"].get("parts", 0) + 1):
+            got = slots.get((sid, k), [])
+            if len(got) != 1:
+                complete = False
+                for i in got:
+                    result[i] = "bad seal"
+                continue
+            ids |= set(recs[got[0]]["value"]["sealed"])
+            result[got[0]] = "valid"
+        if not complete:
+            incomplete.append(sid)
+            ids = set()
+        seal_set[sid] = ids
+    for i, r in recs.items():
+        if r["type"] in ("bean.genesis", "bean.succession"):
+            result[i] = "valid" if i in on_chain else "invalid"
+        elif r["type"] != "bean.seal":
+            p = pos.get(r["kid"])
+            if p is None:
+                result[i] = "key not in chain"
+            elif p < len(chain) - 1 and i not in seal_set[chain[p + 1][0]]:
+                result[i] = "not sealed"
+            else:
+                result[i] = "valid"
+    for e in sc["expected"]:
+        check(f"v21 {sc['name']}: {e['name']}", result.get(e["id"]), e["result"])
+    check(f"v21 {sc['name']}: incomplete", sorted(incomplete), sc["incomplete"])
+
 print()
 print("FAILURES:", failures)
 sys.exit(1 if failures else 0)

@@ -44,6 +44,8 @@ fuzz:
 	go test ./core -run '^$$' -fuzz '^FuzzCanonical$$' -fuzztime $(FUZZTIME) -fuzzminimizetime 5s
 	go test ./core -run '^$$' -fuzz '^FuzzCheckFile$$' -fuzztime $(FUZZTIME) -fuzzminimizetime 5s
 	go test ./core -run '^$$' -fuzz '^FuzzVerifyFiles$$' -fuzztime $(FUZZTIME) -fuzzminimizetime 5s
+	go test ./core -run '^$$' -fuzz '^FuzzSealValue$$' -fuzztime $(FUZZTIME) -fuzzminimizetime 5s
+	go test ./core -run '^$$' -fuzz '^FuzzSealSets$$' -fuzztime $(FUZZTIME) -fuzzminimizetime 5s
 	go test ./cmd/bean-import-csv -run '^$$' -fuzz '^FuzzConvert$$' -fuzztime $(FUZZTIME) -fuzzminimizetime 5s
 	go test ./cmd/bean-import-labcorp -run '^$$' -fuzz '^FuzzLabcorp$$' -fuzztime $(FUZZTIME) -fuzzminimizetime 5s
 

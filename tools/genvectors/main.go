@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/Conscious-Repository/bean/core"
@@ -432,4 +433,121 @@ func genV19V20(signer core.Signer, _ map[string]any) {
 	}
 	write("v20-duplicates-per-author.json", map[string]any{"spec": "SPEC.md 6.3 step 12, change note C27", "files": files,
 		"records": map[string]any{"person_x": xid, "person_y": yid, "agent_z": zid}, "expected_duplicates": dups})
+}
+
+func init() { extra = append(extra, genV21) }
+
+// genV21 writes the seal continuation vector (C28, 2026-10-30). The files
+// and the expected results come from core.VerifyFiles; tools/checkvectors.py
+// computes the results again on its own.
+func genV21(signer core.Signer, _ map[string]any) {
+	kid := signer.Public()
+	rec0 := core.RecoverySigner(seed, 0)
+	nonce := 0x21000
+	mk := func(sg core.Signer, m map[string]any) (string, map[string]any) {
+		nonce++
+		m["v"] = 0.0
+		m["nonce"] = fmt.Sprintf("%032x", nonce)
+		id, b, err := core.SignRecord(m, sg)
+		if err != nil {
+			panic(err)
+		}
+		return id, map[string]any{"path": core.PathOf(id), "bytes": string(b)}
+	}
+	const at = "2026-10-30T12:00:00Z"
+	g := core.NewGenesis(kid, core.Commitment(rec0.Public()), "genvectors@1", at)
+	gid, gf := mk(signer, g)
+	claim := func(n float64) (string, map[string]any) {
+		return mk(signer, map[string]any{"type": "hrv.rmssd", "subject": gid, "author": gid, "kid": kid,
+			"value":  map[string]any{"n": n, "unit": "ms"},
+			"times":  map[string]any{"observed": nil, "imported": at},
+			"source": map[string]any{"system": "csv", "adapter": "genvectors@1", "ref": nil}})
+	}
+	// Claims A, B, C, D by K1. The rotation to K2 seals A, B and C over the
+	// succession S and two parts; D is left out.
+	var ids []string
+	var claimFiles []any
+	names := map[string]string{}
+	for k, name := range []string{"A", "B", "C", "D"} {
+		id, f := claim(float64(k + 1))
+		ids = append(ids, id)
+		claimFiles = append(claimFiles, f)
+		names[id] = "claim " + name
+	}
+	sealed := append([]string(nil), ids[:3]...)
+	sort.Strings(sealed)
+	k2 := core.NewEd25519Signer(hexb("5555555555555555555555555555555555555555555555555555555555555555"))
+	succ := core.NewSuccession(gid, rec0.Public(), gid, k2.Public(), core.Commitment(core.RecoverySigner(seed, 1).Public()), sealed[:1], "genvectors@1", at)
+	succ["value"].(map[string]any)["parts"] = 2.0
+	sid, sf := mk(rec0, succ)
+	p1, p1f := mk(rec0, core.NewSeal(gid, rec0.Public(), sid, 1, sealed[1:2], "genvectors@1", at))
+	p2, p2f := mk(rec0, core.NewSeal(gid, rec0.Public(), sid, 2, sealed[2:3], "genvectors@1", at))
+	// Forged: part 2 naming D signed by the signing key K1, and part 3
+	// (above value.parts) signed by the recovery key.
+	f1, f1f := mk(signer, core.NewSeal(gid, kid, sid, 2, ids[3:4], "genvectors@1", at))
+	f3, f3f := mk(rec0, core.NewSeal(gid, rec0.Public(), sid, 3, ids[3:4], "genvectors@1", at))
+	// A second part 1, signed by the recovery key.
+	d1, d1f := mk(rec0, core.NewSeal(gid, rec0.Public(), sid, 1, ids[3:4], "genvectors@1", at))
+	names[gid], names[sid], names[p1], names[p2], names[f1], names[f3], names[d1] = "genesis G", "succession S", "part 1", "part 2", "forged part 2 by K1", "part 3 above parts", "second part 1"
+
+	verify := func(files []any) *core.Report {
+		m := map[string][]byte{}
+		for _, f := range files {
+			ff := f.(map[string]any)
+			m[ff["path"].(string)] = []byte(ff["bytes"].(string))
+		}
+		return core.VerifyFiles(m)
+	}
+	base := append([]any{gf}, claimFiles...)
+	type scen struct {
+		name  string
+		files []any
+		ids   []string
+	}
+	all := append([]string{gid}, ids...)
+	scens := []scen{
+		{"complete", append(append([]any{}, base...), sf, p1f, p2f, f1f, f3f), append(append([]string{}, all...), sid, p1, p2, f1, f3)},
+		{"missing part 2", append(append([]any{}, base...), sf, p1f), append(append([]string{}, all...), sid, p1)},
+		{"duplicate part 1", append(append([]any{}, base...), sf, p1f, p2f, d1f), append(append([]string{}, all...), sid, p1, p2, d1)},
+		{"parts before the succession", append(append([]any{}, base...), p1f, p2f), append(append([]string{}, all...), p1, p2)},
+	}
+	var out []any
+	for _, sc := range scens {
+		rp := verify(sc.files)
+		var res []any
+		for _, id := range sc.ids {
+			r := "valid"
+			if !rp.Valid[id] {
+				r = rp.Errors[id]
+			}
+			if rp.Held[id] {
+				r = "held"
+			}
+			res = append(res, map[string]any{"name": names[id], "id": id, "result": r})
+		}
+		inc := []any{}
+		for _, x := range rp.Incomplete {
+			inc = append(inc, x)
+		}
+		out = append(out, map[string]any{"name": sc.name, "files": sc.files, "expected": res, "incomplete": inc})
+	}
+	// The expected results must match C28 before the vector is written.
+	want := map[string]string{
+		"complete":                    "valid valid valid valid not sealed valid valid valid bad seal bad seal",
+		"missing part 2":              "valid not sealed not sealed not sealed not sealed valid valid",
+		"duplicate part 1":            "valid not sealed not sealed not sealed not sealed valid bad seal valid bad seal",
+		"parts before the succession": "valid valid valid valid valid held held",
+	}
+	for _, o := range out {
+		o := o.(map[string]any)
+		var got []string
+		for _, e := range o["expected"].([]any) {
+			got = append(got, e.(map[string]any)["result"].(string))
+		}
+		// Claim order in "expected" is A, B, C, D, not sorted; A..C are sealed.
+		if strings.Join(got, " ") != want[o["name"].(string)] {
+			panic("V21 " + o["name"].(string) + ": " + strings.Join(got, " "))
+		}
+	}
+	write("v21-seal-continuations.json", map[string]any{"spec": "SPEC.md 3.3, 5.4 and 6.3 steps 5b and 7, change note C28", "paper_seed": "paper_seed in v9-hkdf.json", "parts_limit": float64(core.MaxSealParts), "scenarios": out})
 }

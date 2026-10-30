@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # End-to-end and adversarial suite (DECISIONS 106 to 117). Every log is a
 # throwaway in a temp folder with fresh keys. Usage: tools/smoke.sh
-# Env: SMOKE_N (perf records, default 50000), SMOKE_CRASH (kill loops, default 30).
+# Env: SMOKE_N (perf records, default 50000; above 200000 the rotation writes
+# seal continuations and is killed three times), SMOKE_CRASH (kill loops, default 30).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 ROOT=$PWD
@@ -181,6 +182,30 @@ echo "ls:     $(measure bean -dir "$P" ls)"
 echo "verify: $(measure bean -dir "$P" verify)"
 echo "add:    $(measure bean -dir "$P" add hr 60 -unit bpm)"
 echo "reindex:$(measure bean -dir "$P" reindex)"
+
+echo "== rotation of the perf log (C28 seal continuations)"
+before=$(bean -dir "$P" ls | wc -l)
+[ "$N" -gt 200000 ] && cp -r "$P" "$W/perfk"
+t0=$(date +%s%N); bean -dir "$P" rotate <"$P.words" >"$W/rot.out" 2>&1; rc=$?; t1=$(date +%s%N)
+RT=$(( (t1 - t0) / 1000000 ))
+parts=$(grep -c '^seal part ' "$W/rot.out")
+echo "rotate $before records: $RT ms, $parts seal parts"
+want_parts=$(( before > 200000 ? (before - 1) / 200000 : 0 ))
+[ $rc = 0 ] && grep -q "^sealed $before\$" "$W/rot.out" && ok "rotate seals all $before records" || bad "rotate: exit $rc, $(tail -2 "$W/rot.out")"
+[ "$parts" = "$want_parts" ] && ok "$parts seal parts for $before records" || bad "seal parts: $parts, want $want_parts"
+want "rotated perf log verifies" 0 "summary" bean -dir "$P" verify
+after=$(bean -dir "$P" ls | wc -l)
+[ "$after" = "$before" ] && ok "every record still current after the rotation" || bad "records after rotation: $after, want $before"
+if [ "$N" -gt 200000 ]; then
+	for k in 1 2 3; do
+		K=$W/perfk$k; cp -r "$W/perfk" "$K"
+		bean -dir "$K" rotate <"$P.words" >/dev/null 2>&1 & pid=$!
+		sleep "$(python3 -c "import random; print(random.uniform(0.2, $RT / 1000))")"; kill -9 $pid 2>/dev/null; wait $pid 2>/dev/null
+		c=$(verify_code "$K"); n=$(bean -dir "$K" ls | wc -l)
+		[ "$c" = 0 ] && [ "$n" = "$before" ] && ok "kill $k during a big rotation: verify 0, $n records" || bad "kill $k: verify $c, $n records"
+		rm -rf "$K"
+	done
+fi
 
 echo
 echo "passed $PASS, failed $FAIL"

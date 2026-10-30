@@ -336,8 +336,11 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 		return &Loaded{Files: files, Hidden: hidden, Report: rp, Holds: holds, Local: local}, nil
 	}
 	s.writeObjCache(disk, files, rp, proven, cacheLen)
-	if done, err := s.finishRotation(rp); err != nil {
+	if done, removed, err := s.finishRotation(rp); err != nil {
 		return nil, err
+	} else if removed {
+		// An undone rotation removed its continuations: judge again.
+		return s.loadWith(full, readOnly)
 	} else if done {
 		if local, err = s.ReadLocal(); err != nil && !errors.Is(err, ErrNotInitialized) {
 			return nil, err
@@ -421,6 +424,9 @@ func (s *Store) GC() (records, blobs int, err error) {
 	}
 	if l.Local != nil && contains(l.Report.Compromised, l.Local.Identity) {
 		return 0, 0, errors.New("compromised: " + l.Local.Identity + ": gc refused")
+	}
+	if len(l.Report.Incomplete) > 0 {
+		return 0, 0, errors.New("incomplete seals: " + strings.Join(l.Report.Incomplete, ", ") + ": sync the missing seal parts before gc")
 	}
 	cutoff := s.Now().UTC().Add(-HoldDays * 24 * time.Hour)
 	var candidates []string

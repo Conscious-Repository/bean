@@ -37,6 +37,9 @@ func FuzzCheckFile(f *testing.F) {
 	f.Add(PathOf(gid), gb)
 	f.Add("objects/00/"+strings.Repeat("0", 62)+".json", []byte("{"))
 	f.Add(PathOf(gid), []byte(strings.Replace(string(gb), "fuzz@1", "fuzz@2", 1)))
+	seal := NewSeal(gid, sg.Public(), gid, 1, []string{gid}, "fuzz@1", "2026-10-30T00:00:00Z")
+	pid, pb, _ := SignRecord(seal, sg)
+	f.Add(PathOf(pid), pb)
 	f.Fuzz(func(t *testing.T, path string, data []byte) {
 		fr := CheckFile(path, data)
 		if fr.Err != nil {

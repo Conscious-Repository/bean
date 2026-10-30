@@ -316,7 +316,12 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 			}
 		}
 	}
-	for _, p := range sortedKeys(a.Files) {
+	// Seal continuations go first, so a sync that stops halfway never
+	// leaves a succession without its parts (C28). Order changes nothing
+	// else: the result is a set union.
+	order := sortedKeys(a.Files)
+	sort.SliceStable(order, func(i, j int) bool { return isSealPath(a, order[i]) && !isSealPath(a, order[j]) })
+	for _, p := range order {
 		data := a.Files[p]
 		fr := CheckFile(p, data)
 		if fr.Err != nil {
@@ -575,4 +580,14 @@ func (s *Store) Reindex() (int, error) {
 		return 0, err
 	}
 	return len(rows), nil
+}
+
+// isSealPath reports whether p holds a bean.seal record of l.
+func isSealPath(l *Loaded, p string) bool {
+	m := pathPattern.FindStringSubmatch(p)
+	if m == nil {
+		return false
+	}
+	r := l.Report.Records["sha256:"+m[1]+m[2]]
+	return r != nil && r.Type == "bean.seal"
 }

@@ -36,8 +36,12 @@ type Source struct {
 	Ref             string // "" when null
 }
 
-// IsIdentity reports whether the record is a genesis or a succession.
-func (r *Record) IsIdentity() bool { return r.Type == "bean.genesis" || r.Type == "bean.succession" }
+// IsIdentity reports whether the record is a genesis, a succession or a
+// seal continuation (C28). Identity records are signed by a genesis key or a
+// recovery key, never by a chain signing key.
+func (r *Record) IsIdentity() bool {
+	return r.Type == "bean.genesis" || r.Type == "bean.succession" || r.Type == "bean.seal"
+}
 
 // IsDestructive reports whether the record supersedes or is a tombstone.
 func (r *Record) IsDestructive() bool {
@@ -69,7 +73,13 @@ func (r *Record) ValueKey() string { s, _ := r.Value["key"].(string); return s }
 // Recovery returns value.recovery for identity records.
 func (r *Record) Recovery() string { s, _ := r.Value["recovery"].(string); return s }
 
-// Sealed returns value.sealed for successions.
+// Parts returns value.parts of a succession (C28), 0 when absent.
+func (r *Record) Parts() int { f, _ := r.Value["parts"].(float64); return int(f) }
+
+// Part returns value.part of a seal continuation (C28).
+func (r *Record) Part() int { f, _ := r.Value["part"].(float64); return int(f) }
+
+// Sealed returns value.sealed for successions and seal continuations.
 func (r *Record) Sealed() []string {
 	a, _ := r.Value["sealed"].([]any)
 	out := make([]string, 0, len(a))
@@ -83,7 +93,11 @@ var typePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*(\.[a-z0-9_-]+)*$`)
 var adapterPattern = regexp.MustCompile(`^[^@\s]+@[^@\s]+$`)
 
 var precisions = map[string]bool{"year": true, "month": true, "day": true, "hour": true, "minute": true, "second": true, "millisecond": true}
-var knownRels = map[string]bool{"succeeds": true, "supersedes": true, "purges": true, "about": true}
+var knownRels = map[string]bool{"succeeds": true, "supersedes": true, "purges": true, "about": true, "seals": true}
+
+// MaxSealParts bounds value.parts and value.part (C28): 1,000 parts of
+// about 230,000 ids each.
+const MaxSealParts = 1000
 
 var (
 	ErrUnknownCoreType = errors.New("unknown core type")
@@ -209,7 +223,7 @@ func (r *Record) checkFields() error {
 			if !knownRels[rel] {
 				return ErrUnknownRel
 			}
-			if (rel == "succeeds" && r.Type != "bean.succession") || (rel == "purges" && r.Type != "bean.tombstone") {
+			if (rel == "succeeds" && r.Type != "bean.succession") || (rel == "purges" && r.Type != "bean.tombstone") || (rel == "seals" && r.Type != "bean.seal") {
 				return badField("refs")
 			}
 			rf := Ref{rel, id}
@@ -281,20 +295,43 @@ func (r *Record) checkReservedType() error {
 		if len(r.Refs) != 1 || r.Refs[0].Rel != "succeeds" {
 			return badField("refs")
 		}
-		if r.Value == nil || len(r.Value) != 3 || !IsTaggedKey(r.ValueKey()) || !IsID(r.Recovery()) {
+		// value.parts is present only when seal continuations follow (C28).
+		n := 3
+		if _, has := r.Value["parts"]; has {
+			n = 4
+			if !isCount(r.Value["parts"]) {
+				return badField("value.parts")
+			}
+		}
+		if r.Value == nil || len(r.Value) != n || !IsTaggedKey(r.ValueKey()) || !IsID(r.Recovery()) {
 			return badField("value")
 		}
-		sealed, ok := r.Value["sealed"].([]any)
-		if !ok {
-			return badField("value.sealed")
+		if err := checkSealedList(r.Value["sealed"], false); err != nil {
+			return err
 		}
-		prev := ""
-		for _, x := range sealed {
-			s, ok := x.(string)
-			if !ok || !IsID(s) || s <= prev {
-				return badField("value.sealed")
-			}
-			prev = s
+	case "bean.seal":
+		// A seal continuation (C28): more ids for the seal set of the
+		// succession that its one "seals" ref names.
+		if r.Subject != r.Author || !IsID(r.Author) {
+			return badField("author")
+		}
+		if len(r.Refs) != 1 || r.Refs[0].Rel != "seals" {
+			return badField("refs")
+		}
+		if r.Value == nil || len(r.Value) != 2 || !isCount(r.Value["part"]) {
+			return badField("value")
+		}
+		if err := checkSealedList(r.Value["sealed"], true); err != nil {
+			return err
+		}
+		if r.Observed != nil {
+			return badField("times.observed")
+		}
+		if r.Blobs != nil {
+			return badField("blobs")
+		}
+		if r.Source.System != "self" || r.Source.Ref != "" {
+			return badField("source")
 		}
 	case "bean.tombstone":
 		if r.Subject != r.Author {
@@ -374,6 +411,30 @@ func checkInterval(v any) error {
 	p, ok := obj["precision"].(string)
 	if !ok || !precisions[p] {
 		return badField("times.observed.precision")
+	}
+	return nil
+}
+
+// isCount reports an integer from 1 to MaxSealParts.
+func isCount(v any) bool {
+	f, ok := v.(float64)
+	return ok && f == float64(int(f)) && f >= 1 && f <= MaxSealParts
+}
+
+// checkSealedList checks value.sealed: unique ids in ascending ASCII order.
+// A continuation must seal at least one id.
+func checkSealedList(v any, nonEmpty bool) error {
+	sealed, ok := v.([]any)
+	if !ok || (nonEmpty && len(sealed) == 0) {
+		return badField("value.sealed")
+	}
+	prev := ""
+	for _, x := range sealed {
+		s, ok := x.(string)
+		if !ok || !IsID(s) || s <= prev {
+			return badField("value.sealed")
+		}
+		prev = s
 	}
 	return nil
 }

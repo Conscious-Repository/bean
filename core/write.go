@@ -94,6 +94,23 @@ func NewSuccession(identity, kid, parent, newKey, newCommitment string, sealed [
 	}
 }
 
+// NewSeal builds an unsigned seal continuation (C28): part k of the seal
+// set of succession sid, signed by the same recovery key (kid).
+func NewSeal(identity, kid, sid string, part int, sealed []string, adapter, imported string) map[string]any {
+	ids := make([]any, len(sealed))
+	for i, x := range sealed {
+		ids[i] = x
+	}
+	return map[string]any{
+		"v": 0.0, "nonce": NewNonce(), "type": "bean.seal",
+		"subject": identity, "author": identity, "kid": kid,
+		"refs":   []any{map[string]any{"rel": "seals", "id": sid}},
+		"value":  map[string]any{"part": float64(part), "sealed": ids},
+		"times":  map[string]any{"observed": nil, "imported": imported},
+		"source": map[string]any{"system": "self", "adapter": adapter, "ref": nil},
+	}
+}
+
 // IsCoreType reports whether a type is reserved for the core.
 func IsCoreType(t string) bool { return strings.HasPrefix(t, "bean.") }
 
