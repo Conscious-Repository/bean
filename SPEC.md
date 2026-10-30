@@ -15,6 +15,7 @@ On 2026-10-30 the audit of `b7a1626` added three change notes. They change which
 - C26: a retired key writes nothing valid. A succession seals every valid record of the outgoing key, not only the destructive ones. A record of an older chain key that the next succession does not seal is invalid (5.4, 5.5 step 6, 6.3 step 7, 6.5). Benjamin decision.
 - C27: duplicate groups include the author (6.3 step 12). A record of one key is never a duplicate of a record of another key.
 - C28: seal continuations. A rotation that must seal more ids than one succession holds writes the rest in `bean.seal` records, signed by the same recovery key (3.3, 5.4, 6.3 steps 5b and 7). The succession says how many there are in `value.parts`. Only a complete set seals anything. A succession without `value.parts` is unchanged, so logs that never needed a continuation do not change. Benjamin decision, 2026-10-30.
+- K1 (PROPOSED, prototype on branch audit-2, needs Benjamin's decision): the too-new gate key set (8.2). Only the head key or a recovery key that a chain node commits to can make an identity too new. Other well-signed records give `ungated: <id>`. This is the K1 decision of draft v0.7, which the repository had not taken over. It changes results only for logs with a `bean.*` record of an unknown `v`; no vector changes.
 
 Reference implementation: the `bean` repository.
 License: CC0 1.0 (section 19).
@@ -884,9 +885,10 @@ A verifier MUST NOT interpret a record whose `v` it does not know.
 The record reached step 13 of 3.8, so its envelope, id and signature are good. The affected identity is:
 
 1. For `bean.genesis`: the record's own id, when `author` = `kid`.
-2. For other `bean.*` types: the `author` field. This applies only when `kid` is a signing key or a recovery key of that identity. The key must be on a node of its succession tree (6.3 step 3). Otherwise, skip the record. The identity is not too new.
+2. For other `bean.*` types: the `author` field I, when I has a genesis in R and `kid` is the head key of I or a recovery public key whose commitment (4.6) is the `value.recovery` of a node on the chain of I (change K1). The chain is followed from the genesis through nodes with one child; at a fork the fork point is the head (6.3 step 5). When the chain is the genesis alone, the head key is the genesis key.
+3. Otherwise no identity is too new. If `author` is an identity with a genesis in R that is not too new, report `ungated: <id>` as a warning. Skip the record.
 
-A file that no known key signed cannot make an identity too new. There is no `too new: log`.
+Only the head key or the seed holder can change the rules for an identity. A rotated-out key, a stranger or a forged file cannot halt it. Before K1 any key of the succession tree, also a rotated-out one, could halt the identity, and the next recovery key could not: a real newer rotation was skipped in silence and an old `bean rotate` then wrote a second succession from the same recovery key, a fork. There is no `too new: log`.
 DEFAULT.
 
 For a too-new identity, the verifier MUST:
@@ -1129,7 +1131,7 @@ A conforming CLI MUST use these exact strings. Ids follow after `: ` where shown
 
 `bad path`, `too large`, `bad json`, `duplicate key`, `bad number`, `bad string`, `bad v`, `bad type`, `not canonical`, `bad field: <name>`, `id mismatch`, `unsupported key algorithm`, `bad key`, `bad signature`, `unknown core type`, `unknown rel`, `blob not listed`, `bad succession`, `key reuse`, `recovery not advanced`, `key not in chain`, `not sealed`, `bad seal`, `incomplete seals: <ids>`, `frozen`, `not author`, `not subject`, `bad target`, `too new: <identity id>`, `compromised: <identity id>`, `seed does not match`, `input purged: <id>`, `input missing: <id>`, `input invalid: <id>`, `old format`, `ambiguous: <ids>`, `retired key`, `method unknown`, `method mismatch`, `replay mismatch`, `not initialized`, `already initialized`, `blob missing: <id>`, `blob corrupt: <id>`.
 
-Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <id>`, `duplicate: <id> of <id>`, `superseded by sibling: <id>`, `hidden pending gc: <id>`, `incomplete seals: <id>` (5.4), `blob missing: <id>` (for a purged or invalid record).
+Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <id>`, `duplicate: <id> of <id>`, `superseded by sibling: <id>`, `hidden pending gc: <id>`, `incomplete seals: <id>` (5.4), `ungated: <id>` (8.2), `blob missing: <id>` (for a purged or invalid record).
 
 `incomplete seals: <ids>` in the error list is the error of `gc` (7.6 step 5). In `verify` it is a warning.
 
@@ -1512,6 +1514,7 @@ The AES-SIV code MUST also pass the RFC 5297 Appendix A vectors. The HKDF code M
 10. The folder lock does not work across hosts on a network or synced folder, and the reference implementation has none on Windows (7.11). Give each host its own folder.
 11. The vectors have no Ed25519 edge cases yet: non-canonical `A`, small-order `A` or `R`, and `S` ≥ L. A second implementation that does not use the same rules as Go `crypto/ed25519` (4.5) can disagree on such signatures.
 12. Every command reads and checks the whole log. Time and memory grow with the number of records: about 1 s and 0.2 GB of live heap at 50,000 records on a laptop-class machine. Batch dense series (9.4).
+13. A thief with the head signing key can write one `bean.*` record with an unknown `v` and halt the identity (8.2): `rotate` refuses a too-new identity, and no bean reads an invented version. The paper seed does not end this theft yet. A fix is open (DECISIONS 138).
 
 ## 18. Out of scope
 

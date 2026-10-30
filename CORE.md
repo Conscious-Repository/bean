@@ -67,7 +67,7 @@ Check each file in this order. Stop at the first failure.
 2. `v`, `type`, `author` and `kid` are present.
 3. The id, the key and the signature.
 4. The version. The earlier checks use only the envelope fields. These fields do not change between versions. An unknown version has two cases:
-   - The type starts with `bean.` and a key of that identity signed the record. The identity is too new. Do not evaluate its records.
+   - The type starts with `bean.` and the head key of that identity, or a recovery key that a node of its chain commits to, signed the record. The identity is too new. Do not evaluate its records. Any other signer (a rotated-out key, a stranger) cannot halt the identity: skip the record with the warning `ungated: <id>` (K1).
    - Any other type. Skip the record, but sync it.
 5. The canonical bytes.
 6. The fields.
