@@ -994,6 +994,13 @@ The type vocabulary is one document (`cmd/bean/vocabulary.md`): each `type`, its
 
 Measurement uncertainty travels with the data (meeting R8). `context.uncertainty` is optional. Its form is `{"kind": "cv" | "sd", "value": <number>, "unit": <string>, "source": <string>}`; `unit` and `source` are optional. `"cv"` is the coefficient of variation as a fraction. `"sd"` is the standard deviation in `unit`, or in the unit of the value when `unit` is absent. `source` names the calibration or the document that gives the value. Two kinds cover the calibration data that device makers publish. An adapter writes it only from a published or measured number.
 
+### 9.10 Credentials
+
+A tool that fetches from a source API reads its credentials from the environment (meeting R12).
+Credentials MUST NOT be in a record, a blob, an adapter output line or a tool binary.
+A fetch job MUST remove credentials and authorization headers before it saves a response for import.
+A fetch job is a separate program, not part of the core (18).
+
 ## 10. Extension 1: computed results
 
 ### 10.1 Status
