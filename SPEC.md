@@ -742,6 +742,11 @@ For each tombstone D with target T:
 A purged target is not valid data. A reader MUST NOT show it.
 A verifier reports every purged target that is hidden in this replica as `hidden pending gc: <id>` (a warning), from the moment it is hidden (7.6 step 6). `bean gc` erases it (7.6).
 
+### 6.8 Trust is reader policy
+
+The core checks signatures and the rules of this section. It does not rank authors.
+A reader decides how much to trust a claim from another author: a device, an agent, a lab, a doctor or a peer. Trust levels and webs of trust are reader policy, not protocol.
+
 ## 7. Folder layout and sync
 
 ### 7.1 Paths
