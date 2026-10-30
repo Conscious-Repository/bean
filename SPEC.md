@@ -590,6 +590,18 @@ A person who lost the host, but has the paper and a copy of `objects/` and `blob
 4. Write a succession from the chain head to a new signing key, as 5.5 steps 2 to 9 do, with the same seals.
 5. Write `local/identity` last. Until it exists, the folder is not initialized, so a failed restore can run again.
 
+### 5.11 Custodians, agents and exit
+
+This section applies meeting decisions R15 and R16. It adds no record type.
+
+1. A custodian is a host that holds the signing key and the identity secret for a person, for example a hosted service. Section 5.2 applies to it. It is the one host of that identity.
+2. A copy of a secret cannot be taken back. A custodian that hands over its key or the paper seed can keep a copy. Thus a handover is not an exit.
+3. To leave a custodian, the person makes a new identity on a host that the person controls (5.2). The data is copied as new records that the new identity signs. The new records have new ids, because `author` is part of the hashed bytes (4.2).
+4. After the exit, a former custodian or another service can still write about the person with its own key, as a device (11.3) or an agent (item 5). It never holds the secret of the new identity.
+5. An AI agent writes with its own key (`bean agent`): a bare key or its own identity. It MUST NOT hold or use the signing key of a person. Its claims about a person have `author` = the agent key and `subject` = the person, so readers can see which records an agent wrote.
+6. A frozen identity (5.7) uses the same exit as item 3.
+7. The new identity MAY write one ordinary claim with rel `about` to the genesis of the old identity, to link the two. Each re-signed copy MAY have rel `about` to its original id. The claim type is a vocabulary term (9.9), not a `bean.*` type. The core gives these claims no special meaning. A dedicated exit record is not part of v0.
+
 Restore always rotates. The old signing key stayed on the lost host and is not trusted.
 
 ## 6. Authority rules
