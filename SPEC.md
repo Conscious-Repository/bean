@@ -108,7 +108,7 @@ Other documents and code comments MUST use these terms with these meanings.
 | id | The string `sha256:` followed by 64 lowercase hex digits. It names a record or a blob. |
 | tagged key | A public key string with an algorithm tag, for example `ed25519:<hex>`. |
 | signing key | A key pair that signs records. Devices hold the private half. |
-| recovery key | An Ed25519 key pair that the paper seed derives. It signs only successions. |
+| recovery key | An Ed25519 key pair that the paper seed derives. It signs only successions and seal parts (5.8). |
 | commitment | The SHA-256 hash of a tagged recovery public key, as an id string. |
 | paper seed | 32 random bytes, written on paper as 24 words. Devices never store it. |
 | identity | A person or agent. Its identity id is the id of its genesis record. |
@@ -125,14 +125,14 @@ Other documents and code comments MUST use these terms with these meanings.
 | fork | Two or more well-signed successions that have the same parent. |
 | fork point | The chain node with two or more children. Everything below it is invalid (`frozen`). |
 | seal | To list a record id in the `value.sealed` list of a succession or of one of its seal continuations (C28). |
-| frozen | The state of an identity after a recovery conflict (section 6.4). A verifier reports it as `compromised`. |
+| frozen | The state of an identity after a recovery conflict (section 5.7). A verifier reports it as `compromised`. |
 | bare key | A tagged key used directly as an author. A bare key never rotates. |
 | author | The identity id or bare key that makes the claim. |
 | subject | The identity id of the person that the record is about. |
 | kid | The tagged key that made the signature. |
 | valid | A record that passes every check in sections 3 and 6. |
 | invalid | A record that fails a check. A verifier reports it with an error string. |
-| held | A destructive record whose target is not in the replica. The verifier keeps it and checks it again when the target arrives. |
+| held | A destructive record whose target is not in the replica, or a succession whose parent is not in the replica. The verifier keeps it and checks it again when the target or parent arrives. |
 | too new | The state of an identity after the verifier finds an `bean.*` record with an unknown `v`. |
 | skip | To keep a file, sync it, and not interpret it. |
 | hide | To stop showing, serving and syncing a target. The bytes stay on disk. |
@@ -237,7 +237,7 @@ A writer puts an unparseable source time in `context.raw_time` as a string.
 ### 3.6 source
 
 `source.system` is a string of 1 to 64 characters, for example `oura` or `self`.
-`source.adapter` is `name@version`, for example `bean-import-oura@1.0.0`.
+`source.adapter` is `name@version`, for example `bean-import-oura@1.0.0`. The verifier checks only the form: one `@`, with at least one character before and after it, and no whitespace (regular expression `^[^@\s]+@[^@\s]+$`). Error: `bad field: source.adapter`.
 `source.ref` is a dedupe ref (section 4.8) or null.
 `source.ref` is null for a record that the author makes directly, with no source file.
 `source.ref` is null for a device-signed record (section 11).
@@ -245,19 +245,21 @@ A writer puts an unparseable source time in `context.raw_time` as a string.
 ### 3.7 refs
 
 Each item is `{"rel": rel, "id": id}`.
-The core knows four rel values:
+The core knows five rel values:
 
 | rel | Meaning | Core checks |
 |---|---|---|
 | `succeeds` | This succession follows the named node. | Section 6. |
 | `supersedes` | This record corrects the target. | Section 6.6. |
 | `purges` | This tombstone deletes the target. | Section 6.7. |
+| `seals` | This seal part continues the named succession (C28). | Section 5.4. |
 | `about` | This record comments on, attests or disputes the target. | None. |
 
 A record with any other rel is invalid with error `unknown rel`.
 Attestations, disputes and notes are ordinary claims with rel `about` and a type that says what they are.
 `succeeds` is allowed only on `bean.succession`.
 `purges` is allowed only on `bean.tombstone`.
+`seals` is allowed only on `bean.seal`.
 A record MUST NOT have two refs with the same rel and id.
 
 ### 3.8 Validation order
@@ -267,7 +269,7 @@ The fields `v`, `type`, `author`, `kid`, `id` and `sig` are the envelope. Their 
 A verifier MUST check each file in this order.
 At the first failure, the verifier reports the error string and stops checking that file.
 
-1. The path matches `objects/<2 hex>/<62 hex>.json`. Error: `bad path`.
+1. The path matches `objects/<2 hex>/<62 hex>.json`. Error: `bad path`. The files checked are the regular files exactly one directory below `objects/`, except names that start with `.tmp-` (7.1). A file directly in `objects/`, or deeper, is not part of the log and is ignored.
 2. The file size is at most 16 MiB. Error: `too large`.
 3. The bytes are valid UTF-8 and parse as one JSON object. Error: `bad json`.
 4. The object has no duplicate keys at any depth. Error: `duplicate key`.
@@ -281,7 +283,7 @@ At the first failure, the verifier reports the error string and stops checking t
 12. `sig` verifies for `kid` over the id bytes (section 4.5). Error: `bad signature`.
 13. If `v` is not a version that this verifier knows, apply section 8 and stop.
 14. The file bytes are equal to the canonical bytes of the parsed object. Error: `not canonical`.
-15. All required fields are present with the correct JSON types and constraints in 3.2 to 3.7. Error: `bad field: <name>`.
+15. All required fields are present with the correct JSON types and constraints in 3.2 to 3.7. Error: `bad field: <name>`, where `<name>` is the dotted path of the failing field, for example `times.observed.start` or `value.parts`. When more than one field fails, which one is named is not normative. Conformance tests compare the name only for files with one bad field.
 16. Apply the authority rules in section 6.
 
 Steps 1 to 15 depend only on the file.
@@ -352,7 +354,7 @@ Ed25519:
 
 - `sig` = `ed25519:` + 128 lowercase hex digits (the 64-byte RFC 8032 signature).
 - Sign with RFC 8032 Ed25519 (pure, no prehash, no context).
-- Verify as Go `crypto/ed25519.Verify` does. It rejects a non-canonical `S`. DEFAULT.
+- Verify as Go `crypto/ed25519.Verify` does. DEFAULT. In words: reject `S` ≥ L (the group order); decode `A`, accepting a non-canonical encoding of a valid point and rejecting a string that is no point; compute k = SHA-512(R || A || id bytes) mod L and R' = [S]B − [k]A, with no cofactor; the signature is good only when the 32-byte encoding of R' equals the R bytes of the signature. Small-order `A` and `R` are not rejected. Section 17 lists the missing reject vectors.
 
 P-256:
 
@@ -677,12 +679,14 @@ Step 9. Check supersede records (6.6).
 
 Step 10. Check tombstones (6.7).
 
+Compute step 10 before step 9: a purged supersede record does not supersede, and a purged target is not valid. A tombstone that names a supersede record is checked like any other tombstone.
+
 Step 11. Check subjects.
-For each claim D whose `subject` has no genesis in R, report `unresolved subject: <id>` as a warning.
+For each valid claim D whose `subject` has no genesis in R, report `unresolved subject: <id>` as a warning.
 D stays valid. The subject check is a warning because a lab can write about a person whose genesis the replica does not hold.
 
 Step 12. Find duplicates.
-Group the valid records by (`subject`, `author`, `source.system`, `source.ref`) where `source.ref` is not null (C27). Before C27 the group had no `author`, so any key that wrote about a subject could copy a ref and hide the person's record as a duplicate. Do not include a record that a valid supersede record names (C23). A parser fix (9.7) keeps the ref of the record that it corrects. Without this rule, the verifier could report the fix as a duplicate of its own target.
+Group the valid records (purged targets are not valid) by (`subject`, `author`, `source.system`, `source.ref`) where `source.ref` is not null (C27). Before C27 the group had no `author`, so any key that wrote about a subject could copy a ref and hide the person's record as a duplicate. Do not include a record that a valid supersede record names (C23). A parser fix (9.7) keeps the ref of the record that it corrects. Without this rule, the verifier could report the fix as a duplicate of its own target.
 In each group, the record with the lowest id is the primary.
 Report the others as `duplicate: <id> of <primary id>`.
 Duplicates stay valid. Indexes and readers SHOULD ignore them.
@@ -721,7 +725,7 @@ For each tombstone D with target T:
 5. Otherwise D is a valid tombstone for T. T is purged.
 
 A purged target is not valid data. A reader MUST NOT show it.
-A verifier reports a purged target that is hidden and past its hold as `hidden pending gc: <id>` (a warning). `bean gc` erases it (7.6).
+A verifier reports every purged target that is hidden in this replica as `hidden pending gc: <id>` (a warning), from the moment it is hidden (7.6 step 6). `bean gc` erases it (7.6).
 
 ## 7. Folder layout and sync
 
@@ -740,10 +744,11 @@ A verifier reports a purged target that is hidden and past its hold as `hidden p
 | `local/cache/` | Indexes and other caches. | never |
 | `local/lock` | The folder lock (7.11). Empty. | never |
 | `local/signing-key.next` | The new signing key while a rotation runs (5.5 step 8). | never |
+| `local/rotation-pending` | The id of the succession that a running rotation writes, one line. Written first, removed last (C28). The next load finishes or undoes the rotation. | never |
 
 Directories use mode 0700. Writers MUST write each file to a temporary name in the same directory and then rename it.
 A sync tool MUST NOT copy `local/`.
-Any other path in the log is not part of the log. A verifier ignores it.
+Any other path in the log is not part of the log. A verifier ignores it. Files one directory below `objects/` are part of the log even when their name is wrong: 3.8 step 1 reports them as `bad path`.
 
 ### 7.2 Write a record
 
@@ -1106,13 +1111,27 @@ Verify output lines:
 
 Lines are sorted by their ASCII bytes, with the summary line last.
 
+`<id or path>` is the path of the file, relative to the log folder (`objects/ab/<62 hex>.json`), for an error from 3.8 steps 1 to 15, and the record id for an error from section 6.
+
+The summary counts:
+
+- `v`: records valid at the end of 6.3. Purged targets are not valid. Superseded records and duplicates are valid.
+- `i`: error lines.
+- `s`: files with an unknown `v` (8.2), plus the records of identities that are too new.
+- `h`: held destructive records and held successions.
+- `d`: `duplicate:` warnings.
+
+A record with an unresolved author is in none of these counts.
+
 ### 12.2 Error strings
 
 A conforming CLI MUST use these exact strings. Ids follow after `: ` where shown.
 
 `bad path`, `too large`, `bad json`, `duplicate key`, `bad number`, `bad string`, `bad v`, `bad type`, `not canonical`, `bad field: <name>`, `id mismatch`, `unsupported key algorithm`, `bad key`, `bad signature`, `unknown core type`, `unknown rel`, `blob not listed`, `bad succession`, `key reuse`, `recovery not advanced`, `key not in chain`, `not sealed`, `bad seal`, `incomplete seals: <ids>`, `frozen`, `not author`, `not subject`, `bad target`, `too new: <identity id>`, `compromised: <identity id>`, `seed does not match`, `input purged: <id>`, `input missing: <id>`, `input invalid: <id>`, `old format`, `ambiguous: <ids>`, `retired key`, `method unknown`, `method mismatch`, `replay mismatch`, `not initialized`, `already initialized`, `blob missing: <id>`, `blob corrupt: <id>`.
 
-Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <id>`, `duplicate: <id> of <id>`, `superseded by sibling: <id>`, `hidden pending gc: <id>`, `blob missing: <id>` (for a purged or invalid record).
+Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <id>`, `duplicate: <id> of <id>`, `superseded by sibling: <id>`, `hidden pending gc: <id>`, `incomplete seals: <id>` (5.4), `blob missing: <id>` (for a purged or invalid record).
+
+`incomplete seals: <ids>` in the error list is the error of `gc` (7.6 step 5). In `verify` it is a warning.
 
 ### 12.3 Commands
 
@@ -1491,6 +1510,8 @@ The AES-SIV code MUST also pass the RFC 5297 Appendix A vectors. The HKDF code M
 8. Records that a device signs and does not sync before a rotation become invalid (C26).
 9. Device records cannot carry encrypted blobs (11.4).
 10. The folder lock does not work across hosts on a network or synced folder, and the reference implementation has none on Windows (7.11). Give each host its own folder.
+11. The vectors have no Ed25519 edge cases yet: non-canonical `A`, small-order `A` or `R`, and `S` ≥ L. A second implementation that does not use the same rules as Go `crypto/ed25519` (4.5) can disagree on such signatures.
+12. Every command reads and checks the whole log. Time and memory grow with the number of records: about 1 s and 0.2 GB of live heap at 50,000 records on a laptop-class machine. Batch dense series (9.4).
 
 ## 18. Out of scope
 

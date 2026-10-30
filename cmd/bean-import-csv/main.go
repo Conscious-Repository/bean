@@ -43,6 +43,9 @@ func main() {
 		fmt.Fprintln(os.Stderr, "usage: bean-import-csv -type <type> [-system <system>] [-blob <blob id>] [-unit <unit>] [-precision <p>] <file.csv>")
 		os.Exit(2)
 	}
+	if o.blob == "" {
+		fmt.Fprintln(os.Stderr, noBlobWarning)
+	}
 	f, err := os.Open(fs.Arg(0))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "bean-import-csv: %s\n", err)
@@ -54,6 +57,10 @@ func main() {
 		os.Exit(1)
 	}
 }
+
+// noBlobWarning reminds the person to keep the raw file first (SPEC.md 9.3
+// step 1): records without it cannot be re-parsed when the adapter improves.
+const noBlobWarning = "bean-import-csv: warning: no -blob: the raw file is not kept; run bean blob put <file.csv> first and pass -blob <id>"
 
 // convert writes one partial record per CSV row.
 func convert(in io.Reader, out io.Writer, o options) error {

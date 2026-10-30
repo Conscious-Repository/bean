@@ -24,6 +24,7 @@ This page says what bean protects, what it does not protect, and where each key 
   These limits are known and not fixed in this build.
 - **gc erases for good.** `gc` refuses while the log has records from a newer bean, the identity is frozen, or a seal set is incomplete, because validity can still change then.
 - **A thief can flood the old key.** Every record of the old key in the folder is sealed by default, so a thief who writes millions of records makes `rotate` slow, and above 200,200,000 records `rotate` refuses (`too large`). Rotate from a copy that does not hold the thief's records, for example a backup from before the theft: records that are not in the folder are not sealed, so they stay invalid.
+- **A thief can halt the log.** A thief with a signing key of yours, also one that you rotated out, can write one record in a made-up newer format. Every copy that syncs it then says `too new`: `verify` checks nothing of your identity, and `append`, `gc`, `rotate` and `restore` refuse. No data is lost, but the 24 words do not undo it yet (SPEC.md 8.2).
 - **A missing seal part fails closed.** Someone who can delete files in a copy can delete a `bean.seal` part. Then every record of the retired key in that copy is not valid until the part comes back from another copy. Nothing is erased, and no one without the 24 words can add or replace a part.
 - **Equal files look equal.** Encryption is deterministic, so someone with the files can see that two of them hold the same content.
 

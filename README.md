@@ -131,8 +131,11 @@ You get one record for each result, with the value, unit, flag, reference interv
 ### A CSV file
 
 ```
-bean-import-csv -type hrv.rmssd -unit ms export.csv | bean append
+BLOB=$(bean blob put export.csv)
+bean-import-csv -type hrv.rmssd -unit ms -blob $BLOB export.csv | bean append
 ```
+
+Keep the raw file first: then a better importer can read it again later. Without `-blob` the importer warns.
 
 The CSV needs a header row and a `value` column. A `time` column (RFC 3339) and an `id` column are optional. Other columns are kept as context.
 

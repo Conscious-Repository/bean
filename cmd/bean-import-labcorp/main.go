@@ -53,6 +53,9 @@ func main() {
 		fmt.Fprintln(os.Stderr, "usage: bean-import-labcorp [-blob <blob id>] [-tz <zone>] <report.pdf | report.txt>")
 		os.Exit(2)
 	}
+	if *blob == "" {
+		fmt.Fprintln(os.Stderr, "bean-import-labcorp: warning: no -blob: the report is not kept; run bean blob put <report.pdf> first and pass -blob <id>")
+	}
 	text, err := readText(fs.Arg(0))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "bean-import-labcorp: %s\n", err)

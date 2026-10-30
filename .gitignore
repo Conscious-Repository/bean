@@ -6,3 +6,4 @@
 /objects/
 /blobs/
 /local/
+__pycache__/

@@ -33,7 +33,7 @@ A health log is a folder of signed claims about one person. Programs add files t
 | `value` | Optional object. The usual forms are `{"n", "unit"}`, `{"s"}`, `{"b"}` and `{"blob"}`. |
 | `times` | `imported` is required, in the form `YYYY-MM-DDTHH:MM:SSZ`. `observed` is null, or `{"start", "end", "precision"}` in RFC 3339. `end` is optional. |
 | `source` | `system`, `adapter` (`name@version`) and `ref` (a dedupe ref, or null). |
-| `refs` | Optional list of `{"rel", "id"}`. `rel` is `succeeds`, `supersedes`, `purges` or `about`. Any other `rel` makes the record invalid. |
+| `refs` | Optional list of `{"rel", "id"}`. `rel` is `succeeds`, `supersedes`, `purges`, `seals` or `about`. Any other `rel` makes the record invalid. |
 | `blobs` | Optional list of `{"hash", "role", "media_type"}`. If `value.blob` is present, it must also be in this list. |
 | `context` | Optional object. The verifier does not interpret it. |
 | `id` | `sha256:` and the hex SHA-256 of the canonical bytes of the object without `id` and `sig`. It must agree with the path. |
