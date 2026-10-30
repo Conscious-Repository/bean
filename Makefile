@@ -4,9 +4,9 @@
 PY ?= python3
 FUZZTIME ?= 2m
 
-.PHONY: check build fmt vet test race lint vuln vectors second demo fuzz smoke
+.PHONY: check build fmt vet test race lint vuln vectors second differential demo fuzz smoke
 
-check: fmt vet build race lint vuln vectors second demo
+check: fmt vet build race lint vuln vectors second differential demo
 
 build:
 	go build ./...
@@ -42,6 +42,13 @@ vectors:
 second:
 	PY=$(PY) bash tools/second/run.sh
 
+# The build of this tree must print what the build of OLD (default
+# origin/main) prints on every corpus log. Set ALLOW only for a difference
+# that the change means to make, and say so in the commit.
+OLD ?= origin/main
+differential:
+	PY=$(PY) bash tools/differential/run.sh $(OLD)
+
 demo:
 	./demo.sh >/dev/null
 
@@ -51,6 +58,7 @@ fuzz:
 	go test ./core -run '^$$' -fuzz '^FuzzVerifyFiles$$' -fuzztime $(FUZZTIME) -fuzzminimizetime 5s
 	go test ./core -run '^$$' -fuzz '^FuzzSealValue$$' -fuzztime $(FUZZTIME) -fuzzminimizetime 5s
 	go test ./core -run '^$$' -fuzz '^FuzzSealSets$$' -fuzztime $(FUZZTIME) -fuzzminimizetime 5s
+	go test ./core -run '^$$' -fuzz '^FuzzTooNewGate$$' -fuzztime $(FUZZTIME) -fuzzminimizetime 5s
 	go test ./cmd/bean-import-csv -run '^$$' -fuzz '^FuzzConvert$$' -fuzztime $(FUZZTIME) -fuzzminimizetime 5s
 	go test ./cmd/bean-import-labcorp -run '^$$' -fuzz '^FuzzLabcorp$$' -fuzztime $(FUZZTIME) -fuzzminimizetime 5s
 
