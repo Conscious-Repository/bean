@@ -98,6 +98,14 @@ J = Ident(L, 6); J.claim(2)
 r = rec(J.key, type="hr", subject=J.id, author=J.id, value={"n": 1}); r2 = dict(r); r2["v"] = 1; r2.pop("id"); r2.pop("sig"); r2["id"] = record_id(r2); r2["sig"] = J.key.sign(r2["id"]); L.put(r2)
 r = rec(I.key, type="bean.tombstone", subject=I.id, author=I.id, refs=[{"rel": "purges", "id": I.id}]); r.pop("id"); r.pop("sig"); r["v"] = 2; r["id"] = record_id(r); r["sig"] = I.key.sign(r["id"]); L.put(r)
 st = Key(b"\x57" * 32); r = rec(st, type="bean.whatever", subject=J.id, author=J.id); r.pop("id"); r.pop("sig"); r["v"] = 3; r["id"] = record_id(r); r["sig"] = st.sign(r["id"]); L.put(r)
+# E2 (K1): a v9 core record by a rotated-out key and by a stranger is ungated;
+# one by the next recovery key (a newer rotation) halts the identity.
+def future(ident, key, t="bean.tombstone"):
+    r = rec(key, type=t, subject=ident.id, author=ident.id, refs=[{"rel": "purges", "id": ident.id}]); r.pop("id"); r.pop("sig"); r["v"] = 9
+    r["id"] = record_id(r); r["sig"] = key.sign(r["id"]); return ident.log.put(r)
+L = Log("too-new-retired"); I = Ident(L, 8); c = I.claim(1); I.rotate([c]); I.claim(2)
+future(I, I.oldkey); future(I, Key(b"\x58" * 32))
+L = Log("too-new-recovery"); I = Ident(L, 9); I.claim(1); future(I, I.rec(0), "bean.succession")
 # F: succession errors: bad succession, key reuse, recovery not advanced, held succession, unknown core type.
 L = Log("succ-errors"); I = Ident(L, 7)
 I.rotate([], parent=I.id, newkey=Key(b"\x60" * 32), gen=1)          # wrong recovery generation

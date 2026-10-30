@@ -419,8 +419,16 @@ def verify(files, blobfiles):
             if r["author"] == r["kid"]: too_new.add(i)
             continue
         T = trees.get(r["author"])
-        if T and any(r["kid"] in (n["value"]["key"], n.get("kid")) for n in T.values()):
-            too_new.add(r["author"])
+        if T is None: continue
+        # 8.2 (K1): the head key, or a recovery key that a chain node commits to.
+        x, gate = genesis[r["author"]], False
+        while True:
+            if commitment(r["kid"]) == x["value"]["recovery"]: gate = True; break
+            kids = [n for n in T.values() if n["type"] == "bean.succession" and n["refs"][0]["id"] == x["id"]]
+            if len(kids) != 1: gate = r["kid"] == x["value"]["key"]; break
+            x = kids[0]
+        if gate: too_new.add(r["author"])
+        else: warn(i, "ungated: " + i)
     for i, r in list(R.items()):
         if r["author"] in too_new or r.get("subject") in too_new or i in too_new:
             del R[i]; skipped += 1  # GUESS(8): records of a too-new identity count as skipped

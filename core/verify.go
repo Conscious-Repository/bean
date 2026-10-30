@@ -210,10 +210,8 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 	}
 	// Step 3: succession trees (seed-only rule, change set C5 to C11).
 	nodes := map[string]map[string]*Record{} // identity -> node id -> node
-	nodeKeys := map[string]map[string]bool{} // identity -> signing or recovery keys of nodes
 	for gid, g := range genesis {
 		n := map[string]*Record{gid: g}
-		keys := map[string]bool{g.ValueKey(): true}
 		pending := []*Record{}
 		for _, id := range ids {
 			r := rp.Records[id]
@@ -236,8 +234,6 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 					continue
 				}
 				n[s.ID] = s
-				keys[s.ValueKey()] = true
-				keys[s.Kid] = true
 			}
 			pending = rest
 		}
@@ -245,25 +241,33 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 			rp.warn(s.ID, "held: "+s.ID)
 			rp.Held[s.ID] = true
 		}
-		nodes[gid], nodeKeys[gid] = n, keys
+		nodes[gid] = n
 	}
-	// Too new (SPEC.md 8.2 with change set C15): an unknown-v bean.* record
-	// counts only when its signer is a key of the identity's known tree.
+	// Too new (SPEC.md 8.2, change K1): an unknown-v bean.* record halts its
+	// author identity only when it is signed by the head key or by a
+	// recovery key that a chain node commits to. Only the head key or the
+	// seed holder can change the rules for an identity; a rotated-out key,
+	// a stranger or a forged file cannot halt it.
 	tooNew := map[string]bool{}
 	for _, r := range unknown {
+		rp.Skipped++
 		if !strings.HasPrefix(r.Type, "bean.") {
-			rp.Skipped++
 			continue
 		}
-		rp.Skipped++
 		if r.Type == "bean.genesis" {
 			if r.Author == r.Kid {
 				tooNew[r.ID] = true
 			}
 			continue
 		}
-		if keys, ok := nodeKeys[r.Author]; ok && keys[r.Kid] {
+		g, ok := genesis[r.Author]
+		if !ok {
+			continue
+		}
+		if gates(g, nodes[r.Author], r.Kid) {
 			tooNew[r.Author] = true
+		} else {
+			rp.warn(r.ID, "ungated: "+r.ID)
 		}
 	}
 	for id := range tooNew {
@@ -482,6 +486,32 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 		}
 	}
 	return rp
+}
+
+// gates reports whether kid may halt the identity of genesis g (SPEC.md 8.2,
+// K1): kid is the head key, or a recovery key that a node of the chain
+// commits to. The chain is followed from g through single children; at a
+// fork the fork point is the head (6.3 step 5).
+func gates(g *Record, n map[string]*Record, kid string) bool {
+	c := Commitment(kid)
+	x := g
+	for {
+		if x.Recovery() == c {
+			return true
+		}
+		var next *Record
+		count := 0
+		for _, s := range n {
+			if s != g && s.Targets("succeeds")[0] == x.ID {
+				next = s
+				count++
+			}
+		}
+		if count != 1 {
+			return x.ValueKey() == kid
+		}
+		x = next
+	}
 }
 
 // offChain marks a key of a tree node that is below a freeze point.
