@@ -440,7 +440,7 @@ A writer MUST encrypt every blob before it hashes and stores it.
 Equal plaintext gives equal blob bytes and an equal blob id for one identity secret.
 Go has no AES-SIV in its standard library.
 An implementation MAY use a vetted AES-SIV library or build CMAC (RFC 4493), S2V and CTR from `crypto/aes` and `crypto/cipher`.
-Either way it MUST pass the RFC 5297 Appendix A vectors. The reference implementation builds it and matches OpenSSL on vector V11.
+Every implementation MUST match vector V11 (14). Code that builds AES-SIV from CMAC, S2V and CTR MUST also pass the RFC 4493 and RFC 5297 Appendix A vectors. A library that accepts only 64-byte keys cannot run RFC 5297 Appendix A, whose keys are 32 bytes. For such a library the gate is V11 plus the 512-bit-key groups of the Wycheproof AES-SIV-CMAC tests (change K7 of draft v0.7). The reference implementation builds AES-SIV, passes RFC 4493 and RFC 5297, and matches OpenSSL on V11.
 Implementations MUST support blobs of at least 256 MiB. DEFAULT.
 
 ### 4.10 Paper seed encoding
@@ -1471,7 +1471,7 @@ The reference implementation has published V1 to V12 and V17 to V21. Its indepen
 | V21 | Seal continuations (C28) | A fixed identity, a succession with 2 parts, a duplicate part, a forged part and a part for a missing succession | Valid, `bad seal`, `not sealed`, held or incomplete per record and per scenario. Published. |
 | V18 | secp256k1 | A fixed secret key and a record id, created_at 0 and 1761566400, zero aux | `kid`, npub, nsec, wrapper bytes and id, `sig`, and five rejects. Published. Checked by `tools/checksecp256k1.py`. |
 
-The AES-SIV code MUST also pass the RFC 5297 Appendix A vectors. The HKDF code MUST pass the RFC 5869 Appendix A vectors.
+Hand-built AES-SIV code MUST also pass the RFC 4493 and RFC 5297 Appendix A vectors (4.9). The HKDF code MUST pass the RFC 5869 Appendix A vectors.
 
 ## 15. Security considerations
 
