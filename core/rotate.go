@@ -3,7 +3,9 @@ package core
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -22,7 +24,12 @@ type RotateResult struct {
 // in this replica is sealed unless its id is in noSeal.
 func (s *Store) Rotate(words []string, noSeal []string, key NewKey) (RotateResult, error) {
 	var res RotateResult
-	l, err := s.Load()
+	unlock, err := s.lock()
+	if err != nil {
+		return res, err
+	}
+	defer unlock()
+	l, err := s.load(false)
 	if err != nil {
 		return res, err
 	}
@@ -69,8 +76,11 @@ func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string, k
 		}
 		skip[x] = true
 	}
+	// C26 (Benjamin decision, 2026-10-30): the succession seals every valid
+	// record of the outgoing key, not only destructive ones. A record of a
+	// retired key that the succession does not seal is invalid.
 	for rid, r := range l.Report.Records {
-		if r.Kid == outgoing && r.IsDestructive() && !r.IsIdentity() && l.Report.Valid[rid] {
+		if r.Kid == outgoing && r.Author == id && !r.IsIdentity() && l.Report.Valid[rid] {
 			if skip[rid] {
 				res.NotSealed = append(res.NotSealed, rid)
 			} else {
@@ -97,12 +107,25 @@ func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string, k
 		return res, err
 	}
 	if fr := CheckFile(PathOf(sid), bytes); fr.Err != nil {
+		if errors.Is(fr.Err, ErrTooLarge) {
+			return res, fmt.Errorf("too large: %d records to seal; a succession holds about 230,000", len(res.Sealed))
+		}
 		return res, fr.Err
+	}
+	// Crash order (DECISIONS 110): the new key goes to disk first, then the
+	// succession, then the key replaces local/signing-key. A crash at any
+	// point leaves a state that the next load finishes or discards
+	// (finishRotation); the new key is never lost while a succession names it.
+	if err := writeFileAtomic(s.path(fileSignKeyNext), []byte(keyLine), 0o600); err != nil {
+		return res, err
 	}
 	if _, err := writeIfAbsent(s.path(PathOf(sid)), bytes, 0o600); err != nil {
 		return res, err
 	}
-	if err := writeFileAtomic(s.path(fileSignKey), []byte(keyLine), 0o600); err != nil {
+	if hookAfterSuccession != nil {
+		hookAfterSuccession()
+	}
+	if err := renameSync(s.path(fileSignKeyNext), s.path(fileSignKey)); err != nil {
 		return res, err
 	}
 	res.Succession, res.NewKey = sid, newSigner.Public()
@@ -116,6 +139,18 @@ func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string, k
 // secret, and writes a succession to a new signing key exactly as Rotate
 // does, with the same default seals. It returns the identity id.
 func (s *Store) Restore(words []string, noSeal []string, key NewKey) (RotateResult, string, error) {
+	return s.RestoreIdentity(words, noSeal, key, "")
+}
+
+// RestoreIdentity is Restore for a folder that holds more than one genesis
+// committing to these words (DECISIONS 109). identity "" accepts only a
+// single match.
+func (s *Store) RestoreIdentity(words []string, noSeal []string, key NewKey, identity string) (RotateResult, string, error) {
+	unlock, err := s.lock()
+	if err != nil {
+		return RotateResult{}, "", err
+	}
+	defer unlock()
 	if _, err := os.Stat(s.path(fileIdentity)); err == nil {
 		return RotateResult{}, "", ErrAlreadyInitialized
 	}
@@ -128,19 +163,32 @@ func (s *Store) Restore(words []string, noSeal []string, key NewKey) (RotateResu
 			seed[i] = 0
 		}
 	}()
-	l, err := s.Load()
+	l, err := s.load(false)
 	if err != nil {
 		return RotateResult{}, "", err
 	}
 	c0 := Commitment(RecoverySigner(seed, 0).Public())
-	var id string
+	var matches []string
 	for _, gid := range sortedKeys(l.Report.Chains) {
 		if chain := l.Report.Chains[gid]; len(chain) > 0 && chain[0].Recovery() == c0 {
-			id = gid
+			matches = append(matches, gid)
 		}
 	}
-	if id == "" {
+	var id string
+	switch {
+	case identity != "":
+		if !contains(matches, identity) {
+			return RotateResult{}, "", errors.New("input missing: genesis " + identity + " for these words")
+		}
+		id = identity
+	case len(matches) == 0:
 		return RotateResult{}, "", errors.New("input missing: genesis for these words")
+	case len(matches) > 1:
+		// The recovery commitment is public, so anyone who can write to the
+		// folder can copy it into a genesis of their own. Never guess.
+		return RotateResult{}, "", errors.New("ambiguous: " + strings.Join(matches, " ") + ": more than one genesis commits to these words; pass -identity with the id that bean whoami showed on your old machine")
+	default:
+		id = matches[0]
 	}
 	secret := IdentitySecret(seed)
 	if err := writeFileAtomic(s.path(fileSecret), []byte(hex.EncodeToString(secret)+"\n"), 0o600); err != nil {
@@ -184,4 +232,63 @@ func isDigits(s string) (int, bool) {
 		n = n*10 + int(c-'0')
 	}
 	return n, true
+}
+
+// fileSignKeyNext holds the new signing key while a rotation is between
+// its two writes (DECISIONS 110).
+const fileSignKeyNext = "local/signing-key.next"
+
+// hookAfterSuccession lets a test stop a rotation between its writes.
+var hookAfterSuccession func()
+
+// finishRotation completes or discards a rotation that a crash stopped.
+// If a chain head names the key in local/signing-key.next, the succession
+// is on disk and the key moves into place. If no chain node names it, the
+// succession never reached the disk and the key is discarded. The caller
+// holds the lock. It reports whether local/signing-key changed.
+func (s *Store) finishRotation(rp *Report) (bool, error) {
+	b, err := os.ReadFile(s.path(fileSignKeyNext))
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	pub, err := keyLinePublic(string(b))
+	if err != nil {
+		return false, err
+	}
+	named := false
+	for _, chain := range rp.Chains {
+		for i, n := range chain {
+			if n.ValueKey() != pub {
+				continue
+			}
+			named = true
+			if i == len(chain)-1 {
+				return true, renameSync(s.path(fileSignKeyNext), s.path(fileSignKey))
+			}
+		}
+	}
+	if !named {
+		return false, os.Remove(s.path(fileSignKeyNext))
+	}
+	return false, nil
+}
+
+// keyLinePublic returns the tagged public key of a local key line.
+func keyLinePublic(line string) (string, error) {
+	sg, err := signerFromLine(line)
+	if err != nil {
+		return "", err
+	}
+	return sg.Public(), nil
+}
+
+// renameSync renames and flushes the directory.
+func renameSync(from, to string) error {
+	if err := os.Rename(from, to); err != nil {
+		return err
+	}
+	return syncDir(filepath.Dir(to))
 }

@@ -131,7 +131,8 @@ func TestNostrLog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(res.NewKey, "secp256k1:") || res.NewKey == first || len(res.Sealed) != 1 {
+	// C26: the claim ids[0] and the tombstone are sealed; ids[1] is purged.
+	if !strings.HasPrefix(res.NewKey, "secp256k1:") || res.NewKey == first || len(res.Sealed) != 2 {
 		t.Errorf("rotate %+v", res)
 	}
 	appendLines(t, s, partial("hrv.rmssd", 3, nil))

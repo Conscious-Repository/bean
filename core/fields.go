@@ -89,6 +89,7 @@ var (
 	ErrUnknownCoreType = errors.New("unknown core type")
 	ErrUnknownRel      = errors.New("unknown rel")
 	ErrBlobNotListed   = errors.New("blob not listed")
+	ErrOldFormat       = errors.New("old format: core record from a build before the rename to bean; this log cannot be used, run bean init in a new folder")
 )
 
 func badField(name string) error { return errors.New("bad field: " + name) }
@@ -112,6 +113,11 @@ func (r *Record) checkFields() error {
 	// type
 	if len(r.Type) < 1 || len(r.Type) > 128 || !typePattern.MatchString(r.Type) {
 		return badField("type")
+	}
+	// A core record from a build before the rename (C24) cannot be valid:
+	// say so instead of failing on a later field (DECISIONS 111).
+	if r.Type == "hlog.genesis" || r.Type == "hlog.succession" || r.Type == "hlog.tombstone" {
+		return ErrOldFormat
 	}
 	// subject
 	subj, hasSubj := m["subject"]

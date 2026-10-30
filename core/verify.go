@@ -366,7 +366,10 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 			rp.fail(id, "key not in chain")
 			continue
 		}
-		if r.IsDestructive() && p < len(chain)-1 {
+		// Step 7 (C26, Benjamin decision 2026-10-30): every record of a
+		// retired key needs the seal of the succession that retired it.
+		// Before C26 only destructive records did.
+		if p < len(chain)-1 {
 			if !contains(chain[p+1].Sealed(), id) {
 				rp.fail(id, "not sealed")
 			}
@@ -451,11 +454,14 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 	// Step 12: duplicates. A superseded record is left out: a parser fix
 	// (9.7) keeps the ref of the record it corrects, and grouping the two
 	// would hide the fix as a duplicate whenever its id is the higher one.
-	groups := map[[3]string][]string{}
+	// The author is part of the group (C27): a record of one key is never
+	// a duplicate of another key's record, so no key can hide another
+	// key's record by copying its ref.
+	groups := map[[4]string][]string{}
 	for _, id := range ids {
 		r := rp.Records[id]
 		if rp.Valid[id] && r.Source.Ref != "" && !r.IsIdentity() && len(rp.Superseded[id]) == 0 {
-			k := [3]string{r.Subject, r.Source.System, r.Source.Ref}
+			k := [4]string{r.Subject, r.Author, r.Source.System, r.Source.Ref}
 			groups[k] = append(groups[k], id)
 		}
 	}

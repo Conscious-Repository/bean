@@ -425,7 +425,8 @@ func TestHoldRestore(t *testing.T) {
 	}
 	nk := NewEd25519Signer(bytes.Repeat([]byte{7}, 32))
 	rec := RecoverySigner(seed, 0)
-	succ := NewSuccession(gid, rec.Public(), gid, nk.Public(), Commitment(RecoverySigner(seed, 1).Public()), nil, Adapter, "2026-10-31T12:00:00Z")
+	// The claim T is sealed (C26) so that only D's missing seal matters.
+	succ := NewSuccession(gid, rec.Public(), gid, nk.Public(), Commitment(RecoverySigner(seed, 1).Public()), []string{tgt}, Adapter, "2026-10-31T12:00:00Z")
 	sid, sb, _ := SignRecord(succ, rec)
 	writeFileAtomic(a2.path(PathOf(sid)), sb, 0o600)
 	b2.Now = func() time.Time { return testClock.Add(3 * 24 * time.Hour) }
