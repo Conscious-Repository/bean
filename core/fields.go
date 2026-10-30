@@ -269,105 +269,79 @@ func (r *Record) checkFields() error {
 	return r.checkReservedType()
 }
 
+// fieldRule is one check of 3.7: when bad, the record fails with field.
+type fieldRule struct {
+	bad   bool
+	field string
+}
+
+// firstBad returns the error of the first rule that fails, in order.
+func firstBad(rules ...fieldRule) error {
+	for _, x := range rules {
+		if x.bad {
+			return badField(x.field)
+		}
+	}
+	return nil
+}
+
+// checkReservedType applies the rules of the bean.* types (3.7, C28).
 func (r *Record) checkReservedType() error {
+	selfSource := r.Source.System == "self" && r.Source.Ref == ""
+	oneRef := func(rel string) bool { return len(r.Refs) == 1 && r.Refs[0].Rel == rel }
 	switch r.Type {
 	case "bean.genesis":
 		key := r.ValueKey()
-		if r.Value == nil || len(r.Value) != 2 || !IsTaggedKey(key) || !IsID(r.Recovery()) {
-			return badField("value")
-		}
-		if r.Author != key || r.Kid != key {
-			return badField("author")
-		}
-		if len(r.Refs) != 0 {
-			return badField("refs")
-		}
-		if r.Observed != nil {
-			return badField("times.observed")
-		}
-		if r.Source.System != "self" || r.Source.Ref != "" {
-			return badField("source")
-		}
+		return firstBad(
+			fieldRule{r.Value == nil || len(r.Value) != 2 || !IsTaggedKey(key) || !IsID(r.Recovery()), "value"},
+			fieldRule{r.Author != key || r.Kid != key, "author"},
+			fieldRule{len(r.Refs) != 0, "refs"},
+			fieldRule{r.Observed != nil, "times.observed"},
+			fieldRule{!selfSource, "source"})
 	case "bean.succession":
-		if r.Subject != r.Author || !IsID(r.Author) {
-			return badField("author")
-		}
-		if len(r.Refs) != 1 || r.Refs[0].Rel != "succeeds" {
-			return badField("refs")
-		}
 		// value.parts is present only when seal continuations follow (C28).
+		parts, hasParts := r.Value["parts"]
 		n := 3
-		if _, has := r.Value["parts"]; has {
+		if hasParts {
 			n = 4
-			if !isCount(r.Value["parts"]) {
-				return badField("value.parts")
-			}
 		}
-		if r.Value == nil || len(r.Value) != n || !IsTaggedKey(r.ValueKey()) || !IsID(r.Recovery()) {
-			return badField("value")
-		}
-		if err := checkSealedList(r.Value["sealed"], false); err != nil {
-			return err
-		}
+		return firstBad(
+			fieldRule{r.Subject != r.Author || !IsID(r.Author), "author"},
+			fieldRule{!oneRef("succeeds"), "refs"},
+			fieldRule{hasParts && !isCount(parts), "value.parts"},
+			fieldRule{r.Value == nil || len(r.Value) != n || !IsTaggedKey(r.ValueKey()) || !IsID(r.Recovery()), "value"},
+			fieldRule{!sealedList(r.Value["sealed"], false), "value.sealed"})
 	case "bean.seal":
 		// A seal continuation (C28): more ids for the seal set of the
 		// succession that its one "seals" ref names.
-		if r.Subject != r.Author || !IsID(r.Author) {
-			return badField("author")
-		}
-		if len(r.Refs) != 1 || r.Refs[0].Rel != "seals" {
-			return badField("refs")
-		}
-		if r.Value == nil || len(r.Value) != 2 || !isCount(r.Value["part"]) {
-			return badField("value")
-		}
-		if err := checkSealedList(r.Value["sealed"], true); err != nil {
-			return err
-		}
-		if r.Observed != nil {
-			return badField("times.observed")
-		}
-		if r.Blobs != nil {
-			return badField("blobs")
-		}
-		if r.Source.System != "self" || r.Source.Ref != "" {
-			return badField("source")
-		}
+		return firstBad(
+			fieldRule{r.Subject != r.Author || !IsID(r.Author), "author"},
+			fieldRule{!oneRef("seals"), "refs"},
+			fieldRule{r.Value == nil || len(r.Value) != 2 || !isCount(r.Value["part"]), "value"},
+			fieldRule{!sealedList(r.Value["sealed"], true), "value.sealed"},
+			fieldRule{r.Observed != nil, "times.observed"},
+			fieldRule{r.Blobs != nil, "blobs"},
+			fieldRule{!selfSource, "source"})
 	case "bean.tombstone":
-		if r.Subject != r.Author {
-			return badField("author")
-		}
-		if len(r.Refs) != 1 || r.Refs[0].Rel != "purges" {
-			return badField("refs")
-		}
-		if r.Value != nil || r.Blobs != nil {
-			return badField("value")
-		}
-		if reason, has := r.Context["reason"]; has {
-			s, ok := reason.(string)
-			if !ok || len([]rune(s)) > 200 {
-				return badField("context.reason")
+		reason, hasReason := r.Context["reason"]
+		s, isText := reason.(string)
+		return firstBad(
+			fieldRule{r.Subject != r.Author, "author"},
+			fieldRule{!oneRef("purges"), "refs"},
+			fieldRule{r.Value != nil || r.Blobs != nil, "value"},
+			fieldRule{hasReason && (!isText || len([]rune(s)) > 200), "context.reason"})
+	}
+	if strings.HasPrefix(r.Type, "bean.") {
+		return ErrUnknownCoreType
+	}
+	if b, has := r.Value["blob"]; has {
+		id, _ := b.(string)
+		for _, bl := range r.Blobs {
+			if bl.Hash == id && IsID(id) {
+				return nil
 			}
 		}
-	default:
-		if strings.HasPrefix(r.Type, "bean.") {
-			return ErrUnknownCoreType
-		}
-		if b, has := r.Value["blob"]; has {
-			id, ok := b.(string)
-			if !ok || !IsID(id) {
-				return ErrBlobNotListed
-			}
-			found := false
-			for _, bl := range r.Blobs {
-				if bl.Hash == id {
-					found = true
-				}
-			}
-			if !found {
-				return ErrBlobNotListed
-			}
-		}
+		return ErrBlobNotListed
 	}
 	return nil
 }
@@ -421,20 +395,20 @@ func isCount(v any) bool {
 	return ok && f == float64(int(f)) && f >= 1 && f <= MaxSealParts
 }
 
-// checkSealedList checks value.sealed: unique ids in ascending ASCII order.
-// A continuation must seal at least one id.
-func checkSealedList(v any, nonEmpty bool) error {
+// sealedList reports whether value.sealed is a list of unique ids in
+// ascending ASCII order. A continuation must seal at least one id.
+func sealedList(v any, nonEmpty bool) bool {
 	sealed, ok := v.([]any)
 	if !ok || (nonEmpty && len(sealed) == 0) {
-		return badField("value.sealed")
+		return false
 	}
 	prev := ""
 	for _, x := range sealed {
 		s, ok := x.(string)
 		if !ok || !IsID(s) || s <= prev {
-			return badField("value.sealed")
+			return false
 		}
 		prev = s
 	}
-	return nil
+	return true
 }
