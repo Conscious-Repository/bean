@@ -79,6 +79,18 @@ rm -f "$A/$(echo "$RID" | sed -E 's/^sha256:(..)(.*)$/objects\/\1\/\2.json/')"
 bean -dir "$OLD" sync "$A" >/dev/null 2>&1
 want "a copy with the retired key refuses to write" 1 "retired key" sh -c "$(declare -f claim); claim 2 | bean -dir '$OLD' append"
 
+echo "== a thief with the current key halts; the 24 words go past it (C29)"
+A=$W/ha; newlog "$A"; claim 1 | bean -dir "$A" append >/dev/null
+STOLEN=$W/hstolen; mkdir -p "$STOLEN"; cp -r "$A/local" "$STOLEN/"
+HID=$(adversary halt "$A" "$STOLEN")
+want "a halt by the current key: too new" 3 "too new: " bean -dir "$A" verify
+want "append refuses while halted" 3 "too new: " sh -c "$(declare -f claim); claim 2 | bean -dir '$A' append"
+want "rotate with the 24 words goes past the halt" 0 "past halt $HID" bean -dir "$A" rotate <"$A.words"
+want "after the rotation the halt is ungated" 0 "ungated: $HID" bean -dir "$A" verify
+want "append works again" 0 "" sh -c "$(declare -f claim); claim 3 | bean -dir '$A' append"
+H2=$(adversary halt "$A" "$STOLEN")
+want "a second halt by the stolen key is ungated" 0 "ungated: $H2" bean -dir "$A" verify
+
 echo "== foreign genesis on restore (M3)"
 A=$W/ga; newlog "$A"; claim 1 | bean -dir "$A" append >/dev/null
 ID=$(awk 'NR==1{print $2}' "$A.init")
