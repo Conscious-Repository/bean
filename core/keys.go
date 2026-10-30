@@ -1,11 +1,13 @@
 package core
 
 import (
+	"crypto"
+	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/sha256"
+	"encoding/asn1"
 	"encoding/hex"
 	"errors"
 	"math/big"
@@ -155,23 +157,36 @@ func NewP256Signer(d []byte) (*p256Signer, error) {
 	if k.D.Sign() == 0 || k.D.Cmp(k.Curve.Params().N) >= 0 {
 		return nil, ErrBadKey
 	}
-	k.X, k.Y = k.Curve.ScalarBaseMult(d)
+	ek, err := ecdh.P256().NewPrivateKey(d)
+	if err != nil {
+		return nil, ErrBadKey
+	}
+	pub := ek.PublicKey().Bytes() // 0x04 || X || Y
+	k.X, k.Y = new(big.Int).SetBytes(pub[1:33]), new(big.Int).SetBytes(pub[33:])
 	return &p256Signer{k}, nil
 }
 
 func (s *p256Signer) Public() string { return TagP256(&s.key.PublicKey) }
 
-// Sign produces r||s with low-S (SPEC.md 4.5). Nonces are random; a
-// hardware signer behaves the same way.
+// Sign produces r||s with low-S (SPEC.md 4.5). The nonce is
+// deterministic (RFC 6979, through crypto/ecdsa with a nil random source,
+// Go 1.24 and later), so a software signer makes reproducible test
+// vectors and never depends on the system random source while signing.
+// A hardware signer may use random nonces; verifiers accept both.
 func (s *p256Signer) Sign(id string) (string, error) {
 	if !IsID(id) {
 		return "", ErrBadSignature
 	}
 	h := sha256.Sum256(idRaw(id))
-	r, sv, err := ecdsa.Sign(rand.Reader, s.key, h[:])
+	der, err := s.key.Sign(nil, h[:], crypto.SHA256)
 	if err != nil {
 		return "", err
 	}
+	var rs struct{ R, S *big.Int }
+	if rest, err := asn1.Unmarshal(der, &rs); err != nil || len(rest) != 0 {
+		return "", ErrBadSignature
+	}
+	r, sv := rs.R, rs.S
 	if sv.Cmp(halfN) > 0 {
 		sv.Sub(s.key.Curve.Params().N, sv)
 	}

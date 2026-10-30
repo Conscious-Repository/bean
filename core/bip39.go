@@ -9,7 +9,7 @@ import (
 
 // bip39-english.txt is the BIP-39 English word list from
 // https://github.com/bitcoin/bips/blob/master/bip-0039/english.txt
-// (BIP-39 is licensed under the BSD 2-Clause license). Its SHA-256 is
+// (BIP-39 is licensed under the MIT license; see NOTICE). Its SHA-256 is
 // 2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda.
 //
 //go:embed bip39-english.txt

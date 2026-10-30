@@ -13,7 +13,7 @@ A health log is a folder of signed claims about one person. Programs add files t
 1. A record is one JSON object.
 2. Store the record as its RFC 8785 canonical bytes. Do not add a byte order mark or a final newline.
 3. The path is `objects/<h0h1>/<h2…h63>.json`. `h` is the 64 hex digits after `sha256:` in the record id.
-4. Before you parse a file, its size must be 16 MiB or less. After you know the type, the size must be 1 MiB or less, but a succession can be 16 MiB.
+4. Before you parse a file, its size must be 16 MiB or less. After you know the type, the size must be 1 MiB or less, but a succession or a seal part can be 16 MiB.
 5. Every number is an IEEE 754 double that converts to the same canonical text and back. A number whose canonical form has no `.` and no `e` is an integer. An integer must be in the range ±(2^53−1). Thus `9.007199254740992e15` is invalid and `1e21` is valid.
 6. Strings are UTF-8. A string must not contain an escaped lone surrogate.
 7. An object must not contain the same key two times.
@@ -79,7 +79,8 @@ Check each file in this order. Stop at the first failure.
 | Type | Rules |
 |---|---|
 | `bean.genesis` | No `subject` and no `refs`. `author`, `kid` and `value.key` are the same key. `value.recovery` is the commitment to recovery key 0. The id of the genesis is the identity id. It does not change. |
-| `bean.succession` | `subject` and `author` are the identity id. One `succeeds` ref names the parent. `value` is `{"key", "recovery", "sealed"}`: the new signing key, the commitment to recovery key g+1, and a sorted list of ids. Recovery key g signs it. g is the position of the parent on the chain. The genesis has position 0. |
+| `bean.succession` | `subject` and `author` are the identity id. One `succeeds` ref names the parent. `value` is `{"key", "recovery", "sealed"}`: the new signing key, the commitment to recovery key g+1, and a sorted list of ids. Recovery key g signs it. g is the position of the parent on the chain. The genesis has position 0. When the list is too long for one file, `value` also has `"parts": n` (1 to 1000), and n seal parts carry the rest (C28, 2026-10-30). |
+| `bean.seal` | A seal part. `subject` and `author` are the identity id, `kid` is the `kid` of the succession, and one `seals` ref names it. `value` is `{"part": k, "sealed": [ids]}`, k from 1 to 1000, the list sorted, unique and not empty. `times.observed` is null, no blobs, `source` is `{"system":"self","adapter","ref":null}`. A part with another subject or key, a k above n, or a succession that is not on the chain is invalid (`bad seal`). Two parts with one k are both invalid. A part whose succession is missing is held. |
 
 ### 2.2 Paper seed and derived keys
 
@@ -103,17 +104,18 @@ Check each file in this order. Stop at the first failure.
 
 | Action | Who | Key |
 |---|---|---|
-| Add a claim | Any author. Readers decide whom to trust. | A key on the chain of the author, or a bare key with `kid` equal to `author`. |
+| Add a claim | Any author. Readers decide whom to trust. | The head key, or an older key on the chain whose next succession lists the record in `sealed` (C26, 2026-10-30). A bare key with `kid` equal to `author` is always its own head. |
 | Correct (a record with a `supersedes` ref) | The author of the target. The target must not be an `bean.*` record. | The head key, or an older key on the chain whose next succession lists the record in `sealed`. |
-| Delete (an `bean.tombstone` with one `purges` ref and `author` equal to `subject`) | The subject of the target. The target must not be a genesis, a succession or a tombstone. | The same as for a correction. |
+| Delete (an `bean.tombstone` with one `purges` ref and `author` equal to `subject`) | The subject of the target. The target must not be a genesis, a succession, a seal part or a tombstone. | The same as for a correction. |
 | Rotate | The identity. | The recovery key to which the head commits. |
 
 More rules:
 
-1. A recovery key signs only successions.
+1. A recovery key signs only successions and seal parts.
 2. If two or more valid records correct the same target, readers show the one with the lowest id.
-3. Valid records that have the same `subject`, `source.system` and `source.ref` are duplicates. Do not count corrected records. The record with the lowest id is the primary.
+3. Valid records that have the same `subject`, `author`, `source.system` and `source.ref` are duplicates (C27, 2026-10-30). Do not count corrected records. The record with the lowest id is the primary.
 4. A claim is not valid if the set has no genesis for its author.
+5. A rotation seals every valid record of the outgoing key by default. A retired key cannot add a valid record after the rotation. The sealed set of a succession is its own list plus the lists of its n parts. If any part number from 1 to n does not have exactly one valid part, the set is empty: every record of the outgoing key is not valid until the parts arrive, and `gc` erases nothing (C28). Write the parts before the succession, and sync them first.
 
 ## 4. Folder and sync
 
@@ -125,6 +127,7 @@ More rules:
 4. The copy that wrote the tombstone erases the target at once. Any other copy that has the target hides it. It erases the target only when the person runs `gc`, 7 days or more later.
 5. If a tombstone becomes invalid, for example after a rotation that does not seal it, restore the target.
 6. You can also copy files with rsync, git or a USB drive. Then run `verify` on each copy.
+7. Erasure follows files, not validity (C25). `purge` and `gc` erase a blob only when they erase a record that names it and no other record file names it. `gc` erases nothing while any identity is too new or the local identity is frozen.
 
 ### 4.2 Blobs
 

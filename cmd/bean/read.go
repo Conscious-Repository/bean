@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -185,16 +186,30 @@ func byText(r *core.Record, me string, labels map[string]string) string {
 // Anything that does not sniff as an image is refused, so a photo flag
 // cannot pull an arbitrary file into the log.
 func readImage(path string) ([]byte, string, error) {
-	fi, err := os.Stat(path)
+	f, err := os.Open(path)
 	if err != nil {
 		return nil, "", err
+	}
+	defer f.Close()
+	// Stat the open file, not the path, and read at most maxPhoto+1
+	// bytes: a device such as /dev/zero or a file that grows after the
+	// check cannot exhaust memory.
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, "", err
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, "", errors.New("not a regular file: " + path)
 	}
 	if fi.Size() > maxPhoto {
 		return nil, "", fmt.Errorf("photo larger than %d MiB", maxPhoto>>20)
 	}
-	data, err := os.ReadFile(path)
+	data, err := io.ReadAll(io.LimitReader(f, maxPhoto+1))
 	if err != nil {
 		return nil, "", err
+	}
+	if len(data) > maxPhoto {
+		return nil, "", fmt.Errorf("photo larger than %d MiB", maxPhoto>>20)
 	}
 	mt := http.DetectContentType(data)
 	if !strings.HasPrefix(mt, "image/") {

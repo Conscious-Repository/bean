@@ -73,7 +73,7 @@ func checkFile(path string, data []byte, proven bool) FileResult {
 	if r.Type, ok = obj["type"].(string); !ok {
 		return FileResult{Err: ErrBadType}
 	}
-	if r.Type != "bean.succession" && len(data) > MaxRecordSize {
+	if r.Type != "bean.succession" && r.Type != "bean.seal" && len(data) > MaxRecordSize {
 		return FileResult{Err: ErrTooLarge}
 	}
 	// 9. envelope strings
@@ -126,6 +126,7 @@ type Report struct {
 	Superseded  map[string][]string  // target id -> valid supersede record ids (sorted)
 	Purged      map[string]string    // target id -> tombstone id
 	Held        map[string]bool      // ids of held destructive records
+	Incomplete  []string             // chain successions whose seal set is incomplete (C28)
 	Duplicates  map[string]string    // duplicate id -> primary id
 	Skipped     int
 }
@@ -332,6 +333,14 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 	}
 	sort.Strings(rp.Compromised)
 
+	// Step 5b (C28): seal sets. A succession with value.parts = n seals the
+	// union of its own value.sealed and the value.sealed of n continuation
+	// records, part 1 to n. Only a complete set seals anything: with a part
+	// missing or doubled, the set is empty, so every record of the retired
+	// key is "not sealed" until the parts arrive. Fail closed; nothing is
+	// erased, and validity comes back with the missing files.
+	sealedBy := sealSets(rp, ids)
+
 	// Step 6: resolve signing keys; step 7: seals; step 8: frozen rules.
 	recPos := map[string]int{}
 	for _, id := range ids {
@@ -366,8 +375,11 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 			rp.fail(id, "key not in chain")
 			continue
 		}
-		if r.IsDestructive() && p < len(chain)-1 {
-			if !contains(chain[p+1].Sealed(), id) {
+		// Step 7 (C26, Benjamin decision 2026-10-30): every record of a
+		// retired key needs the seal of the succession that retired it.
+		// Before C26 only destructive records did.
+		if p < len(chain)-1 {
+			if !sealedBy[chain[p+1].ID][id] {
 				rp.fail(id, "not sealed")
 			}
 		}
@@ -451,11 +463,14 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 	// Step 12: duplicates. A superseded record is left out: a parser fix
 	// (9.7) keeps the ref of the record it corrects, and grouping the two
 	// would hide the fix as a duplicate whenever its id is the higher one.
-	groups := map[[3]string][]string{}
+	// The author is part of the group (C27): a record of one key is never
+	// a duplicate of another key's record, so no key can hide another
+	// key's record by copying its ref.
+	groups := map[[4]string][]string{}
 	for _, id := range ids {
 		r := rp.Records[id]
 		if rp.Valid[id] && r.Source.Ref != "" && !r.IsIdentity() && len(rp.Superseded[id]) == 0 {
-			k := [3]string{r.Subject, r.Source.System, r.Source.Ref}
+			k := [4]string{r.Subject, r.Author, r.Source.System, r.Source.Ref}
 			groups[k] = append(groups[k], id)
 		}
 	}
@@ -533,7 +548,7 @@ func (rp *Report) Lines() []string {
 // held in local/, whose freeze is exit 4.
 func (rp *Report) ExitCode(local []string) int {
 	code := 0
-	if len(rp.Errors) > 0 {
+	if len(rp.Errors) > 0 || len(rp.Incomplete) > 0 {
 		code = 1
 	}
 	if len(rp.TooNew) > 0 {
@@ -545,4 +560,70 @@ func (rp *Report) ExitCode(local []string) int {
 		}
 	}
 	return code
+}
+
+// sealSets checks the bean.seal continuations (C28) and returns the seal
+// set of each chain succession. It marks bad parts invalid.
+func sealSets(rp *Report, ids []string) map[string]map[string]bool {
+	onChain := map[string]bool{}
+	for _, chain := range rp.Chains {
+		for _, c := range chain[1:] {
+			onChain[c.ID] = true
+		}
+	}
+	parts := map[string]map[int][]*Record{} // succession id -> part -> parts
+	for _, id := range ids {
+		r := rp.Records[id]
+		if r.Type != "bean.seal" {
+			continue
+		}
+		sid := r.Targets("seals")[0]
+		s, ok := rp.Records[sid]
+		if !ok {
+			rp.warn(id, "held: "+id)
+			rp.Held[id] = true
+			continue
+		}
+		// Same identity, same recovery key as the succession, a part
+		// number the succession announces, and a succession on the chain.
+		if s.Type != "bean.succession" || r.Subject != s.Subject || r.Kid != s.Kid || r.Part() > s.Parts() || !onChain[sid] || !rp.Valid[sid] {
+			rp.fail(id, "bad seal")
+			continue
+		}
+		if parts[sid] == nil {
+			parts[sid] = map[int][]*Record{}
+		}
+		parts[sid][r.Part()] = append(parts[sid][r.Part()], r)
+	}
+	out := map[string]map[string]bool{}
+	for _, gid := range sortedKeys(rp.Chains) {
+		for _, c := range rp.Chains[gid][1:] {
+			set := map[string]bool{}
+			for _, x := range c.Sealed() {
+				set[x] = true
+			}
+			complete := true
+			for k := 1; k <= c.Parts(); k++ {
+				list := parts[c.ID][k]
+				if len(list) != 1 {
+					complete = false
+					for _, d := range list { // two parts for one slot: only a seed holder can sign them
+						rp.fail(d.ID, "bad seal")
+					}
+					continue
+				}
+				for _, x := range list[0].Sealed() {
+					set[x] = true
+				}
+			}
+			if !complete {
+				rp.warn(c.ID, "incomplete seals: "+c.ID)
+				rp.Incomplete = append(rp.Incomplete, c.ID)
+				set = map[string]bool{}
+			}
+			out[c.ID] = set
+		}
+	}
+	sort.Strings(rp.Incomplete)
+	return out
 }

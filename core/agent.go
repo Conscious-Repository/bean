@@ -99,6 +99,11 @@ func (s *Store) ReadAgent() (*Agent, error) {
 // when identity is "". When this replica holds the person's signing key,
 // it also writes the agent.pair claim and returns its id.
 func (s *Store) AgentInit(identity, label string) (string, string, error) {
+	unlock, err := s.lock()
+	if err != nil {
+		return "", "", err
+	}
+	defer unlock()
 	have, err := s.Identity()
 	switch {
 	case errors.Is(err, ErrNotInitialized):
@@ -133,12 +138,12 @@ func (s *Store) AgentInit(identity, label string) (string, string, error) {
 	if _, err := s.ReadLocal(); err != nil {
 		return pub, "", nil // agent-only: the person pairs it on their own machine
 	}
-	pairID, err := s.Pair(pub, label)
+	pairID, err := s.pair(pub, label)
 	return pub, pairID, err
 }
 
 func (s *Store) onlyGenesis() (string, error) {
-	l, err := s.Load()
+	l, err := s.load(false)
 	if err != nil {
 		return "", err
 	}
@@ -156,13 +161,22 @@ func (s *Store) onlyGenesis() (string, error) {
 // key to write claims about them. A current pair claim for the same key is
 // returned instead of writing another.
 func (s *Store) Pair(key, label string) (string, error) {
+	unlock, err := s.lock()
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
+	return s.pair(key, label)
+}
+
+func (s *Store) pair(key, label string) (string, error) {
 	if !strings.HasPrefix(key, "secp256k1:") && !strings.HasPrefix(key, "ed25519:") && !strings.HasPrefix(key, "p256:") {
 		return "", ErrUnsupportedKeyAlgorithm
 	}
 	if _, err := ParseKey(key); err != nil {
 		return "", err
 	}
-	l, err := s.Load()
+	l, err := s.load(false)
 	if err != nil {
 		return "", err
 	}
@@ -199,8 +213,17 @@ func (s *Store) Pair(key, label string) (string, error) {
 // agent.pair claim to its label ("agent" when it has none).
 func (l *Loaded) AgentLabels() map[string]string {
 	out := map[string]string{}
+	self := ""
+	if l.Local != nil {
+		self = l.Local.Identity
+	}
 	for id, r := range l.Report.Records {
 		if r.Type != "agent.pair" || r.Author != r.Subject || !l.Current(id) || r.ValueKey() == "" {
+			continue
+		}
+		// Only the local person's pairings label keys (NIT 5): another
+		// identity in the folder cannot name an agent for this person.
+		if self != "" && r.Author != self {
 			continue
 		}
 		if st, _ := r.Value["status"].(string); st == "unpaired" {
@@ -218,7 +241,12 @@ func (l *Loaded) AgentLabels() map[string]string {
 // AppendAsAgent is Append signed by the local agent key, with the agent's
 // key as the author and the local identity as the default subject.
 func (s *Store) AppendAsAgent(in io.Reader) (AppendResult, error) {
-	l, err := s.Load()
+	unlock, err := s.lock()
+	if err != nil {
+		return AppendResult{}, err
+	}
+	defer unlock()
+	l, err := s.load(false)
 	if err != nil {
 		return AppendResult{}, err
 	}

@@ -1,0 +1,32 @@
+{
+  "expected_duplicates": [
+    {
+      "id": "sha256:92afff5d098f7a2d78c1b6b4a066348a992932d855dc8561ba63fcbdf8ed6d4c",
+      "primary": "sha256:352b5fe69f6b013c2c335b9140fee5c54d6e58640b7b93688d90912edfc59fbc"
+    }
+  ],
+  "files": [
+    {
+      "bytes": "{\"author\":\"ed25519:d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737\",\"id\":\"sha256:43abfda482b162bf2de492faabd2717066114a6b36a32dd98d7379a8caa72ce6\",\"kid\":\"ed25519:d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737\",\"nonce\":\"00000000000000000000000000019001\",\"sig\":\"ed25519:0e62a278a815f57ec95f2e4ec3b525306d9a047cbee3906b862185ef3d328a94e2be1ec2d576f8f2154b144f22bb04943d11674cfa52644294bfc163e168bc09\",\"source\":{\"adapter\":\"genvectors@1\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-10-30T12:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737\",\"recovery\":\"sha256:74d72968e6e27788e8da90f03fd3fbe0461443b8640a5abd8fe671d3e0de0d12\"}}",
+      "path": "objects/43/abfda482b162bf2de492faabd2717066114a6b36a32dd98d7379a8caa72ce6.json"
+    },
+    {
+      "bytes": "{\"author\":\"sha256:43abfda482b162bf2de492faabd2717066114a6b36a32dd98d7379a8caa72ce6\",\"id\":\"sha256:352b5fe69f6b013c2c335b9140fee5c54d6e58640b7b93688d90912edfc59fbc\",\"kid\":\"ed25519:d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737\",\"nonce\":\"00000000000000000000000000019007\",\"sig\":\"ed25519:87fa36a3865815aa613fb2787f0937601f78b776a30277f5c8649591573529bdcbbb25df3aee38407821f1f53ec239eb01bbda935492345a4b22c991593c1709\",\"source\":{\"adapter\":\"genvectors@1\",\"ref\":\"hmac-sha256:ea3a85f8559ad9c8130d64a16613c5637385fdea2d046e04a014b9697c5e7ff5\",\"system\":\"csv\"},\"subject\":\"sha256:43abfda482b162bf2de492faabd2717066114a6b36a32dd98d7379a8caa72ce6\",\"times\":{\"imported\":\"2026-10-30T12:00:00Z\",\"observed\":null},\"type\":\"hrv.rmssd\",\"v\":0,\"value\":{\"n\":5,\"unit\":\"ms\"}}",
+      "path": "objects/35/2b5fe69f6b013c2c335b9140fee5c54d6e58640b7b93688d90912edfc59fbc.json"
+    },
+    {
+      "bytes": "{\"author\":\"sha256:43abfda482b162bf2de492faabd2717066114a6b36a32dd98d7379a8caa72ce6\",\"id\":\"sha256:92afff5d098f7a2d78c1b6b4a066348a992932d855dc8561ba63fcbdf8ed6d4c\",\"kid\":\"ed25519:d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737\",\"nonce\":\"00000000000000000000000000019008\",\"sig\":\"ed25519:996d2b8a83b186756cd5d4286f2161843397c1cede4d24da1845f614e26577f7bd71a0947fd7d75a5883e6e4d7aa1da41dbdbb57dfe8e779c5ee42c01952950b\",\"source\":{\"adapter\":\"genvectors@1\",\"ref\":\"hmac-sha256:ea3a85f8559ad9c8130d64a16613c5637385fdea2d046e04a014b9697c5e7ff5\",\"system\":\"csv\"},\"subject\":\"sha256:43abfda482b162bf2de492faabd2717066114a6b36a32dd98d7379a8caa72ce6\",\"times\":{\"imported\":\"2026-10-30T12:00:00Z\",\"observed\":null},\"type\":\"hrv.rmssd\",\"v\":0,\"value\":{\"n\":5,\"unit\":\"ms\"}}",
+      "path": "objects/92/afff5d098f7a2d78c1b6b4a066348a992932d855dc8561ba63fcbdf8ed6d4c.json"
+    },
+    {
+      "bytes": "{\"author\":\"ed25519:d759793bbc13a2819a827c76adb6fba8a49aee007f49f2d0992d99b825ad2c48\",\"id\":\"sha256:968721eca2e675ad3ee847aecadad812c319d796030d995eaa72bbdf8c7e807e\",\"kid\":\"ed25519:d759793bbc13a2819a827c76adb6fba8a49aee007f49f2d0992d99b825ad2c48\",\"nonce\":\"00000000000000000000000000019009\",\"sig\":\"ed25519:7ba251475c975c65766d543c5e7b90e5ff8b957ea549e5eeae4f2c3f90e4e2971e9fdb4b052a0980fb832237fb6acceb0ebd87086c251bbfee981562f5e94f0c\",\"source\":{\"adapter\":\"genvectors@1\",\"ref\":\"hmac-sha256:ea3a85f8559ad9c8130d64a16613c5637385fdea2d046e04a014b9697c5e7ff5\",\"system\":\"csv\"},\"subject\":\"sha256:43abfda482b162bf2de492faabd2717066114a6b36a32dd98d7379a8caa72ce6\",\"times\":{\"imported\":\"2026-10-30T12:00:00Z\",\"observed\":null},\"type\":\"hrv.rmssd\",\"v\":0,\"value\":{\"n\":6,\"unit\":\"ms\"}}",
+      "path": "objects/96/8721eca2e675ad3ee847aecadad812c319d796030d995eaa72bbdf8c7e807e.json"
+    }
+  ],
+  "records": {
+    "agent_z": "sha256:968721eca2e675ad3ee847aecadad812c319d796030d995eaa72bbdf8c7e807e",
+    "person_x": "sha256:352b5fe69f6b013c2c335b9140fee5c54d6e58640b7b93688d90912edfc59fbc",
+    "person_y": "sha256:92afff5d098f7a2d78c1b6b4a066348a992932d855dc8561ba63fcbdf8ed6d4c"
+  },
+  "spec": "SPEC.md 6.3 step 12, change note C27"
+}

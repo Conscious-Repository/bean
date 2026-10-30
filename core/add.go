@@ -99,7 +99,12 @@ func (s *Store) Add(typ, value string, o AddOptions) (string, error) {
 	if len(ctx) > 0 {
 		obj["context"] = ctx
 	}
-	l, err := s.Load()
+	unlock, err := s.lock()
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
+	l, err := s.load(false)
 	if err != nil {
 		return "", err
 	}

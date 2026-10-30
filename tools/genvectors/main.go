@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/Conscious-Repository/bean/core"
@@ -331,4 +332,222 @@ func genV18(_ core.Signer, claim map[string]any) {
 		"nsec": core.Bech32Encode("nsec", secp), "npub": core.Npub(skid), "kid": skid,
 		"nostr_kind": float64(core.NostrKind), "alt": core.WrapperAlt, "id": claimID, "cases": sigCases, "rejects": rejects,
 	})
+
+}
+
+func init() { extra = append(extra, genV19V20) }
+
+func genV19V20(signer core.Signer, _ map[string]any) {
+	kid := signer.Public()
+	rec0 := core.RecoverySigner(seed, 0).Public()
+	commit0 := core.Commitment(rec0)
+	dedupeKey := core.DedupeKey(core.IdentitySecret(seed))
+
+	// V19 and V20 (2026-10-30): verifier rules C26 and C27. The files and
+	// the expected results come from core.VerifyFiles; tools/checkvectors.py
+	// computes the results again on its own.
+	nonce := 0x19000
+	mk := func(sg core.Signer, m map[string]any) (string, map[string]any) {
+		nonce++
+		m["v"] = 0.0
+		m["nonce"] = fmt.Sprintf("%032x", nonce)
+		if _, ok := m["source"]; !ok {
+			m["source"] = map[string]any{"system": "self", "adapter": "genvectors@1", "ref": nil}
+		}
+		if _, ok := m["times"]; !ok {
+			m["times"] = map[string]any{"observed": nil, "imported": "2026-10-30T12:00:00Z"}
+		}
+		id, b, err := core.SignRecord(m, sg)
+		if err != nil {
+			panic(err)
+		}
+		return id, map[string]any{"path": core.PathOf(id), "bytes": string(b)}
+	}
+	claimBy := func(identity string, sg core.Signer, n float64, ref any) map[string]any {
+		return map[string]any{"type": "hrv.rmssd", "subject": identity, "author": identity, "kid": sg.Public(),
+			"value":  map[string]any{"n": n, "unit": "ms"},
+			"times":  map[string]any{"observed": nil, "imported": "2026-10-30T12:00:00Z"},
+			"source": map[string]any{"system": "csv", "adapter": "genvectors@1", "ref": ref}}
+	}
+	verifyFiles := func(files []any) *core.Report {
+		m := map[string][]byte{}
+		for _, f := range files {
+			ff := f.(map[string]any)
+			m[ff["path"].(string)] = []byte(ff["bytes"].(string))
+		}
+		return core.VerifyFiles(m)
+	}
+
+	// V19: genesis G with key K1. Claims A and B by K1. Succession S
+	// (recovery generation 0) to K2 seals A only. Claim C by K2. Claim D by
+	// K1 written after the rotation.
+	k2 := core.NewEd25519Signer(hexb("3333333333333333333333333333333333333333333333333333333333333333"))
+	var files []any
+	g := core.NewGenesis(kid, commit0, "genvectors@1", "2026-10-30T12:00:00Z")
+	gid, gf := mk(signer, g)
+	files = append(files, gf)
+	aid, af := mk(signer, claimBy(gid, signer, 1, nil))
+	bid, bf := mk(signer, claimBy(gid, signer, 2, nil))
+	files = append(files, af, bf)
+	succ := core.NewSuccession(gid, rec0, gid, k2.Public(), core.Commitment(core.RecoverySigner(seed, 1).Public()), []string{aid}, "genvectors@1", "2026-10-30T12:00:00Z")
+	sid, sf := mk(core.RecoverySigner(seed, 0), succ)
+	cid, cf := mk(k2, claimBy(gid, k2, 3, nil))
+	did, df := mk(signer, claimBy(gid, signer, 4, nil))
+	files = append(files, sf, cf, df)
+	rp := verifyFiles(files)
+	result := func(id string) string {
+		if rp.Valid[id] {
+			return "valid"
+		}
+		return rp.Errors[id]
+	}
+	var expect []any
+	for _, x := range []struct{ name, id string }{{"genesis G", gid}, {"claim A by K1, sealed", aid}, {"claim B by K1, not sealed", bid}, {"succession S", sid}, {"claim C by K2", cid}, {"claim D by K1 after rotation", did}} {
+		expect = append(expect, map[string]any{"name": x.name, "id": x.id, "result": result(x.id)})
+	}
+	if result(aid) != "valid" || result(bid) != "not sealed" || result(cid) != "valid" || result(did) != "not sealed" {
+		panic("V19 does not match C26")
+	}
+	write("v19-retired-key-seals.json", map[string]any{"spec": "SPEC.md 5.4 and 6.3 step 7, change note C26", "paper_seed": "paper_seed in v9-hkdf.json", "files": files, "expected": expect})
+
+	// V20: the person P writes claims X and Y with one ref R. A bare agent
+	// key writes claim Z about P with ref R. Only Y or X is a duplicate.
+	agent := core.NewEd25519Signer(hexb("4444444444444444444444444444444444444444444444444444444444444444"))
+	ref := core.DedupeRefNative(dedupeKey, "csv", "row-20", 0)
+	files = []any{gf}
+	xid, xf := mk(signer, claimBy(gid, signer, 5, ref))
+	yid, yf := mk(signer, claimBy(gid, signer, 5, ref))
+	z := claimBy(gid, agent, 6, ref)
+	z["author"] = agent.Public()
+	zid, zf := mk(agent, z)
+	files = append(files, xf, yf, zf)
+	rp = verifyFiles(files)
+	var dups []any
+	for _, id := range []string{xid, yid, zid} {
+		if p, ok := rp.Duplicates[id]; ok {
+			dups = append(dups, map[string]any{"id": id, "primary": p})
+		}
+	}
+	if len(dups) != 1 || rp.Duplicates[zid] != "" {
+		panic("V20 does not match C27")
+	}
+	write("v20-duplicates-per-author.json", map[string]any{"spec": "SPEC.md 6.3 step 12, change note C27", "files": files,
+		"records": map[string]any{"person_x": xid, "person_y": yid, "agent_z": zid}, "expected_duplicates": dups})
+}
+
+func init() { extra = append(extra, genV21) }
+
+// genV21 writes the seal continuation vector (C28, 2026-10-30). The files
+// and the expected results come from core.VerifyFiles; tools/checkvectors.py
+// computes the results again on its own.
+func genV21(signer core.Signer, _ map[string]any) {
+	kid := signer.Public()
+	rec0 := core.RecoverySigner(seed, 0)
+	nonce := 0x21000
+	mk := func(sg core.Signer, m map[string]any) (string, map[string]any) {
+		nonce++
+		m["v"] = 0.0
+		m["nonce"] = fmt.Sprintf("%032x", nonce)
+		id, b, err := core.SignRecord(m, sg)
+		if err != nil {
+			panic(err)
+		}
+		return id, map[string]any{"path": core.PathOf(id), "bytes": string(b)}
+	}
+	const at = "2026-10-30T12:00:00Z"
+	g := core.NewGenesis(kid, core.Commitment(rec0.Public()), "genvectors@1", at)
+	gid, gf := mk(signer, g)
+	claim := func(n float64) (string, map[string]any) {
+		return mk(signer, map[string]any{"type": "hrv.rmssd", "subject": gid, "author": gid, "kid": kid,
+			"value":  map[string]any{"n": n, "unit": "ms"},
+			"times":  map[string]any{"observed": nil, "imported": at},
+			"source": map[string]any{"system": "csv", "adapter": "genvectors@1", "ref": nil}})
+	}
+	// Claims A, B, C, D by K1. The rotation to K2 seals A, B and C over the
+	// succession S and two parts; D is left out.
+	var ids []string
+	var claimFiles []any
+	names := map[string]string{}
+	for k, name := range []string{"A", "B", "C", "D"} {
+		id, f := claim(float64(k + 1))
+		ids = append(ids, id)
+		claimFiles = append(claimFiles, f)
+		names[id] = "claim " + name
+	}
+	sealed := append([]string(nil), ids[:3]...)
+	sort.Strings(sealed)
+	k2 := core.NewEd25519Signer(hexb("5555555555555555555555555555555555555555555555555555555555555555"))
+	succ := core.NewSuccession(gid, rec0.Public(), gid, k2.Public(), core.Commitment(core.RecoverySigner(seed, 1).Public()), sealed[:1], "genvectors@1", at)
+	succ["value"].(map[string]any)["parts"] = 2.0
+	sid, sf := mk(rec0, succ)
+	p1, p1f := mk(rec0, core.NewSeal(gid, rec0.Public(), sid, 1, sealed[1:2], "genvectors@1", at))
+	p2, p2f := mk(rec0, core.NewSeal(gid, rec0.Public(), sid, 2, sealed[2:3], "genvectors@1", at))
+	// Forged: part 2 naming D signed by the signing key K1, and part 3
+	// (above value.parts) signed by the recovery key.
+	f1, f1f := mk(signer, core.NewSeal(gid, kid, sid, 2, ids[3:4], "genvectors@1", at))
+	f3, f3f := mk(rec0, core.NewSeal(gid, rec0.Public(), sid, 3, ids[3:4], "genvectors@1", at))
+	// A second part 1, signed by the recovery key.
+	d1, d1f := mk(rec0, core.NewSeal(gid, rec0.Public(), sid, 1, ids[3:4], "genvectors@1", at))
+	names[gid], names[sid], names[p1], names[p2], names[f1], names[f3], names[d1] = "genesis G", "succession S", "part 1", "part 2", "forged part 2 by K1", "part 3 above parts", "second part 1"
+
+	verify := func(files []any) *core.Report {
+		m := map[string][]byte{}
+		for _, f := range files {
+			ff := f.(map[string]any)
+			m[ff["path"].(string)] = []byte(ff["bytes"].(string))
+		}
+		return core.VerifyFiles(m)
+	}
+	base := append([]any{gf}, claimFiles...)
+	type scen struct {
+		name  string
+		files []any
+		ids   []string
+	}
+	all := append([]string{gid}, ids...)
+	scens := []scen{
+		{"complete", append(append([]any{}, base...), sf, p1f, p2f, f1f, f3f), append(append([]string{}, all...), sid, p1, p2, f1, f3)},
+		{"missing part 2", append(append([]any{}, base...), sf, p1f), append(append([]string{}, all...), sid, p1)},
+		{"duplicate part 1", append(append([]any{}, base...), sf, p1f, p2f, d1f), append(append([]string{}, all...), sid, p1, p2, d1)},
+		{"parts before the succession", append(append([]any{}, base...), p1f, p2f), append(append([]string{}, all...), p1, p2)},
+	}
+	var out []any
+	for _, sc := range scens {
+		rp := verify(sc.files)
+		var res []any
+		for _, id := range sc.ids {
+			r := "valid"
+			if !rp.Valid[id] {
+				r = rp.Errors[id]
+			}
+			if rp.Held[id] {
+				r = "held"
+			}
+			res = append(res, map[string]any{"name": names[id], "id": id, "result": r})
+		}
+		inc := []any{}
+		for _, x := range rp.Incomplete {
+			inc = append(inc, x)
+		}
+		out = append(out, map[string]any{"name": sc.name, "files": sc.files, "expected": res, "incomplete": inc})
+	}
+	// The expected results must match C28 before the vector is written.
+	want := map[string]string{
+		"complete":                    "valid valid valid valid not sealed valid valid valid bad seal bad seal",
+		"missing part 2":              "valid not sealed not sealed not sealed not sealed valid valid",
+		"duplicate part 1":            "valid not sealed not sealed not sealed not sealed valid bad seal valid bad seal",
+		"parts before the succession": "valid valid valid valid valid held held",
+	}
+	for _, o := range out {
+		o := o.(map[string]any)
+		var got []string
+		for _, e := range o["expected"].([]any) {
+			got = append(got, e.(map[string]any)["result"].(string))
+		}
+		// Claim order in "expected" is A, B, C, D, not sorted; A..C are sealed.
+		if strings.Join(got, " ") != want[o["name"].(string)] {
+			panic("V21 " + o["name"].(string) + ": " + strings.Join(got, " "))
+		}
+	}
+	write("v21-seal-continuations.json", map[string]any{"spec": "SPEC.md 3.3, 5.4 and 6.3 steps 5b and 7, change note C28", "paper_seed": "paper_seed in v9-hkdf.json", "parts_limit": float64(core.MaxSealParts), "scenarios": out})
 }

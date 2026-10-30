@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -264,7 +265,9 @@ func TestChain(t *testing.T) {
 	oldTomb := l.tombstone(i, c1)         // destructive by the key about to rotate out
 	c0 := l.claim(i, "hrv.rmssd", 39, "") // target of an unsealed tombstone
 	unsealed := l.tombstone(i, c0)
-	succ, nk := l.rotate(i, i.id, 0, []string{oldTomb})
+	seals := []string{oldTomb, c0}
+	sort.Strings(seals)
+	succ, nk := l.rotate(i, i.id, 0, seals)
 	oldKey := i.signer
 	i.signer = nk
 	c2 := l.claim(i, "hrv.rmssd", 41, "")
@@ -279,14 +282,13 @@ func TestChain(t *testing.T) {
 	if !rp.Valid[c0] {
 		t.Error("unsealed tombstone purged its target")
 	}
-	// A claim by the old key is still valid (6.5).
+	// C26 (Benjamin decision 2026-10-30): a claim by the retired key that
+	// the succession does not seal is invalid.
 	i.signer = oldKey
 	old := l.claim(i, "hrv.rmssd", 42, "")
 	i.signer = nk
 	rp = l.verify()
-	if !rp.Valid[old] {
-		t.Error("old chain key claim invalid")
-	}
+	wantError(t, rp, old, "not sealed")
 	// A signing key cannot write a succession (C5).
 	bad := NewSuccession(i.id, nk.Public(), succ, NewEd25519Signer(bytes.Repeat([]byte{9}, 32)).Public(), Commitment("ed25519:"+strings.Repeat("00", 32)), nil, "test@0", "2026-10-27T00:00:05Z")
 	bad["nonce"] = l.nonce()

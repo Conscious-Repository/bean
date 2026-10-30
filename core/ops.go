@@ -26,7 +26,12 @@ var forbiddenPartial = []string{"v", "nonce", "author", "kid", "id", "sig"}
 // records before it stay written.
 func (s *Store) Append(in io.Reader) (AppendResult, error) {
 	var res AppendResult
-	l, err := s.Load()
+	unlock, err := s.lock()
+	if err != nil {
+		return res, err
+	}
+	defer unlock()
+	l, err := s.load(false)
 	if err != nil {
 		return res, err
 	}
@@ -66,6 +71,9 @@ type writer struct {
 
 func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, error) {
 	var res AppendResult
+	if err := l.canWrite(w); err != nil {
+		return res, err
+	}
 	var dedupeKey []byte
 	if w.secret != nil {
 		dedupeKey = DedupeKey(w.secret)
@@ -74,10 +82,12 @@ func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, err
 	if err != nil {
 		return res, err
 	}
-	// Existing valid triples and, per 9.7, the ids they belong to.
+	// Existing valid refs of this author and, per 9.7, the ids they belong
+	// to. Dedupe is per author (C27): another key's record with the same
+	// ref never hides or blocks this author's record.
 	existing := map[string]string{}
 	for id, r := range l.Report.Records {
-		if l.Report.Valid[id] && r.Source.Ref != "" {
+		if l.Report.Valid[id] && r.Source.Ref != "" && r.Author == w.author {
 			existing[refLine(r.Subject, r.Source.System, r.Source.Ref)] = id
 		}
 	}
@@ -181,8 +191,12 @@ func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, err
 		if err != nil {
 			return res, err
 		}
-		if fr := CheckFile(PathOf(id), bytes); fr.Err != nil {
+		fr := CheckFile(PathOf(id), bytes)
+		if fr.Err != nil {
 			return res, fmt.Errorf("%s: line %d", fr.Err, lineNo)
+		}
+		if err := l.canWriteRecord(fr.Record); err != nil {
+			return res, fmt.Errorf("%s: line %d", err, lineNo)
 		}
 		wrote, err := writeIfAbsent(s.path(PathOf(id)), bytes, 0o600)
 		if err != nil {
@@ -202,7 +216,12 @@ func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, err
 // Purge writes a tombstone for id (or a 6+ hex prefix of it) and erases
 // the target at once (7.7).
 func (s *Store) Purge(id, reason string) (string, error) {
-	l, err := s.Load()
+	unlock, err := s.lock()
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
+	l, err := s.load(false)
 	if err != nil {
 		return "", err
 	}
@@ -219,6 +238,9 @@ func (s *Store) Purge(id, reason string) (string, error) {
 	}
 	if target.Subject != l.Local.Identity {
 		return "", ErrNotSubject
+	}
+	if err := l.canWrite(writer{signer: l.Local.Signer, author: l.Local.Identity}); err != nil {
+		return "", err
 	}
 	t := NewTombstone(l.Local.Identity, l.Local.Signer.Public(), id, reason, Adapter, s.nowString())
 	tid, bytes, err := SignRecord(t, l.Local.Signer)
@@ -246,11 +268,14 @@ func (s *Store) Purge(id, reason string) (string, error) {
 	if err := s.writeHolds(l.Holds); err != nil {
 		return "", err
 	}
-	l2, err := s.Load()
-	if err != nil {
-		return "", err
+	// Erase the target's own blobs, unless another record file names them
+	// (C25). Never erase any other blob here.
+	delete(l.Files, PathOf(id))
+	var candidates []string
+	for _, b := range target.Blobs {
+		candidates = append(candidates, b.Hash)
 	}
-	if _, err := s.eraseOrphanBlobs(l2); err != nil {
+	if _, err := s.eraseBlobsOf(l.Files, candidates); err != nil {
 		return "", err
 	}
 	return tid, nil
@@ -266,11 +291,18 @@ type SyncResult struct {
 // fails its signature when the incoming one passes).
 func (s *Store) Sync(src *Store) (SyncResult, error) {
 	var res SyncResult
-	a, err := src.Load()
+	unlock, err := s.lock()
 	if err != nil {
 		return res, err
 	}
-	b, err := s.Load()
+	defer unlock()
+	// The source is read without its lock and without changes: a sync never
+	// writes to the folder it copies from.
+	a, err := src.loadReadOnly()
+	if err != nil {
+		return res, err
+	}
+	b, err := s.load(false)
 	if err != nil {
 		return res, err
 	}
@@ -284,7 +316,12 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 			}
 		}
 	}
-	for _, p := range sortedKeys(a.Files) {
+	// Seal continuations go first, so a sync that stops halfway never
+	// leaves a succession without its parts (C28). Order changes nothing
+	// else: the result is a set union.
+	order := sortedKeys(a.Files)
+	sort.SliceStable(order, func(i, j int) bool { return isSealPath(a, order[i]) && !isSealPath(a, order[j]) })
+	for _, p := range order {
 		data := a.Files[p]
 		fr := CheckFile(p, data)
 		if fr.Err != nil {
@@ -324,19 +361,24 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 		}
 		res.Records++
 	}
-	// Blobs (7.4 step 4): named by a record of the union that is not purged
-	// or hidden.
-	b2, err := s.Load()
+	// Blobs (7.4 step 4 as changed by C25): named by a record file of the
+	// union that is not purged or hidden, valid now or not.
+	b2, err := s.load(false)
 	if err != nil {
 		return res, err
 	}
 	named := map[string]bool{}
-	for id, r := range b2.Report.Records {
-		if !b2.Visible(id) {
+	for p, data := range b2.Files {
+		m := pathPattern.FindStringSubmatch(p)
+		if m == nil {
 			continue
 		}
-		for _, bl := range r.Blobs {
-			named[bl.Hash] = true
+		id := "sha256:" + m[1] + m[2]
+		if _, purged := b2.Report.Purged[id]; purged || b2.Hidden[id] {
+			continue
+		}
+		for _, h := range namedBlobs(data) {
+			named[h] = true
 		}
 	}
 	paths, err := listShardFiles(src.Dir, dirBlobs)
@@ -380,7 +422,12 @@ func (s *Store) Export(dir string) (records, blobs int, err error) {
 	if entries, err := os.ReadDir(dir); err == nil && len(entries) > 0 {
 		return 0, 0, errors.New("export dir not empty")
 	}
-	l, err := s.Load()
+	unlock, err := s.lock()
+	if err != nil {
+		return 0, 0, err
+	}
+	defer unlock()
+	l, err := s.load(false)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -431,6 +478,11 @@ func (s *Store) Export(dir string) (records, blobs int, err error) {
 
 // ImportExport reverses Export into a log with the same identity secret.
 func (s *Store) ImportExport(dir string) (records, blobs int, err error) {
+	unlock, err := s.lock()
+	if err != nil {
+		return 0, 0, err
+	}
+	defer unlock()
 	if _, err := s.ReadLocal(); err != nil {
 		return 0, 0, err
 	}
@@ -447,7 +499,7 @@ func (s *Store) ImportExport(dir string) (records, blobs int, err error) {
 		if err != nil {
 			return 0, 0, err
 		}
-		if id[7:] != e.Name() {
+		if !IsID("sha256:"+e.Name()) || id[7:] != e.Name() {
 			return 0, 0, errors.New("blob corrupt: sha256:" + e.Name())
 		}
 		blobs++
@@ -461,7 +513,11 @@ func (s *Store) ImportExport(dir string) (records, blobs int, err error) {
 		if err != nil {
 			return 0, 0, err
 		}
-		p := PathOf("sha256:" + strings.TrimSuffix(e.Name(), ".json"))
+		rid := "sha256:" + strings.TrimSuffix(e.Name(), ".json")
+		if !IsID(rid) || !strings.HasSuffix(e.Name(), ".json") {
+			return 0, 0, errors.New("bad path: records/" + e.Name())
+		}
+		p := PathOf(rid)
 		if fr := CheckFile(p, data); fr.Err != nil {
 			return 0, 0, fmt.Errorf("%s: %s", e.Name(), fr.Err)
 		}
@@ -479,10 +535,15 @@ func (s *Store) ImportExport(dir string) (records, blobs int, err error) {
 // Reindex deletes local/cache and rebuilds the index (7.10). The index is
 // the canonical bytes of a sorted list of record summaries.
 func (s *Store) Reindex() (int, error) {
+	unlock, err := s.lock()
+	if err != nil {
+		return 0, err
+	}
+	defer unlock()
 	if err := os.RemoveAll(s.path(dirCache)); err != nil {
 		return 0, err
 	}
-	l, err := s.Load()
+	l, err := s.load(false)
 	if err != nil {
 		return 0, err
 	}
@@ -519,4 +580,14 @@ func (s *Store) Reindex() (int, error) {
 		return 0, err
 	}
 	return len(rows), nil
+}
+
+// isSealPath reports whether p holds a bean.seal record of l.
+func isSealPath(l *Loaded, p string) bool {
+	m := pathPattern.FindStringSubmatch(p)
+	if m == nil {
+		return false
+	}
+	r := l.Report.Records["sha256:"+m[1]+m[2]]
+	return r != nil && r.Type == "bean.seal"
 }

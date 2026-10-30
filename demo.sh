@@ -13,7 +13,7 @@ go build -o "$W/bin/bean-import-csv" ./cmd/bean-import-csv
 
 A="$W/a"; B="$W/b"; mkdir -p "$A" "$B"
 echo "== init A"
-bean -dir "$A" init 2>/dev/null | head -1
+bean -dir "$A" init 2>/dev/null >"$W/a.init"; head -1 "$W/a.init"
 cp -r "$A/local" "$B/local"
 
 echo "== import a CSV into A"

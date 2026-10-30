@@ -7,8 +7,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -36,6 +38,8 @@ type Store struct {
 	Dir string
 	// Now returns the current time. Tests and $BEAN_NOW inject it.
 	Now func() time.Time
+	// mu is the in-process half of the folder lock (lock.go).
+	mu sync.Mutex
 }
 
 // Open points at a folder. It does not read anything.
@@ -80,27 +84,28 @@ func (s *Store) ReadLocal() (*Local, error) {
 	if err != nil {
 		return nil, err
 	}
-	alg, hx, _ := strings.Cut(strings.TrimSpace(string(kb)), ":")
+	if l.Signer, err = signerFromLine(string(kb)); err != nil {
+		return nil, err
+	}
+	return l, nil
+}
+
+// signerFromLine parses a local key line, "<alg>:<64 hex secret>".
+func signerFromLine(line string) (Signer, error) {
+	alg, hx, _ := strings.Cut(strings.TrimSpace(line), ":")
 	raw, err := hex.DecodeString(hx)
 	if err != nil || len(raw) != 32 {
 		return nil, errors.New("bad field: local/signing-key")
 	}
 	switch alg {
 	case "ed25519":
-		l.Signer = NewEd25519Signer(raw)
+		return NewEd25519Signer(raw), nil
 	case "secp256k1":
-		if l.Signer, err = NewSecp256k1Signer(raw); err != nil {
-			return nil, err
-		}
+		return NewSecp256k1Signer(raw)
 	case "p256":
-		l.Signer, err = NewP256Signer(raw)
-		if err != nil {
-			return nil, err
-		}
-	default:
-		return nil, ErrUnsupportedKeyAlgorithm
+		return NewP256Signer(raw)
 	}
-	return l, nil
+	return nil, ErrUnsupportedKeyAlgorithm
 }
 
 // NewKey is the signing key that init, rotate and restore install. The
@@ -149,6 +154,11 @@ func (k NewKey) signer() (Signer, string, error) {
 // zero NewKey is a new random Ed25519 key. It returns the identity id and
 // the 24 words, which the caller shows once.
 func (s *Store) Init(key NewKey) (string, []string, error) {
+	unlock, err := s.lock()
+	if err != nil {
+		return "", nil, err
+	}
+	defer unlock()
 	if _, err := os.Stat(s.path(fileIdentity)); err == nil {
 		return "", nil, ErrAlreadyInitialized
 	}
@@ -261,16 +271,7 @@ func (s *Store) addPurgedRef(r *Record) error {
 	if have[line] {
 		return nil
 	}
-	if err := os.MkdirAll(s.path(dirLocal), 0o700); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(s.path(filePurgedRef), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	_, err = f.WriteString(line + "\n")
-	return err
+	return appendLineSync(s.path(filePurgedRef), line)
 }
 
 // Loaded is a replica after the hold rules ran.
@@ -286,10 +287,32 @@ type Loaded struct {
 // 7.6 as changed by C14): a newly purged target is hidden, never erased on
 // a timer; a target whose tombstone became invalid is restored. It skips
 // the signature check of files the object cache vouches for (cache.go).
-func (s *Store) Load() (*Loaded, error) { return s.load(false) }
+// It holds the folder lock. On a folder that cannot be written it reads
+// without the lock and changes nothing.
+func (s *Store) Load() (*Loaded, error) {
+	unlock, err := s.lock()
+	if err != nil {
+		if readOnlyFolder(err) {
+			return s.loadWith(false, true)
+		}
+		return nil, err
+	}
+	defer unlock()
+	return s.load(false)
+}
 
-// load is Load; full proves every file and rebuilds the object cache.
-func (s *Store) load(full bool) (*Loaded, error) {
+// load is Load for a caller that holds the lock; full proves every file
+// and rebuilds the object cache.
+func (s *Store) load(full bool) (*Loaded, error) { return s.loadWith(full, false) }
+
+// loadReadOnly verifies the folder without changing it: no hides, no
+// restores, no cache. Sync reads its source this way.
+func (s *Store) loadReadOnly() (*Loaded, error) { return s.loadWith(false, true) }
+
+func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
+	if !readOnly {
+		removeStaleTemps(s.path(dirObjects), s.path(dirBlobs), s.path(dirLocal))
+	}
 	local, err := s.ReadLocal()
 	if err != nil && !errors.Is(err, ErrNotInitialized) && !errors.Is(err, os.ErrNotExist) {
 		return nil, err // an agent-only replica has no signing key; it still loads
@@ -306,7 +329,23 @@ func (s *Store) load(full bool) (*Loaded, error) {
 		return nil, err
 	}
 	rp := verifyFiles(files, proven)
+	if readOnly {
+		for target := range rp.Purged {
+			hidden[target] = true
+		}
+		return &Loaded{Files: files, Hidden: hidden, Report: rp, Holds: holds, Local: local}, nil
+	}
 	s.writeObjCache(disk, files, rp, proven, cacheLen)
+	if done, removed, err := s.finishRotation(rp); err != nil {
+		return nil, err
+	} else if removed {
+		// An undone rotation removed its continuations: judge again.
+		return s.loadWith(full, readOnly)
+	} else if done {
+		if local, err = s.ReadLocal(); err != nil && !errors.Is(err, ErrNotInitialized) {
+			return nil, err
+		}
+	}
 	changed := false
 	// New valid purges: hide the target.
 	for target, tid := range rp.Purged {
@@ -369,11 +408,28 @@ func (l *Loaded) Visible(id string) bool { return l.Report.Valid[id] && !l.Hidde
 // HoldDays old, and blobs that no valid unpurged record names. It returns
 // the counts.
 func (s *Store) GC() (records, blobs int, err error) {
-	l, err := s.Load()
+	unlock, err := s.lock()
 	if err != nil {
 		return 0, 0, err
 	}
+	defer unlock()
+	l, err := s.load(false)
+	if err != nil {
+		return 0, 0, err
+	}
+	// Fail closed (DECISIONS 107): erase nothing while the verifier cannot
+	// fully judge the identities in this folder.
+	if len(l.Report.TooNew) > 0 {
+		return 0, 0, errors.New("too new: " + strings.Join(l.Report.TooNew, ", ") + ": update bean before gc")
+	}
+	if l.Local != nil && contains(l.Report.Compromised, l.Local.Identity) {
+		return 0, 0, errors.New("compromised: " + l.Local.Identity + ": gc refused")
+	}
+	if len(l.Report.Incomplete) > 0 {
+		return 0, 0, errors.New("incomplete seals: " + strings.Join(l.Report.Incomplete, ", ") + ": sync the missing seal parts before gc")
+	}
 	cutoff := s.Now().UTC().Add(-HoldDays * 24 * time.Hour)
+	var candidates []string
 	for tid, h := range l.Holds {
 		recv, perr := time.Parse("2006-01-02T15:04:05Z", h.Received)
 		if perr != nil || recv.After(cutoff) {
@@ -381,6 +437,11 @@ func (s *Store) GC() (records, blobs int, err error) {
 		}
 		if l.Report.Purged[h.Target] != tid || !l.Hidden[h.Target] {
 			continue
+		}
+		if r := l.Report.Records[h.Target]; r != nil {
+			for _, b := range r.Blobs {
+				candidates = append(candidates, b.Hash)
+			}
 		}
 		if err := os.Remove(hiddenPath(s.Dir, h.Target)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return 0, 0, err
@@ -393,39 +454,74 @@ func (s *Store) GC() (records, blobs int, err error) {
 	if err := s.writeHolds(l.Holds); err != nil {
 		return 0, 0, err
 	}
-	blobs, err = s.eraseOrphanBlobs(l)
+	blobs, err = s.eraseBlobsOf(l.Files, candidates)
 	return records, blobs, err
 }
 
-// eraseOrphanBlobs removes blobs that no valid, unpurged record names
-// (7.6 step 5, 7.7 step 5).
-func (s *Store) eraseOrphanBlobs(l *Loaded) (int, error) {
-	named := map[string]bool{}
-	for id, r := range l.Report.Records {
-		if !l.Report.Valid[id] {
-			continue
-		}
-		for _, b := range r.Blobs {
-			named[b.Hash] = true
+// eraseBlobsOf erases the candidate blobs (the blobs of records that were
+// just erased) that no remaining record file names (SPEC.md 7.6 step 5
+// and 7.7 step 5 as changed by C25). A record file counts whether or not
+// it is valid now: validity can come back (a sync, a newer bean), erased
+// bytes cannot. A file that does not parse counts when it contains the
+// blob id at all. A blob that no record ever named is never erased.
+func (s *Store) eraseBlobsOf(files map[string][]byte, candidates []string) (int, error) {
+	if len(candidates) == 0 {
+		return 0, nil
+	}
+	want := map[string]bool{}
+	for _, c := range candidates {
+		if IsID(c) {
+			want[c] = true
 		}
 	}
-	paths, err := listShardFiles(s.Dir, dirBlobs)
-	if err != nil {
-		return 0, err
+	for _, data := range files {
+		if len(want) == 0 {
+			break
+		}
+		for _, h := range namedBlobs(data) {
+			delete(want, h)
+		}
 	}
 	n := 0
-	for _, p := range paths {
-		id := blobIDOfPath(p)
-		if id == "" || named[id] {
+	for _, id := range sortedKeys(want) {
+		err := os.Remove(s.path(BlobPathOf(id)))
+		if errors.Is(err, os.ErrNotExist) {
 			continue
 		}
-		if err := os.Remove(s.path(p)); err != nil {
+		if err != nil {
 			return n, err
 		}
 		n++
 	}
 	return n, nil
 }
+
+// namedBlobs returns the blob ids that a record file names, without
+// judging the record. For bytes that do not parse it returns every
+// "sha256:<64 hex>" string in them.
+func namedBlobs(data []byte) []string {
+	v, err := Parse(data)
+	if obj, ok := v.(map[string]any); err == nil && ok {
+		var out []string
+		arr, _ := obj["blobs"].([]any)
+		for _, it := range arr {
+			if m, ok := it.(map[string]any); ok {
+				if h, ok := m["hash"].(string); ok {
+					out = append(out, h)
+				}
+			}
+		}
+		if val, ok := obj["value"].(map[string]any); ok {
+			if h, ok := val["blob"].(string); ok {
+				out = append(out, h)
+			}
+		}
+		return out
+	}
+	return idPattern.FindAllString(string(data), -1)
+}
+
+var idPattern = regexp.MustCompile(`sha256:[0-9a-f]{64}`)
 
 // PutBlob encrypts and stores plaintext (7.3). It returns the blob id.
 func (s *Store) PutBlob(plaintext []byte) (string, error) {
@@ -446,6 +542,9 @@ func (s *Store) PutBlob(plaintext []byte) (string, error) {
 
 // GetBlob reads and decrypts a blob.
 func (s *Store) GetBlob(id string) ([]byte, error) {
+	if !IsID(id) {
+		return nil, errors.New("bad field: blob id")
+	}
 	secret, err := s.identitySecret()
 	if err != nil {
 		return nil, err
@@ -470,7 +569,16 @@ func (s *Store) GetBlob(id string) ([]byte, error) {
 // VerifyLines runs verify (12.1 output) including blob checks and hidden
 // warnings. It returns the lines and the exit code.
 func (s *Store) VerifyLines() ([]string, int, error) {
-	l, err := s.load(true)
+	readOnly := false
+	unlock, err := s.lock()
+	if err != nil {
+		if !readOnlyFolder(err) {
+			return nil, 1, err
+		}
+		readOnly, unlock = true, func() {}
+	}
+	defer unlock()
+	l, err := s.loadWith(true, readOnly)
 	if err != nil {
 		return nil, 1, err
 	}

@@ -241,6 +241,16 @@ check("v6 high-S", verify(v6["kid"], v6["id"], v6["high_s_sig"]), "bad signature
 raw = bytes.fromhex(v6["high_s_sig"][5:])
 pk.public_key().verify(utils.encode_dss_signature(int.from_bytes(raw[:32], "big"), int.from_bytes(raw[32:], "big")), id_raw(v6["id"]), ec.ECDSA(hashes.SHA256()))
 print("ok   v6 high-S twin is a valid ECDSA signature (rejected only by low-S rule)")
+# The reference signer uses RFC 6979 nonces, so low_s_sig is reproducible.
+try:
+    der = pk.sign(id_raw(v6["id"]), ec.ECDSA(hashes.SHA256(), deterministic_signing=True))
+    r6, s6 = utils.decode_dss_signature(der)
+    n256 = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+    if s6 > n256 // 2:
+        s6 = n256 - s6
+    check("v6 RFC 6979 low-S sig", "p256:" + r6.to_bytes(32, "big").hex() + s6.to_bytes(32, "big").hex(), v6["low_s_sig"])
+except TypeError:
+    print("skip v6 RFC 6979: this cryptography has no deterministic_signing")
 
 v7 = load("v7-commitment.json")
 check("v7 commitment", "sha256:" + hashlib.sha256(v7["tagged_key"].encode("ascii")).hexdigest(), v7["commitment"])
@@ -338,6 +348,136 @@ for c in v17["cases"]:
                 else:
                     got = "accept"
     check(f"v17 {c['name']}", got, want)
+
+# ---- verifier rules C26 and C27 (2026-10-30) --------------------------
+
+
+def load_files(files):
+    recs = {}
+    for f in files:
+        rec, err = parse(f["bytes"])
+        check(f"file {f['path'][-12:]} parse", err, None)
+        rid, _ = record_id(rec)
+        check(f"file {f['path'][-12:]} id", rid, rec["id"])
+        check(f"file {f['path'][-12:]} path", "objects/" + rid[7:9] + "/" + rid[9:] + ".json", f["path"])
+        check(f"file {f['path'][-12:]} canonical", canonical(rec), f["bytes"])
+        if verify(rec["kid"], rid, rec["sig"]) == "accept":
+            recs[rid] = rec
+    return recs
+
+
+def chain_of(recs):
+    """The chain of the one identity in recs: genesis first. Linear chains only."""
+    (gid, g), = [(i, r) for i, r in recs.items() if r["type"] == "bean.genesis" and r["kid"] == r["value"]["key"] == r["author"]]
+    chain = [(gid, g)]
+    while True:
+        head_id, head = chain[-1]
+        kids = [(i, r) for i, r in recs.items() if r["type"] == "bean.succession" and r["author"] == r["subject"] == gid
+                and r["refs"] == [{"rel": "succeeds", "id": head_id}]
+                and "sha256:" + hashlib.sha256(r["kid"].encode("ascii")).hexdigest() == head["value"]["recovery"]]
+        if not kids:
+            return gid, chain
+        assert len(kids) == 1, "fork in a vector"
+        chain.append(kids[0])
+
+
+v19 = load("v19-retired-key-seals.json")
+recs = load_files(v19["files"])
+gid, chain = chain_of(recs)
+pos = {node["value"]["key"]: p for p, (_, node) in enumerate(chain)}
+for e in v19["expected"]:
+    r = recs[e["id"]]
+    if r["type"] in ("bean.genesis", "bean.succession"):
+        got = "valid" if any(i == e["id"] for i, _ in chain) else "invalid"
+    else:
+        p = pos.get(r["kid"])
+        if p is None:
+            got = "key not in chain"
+        elif p < len(chain) - 1 and e["id"] not in chain[p + 1][1]["value"]["sealed"]:
+            got = "not sealed"
+        else:
+            got = "valid"
+    check(f"v19 {e['name']}", got, e["result"])
+
+v20 = load("v20-duplicates-per-author.json")
+recs = load_files(v20["files"])
+gid, chain = chain_of(recs)
+groups = {}
+for i, r in sorted(recs.items()):
+    if r["type"].startswith("bean.") or r["source"]["ref"] is None:
+        continue
+    groups.setdefault((r["subject"], r["author"], r["source"]["system"], r["source"]["ref"]), []).append(i)
+dups = sorted([{"id": i, "primary": g[0]} for g in groups.values() for i in g[1:]], key=lambda d: d["id"])
+check("v20 duplicates", json.dumps(dups, sort_keys=True), json.dumps(sorted(v20["expected_duplicates"], key=lambda d: d["id"]), sort_keys=True))
+
+# ---- seal continuations C28 (2026-10-30) -------------------------------
+
+
+def seal_fields_ok(r):
+    """The bean.seal field rules of SPEC 3.3, checked here on their own."""
+    v = r.get("value")
+    if not isinstance(v, dict) or set(v) != {"part", "sealed"}:
+        return False
+    part, ids = v["part"], v["sealed"]
+    if not isinstance(part, int) or isinstance(part, bool) or not 1 <= part <= v21["parts_limit"]:
+        return False
+    if not isinstance(ids, list) or not ids or ids != sorted(set(ids)):
+        return False
+    return (r["subject"] == r["author"] and r.get("blobs") is None and r["times"]["observed"] is None
+            and r["source"]["system"] == "self" and r["source"]["ref"] is None
+            and len(r["refs"]) == 1 and r["refs"][0]["rel"] == "seals")
+
+
+v21 = load("v21-seal-continuations.json")
+for sc in v21["scenarios"]:
+    recs = load_files(sc["files"])
+    gid, chain = chain_of(recs)
+    on_chain = {i for i, _ in chain}
+    pos = {node["value"]["key"]: p for p, (_, node) in enumerate(chain)}
+    result, slots = {}, {}
+    for i, r in recs.items():
+        if r["type"] != "bean.seal":
+            continue
+        check(f"v21 {sc['name']} fields of {i[:15]}", seal_fields_ok(r), True)
+        sid = r["refs"][0]["id"]
+        s = recs.get(sid)
+        if s is None:
+            result[i] = "held"
+        elif (s["type"] != "bean.succession" or sid not in on_chain or sid == gid or r["subject"] != s["subject"]
+              or r["kid"] != s["kid"] or r["value"]["part"] > s["value"].get("parts", 0)):
+            result[i] = "bad seal"
+        else:
+            slots.setdefault((sid, r["value"]["part"]), []).append(i)
+    seal_set, incomplete = {}, []
+    for sid, s in chain[1:]:
+        ids, complete = set(s["value"]["sealed"]), True
+        for k in range(1, s["value"].get("parts", 0) + 1):
+            got = slots.get((sid, k), [])
+            if len(got) != 1:
+                complete = False
+                for i in got:
+                    result[i] = "bad seal"
+                continue
+            ids |= set(recs[got[0]]["value"]["sealed"])
+            result[got[0]] = "valid"
+        if not complete:
+            incomplete.append(sid)
+            ids = set()
+        seal_set[sid] = ids
+    for i, r in recs.items():
+        if r["type"] in ("bean.genesis", "bean.succession"):
+            result[i] = "valid" if i in on_chain else "invalid"
+        elif r["type"] != "bean.seal":
+            p = pos.get(r["kid"])
+            if p is None:
+                result[i] = "key not in chain"
+            elif p < len(chain) - 1 and i not in seal_set[chain[p + 1][0]]:
+                result[i] = "not sealed"
+            else:
+                result[i] = "valid"
+    for e in sc["expected"]:
+        check(f"v21 {sc['name']}: {e['name']}", result.get(e["id"]), e["result"])
+    check(f"v21 {sc['name']}: incomplete", sorted(incomplete), sc["incomplete"])
 
 print()
 print("FAILURES:", failures)

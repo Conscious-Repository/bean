@@ -62,7 +62,7 @@ If the build fails with `package crypto/hkdf is not in GOROOT`, your Go is too o
    bean init -nostr new
    ```
 
-   It prints your identity, your npub and 24 words. **Write the 24 words on paper now.** `bean` shows them only once. They recover your identity on a new machine. Never type them into a crypto wallet.
+   It prints your identity, your npub and 24 words. **Write the 24 words on paper now.** `bean` shows them only once. They recover your identity on a new machine. Never type them into a crypto wallet. Write your identity id (the `sha256:...` on the first line) on the same paper: it is not secret, and `restore -identity` needs it if someone puts a copy of your public commitment in the folder.
 
 3. Add something:
 
@@ -181,6 +181,8 @@ bean verify
 
 Never use `rsync --delete`: the log only grows, and deletions travel as records. Syncthing also works if you share `objects/` and `blobs/` only. Run `bean verify` after a copy made with another tool; it applies deletions that came with the copy.
 
+Each machine needs its own folder. Do not point two machines at one shared or network folder (SMB, NFS, iCloud Drive, Dropbox): the folder lock works only inside one machine, so two `rotate` or `restore` runs on two machines can fork and freeze your identity. On Windows the lock does nothing at all, so run one `bean` command at a time and stop `bean mcp` before you rotate or restore.
+
 ### Run an agent on another machine
 
 For example, an assistant on a cloud server. The server gets a copy of the log and its own agent key, but not your key and not your 24 words.
@@ -224,15 +226,21 @@ If you lose the laptop:
 
    Type or paste the 24 words, then press Ctrl-D.
 
-Your identity and records stay the same. The lost key can no longer correct or delete anything. Use `bean rotate` the same way on a machine that you still have, for example when a key is old.
+Your identity and records stay the same. The lost key can no longer add, correct or delete anything: a record it signs after the rotation is not valid. Records of the old key that are in this folder when you restore stay valid, because the rotation seals them. Use `bean rotate` the same way on a machine that you still have, for example when a key is old.
 
-Sync every copy before you rotate or restore. Never rotate or restore on two machines from the same point: that freezes the identity, and you must make a new one.
+If `restore` says `ambiguous`, the folder holds more than one identity made from these words' public commitment (someone can copy it). Pass your identity id: `bean -dir ~/health restore -identity sha256:...`. Your identity id is on the first line that `init` printed, in any export's `manifest.json`, and in `bean whoami` on an old machine.
+
+Sync every copy before you rotate or restore. Records that a copy made with the old key and did not sync before the rotation stop being valid. A log of more than 200,000 records per key rotates into a succession plus `seal part` records; copy all of them. Until every part is in a copy, `bean verify` there says `incomplete seals` and the old key's records do not count, but nothing is deleted. Never rotate or restore on two machines from the same point: that freezes the identity, and you must make a new one.
+
+### Upgrading a log made before 2026-10-30
+
+Builds from 2026-10-30 on change four rules (SPEC.md C25 to C28). If you never ran `rotate` or `restore` on your log, nothing changes for you. If you did, the records that the old key signed were not sealed then, and they now show as `not sealed` in `bean verify`. Ask before you run a new build on such a log. A log from before the rename to bean (types `hlog.*`) fails with `old format`; make a new log with `bean init`.
 
 ## How it works
 
 A record is a JSON file in `objects/`, named by the SHA-256 hash of its content and signed with your key. Your identity is the hash of your first record, so it never changes when keys change. Corrections and deletions are new records. The protocol says who may make them, so every copy reaches the same result from the same files. Stored files (PDFs, photos) are encrypted in `blobs/`. Sync copies the files that one copy has and the other does not.
 
-Every record is checked when it is first read, then cached, the same way git trusts its object store. `bean verify` checks everything again. At 20,000 records, `add` and an AI query take about 0.2 s and `verify` about 1 s. Every write goes to disk before it counts.
+Every record is checked when it is first read, then cached, the same way git trusts its object store. `bean verify` checks everything again. At 20,000 records, `add` and an AI query take about 0.2 s and `verify` about 1 s. At 230,000 records on one machine (measured 2026-10-30), `add` takes about 7 s, `verify` about 11 s, `rotate` about 9 s, and each needs about 2.5 GB of memory. Every write goes to disk before it counts.
 
 [CORE.md](CORE.md) is the full protocol in two pages: enough to write a second implementation.
 

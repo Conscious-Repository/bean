@@ -2,6 +2,7 @@ package core
 
 import (
 	"os"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -90,7 +91,12 @@ func TestRotateSeals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res.Sealed) != 1 || res.Sealed[0] != d1 || len(res.NotSealed) != 1 || res.NotSealed[0] != d3 {
+	// C26: the succession seals every record of the outgoing key, the
+	// purged ids[0] too (so it is valid if D1 ever dies), minus the
+	// excluded D3.
+	want := []string{ids[0], ids[1], ids[2], d1}
+	sort.Strings(want)
+	if strings.Join(res.Sealed, ",") != strings.Join(want, ",") || len(res.NotSealed) != 1 || res.NotSealed[0] != d3 {
 		t.Fatalf("sealed %v not sealed %v", res.Sealed, res.NotSealed)
 	}
 	// Two passes: the first delivers the succession that invalidates D2, the
@@ -114,10 +120,10 @@ func TestRotateSeals(t *testing.T) {
 			t.Error("seal effects wrong")
 		}
 	}
-	// B's signing key is now the outgoing key: its new claims are still
-	// valid (6.5) but it cannot purge any more.
-	if r := appendLines(t, b, partial("hrv.rmssd", 4, nil)); r.Added != 1 {
-		t.Error("old key claim")
+	// B's signing key is now the retired key. Under C26 nothing it signs
+	// is valid any more, so B refuses to write (DECISIONS 108).
+	if _, err := b.Append(strings.NewReader(partial("hrv.rmssd", 4, nil) + "\n")); err == nil || !strings.HasPrefix(err.Error(), "retired key: ") {
+		t.Errorf("old key claim: %v", err)
 	}
 	lb, _ := b.Load()
 	if !lb.Visible(ids[1]) {
@@ -147,8 +153,12 @@ func TestDoubleRotationFreeze(t *testing.T) {
 	if _, err := a.Rotate(words, nil, NewKey{}); err == nil || !strings.HasPrefix(err.Error(), "compromised: ") {
 		t.Errorf("rotate on frozen: %v", err)
 	}
-	// Trunk claim is still valid; new claims by either branch key are frozen.
-	appendLines(t, a, partial("hrv.rmssd", 2, nil))
+	// Trunk claim is still valid. A frozen identity refuses new records
+	// (DECISIONS 108); one written by hand with a branch key is frozen.
+	if _, err := a.Append(strings.NewReader(partial("hrv.rmssd", 2, nil) + "\n")); err == nil || !strings.HasPrefix(err.Error(), "compromised: ") {
+		t.Errorf("append on frozen: %v", err)
+	}
+	writeRaw(t, a, partial("hrv.rmssd", 2, nil))
 	la, _ := a.Load()
 	n := 0
 	for rid, e := range la.Report.Errors {
@@ -201,7 +211,9 @@ func TestRestoreLostLaptop(t *testing.T) {
 	if got != id {
 		t.Fatalf("restored identity %s, want %s", got, id)
 	}
-	if len(res.Sealed) != 1 || res.Sealed[0] != purge || res.NewKey == lostKey {
+	// C26: the tombstone and its target's id (the target is not in the
+	// backup; sealing its id keeps it valid should the tombstone die).
+	if len(res.Sealed) != 2 || !contains(res.Sealed, purge) || !contains(res.Sealed, ids[2]) || res.NewKey == lostKey {
 		t.Errorf("restore result %+v", res)
 	}
 	l := verifyOK(t, b)
