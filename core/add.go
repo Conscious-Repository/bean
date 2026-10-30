@@ -46,7 +46,7 @@ func ParseWhen(s string, loc *time.Location) (string, string, error) {
 		}
 		// The same text read in UTC has the wall clock that was typed.
 		if wall, _ := time.Parse(layout, s); t.Format(time.DateTime) != wall.Format(time.DateTime) {
-			return "", "", fmt.Errorf("bad time: %q does not exist in %s (the clock changed)", s, loc)
+			return "", "", fmt.Errorf("bad time: %q does not exist in this time zone: the clock changed then", s)
 		}
 		if layout == "2006-01-02" {
 			return s + "T00:00:00" + t.Format("Z07:00"), "day", nil
