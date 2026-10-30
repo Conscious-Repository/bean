@@ -249,6 +249,7 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 	// seed holder can change the rules for an identity; a rotated-out key,
 	// a stranger or a forged file cannot halt it.
 	tooNew := map[string]bool{}
+	var ungated []*Record
 	for _, r := range unknown {
 		rp.Skipped++
 		if !strings.HasPrefix(r.Type, "bean.") {
@@ -267,6 +268,12 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 		if gates(g, nodes[r.Author], r.Kid) {
 			tooNew[r.Author] = true
 		} else {
+			ungated = append(ungated, r)
+		}
+	}
+	// A too-new identity has no warnings of its own records (8.2 item 2).
+	for _, r := range ungated {
+		if !tooNew[r.Author] {
 			rp.warn(r.ID, "ungated: "+r.ID)
 		}
 	}

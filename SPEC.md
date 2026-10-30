@@ -886,7 +886,7 @@ The record reached step 13 of 3.8, so its envelope, id and signature are good. T
 
 1. For `bean.genesis`: the record's own id, when `author` = `kid`.
 2. For other `bean.*` types: the `author` field I, when I has a genesis in R and `kid` is the head key of I or a recovery public key whose commitment (4.6) is the `value.recovery` of a node on the chain of I (change K1). The chain is followed from the genesis through nodes with one child; at a fork the fork point is the head (6.3 step 5). When the chain is the genesis alone, the head key is the genesis key.
-3. Otherwise no identity is too new. If `author` is an identity with a genesis in R, report `ungated: <id>` as a warning. Skip the record.
+3. Otherwise no identity is too new. If `author` is an identity with a genesis in R that is not too new, report `ungated: <id>` as a warning. Skip the record.
 
 Only the head key or the seed holder can change the rules for an identity. A rotated-out key, a stranger or a forged file cannot halt it. Before K1 any key of the succession tree, also a rotated-out one, could halt the identity, and the next recovery key could not: a real newer rotation was skipped in silence and an old `bean rotate` then wrote a second succession from the same recovery key, a fork. There is no `too new: log`.
 DEFAULT.

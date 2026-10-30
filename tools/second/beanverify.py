@@ -411,7 +411,7 @@ def verify(files, blobfiles):
                 N[i] = s; changed = True
         return N
     trees = {g: tree(g) for g in genesis}
-    too_new = set()
+    too_new = set(); ungated = []
     for i, r in unknown.items():
         skipped += 1
         if not r["type"].startswith("bean."): continue
@@ -428,7 +428,9 @@ def verify(files, blobfiles):
             if len(kids) != 1: gate = r["kid"] == x["value"]["key"]; break
             x = kids[0]
         if gate: too_new.add(r["author"])
-        else: warn(i, "ungated: " + i)
+        else: ungated.append((i, r["author"]))
+    for i, a in ungated:
+        if a not in too_new: warn(i, "ungated: " + i)  # 8.2: nothing of a too-new identity is reported
     for i, r in list(R.items()):
         if r["author"] in too_new or r.get("subject") in too_new or i in too_new:
             del R[i]; skipped += 1  # GUESS(8): records of a too-new identity count as skipped

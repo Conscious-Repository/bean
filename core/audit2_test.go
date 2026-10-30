@@ -106,3 +106,18 @@ func TestTooNewGateNextRecoveryKey(t *testing.T) {
 		t.Fatalf("append: %v, want too new", err)
 	}
 }
+
+// An ungated record of a too-new identity gets no warning: nothing of a
+// too-new identity is evaluated (SPEC.md 8.2 item 2).
+func TestUngatedSilentOnTooNewIdentity(t *testing.T) {
+	s, id, _ := initWithWords(t)
+	futureRecord(t, s, id, s.mustLocal(t).Signer)
+	stranger := futureRecord(t, s, id, NewEd25519Signer(bytes.Repeat([]byte{0x78}, 32)))
+	l, err := s.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !contains(l.Report.TooNew, id) || len(l.Report.Warnings[stranger]) != 0 {
+		t.Fatalf("too new %v, warnings %v", l.Report.TooNew, l.Report.Warnings[stranger])
+	}
+}
