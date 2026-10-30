@@ -115,16 +115,16 @@ Reads and checks every file and signature, and every stored file's hash. Run it 
 
 ### `mcp [-write] [-label <name>]`
 
-Runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdin and stdout, for any AI client that supports MCP. Without `-write` it can only read. Its tools:
+Runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdin and stdout, for any AI client that supports MCP. Without `-write` it can only read. The read tools show only records about you; `include_others` adds the other people in the folder. Each row names its `author` and `subject`: `self`, `agent:<label>` or an identity id. Its tools:
 
 | Tool | Returns |
 |---|---|
 | `list_types` | Every type, with its count, units and date range. |
 | `query_records` | Records by type and time. |
-| `stats` | Count, minimum, maximum, mean, median and spread of one type, by day, week or month if asked. |
+| `stats` | Count, minimum, maximum, mean, median and spread of one type, by day, week or month if asked. Readings by different authors or in different units are in separate `groups`. |
 | `get_record` | One record, its status and its replies. |
 | `read_blob` | A stored text file. For other files, only the size. |
-| `log_entry` | With `-write` only. Adds a record signed by the agent key. It can also comment on a record (`about`) or replace one of the agent's own records (`corrects`). |
+| `log_entry` | With `-write` only. Adds a record signed by the agent key, of a type from the vocabulary only. It can also comment on a record (`about`) or replace one of the agent's own records (`corrects`). |
 
 With `-write`, the first start makes the agent key of this machine and, on your own machine, trusts it. `-label` names that agent (default: `agent@<computer name>`).
 

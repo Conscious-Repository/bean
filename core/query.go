@@ -18,6 +18,8 @@ type Filter struct {
 	Since  time.Time // When(r) at or after Since
 	Until  time.Time // When(r) before Until
 	Author string
+	// Subject is the identity the record is about.
+	Subject string
 	// All includes superseded records, duplicates, tombstones, identity
 	// records and pairing claims. Purged, hidden and invalid records are
 	// never listed.
@@ -47,6 +49,9 @@ func (f Filter) match(r *Record) bool {
 		return false
 	}
 	if f.Author != "" && r.Author != f.Author {
+		return false
+	}
+	if f.Subject != "" && r.Subject != f.Subject {
 		return false
 	}
 	w := When(r)
