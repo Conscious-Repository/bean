@@ -314,6 +314,9 @@ func main() {
 		for _, id := range res.Parts {
 			fmt.Println("seal part", id)
 		}
+		for _, id := range res.Past {
+			fmt.Println("past halt", id)
+		}
 		fmt.Println("rotated to", res.NewKey)
 		fmt.Printf("sealed %d\n", len(res.Sealed))
 	case "restore":
@@ -348,6 +351,9 @@ func main() {
 		}
 		for _, x := range res.Parts {
 			fmt.Println("seal part", x)
+		}
+		for _, x := range res.Past {
+			fmt.Println("past halt", x)
 		}
 		fmt.Println("rotated to", res.NewKey)
 		fmt.Printf("sealed %d\n", len(res.Sealed))

@@ -17,6 +17,7 @@ type RotateResult struct {
 	Sealed     []string
 	NotSealed  []string // records of the outgoing key left unsealed by request
 	Parts      []string // seal continuations (C28), in part order
+	Past       []string // records of an unknown version by the outgoing key that halted the identity (C29)
 }
 
 // Rotate writes a recovery-signed succession from the chain head to a new
@@ -59,8 +60,19 @@ func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string, k
 	if contains(l.Report.Compromised, id) {
 		return res, errors.New("compromised: " + id)
 	}
+	var halt []string
 	if contains(l.Report.TooNew, id) {
-		return res, errors.New("too new: " + id + ": update bean before you rotate")
+		// C29: the 24 words go past a halt that only the head key caused.
+		// The succession retires that key, so its records become ungated
+		// (8.2) on every verifier. A halt by a recovery key needs an update.
+		halt = l.Report.HeadHalt[id]
+		if len(halt) == 0 {
+			return res, errors.New("too new: " + id + ": update bean before you rotate")
+		}
+		l = l.past(id)
+		if contains(l.Report.Compromised, id) {
+			return res, errors.New("compromised: " + id)
+		}
 	}
 	chain := l.Report.Chains[id]
 	if len(chain) == 0 {
@@ -109,6 +121,13 @@ func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string, k
 			seal[h.Target] = true
 		}
 	}
+	// The halting records are records of the outgoing key in this folder,
+	// so C26 seals them too unless the person excludes them. No verifier
+	// that knows their version can then lose them; this one skips them.
+	for _, x := range halt {
+		seal[x] = true
+	}
+	res.Past = halt
 	for rid := range seal {
 		if skip[rid] {
 			res.NotSealed = append(res.NotSealed, rid)
@@ -153,6 +172,7 @@ func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string, k
 	if fr := CheckFile(PathOf(sid), bytes); fr.Err != nil {
 		return res, fr.Err
 	}
+
 	type file struct {
 		id   string
 		data []byte
@@ -167,6 +187,23 @@ func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string, k
 			return res, fr.Err
 		}
 		parts = append(parts, file{pid, pb})
+	}
+	// Past a halt, prove before the first write that the succession ends
+	// it: with the new files, the identity must not be too new and the
+	// succession must be its head. Fail closed otherwise.
+	if len(halt) > 0 {
+		after := make(map[string][]byte, len(l.Files)+len(parts)+1)
+		for p, b := range l.Files {
+			after[p] = b
+		}
+		after[PathOf(sid)] = bytes
+		for _, f := range parts {
+			after[PathOf(f.id)] = f.data
+		}
+		rp := verifyFiles(after, nil, "")
+		if c := rp.Chains[id]; contains(rp.TooNew, id) || len(c) == 0 || c[len(c)-1].ID != sid {
+			return res, errors.New("too new: " + id + ": the rotation would not end the halt; update bean")
+		}
 	}
 	// Crash order (DECISIONS 110, 124): local/rotation-pending names the
 	// succession, then the new key goes to local/signing-key.next, then the
@@ -249,6 +286,17 @@ func (s *Store) RestoreIdentity(words []string, noSeal []string, key NewKey, ide
 			matches = append(matches, gid)
 		}
 	}
+	// C29: an identity halted only by its head key has no chain here, but
+	// the 24 words may go past the halt. Look at it with the halt ignored.
+	for _, gid := range l.Report.TooNew {
+		if len(l.Report.HeadHalt[gid]) == 0 {
+			continue
+		}
+		if chain := l.past(gid).Report.Chains[gid]; len(chain) > 0 && chain[0].Recovery() == c0 {
+			matches = append(matches, gid)
+		}
+	}
+	sort.Strings(matches)
 	var id string
 	switch {
 	case identity != "":
@@ -350,9 +398,14 @@ func (s *Store) finishRotation(rp *Report) (changed, removed bool, err error) {
 		_, nextErr := os.Stat(s.path(fileSignKeyNext))
 		switch {
 		case errors.Is(statErr, os.ErrNotExist):
-			// The succession never reached the disk: undo its parts.
-			for _, id := range sortedKeys(rp.Records) {
+			// The succession never reached the disk: undo its parts. A
+			// rotation past a halt (C29) wrote them for an identity that is
+			// still too new, so look among its dropped records too.
+			for _, id := range append(sortedKeys(rp.Records), sortedKeys(rp.Dropped)...) {
 				r := rp.Records[id]
+				if r == nil {
+					r = rp.Dropped[id]
+				}
 				if r.Type == "bean.seal" && r.Targets("seals")[0] == sid {
 					if err := os.Remove(s.path(PathOf(id))); err != nil && !errors.Is(err, os.ErrNotExist) {
 						return false, removed, err
@@ -422,4 +475,13 @@ func renameSync(from, to string) error {
 		return err
 	}
 	return syncDir(filepath.Dir(to))
+}
+
+// past returns l judged again with the head-key halt of identity id
+// ignored (C29). Only rotateFrom uses it, to seal and write the succession
+// that ends the halt.
+func (l *Loaded) past(id string) *Loaded {
+	c := *l
+	c.Report = verifyFiles(l.Files, nil, id)
+	return &c
 }
