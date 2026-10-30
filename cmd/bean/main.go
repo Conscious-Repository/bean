@@ -338,7 +338,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		res, id, err := s.RestoreIdentity(core.ParseWords(string(text)), noSeal, key, *ident)
+		res, id, err := s.Restore(core.ParseWords(string(text)), noSeal, key, *ident)
 		if err != nil {
 			fail(err)
 		}

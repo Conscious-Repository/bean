@@ -54,89 +54,27 @@ func (s *Store) Rotate(words []string, noSeal []string, key NewKey) (RotateResul
 }
 
 // rotateFrom writes the succession from the head of identity id and stores
-// the new signing key. The caller has checked the seed.
+// the new signing key. The caller has checked the seed. The steps: judge
+// the identity (past a head-key halt, C29), choose the seal set (C26),
+// sign the records (C28), prove that they end a halt, and write them in
+// crash order.
 func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string, key NewKey) (RotateResult, error) {
 	var res RotateResult
-	if contains(l.Report.Compromised, id) {
-		return res, errors.New("compromised: " + id)
-	}
-	var halt []string
-	if contains(l.Report.TooNew, id) {
-		// C29: the 24 words go past a halt that only the head key caused.
-		// The succession retires that key, so its records become ungated
-		// (8.2) on every verifier. A halt by a recovery key needs an update.
-		halt = l.Report.HeadHalt[id]
-		if len(halt) == 0 {
-			return res, errors.New("too new: " + id + ": update bean before you rotate")
-		}
-		l = l.past(id)
-		if contains(l.Report.Compromised, id) {
-			return res, errors.New("compromised: " + id)
-		}
+	l, halt, err := l.rotatable(id)
+	if err != nil {
+		return res, err
 	}
 	chain := l.Report.Chains[id]
 	if len(chain) == 0 {
 		return res, errors.New("input missing: " + id)
 	}
-	head := chain[len(chain)-1]
-	gen := len(chain) - 1
+	head, gen := chain[len(chain)-1], len(chain)-1
 	rec := RecoverySigner(seed, gen)
 	if Commitment(rec.Public()) != head.Recovery() {
 		return res, ErrSeedMismatch
 	}
-	outgoing := head.ValueKey()
-	skip := map[string]bool{}
-	for _, x := range noSeal {
-		if r, err := l.Resolve(x); err == nil {
-			x = r.ID // a 6+ hex prefix works, as everywhere else
-		}
-		skip[x] = true
-	}
-	// C26 (Benjamin decision, 2026-10-30): the succession seals every valid
-	// record of the outgoing key, not only destructive ones. A record of a
-	// retired key that the succession does not seal is invalid.
-	//
-	// The seal set is every record of the outgoing key in this folder,
-	// valid now or not, plus every target that a tombstone or supersede in
-	// this folder names. A record that is invalid now for another reason,
-	// for example a purged target, must still be sealed: when its tombstone
-	// dies (-no-seal), the target comes back and must not die of a missing
-	// seal. A sealed id that names no record of the outgoing key has no
-	// effect (SPEC 5.4), so the extra target ids are harmless.
-	seal := map[string]bool{}
-	for rid, r := range l.Report.Records {
-		if r.Kid == outgoing && r.Author == id && !r.IsIdentity() {
-			seal[rid] = true
-		}
-		for _, rel := range []string{"purges", "supersedes"} {
-			for _, t := range r.Targets(rel) {
-				if t2, ok := l.Report.Records[t]; !ok || (t2.Kid == outgoing && t2.Author == id) {
-					seal[t] = true
-				}
-			}
-		}
-	}
-	for _, h := range l.Holds {
-		if t, ok := l.Report.Records[h.Target]; !ok || (t.Kid == outgoing && t.Author == id) {
-			seal[h.Target] = true
-		}
-	}
-	// The halting records are records of the outgoing key in this folder,
-	// so C26 seals them too unless the person excludes them. No verifier
-	// that knows their version can then lose them; this one skips them.
-	for _, x := range halt {
-		seal[x] = true
-	}
+	res.Sealed, res.NotSealed = l.sealSet(id, head.ValueKey(), halt, noSeal)
 	res.Past = halt
-	for rid := range seal {
-		if skip[rid] {
-			res.NotSealed = append(res.NotSealed, rid)
-		} else {
-			res.Sealed = append(res.Sealed, rid)
-		}
-	}
-	sort.Strings(res.Sealed)
-	sort.Strings(res.NotSealed)
 	newSigner, keyLine, err := key.signer()
 	if err != nil {
 		return res, err
@@ -148,59 +86,20 @@ func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string, k
 			return res, errors.New("key reuse")
 		}
 	}
-	// C28: the first sealChunk ids go in the succession, the rest in
-	// bean.seal continuations of sealChunk ids each, signed by the same
-	// recovery key. value.parts tells a reader how many to expect.
-	first, rest := res.Sealed, [][]string(nil)
-	if len(first) > sealChunk {
-		first = res.Sealed[:sealChunk]
-		for i := sealChunk; i < len(res.Sealed); i += sealChunk {
-			rest = append(rest, res.Sealed[i:min(i+sealChunk, len(res.Sealed))])
-		}
-	}
-	if len(rest) > MaxSealParts {
-		return res, fmt.Errorf("too large: %d records to seal; one rotation seals at most %d", len(res.Sealed), sealChunk*(MaxSealParts+1))
-	}
-	succ := NewSuccession(id, rec.Public(), head.ID, newSigner.Public(), Commitment(RecoverySigner(seed, gen+1).Public()), first, Adapter, s.nowString())
-	if len(rest) > 0 {
-		succ["value"].(map[string]any)["parts"] = float64(len(rest))
-	}
-	sid, bytes, err := SignRecord(succ, rec)
+	files, err := s.rotationRecords(id, rec, head.ID, newSigner.Public(), Commitment(RecoverySigner(seed, gen+1).Public()), res.Sealed)
 	if err != nil {
 		return res, err
 	}
-	if fr := CheckFile(PathOf(sid), bytes); fr.Err != nil {
-		return res, fr.Err
-	}
-
-	type file struct {
-		id   string
-		data []byte
-	}
-	var parts []file
-	for k, ids := range rest {
-		pid, pb, err := SignRecord(NewSeal(id, rec.Public(), sid, k+1, ids, Adapter, s.nowString()), rec)
-		if err != nil {
-			return res, err
-		}
-		if fr := CheckFile(PathOf(pid), pb); fr.Err != nil {
-			return res, fr.Err
-		}
-		parts = append(parts, file{pid, pb})
-	}
+	sid := files[len(files)-1].id
 	// Past a halt, prove before the first write that the succession ends
 	// it: with the new files, the identity must not be too new and the
 	// succession must be its head. Fail closed otherwise.
 	if len(halt) > 0 {
-		after := make(map[string][]byte, len(l.Files)+len(parts)+1)
-		for p, b := range l.Files {
-			after[p] = b
+		add := map[string][]byte{}
+		for _, f := range files {
+			add[PathOf(f.id)] = f.data
 		}
-		after[PathOf(sid)] = bytes
-		for _, f := range parts {
-			after[PathOf(f.id)] = f.data
-		}
-		rp := verifyFiles(after, nil)
+		rp := verifyFiles(overlay(l.Files, nil, add), nil)
 		if c := rp.Chains[id]; contains(rp.TooNew, id) || len(c) == 0 || c[len(c)-1].ID != sid {
 			return res, errors.New("too new: " + id + ": the rotation would not end the halt; update bean")
 		}
@@ -217,19 +116,17 @@ func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string, k
 	if err := writeFileAtomic(s.path(fileSignKeyNext), []byte(keyLine), 0o600); err != nil {
 		return res, err
 	}
-	for _, f := range parts {
+	for _, f := range files {
 		if _, err := writeIfAbsent(s.path(PathOf(f.id)), f.data, 0o600); err != nil {
 			return res, err
 		}
-		if hookAfterPart != nil {
-			hookAfterPart()
+		hook := hookAfterPart
+		if f.id == sid {
+			hook = hookAfterSuccession
 		}
-	}
-	if _, err := writeIfAbsent(s.path(PathOf(sid)), bytes, 0o600); err != nil {
-		return res, err
-	}
-	if hookAfterSuccession != nil {
-		hookAfterSuccession()
+		if hook != nil {
+			hook()
+		}
 	}
 	if err := renameSync(s.path(fileSignKeyNext), s.path(fileSignKey)); err != nil {
 		return res, err
@@ -237,11 +134,126 @@ func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string, k
 	if err := os.Remove(s.path(fileRotationPending)); err != nil {
 		return res, err
 	}
-	for _, f := range parts {
+	for _, f := range files[:len(files)-1] {
 		res.Parts = append(res.Parts, f.id)
 	}
 	res.Succession, res.NewKey = sid, newSigner.Public()
 	return res, nil
+}
+
+// rotatable refuses a compromised identity and one that only an update
+// can go past. For an identity halted by its head key alone (C29) it
+// returns l judged without the halting records, and their ids: the
+// succession retires that key, so the records become ungated (8.2) on
+// every verifier.
+func (l *Loaded) rotatable(id string) (*Loaded, []string, error) {
+	var halt []string
+	if contains(l.Report.TooNew, id) {
+		halt = l.Report.HeadHalt[id]
+		if len(halt) == 0 {
+			return nil, nil, errors.New("too new: " + id + ": update bean before you rotate")
+		}
+		l = l.past(id)
+	}
+	if contains(l.Report.Compromised, id) {
+		return nil, nil, errors.New("compromised: " + id)
+	}
+	return l, halt, nil
+}
+
+// sealSet is what the succession from key outgoing of identity id seals
+// (C26, Benjamin decision 2026-10-30): every record of the outgoing key in
+// this folder, valid now or not, plus every target that a tombstone, a
+// supersede or a hold in this folder names, plus the halting records.
+// A record that is invalid now for another reason, for example a purged
+// target, must still be sealed: when its tombstone dies (-no-seal), the
+// target comes back and must not die of a missing seal. A sealed id that
+// names no record of the outgoing key has no effect (SPEC 5.4), so the
+// extra ids are harmless. Ids in noSeal (or 6+ hex prefixes) are left out.
+func (l *Loaded) sealSet(id, outgoing string, halt, noSeal []string) (sealed, notSealed []string) {
+	ours := func(t string) bool {
+		r, ok := l.Report.Records[t]
+		return !ok || (r.Kid == outgoing && r.Author == id)
+	}
+	seal := map[string]bool{}
+	for rid, r := range l.Report.Records {
+		if r.Kid == outgoing && r.Author == id && !r.IsIdentity() {
+			seal[rid] = true
+		}
+		for _, t := range append(r.Targets("purges"), r.Targets("supersedes")...) {
+			seal[t] = seal[t] || ours(t)
+		}
+	}
+	for _, h := range l.Holds {
+		seal[h.Target] = seal[h.Target] || ours(h.Target)
+	}
+	for _, x := range halt {
+		seal[x] = true
+	}
+	skip := map[string]bool{}
+	for _, x := range noSeal {
+		if r, err := l.Resolve(x); err == nil {
+			x = r.ID // a 6+ hex prefix works, as everywhere else
+		}
+		skip[x] = true
+	}
+	for _, rid := range sortedKeys(seal) {
+		if !seal[rid] {
+			continue
+		} else if skip[rid] {
+			notSealed = append(notSealed, rid)
+		} else {
+			sealed = append(sealed, rid)
+		}
+	}
+	return sealed, notSealed
+}
+
+// signedFile is a signed record and its id.
+type signedFile struct {
+	id   string
+	data []byte
+}
+
+// rotationRecords signs the succession and its bean.seal continuations
+// (C28): the first sealChunk ids go in the succession, the rest in
+// continuations of sealChunk ids each, signed by the same recovery key;
+// value.parts tells a reader how many to expect. The continuations come
+// first and the succession last, in write order.
+func (s *Store) rotationRecords(id string, rec Signer, parent, newKey, next string, sealed []string) ([]signedFile, error) {
+	var chunks [][]string
+	for i := 0; i < len(sealed); i += sealChunk {
+		chunks = append(chunks, sealed[i:min(i+sealChunk, len(sealed))])
+	}
+	if len(chunks) == 0 {
+		chunks = [][]string{nil}
+	}
+	if len(chunks)-1 > MaxSealParts {
+		return nil, fmt.Errorf("too large: %d records to seal; one rotation seals at most %d", len(sealed), sealChunk*(MaxSealParts+1))
+	}
+	succ := NewSuccession(id, rec.Public(), parent, newKey, next, chunks[0], Adapter, s.nowString())
+	if len(chunks) > 1 {
+		succ["value"].(map[string]any)["parts"] = float64(len(chunks) - 1)
+	}
+	sid, sb, err := SignRecord(succ, rec)
+	if err != nil {
+		return nil, err
+	}
+	var out []signedFile
+	for k, ids := range chunks[1:] {
+		pid, pb, err := SignRecord(NewSeal(id, rec.Public(), sid, k+1, ids, Adapter, s.nowString()), rec)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, signedFile{pid, pb})
+	}
+	out = append(out, signedFile{sid, sb})
+	for _, f := range out {
+		if fr := CheckFile(PathOf(f.id), f.data); fr.Err != nil {
+			return nil, fr.Err
+		}
+	}
+	return out, nil
 }
 
 // Restore rebuilds local/ on a new host from the 24 words and a synced
@@ -249,15 +261,10 @@ func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string, k
 // lost host, so Restore always rotates: it finds the identity whose genesis
 // commits to recovery generation 0 of these words, writes the identity
 // secret, and writes a succession to a new signing key exactly as Rotate
-// does, with the same default seals. It returns the identity id.
-func (s *Store) Restore(words []string, noSeal []string, key NewKey) (RotateResult, string, error) {
-	return s.RestoreIdentity(words, noSeal, key, "")
-}
-
-// RestoreIdentity is Restore for a folder that holds more than one genesis
-// committing to these words (DECISIONS 109). identity "" accepts only a
-// single match.
-func (s *Store) RestoreIdentity(words []string, noSeal []string, key NewKey, identity string) (RotateResult, string, error) {
+// does, with the same default seals. It returns the identity id. identity
+// "" accepts only a single genesis that commits to these words; a folder
+// with more than one needs the id (DECISIONS 109).
+func (s *Store) Restore(words []string, noSeal []string, key NewKey, identity string) (RotateResult, string, error) {
 	unlock, err := s.lock()
 	if err != nil {
 		return RotateResult{}, "", err
@@ -343,7 +350,7 @@ func ParseWords(text string) []string {
 	var out []string
 	for _, f := range strings.Fields(text) {
 		f = strings.TrimRight(f, ".")
-		if _, isNum := isDigits(f); isNum {
+		if isDigits(f) {
 			continue
 		}
 		out = append(out, strings.ToLower(f))
@@ -351,18 +358,13 @@ func ParseWords(text string) []string {
 	return out
 }
 
-func isDigits(s string) (int, bool) {
-	if s == "" {
-		return 0, false
-	}
-	n := 0
+func isDigits(s string) bool {
 	for _, c := range s {
 		if c < '0' || c > '9' {
-			return 0, false
+			return false
 		}
-		n = n*10 + int(c-'0')
 	}
-	return n, true
+	return s != ""
 }
 
 // fileSignKeyNext holds the new signing key while a rotation is between
@@ -484,14 +486,22 @@ func renameSync(from, to string) error {
 // result depends on them. Only rotate and restore use it, to seal and
 // write the succession that ends the halt.
 func (l *Loaded) past(id string) *Loaded {
-	files := make(map[string][]byte, len(l.Files))
-	for p, b := range l.Files {
-		files[p] = b
-	}
-	for _, h := range l.Report.HeadHalt[id] {
-		delete(files, PathOf(h))
-	}
 	c := *l
-	c.Report = verifyFiles(files, nil)
+	c.Report = verifyFiles(overlay(l.Files, l.Report.HeadHalt[id], nil), nil)
 	return &c
+}
+
+// overlay returns a copy of files without the records drop and with add.
+func overlay(files map[string][]byte, drop []string, add map[string][]byte) map[string][]byte {
+	out := make(map[string][]byte, len(files)+len(add))
+	for p, b := range files {
+		out[p] = b
+	}
+	for _, id := range drop {
+		delete(out, PathOf(id))
+	}
+	for p, b := range add {
+		out[p] = b
+	}
+	return out
 }

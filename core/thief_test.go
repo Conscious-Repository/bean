@@ -146,7 +146,7 @@ func TestThiefHaltRestoreElsewhere(t *testing.T) {
 	if _, err := b.Sync(a); err != nil {
 		t.Fatal(err)
 	}
-	res, got, err := b.Restore(words, nil, NewKey{})
+	res, got, err := b.Restore(words, nil, NewKey{}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -414,7 +414,7 @@ func TestRestorePastHaltAmongStrangers(t *testing.T) {
 	if _, err := b.Sync(a); err != nil {
 		t.Fatal(err)
 	}
-	if _, got, err := b.Restore(words, nil, NewKey{}); err != nil || got != id {
+	if _, got, err := b.Restore(words, nil, NewKey{}, ""); err != nil || got != id {
 		t.Fatalf("restore %s: %v", got, err)
 	}
 	mustTooNew(t, b, id, false)

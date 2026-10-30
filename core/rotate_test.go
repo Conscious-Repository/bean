@@ -204,7 +204,7 @@ func TestRestoreLostLaptop(t *testing.T) {
 		t.Fatalf("backup has local/: %v", err)
 	}
 
-	res, got, err := b.Restore(words, nil, NewKey{})
+	res, got, err := b.Restore(words, nil, NewKey{}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +256,7 @@ func TestRestoreLostLaptop(t *testing.T) {
 func TestRestoreErrors(t *testing.T) {
 	a, _, words := initWithWords(t)
 	appendLines(t, a, partial("hrv.rmssd", 1, nil))
-	if _, _, err := a.Restore(words, nil, NewKey{}); err != ErrAlreadyInitialized {
+	if _, _, err := a.Restore(words, nil, NewKey{}, ""); err != ErrAlreadyInitialized {
 		t.Errorf("restore over local/: %v", err)
 	}
 	b := newStore(t)
@@ -264,18 +264,18 @@ func TestRestoreErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _, otherWords := initWithWords(t)
-	if _, _, err := b.Restore(otherWords, nil, NewKey{}); err == nil || err.Error() != "input missing: genesis for these words" {
+	if _, _, err := b.Restore(otherWords, nil, NewKey{}, ""); err == nil || err.Error() != "input missing: genesis for these words" {
 		t.Errorf("other words: %v", err)
 	}
 	bad := append([]string{}, words...)
 	bad[0] = "notaword"
-	if _, _, err := b.Restore(bad, nil, NewKey{}); err != ErrSeedMismatch {
+	if _, _, err := b.Restore(bad, nil, NewKey{}, ""); err != ErrSeedMismatch {
 		t.Errorf("bad word: %v", err)
 	}
 	if _, err := b.ReadLocal(); err != ErrNotInitialized {
 		t.Errorf("failed restore left local/ initialized: %v", err)
 	}
-	if _, _, err := newStore(t).Restore(words, nil, NewKey{}); err == nil {
+	if _, _, err := newStore(t).Restore(words, nil, NewKey{}, ""); err == nil {
 		t.Error("restore into an empty folder")
 	}
 }

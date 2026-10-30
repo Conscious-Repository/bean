@@ -55,7 +55,7 @@ func TestTwoRotationsKeepEverything(t *testing.T) {
 	// Restore on a fresh folder from the synced files keeps all of it.
 	n := newStore(t)
 	n.Sync(a)
-	if _, _, err := n.Restore(words, nil, NewKey{}); err != nil {
+	if _, _, err := n.Restore(words, nil, NewKey{}, ""); err != nil {
 		t.Fatal(err)
 	}
 	ln := verifyOK(t, n)
