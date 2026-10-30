@@ -1561,8 +1561,15 @@ Hand-built AES-SIV code MUST also pass the RFC 4493 and RFC 5297 Appendix A vect
 - A blessed series format.
 - A type registry. Type conventions are plain documents.
 - Per-recipient pseudonymous subjects (deferred).
-- Grants, sharing, selective disclosure and zero-knowledge proofs.
+- Grants, sharing, selective disclosure and zero-knowledge proofs. Version 0 serves one person first. Direction for later: encrypt a share to the recipient's key, with no central password-gated link.
+- Encryption of records at rest. Use operating system disk encryption or the sync tool. It needs key management that version 0 does not have. Revisit at version 1.
+- Remote signing (a NIP-46 style signer for the signing key). One host per identity keeps version 0 simple. The Nostr wrapper (4.5) lets a NIP-46 signer sign, but bean does not require one.
+- Standing shares to research parties.
 - Trusted time, witness records and global ordering.
+- Multi-signature thresholds, delegation and witnesses as in KERI.
+- A database in the core. Indexes are rebuildable caches (7.10).
+- Fetching from source APIs inside the core. A fetch job is a separate program (9.10).
+- Work on bean as a formal standard before the personal use case works (meeting R19).
 - Nostr and Blossom transport (a later extension). `secp256k1` signing keys are in the core since v0.5. Publication of records to relays is not.
 - User interface, servers and accounts.
 - Applications, for example comparison tools, device apps and clinician views.
