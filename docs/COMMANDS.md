@@ -107,6 +107,7 @@ Reads and checks every file and signature, and every stored file's hash. Run it 
 | `warning: <id>: unresolved author: <id>` | A record by an identity whose first record this copy does not have. |
 | `warning: <id>: incomplete seals: <id>` | A rotation's `seal part` records are not all in this copy. The old key's records do not count until they arrive. Nothing is deleted. |
 | `too new: <id>` | Records from a newer bean for this identity. Update bean. Exit code 3. |
+| `warning: <id>: ungated: <id>` | A record from a newer bean signed by a key that may not change the rules for the identity: an old key or a stranger. It is skipped and does not stop anything. |
 | `compromised: <id>` | The identity forked and is frozen. Exit code 4 when it is yours. |
 | `summary: <v> valid, <i> invalid, <s> skipped, <h> held, <d> duplicate` | The counts. |
 
