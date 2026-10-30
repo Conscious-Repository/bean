@@ -988,6 +988,12 @@ When the fixed record keeps the same HMAC input, its dedupe ref is the same as t
 The reference implementation has `bean-import-csv` and `bean-import-labcorp`. Adapters for Apple Health, Oura and Whoop are open (Appendix).
 Each adapter document MUST say which source field is the native id, or that the source has none.
 
+### 9.9 Vocabulary and uncertainty
+
+The type vocabulary is one document (`cmd/bean/vocabulary.md`): each `type`, its `value`, its unit and the suggested `context` keys (meeting R6, R7). The verifier does not check it. A new term is added to the document before an adapter uses it. A term is never redefined: a changed meaning is a new term.
+
+Measurement uncertainty travels with the data (meeting R8). `context.uncertainty` is optional. Its form is `{"kind": "cv" | "sd", "value": <number>, "unit": <string>, "source": <string>}`; `unit` and `source` are optional. `"cv"` is the coefficient of variation as a fraction. `"sd"` is the standard deviation in `unit`, or in the unit of the value when `unit` is absent. `source` names the calibration or the document that gives the value. Two kinds cover the calibration data that device makers publish. An adapter writes it only from a published or measured number.
+
 ## 10. Extension 1: computed results
 
 ### 10.1 Status
@@ -1583,5 +1589,5 @@ Open:
 
 15. Native id fields for Apple Health, Oura and Whoop. Each adapter decides from a real export file, never from memory.
 16. Batch interval and series format for sources with many readings (9.4).
-17. A convention for measurement uncertainty, for example `context.cv`. This is an adapter convention.
+17. Measurement uncertainty: decided, `context.uncertainty` (9.9).
 18. A query format for the index (7.10). Readers decide. Version 0 has `local/cache/index.json` only.

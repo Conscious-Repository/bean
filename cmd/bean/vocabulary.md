@@ -32,6 +32,20 @@ Conventions for what goes in the log, so that a month of entries lines up for `s
 
 Importers write their own types: `lab.<test>` for Labcorp, `hrv.rmssd` for a CSV of HRV.
 
+## Uncertainty
+
+A measurement can say how sure it is in the detail `uncertainty`, stored as `context.uncertainty`:
+
+    {"kind": "cv", "value": 0.05}
+    {"kind": "sd", "value": 1.2, "unit": "ms", "source": "device manual, 2025"}
+
+- `kind` is `cv` (coefficient of variation, as a fraction: 0.05 is 5 %) or `sd` (standard deviation).
+- `value` is a number.
+- `unit` (optional) is the unit of an `sd`. Without it, the `sd` is in the unit of the entry's value.
+- `source` (optional) names the calibration or document the number comes from.
+
+Leave it out when nobody published a number. Never guess one.
+
 ## Units
 
 `kg`, `g`, `mg`, `L`, `mL`, `km`, `min`, `h`, `kcal`, `/min` (beats per minute), `{score}` (0 to 10), `{drink}`. Write the unit the person used; do not convert.
