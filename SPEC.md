@@ -1132,6 +1132,7 @@ The reference CLI is `bean`. It uses Go `flag` syntax.
 Every command takes `-dir <path>`. The default is `$BEAN_DIR`, then the current directory.
 Commands write results to standard output and errors to standard error.
 An error line is `bean: <error string>`.
+Text output writes control characters, line and paragraph separators and bidirectional controls from records and file names as `\xNN` or `\uNNNN`, so a record cannot fake an output line or control the terminal. JSON output (`ls -json`, `bean mcp`) uses JSON escapes.
 Every command that loads the log applies the hold rules (7.6) first.
 
 Exit codes:
