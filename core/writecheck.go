@@ -26,7 +26,14 @@ func (l *Loaded) canWrite(w writer) error {
 		if e, ok := rp.Errors[PathOf(w.author)]; ok {
 			return fmt.Errorf("identity not valid in this log: %s: %s", w.author, e)
 		}
-		return errors.New("input missing: genesis " + w.author)
+		if e, ok := rp.Errors[w.author]; ok {
+			return fmt.Errorf("identity not valid in this log: %s: %s", w.author, e)
+		}
+		// A new copy that has local/ but has not synced yet has no
+		// genesis. Its records are "unresolved author" until the genesis
+		// arrives (SPEC 6.3 step 6.2), then they are judged like any
+		// other; a retired key on such a copy fails then. Allow it.
+		return nil
 	}
 	if head := chain[len(chain)-1].ValueKey(); w.signer == nil || head != w.signer.Public() {
 		pub := ""

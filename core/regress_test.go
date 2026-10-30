@@ -454,3 +454,20 @@ func TestNoSealTombstoneRestoresTarget(t *testing.T) {
 		t.Errorf("thief tombstone: %q", la.Report.Errors[d])
 	}
 }
+
+// M4 must not block a new copy that has local/ but has not synced yet.
+func TestWriteBeforeFirstSync(t *testing.T) {
+	a, _ := initStore(t)
+	b := newStore(t)
+	for _, f := range []string{fileIdentity, fileSecret, fileSignKey} {
+		data, _ := os.ReadFile(a.path(f))
+		writeFileAtomic(b.path(f), data, 0o600)
+	}
+	if r := appendLines(t, b, partial("hr", 1, nil)); r.Added != 1 {
+		t.Fatal("append before the first sync")
+	}
+	if _, err := a.Sync(b); err != nil {
+		t.Fatal(err)
+	}
+	verifyOK(t, a)
+}

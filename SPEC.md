@@ -843,7 +843,7 @@ Every command that writes to the folder, and `verify`, holds an exclusive lock o
 
 ### 7.12 Write checks
 
-A write MUST NOT return an id for a record that the verifier of the same folder rejects. `append`, `add`, `purge` and the agent writes refuse when the author identity is too new (`too new: <id>`), frozen (`compromised: <id>`), not resolved, or when the local signing key is not the chain head key (`retired key: ...`). `append` refuses identity records (`bad type`). `SignRecord` refuses strings that are not UTF-8 and numbers that are not finite (`bad string`, `bad number`).
+A write MUST NOT return an id for a record that the verifier of the same folder rejects. A copy that has `local/` but no genesis yet can write; its records are `unresolved author` until the genesis arrives. `append`, `add`, `purge` and the agent writes refuse when the author identity is too new (`too new: <id>`), frozen (`compromised: <id>`), has an invalid genesis in this folder, or when the local signing key is not the chain head key (`retired key: ...`). `append` refuses identity records (`bad type`). `SignRecord` refuses strings that are not UTF-8 and numbers that are not finite (`bad string`, `bad number`).
 
 ## 8. Versioning
 
