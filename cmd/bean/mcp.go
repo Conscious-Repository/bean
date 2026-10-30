@@ -393,8 +393,9 @@ func callTool(s *core.Store, name string, raw json.RawMessage, write bool) (any,
 	return nil, errUnknownTool
 }
 
-// namer names an author or subject for a client: self for the local
-// person, agent:<label> for one of their paired agents, else the id.
+// namer names an author or subject as ls does: self for the local person,
+// agent:<label> for one of their paired agents, the npub of another key,
+// else the id.
 type namer func(id string) string
 
 func names(l *core.Loaded) namer {
@@ -405,6 +406,9 @@ func names(l *core.Loaded) namer {
 		}
 		if label, ok := labels[id]; ok {
 			return "agent:" + label
+		}
+		if npub := core.Npub(id); npub != "" {
+			return npub
 		}
 		return id
 	}
