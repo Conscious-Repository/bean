@@ -47,6 +47,8 @@ L=$W/blob; newlog "$L"
 printf 'loose pdf bytes' >"$W/loose.pdf"; LOOSE=$(bean -dir "$L" blob put "$W/loose.pdf")
 printf 'time,value\n2026-10-20T03:00:00Z,1\n' >"$W/one.csv"; B1=$(bean -dir "$L" blob put "$W/one.csv")
 bean-import-csv -type hr -blob "$B1" "$W/one.csv" | bean -dir "$L" append >/dev/null
+want "csv importer without -blob warns (raw first, 9.3)" 0 "no -blob" bean-import-csv -type hr "$W/one.csv"
+if bean-import-csv -type hr -blob "$B1" "$W/one.csv" 2>&1 >/dev/null | grep -q "no -blob"; then bad "csv importer with -blob warns"; else ok "csv importer with -blob does not warn"; fi
 X=$(bean -dir "$L" add hr 5 -unit bpm)
 bean -dir "$L" purge "$X" >/dev/null
 want "loose blob kept after an unrelated purge" 0 "" bean -dir "$L" blob get "$LOOSE"

@@ -59,6 +59,9 @@ func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string, k
 	if contains(l.Report.Compromised, id) {
 		return res, errors.New("compromised: " + id)
 	}
+	if contains(l.Report.TooNew, id) {
+		return res, errors.New("too new: " + id + ": update bean before you rotate")
+	}
 	chain := l.Report.Chains[id]
 	if len(chain) == 0 {
 		return res, errors.New("input missing: " + id)
@@ -249,10 +252,16 @@ func (s *Store) RestoreIdentity(words []string, noSeal []string, key NewKey, ide
 	var id string
 	switch {
 	case identity != "":
+		if !contains(matches, identity) && contains(l.Report.TooNew, identity) {
+			return RotateResult{}, "", errors.New("too new: " + identity + ": update bean before you restore")
+		}
 		if !contains(matches, identity) {
 			return RotateResult{}, "", errors.New("input missing: genesis " + identity + " for these words")
 		}
 		id = identity
+	case identity == "" && len(matches) == 0 && len(l.Report.TooNew) > 0:
+		// A too-new identity has no chain here; the genesis may be one of them.
+		return RotateResult{}, "", errors.New("too new: " + strings.Join(l.Report.TooNew, ", ") + ": update bean before you restore")
 	case len(matches) == 0:
 		return RotateResult{}, "", errors.New("input missing: genesis for these words")
 	case len(matches) > 1:
