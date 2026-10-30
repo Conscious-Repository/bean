@@ -200,7 +200,7 @@ func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string, k
 		for _, f := range parts {
 			after[PathOf(f.id)] = f.data
 		}
-		rp := verifyFiles(after, nil, "")
+		rp := verifyFiles(after, nil)
 		if c := rp.Chains[id]; contains(rp.TooNew, id) || len(c) == 0 || c[len(c)-1].ID != sid {
 			return res, errors.New("too new: " + id + ": the rotation would not end the halt; update bean")
 		}
@@ -479,11 +479,19 @@ func renameSync(from, to string) error {
 	return syncDir(filepath.Dir(to))
 }
 
-// past returns l judged again with the head-key halt of identity id
-// ignored (C29). Only rotateFrom uses it, to seal and write the succession
-// that ends the halt.
+// past returns l judged again without the records that halt identity id
+// by its head key (C29). They are of an unknown version, so no other
+// result depends on them. Only rotate and restore use it, to seal and
+// write the succession that ends the halt.
 func (l *Loaded) past(id string) *Loaded {
+	files := make(map[string][]byte, len(l.Files))
+	for p, b := range l.Files {
+		files[p] = b
+	}
+	for _, h := range l.Report.HeadHalt[id] {
+		delete(files, PathOf(h))
+	}
 	c := *l
-	c.Report = verifyFiles(l.Files, nil, id)
+	c.Report = verifyFiles(files, nil)
 	return &c
 }

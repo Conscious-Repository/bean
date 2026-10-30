@@ -329,7 +329,7 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 		return nil, err
 	}
 	files, hidden := o.files, o.hidden
-	rp := verifyFiles(files, o.proven, "")
+	rp := verifyFiles(files, o.proven)
 	for _, p := range o.bad {
 		rp.Errors[p] = ErrBadPath.Error()
 	}
