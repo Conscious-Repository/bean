@@ -33,7 +33,7 @@ func (l *Loaded) canWrite(w writer) error {
 		if w.signer != nil {
 			pub = w.signer.Public()
 		}
-		return fmt.Errorf("retired key: this copy signs with %s, but the current key of %s is %s; sync, then run bean restore on this machine to write again", pub, w.author, head)
+		return fmt.Errorf("retired key: this copy signs with %s, but the current key of %s is %s; copy local/signing-key from the machine that rotated, or run bean rotate here with the 24 words", pub, w.author, head)
 	}
 	return nil
 }

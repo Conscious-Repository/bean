@@ -91,9 +91,10 @@ func TestRotateSeals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// C26: the succession seals every valid record of the outgoing key
-	// (ids[1], ids[2], D1; ids[0] is purged), minus the excluded D3.
-	want := []string{ids[1], ids[2], d1}
+	// C26: the succession seals every record of the outgoing key, the
+	// purged ids[0] too (so it is valid if D1 ever dies), minus the
+	// excluded D3.
+	want := []string{ids[0], ids[1], ids[2], d1}
 	sort.Strings(want)
 	if strings.Join(res.Sealed, ",") != strings.Join(want, ",") || len(res.NotSealed) != 1 || res.NotSealed[0] != d3 {
 		t.Fatalf("sealed %v not sealed %v", res.Sealed, res.NotSealed)
@@ -210,7 +211,9 @@ func TestRestoreLostLaptop(t *testing.T) {
 	if got != id {
 		t.Fatalf("restored identity %s, want %s", got, id)
 	}
-	if len(res.Sealed) != 1 || res.Sealed[0] != purge || res.NewKey == lostKey {
+	// C26: the tombstone and its target's id (the target is not in the
+	// backup; sealing its id keeps it valid should the tombstone die).
+	if len(res.Sealed) != 2 || !contains(res.Sealed, purge) || !contains(res.Sealed, ids[2]) || res.NewKey == lostKey {
 		t.Errorf("restore result %+v", res)
 	}
 	l := verifyOK(t, b)

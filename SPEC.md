@@ -517,7 +517,7 @@ The person rotates when a device is lost, a key is stolen, or a device leaves. S
    - `refs` = `[{"rel":"succeeds","id":<parent id>}]`.
    - `value.key` = the new tagged public key.
    - `value.recovery` = the commitment to recovery generation `g + 1`.
-   - `value.sealed` = the sorted ids of the parent key's valid records in this replica, except identity records, minus any the person excludes (C26).
+   - `value.sealed` = the sorted ids of every record of the parent key in this replica, valid or not, except identity records, plus the target ids of the tombstones, supersede records and holds in this replica that do not name a record of another key, minus any the person excludes (C26). An invalid or purged record is sealed too: if its tombstone dies, it comes back valid.
 7. Sign with recovery key generation `g`. The `kid` is the recovery public key. This reveals the key.
 8. Store the new signing key in `local/`. Write it to `local/signing-key.next` before the succession, and rename it to `local/signing-key` after. A load that finds `local/signing-key.next` renames it when the chain head names its key, and removes it when no chain node names its key. Thus a crash at any point leaves a folder that can write.
 9. Erase the paper seed and the recovery private keys.

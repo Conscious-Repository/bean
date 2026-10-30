@@ -418,3 +418,39 @@ func TestP256Deterministic(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+// Round 1 re-audit: a thief's tombstone that the person excludes with
+// -no-seal must give the target back valid, not "not sealed" (C26 with
+// SPEC 7.6). The target was purged at rotation time, so a seal set of
+// only valid records missed it.
+func TestNoSealTombstoneRestoresTarget(t *testing.T) {
+	a, _, words := initWithWords(t)
+	tgt := appendLines(t, a, partial("hr", 1, nil)).IDs[0]
+	thief := cloneLocal(t, a)
+	thief.Sync(a)
+	d, err := thief.Purge(tgt, "thief")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Sync(thief); err != nil {
+		t.Fatal(err)
+	}
+	la, _ := a.Load()
+	if !la.Hidden[tgt] {
+		t.Fatal("A did not hide the target")
+	}
+	res, err := a.Rotate(words, []string{d}, NewKey{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !contains(res.NotSealed, d) || !contains(res.Sealed, tgt) {
+		t.Fatalf("sealed %v not sealed %v", res.Sealed, res.NotSealed)
+	}
+	la, _ = a.Load()
+	if !la.Visible(tgt) {
+		t.Errorf("target not restored: valid=%v err=%q hidden=%v", la.Report.Valid[tgt], la.Report.Errors[tgt], la.Hidden[tgt])
+	}
+	if la.Report.Errors[d] != "not sealed" {
+		t.Errorf("thief tombstone: %q", la.Report.Errors[d])
+	}
+}

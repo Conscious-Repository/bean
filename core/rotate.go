@@ -79,13 +79,37 @@ func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string, k
 	// C26 (Benjamin decision, 2026-10-30): the succession seals every valid
 	// record of the outgoing key, not only destructive ones. A record of a
 	// retired key that the succession does not seal is invalid.
+	//
+	// The seal set is every record of the outgoing key in this folder,
+	// valid now or not, plus every target that a tombstone or supersede in
+	// this folder names. A record that is invalid now for another reason,
+	// for example a purged target, must still be sealed: when its tombstone
+	// dies (-no-seal), the target comes back and must not die of a missing
+	// seal. A sealed id that names no record of the outgoing key has no
+	// effect (SPEC 5.4), so the extra target ids are harmless.
+	seal := map[string]bool{}
 	for rid, r := range l.Report.Records {
-		if r.Kid == outgoing && r.Author == id && !r.IsIdentity() && l.Report.Valid[rid] {
-			if skip[rid] {
-				res.NotSealed = append(res.NotSealed, rid)
-			} else {
-				res.Sealed = append(res.Sealed, rid)
+		if r.Kid == outgoing && r.Author == id && !r.IsIdentity() {
+			seal[rid] = true
+		}
+		for _, rel := range []string{"purges", "supersedes"} {
+			for _, t := range r.Targets(rel) {
+				if t2, ok := l.Report.Records[t]; !ok || (t2.Kid == outgoing && t2.Author == id) {
+					seal[t] = true
+				}
 			}
+		}
+	}
+	for _, h := range l.Holds {
+		if t, ok := l.Report.Records[h.Target]; !ok || (t.Kid == outgoing && t.Author == id) {
+			seal[h.Target] = true
+		}
+	}
+	for rid := range seal {
+		if skip[rid] {
+			res.NotSealed = append(res.NotSealed, rid)
+		} else {
+			res.Sealed = append(res.Sealed, rid)
 		}
 	}
 	sort.Strings(res.Sealed)
