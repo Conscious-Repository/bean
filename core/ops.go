@@ -24,20 +24,21 @@ var forbiddenPartial = []string{"v", "nonce", "author", "kid", "id", "sig"}
 // Append reads JSONL partial records (SPEC.md 9.2), completes, dedupes,
 // signs and writes them (12.3 bean append). On the first error it stops;
 // records before it stay written.
-func (s *Store) Append(in io.Reader) (AppendResult, error) {
-	var res AppendResult
+func (s *Store) Append(in io.Reader) (AppendResult, error) { return s.appendAs(in, false) }
+
+func (s *Store) appendAs(in io.Reader, agent bool) (AppendResult, error) {
 	unlock, err := s.lock()
 	if err != nil {
-		return res, err
+		return AppendResult{}, err
 	}
 	defer unlock()
 	l, err := s.load(false)
 	if err != nil {
-		return res, err
+		return AppendResult{}, err
 	}
-	w, err := s.writerFor(l, false)
+	w, err := s.writerFor(l, agent)
 	if err != nil {
-		return res, err
+		return AppendResult{}, err
 	}
 	return s.appendWith(l, w, in)
 }

@@ -151,27 +151,21 @@ func (rp *Report) fail(id, msg string) {
 // result depends only on the set.
 func VerifyFiles(files map[string][]byte) *Report { return verifyFiles(files, nil) }
 
-// checkAll runs checkFile on every path on all CPUs. Results are by index,
-// so the outcome does not depend on scheduling.
-func checkAll(paths []string, files map[string][]byte, proven map[string]bool) []FileResult {
-	out := make([]FileResult, len(paths))
+// parallel runs f(0) to f(n-1) on all CPUs. Callers write results by
+// index, so the outcome does not depend on scheduling.
+func parallel(n int, f func(i int)) {
 	var next atomic.Int64
 	var wg sync.WaitGroup
 	for w := 0; w < runtime.GOMAXPROCS(0); w++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for {
-				i := int(next.Add(1) - 1)
-				if i >= len(paths) {
-					return
-				}
-				out[i] = checkFile(paths[i], files[paths[i]], proven[paths[i]])
+			for i := int(next.Add(1) - 1); i < n; i = int(next.Add(1) - 1) {
+				f(i)
 			}
 		}()
 	}
 	wg.Wait()
-	return out
 }
 
 // verifyFiles is VerifyFiles; proven names paths whose signatures this
@@ -202,8 +196,10 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 // checkFiles is step 1. It returns the records of an unknown version.
 func (rp *Report) checkFiles(files map[string][]byte, proven map[string]bool) []*Record {
 	paths := sortedKeys(files)
+	results := make([]FileResult, len(paths))
+	parallel(len(paths), func(i int) { results[i] = checkFile(paths[i], files[paths[i]], proven[paths[i]]) })
 	var unknown []*Record
-	for i, fr := range checkAll(paths, files, proven) {
+	for i, fr := range results {
 		switch {
 		case fr.Err != nil:
 			rp.Errors[paths[i]] = fr.Err.Error()

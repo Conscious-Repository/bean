@@ -6,12 +6,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -163,22 +160,7 @@ func (s *Store) readObjects(full bool) (*objectSet, error) {
 	// Read the rest on all CPUs; a log can have tens of thousands of files.
 	data := make([][]byte, len(todo))
 	errs := make([]error, len(todo))
-	var next atomic.Int64
-	var wg sync.WaitGroup
-	for w := 0; w < runtime.GOMAXPROCS(0); w++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for {
-				i := int(next.Add(1) - 1)
-				if i >= len(todo) {
-					return
-				}
-				data[i], errs[i] = os.ReadFile(s.path(todo[i].rel))
-			}
-		}()
-	}
-	wg.Wait()
+	parallel(len(todo), func(i int) { data[i], errs[i] = os.ReadFile(s.path(todo[i].rel)) })
 	for i, d := range todo {
 		if errors.Is(errs[i], os.ErrNotExist) {
 			return nil, errMoved
@@ -194,25 +176,25 @@ func (s *Store) readObjects(full bool) (*objectSet, error) {
 // writeObjCache stores every record that passed steps 1 to 15, unless
 // that is exactly what the cache already held (every entry was used and
 // none is new). It is best effort: a log on read-only media still loads.
-func (s *Store) writeObjCache(disk []diskObject, files map[string][]byte, rp *Report, proven map[string]bool, cacheLen int) {
+func (s *Store) writeObjCache(o *objectSet, rp *Report) {
 	racy := time.Now().Add(-racyWindow).UnixNano() // file times are wall-clock, not $BEAN_NOW
 	good := map[string]bool{}
 	for _, r := range rp.Records {
 		good[r.Path] = true
 	}
-	sort.Slice(disk, func(i, j int) bool { return disk[i].rel < disk[j].rel })
+	sort.Slice(o.disk, func(i, j int) bool { return o.disk[i].rel < o.disk[j].rel })
 	var buf bytes.Buffer
 	n := 0
-	for _, d := range disk {
+	for _, d := range o.disk {
 		if !good[d.path] || d.stamp.mtime > racy {
 			continue
 		}
 		n++
 		buf.WriteString(d.rel + "\t" + strconv.FormatInt(d.stamp.size, 10) + "\t" + strconv.FormatInt(d.stamp.mtime, 10) + "\t")
-		buf.Write(files[d.path])
+		buf.Write(o.files[d.path])
 		buf.WriteByte('\n')
 	}
-	if n == len(proven) && cacheLen == len(proven) {
+	if n == len(o.proven) && o.cacheLen == len(o.proven) {
 		return
 	}
 	if err := os.MkdirAll(filepath.Dir(s.path(fileObjCache)), 0o700); err == nil {

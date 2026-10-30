@@ -61,17 +61,11 @@ type Local struct {
 // ReadLocal loads local/. It returns not initialized when local/identity is
 // absent.
 func (s *Store) ReadLocal() (*Local, error) {
-	idb, err := os.ReadFile(s.path(fileIdentity))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, ErrNotInitialized
-	}
+	id, err := s.Identity()
 	if err != nil {
 		return nil, err
 	}
-	l := &Local{Identity: strings.TrimSpace(string(idb))}
-	if !IsID(l.Identity) {
-		return nil, errors.New("bad field: local/identity")
-	}
+	l := &Local{Identity: id}
 	sb, err := os.ReadFile(s.path(fileSecret))
 	if err != nil {
 		return nil, err
@@ -339,7 +333,7 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 		}
 		return &Loaded{Files: files, Hidden: hidden, Report: rp, Holds: holds, Local: local}, nil
 	}
-	s.writeObjCache(o.disk, files, rp, o.proven, o.cacheLen)
+	s.writeObjCache(o, rp)
 	if done, removed, err := s.finishRotation(rp); err != nil {
 		return nil, err
 	} else if removed {

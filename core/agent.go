@@ -147,10 +147,7 @@ func (s *Store) onlyGenesis() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var ids []string
-	for id := range l.Report.Chains {
-		ids = append(ids, id)
-	}
+	ids := sortedKeys(l.Report.Chains)
 	if len(ids) != 1 {
 		return "", errors.New("input missing: one genesis in this folder; sync the log first or pass -identity")
 	}
@@ -170,9 +167,6 @@ func (s *Store) Pair(key, label string) (string, error) {
 }
 
 func (s *Store) pair(key, label string) (string, error) {
-	if !strings.HasPrefix(key, "secp256k1:") && !strings.HasPrefix(key, "ed25519:") && !strings.HasPrefix(key, "p256:") {
-		return "", ErrUnsupportedKeyAlgorithm
-	}
 	if _, err := ParseKey(key); err != nil {
 		return "", err
 	}
@@ -240,19 +234,4 @@ func (l *Loaded) AgentLabels() map[string]string {
 
 // AppendAsAgent is Append signed by the local agent key, with the agent's
 // key as the author and the local identity as the default subject.
-func (s *Store) AppendAsAgent(in io.Reader) (AppendResult, error) {
-	unlock, err := s.lock()
-	if err != nil {
-		return AppendResult{}, err
-	}
-	defer unlock()
-	l, err := s.load(false)
-	if err != nil {
-		return AppendResult{}, err
-	}
-	w, err := s.writerFor(l, true)
-	if err != nil {
-		return AppendResult{}, err
-	}
-	return s.appendWith(l, w, in)
-}
+func (s *Store) AppendAsAgent(in io.Reader) (AppendResult, error) { return s.appendAs(in, true) }

@@ -120,8 +120,7 @@ func IsTaggedKey(s string) bool {
 func (r *Record) checkFields() error {
 	m := r.Raw
 	// nonce
-	nonce, ok := m["nonce"].(string)
-	if !ok || !isLowerHex(nonce, 32) {
+	if nonce, _ := m["nonce"].(string); !isLowerHex(nonce, 32) {
 		return badField("nonce")
 	}
 	// type
@@ -134,17 +133,11 @@ func (r *Record) checkFields() error {
 		return ErrOldFormat
 	}
 	// subject
+	// subject: on every record but a genesis
 	subj, hasSubj := m["subject"]
-	if r.Type == "bean.genesis" {
-		if hasSubj {
-			return badField("subject")
-		}
-	} else {
-		s, ok := subj.(string)
-		if !hasSubj || !ok || !IsID(s) {
-			return badField("subject")
-		}
-		r.Subject = s
+	r.Subject, _ = subj.(string)
+	if hasSubj == (r.Type == "bean.genesis") || (hasSubj && !IsID(r.Subject)) {
+		return badField("subject")
 	}
 	// author
 	if !IsID(r.Author) && !IsTaggedKey(r.Author) {
@@ -152,15 +145,13 @@ func (r *Record) checkFields() error {
 	}
 	// value
 	if v, has := m["value"]; has {
-		obj, ok := v.(map[string]any)
-		if !ok {
+		if r.Value, _ = v.(map[string]any); r.Value == nil {
 			return badField("value")
 		}
-		r.Value = obj
 	}
 	// times
-	times, ok := m["times"].(map[string]any)
-	if !ok {
+	times, _ := m["times"].(map[string]any)
+	if times == nil {
 		return badField("times")
 	}
 	imp, ok := times["imported"].(string)
@@ -179,16 +170,16 @@ func (r *Record) checkFields() error {
 		r.Observed = obs
 	}
 	// source
-	src, ok := m["source"].(map[string]any)
-	if !ok {
+	src, _ := m["source"].(map[string]any)
+	if src == nil {
 		return badField("source")
 	}
-	sys, ok := src["system"].(string)
-	if !ok || len(sys) < 1 || len(sys) > 64 {
+	sys, _ := src["system"].(string)
+	if len(sys) < 1 || len(sys) > 64 {
 		return badField("source.system")
 	}
-	ad, ok := src["adapter"].(string)
-	if !ok || !adapterPattern.MatchString(ad) {
+	ad, _ := src["adapter"].(string)
+	if !adapterPattern.MatchString(ad) {
 		return badField("source.adapter")
 	}
 	ref, has := src["ref"]
@@ -211,10 +202,7 @@ func (r *Record) checkFields() error {
 		}
 		seen := map[Ref]bool{}
 		for _, it := range arr {
-			obj, ok := it.(map[string]any)
-			if !ok {
-				return badField("refs")
-			}
+			obj, _ := it.(map[string]any) // a nil map fails the next check
 			rel, ok1 := obj["rel"].(string)
 			id, ok2 := obj["id"].(string)
 			if !ok1 || !ok2 || !IsID(id) {
@@ -241,10 +229,7 @@ func (r *Record) checkFields() error {
 			return badField("blobs")
 		}
 		for _, it := range arr {
-			obj, ok := it.(map[string]any)
-			if !ok {
-				return badField("blobs")
-			}
+			obj, _ := it.(map[string]any) // a nil map fails the next check
 			hash, ok1 := obj["hash"].(string)
 			role, ok2 := obj["role"].(string)
 			mt, ok3 := obj["media_type"].(string)
@@ -256,11 +241,9 @@ func (r *Record) checkFields() error {
 	}
 	// context
 	if raw, has := m["context"]; has {
-		obj, ok := raw.(map[string]any)
-		if !ok {
+		if r.Context, _ = raw.(map[string]any); r.Context == nil {
 			return badField("context")
 		}
-		r.Context = obj
 	}
 	// sig shape (verified earlier)
 	if _, ok := m["sig"].(string); !ok {
