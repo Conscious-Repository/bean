@@ -383,7 +383,7 @@ func (rep *Report) records(blob string, loc *time.Location) []map[string]any {
 		switch {
 		case r.Value == "":
 			value = map[string]any{"n": nil}
-		case reNumber.MatchString(r.Value):
+		case reNumber.MatchString(r.Value) && exact(r.Value):
 			n, _ := strconv.ParseFloat(r.Value, 64)
 			value = map[string]any{"n": n}
 			if string(core.Canonical(n)) != r.Value {
@@ -423,4 +423,11 @@ func (rep *Report) records(blob string, loc *time.Location) []map[string]any {
 		out = append(out, rec)
 	}
 	return out
+}
+
+// exact reports whether a printed number fits a record number (SPEC 4.1).
+// A larger one stays text, so the import never fails on it.
+func exact(v string) bool {
+	n, err := strconv.ParseFloat(v, 64)
+	return err == nil && core.ExactNumber(n)
 }

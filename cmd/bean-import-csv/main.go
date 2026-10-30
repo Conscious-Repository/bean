@@ -166,13 +166,14 @@ func convert(in io.Reader, out io.Writer, o options) error {
 var decimal = regexp.MustCompile(`^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$`)
 
 // number parses v as a finite decimal number. An integer outside the
-// exact range of a float64 (from 2^53 up) is kept as text so no digit is lost.
+// exact range of a float64 (from 2^53 up) is kept as text so no digit is
+// lost, and so is any value that SPEC 4.1 cannot carry (core.ExactNumber).
 func number(v string) (float64, bool) {
 	if !decimal.MatchString(v) {
 		return 0, false
 	}
 	n, err := strconv.ParseFloat(v, 64)
-	if err != nil || math.IsInf(n, 0) || math.IsNaN(n) {
+	if err != nil || !core.ExactNumber(n) {
 		return 0, false
 	}
 	if !strings.ContainsAny(v, ".eE") && math.Abs(n) >= 1<<53 {

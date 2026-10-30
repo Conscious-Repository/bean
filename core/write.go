@@ -127,3 +127,10 @@ func CheckValue(v any) error {
 	}
 	return nil
 }
+
+// ExactNumber reports whether f can be a JSON number in a record: finite,
+// and an integer value only up to 2^53 in magnitude (SPEC 4.1). Importers
+// keep any other number as text.
+func ExactNumber(f float64) bool {
+	return !math.IsNaN(f) && !math.IsInf(f, 0) && numberInRange(f)
+}

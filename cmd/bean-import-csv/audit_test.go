@@ -77,3 +77,13 @@ func FuzzConvert(f *testing.F) {
 		}
 	})
 }
+
+// Round 2 fuzz finding: 1e17 parses, but SPEC 4.1 cannot carry an integer
+// value above 2^53, so append failed on the whole file. It stays text.
+func TestConvertOutOfRangeNumber(t *testing.T) {
+	got := convertValues(t, "value\n1e17\n1.5e17\n9007199254740991\n")
+	want := []string{`{"s":"1e17"}`, `{"s":"1.5e17"}`, `{"n":9007199254740991}`}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("got %v want %v", got, want)
+	}
+}
