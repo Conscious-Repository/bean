@@ -986,6 +986,7 @@ When the fixed record keeps the same HMAC input, its dedupe ref is the same as t
 ### 9.8 Adapters
 
 The reference implementation has `bean-import-csv` and `bean-import-labcorp`. Adapters for Apple Health, Oura and Whoop are open (Appendix).
+The first planned source is Whoop: JSON from the Whoop API, fetched on a schedule by a separate job (9.10), stored as a blob first (9.3), then parsed (meeting R1 to R3). Its field mapping and native ids come from real responses, not from memory.
 Each adapter document MUST say which source field is the native id, or that the source has none.
 
 ### 9.9 Vocabulary and uncertainty
