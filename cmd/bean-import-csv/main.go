@@ -7,20 +7,24 @@
 package main
 
 import (
+	"bufio"
 	"encoding/csv"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Conscious-Repository/bean/core"
 )
 
-const version = "bean-import-csv@0.5.0"
+const version = "bean-import-csv@0.5.1"
 
 type options struct {
 	typ, system, blob, unit, precision string
@@ -53,11 +57,22 @@ func main() {
 
 // convert writes one partial record per CSV row.
 func convert(in io.Reader, out io.Writer, o options) error {
-	r := csv.NewReader(in)
+	br := bufio.NewReader(in)
+	// Spreadsheet exports often start with a UTF-8 byte order mark; it is
+	// not part of the first column name.
+	if b, err := br.Peek(3); err == nil && string(b) == "\ufeff" {
+		br.Discard(3)
+	}
+	r := csv.NewReader(br)
 	r.FieldsPerRecord = -1
 	header, err := r.Read()
 	if err != nil {
 		return err
+	}
+	for _, h := range header {
+		if !utf8.ValidString(h) {
+			return errors.New("line 1: bad string: not UTF-8")
+		}
 	}
 	col := map[string]int{}
 	for i, h := range header {
@@ -78,6 +93,11 @@ func convert(in io.Reader, out io.Writer, o options) error {
 		if err != nil {
 			return fmt.Errorf("line %d: %s", line, err)
 		}
+		for _, f := range row {
+			if !utf8.ValidString(f) {
+				return fmt.Errorf("line %d: bad string: not UTF-8", line)
+			}
+		}
 		get := func(i int) string {
 			if i < len(row) {
 				return strings.TrimSpace(row[i])
@@ -87,7 +107,7 @@ func convert(in io.Reader, out io.Writer, o options) error {
 		// SPEC.md 3.4 shapes; 9.6: null when the source has none, never invent.
 		value := map[string]any{"n": nil}
 		if v := get(vi); v != "" {
-			if n, err := strconv.ParseFloat(v, 64); err == nil {
+			if n, ok := number(v); ok {
 				value = map[string]any{"n": n}
 				if o.unit != "" {
 					value["unit"] = o.unit
@@ -138,4 +158,25 @@ func convert(in io.Reader, out io.Writer, o options) error {
 			return err
 		}
 	}
+}
+
+// decimal is a plain decimal number as a person or a spreadsheet writes it.
+// strconv.ParseFloat also takes "NaN", "Inf", hex floats and underscores;
+// those are kept as text.
+var decimal = regexp.MustCompile(`^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$`)
+
+// number parses v as a finite decimal number. An integer outside the
+// exact range of a float64 (from 2^53 up) is kept as text so no digit is lost.
+func number(v string) (float64, bool) {
+	if !decimal.MatchString(v) {
+		return 0, false
+	}
+	n, err := strconv.ParseFloat(v, 64)
+	if err != nil || math.IsInf(n, 0) || math.IsNaN(n) {
+		return 0, false
+	}
+	if !strings.ContainsAny(v, ".eE") && math.Abs(n) >= 1<<53 {
+		return 0, false
+	}
+	return n, true
 }

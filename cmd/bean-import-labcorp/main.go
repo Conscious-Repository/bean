@@ -24,6 +24,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -33,12 +34,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Conscious-Repository/bean/core"
 )
 
 const (
-	version = "bean-import-labcorp@0.1.0"
+	version = "bean-import-labcorp@0.1.1"
 	system  = "labcorp"
 )
 
@@ -84,6 +86,9 @@ func readText(path string) (string, error) {
 		return "", err
 	}
 	if !bytes.HasPrefix(data, []byte("%PDF")) {
+		if !utf8.Valid(data) {
+			return "", errors.New("bad string: the text is not UTF-8")
+		}
 		return string(data), nil
 	}
 	bin, err := exec.LookPath("pdftotext")
@@ -95,6 +100,9 @@ func readText(path string) (string, error) {
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("pdftotext: %v: %s", err, strings.TrimSpace(errb.String()))
+	}
+	if !utf8.Valid(out.Bytes()) {
+		return "", errors.New("bad string: pdftotext output is not UTF-8")
 	}
 	return out.String(), nil
 }
