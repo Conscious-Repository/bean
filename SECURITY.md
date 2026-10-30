@@ -18,8 +18,13 @@ This page says what bean protects, what it does not protect, and where each key 
 - **If you lose the 24 words and the machine, you lose the identity.** Your records stay readable on any copy, but you cannot change keys again.
 - **An AI client sees what it reads.** `bean mcp` sends the records it returns to the AI provider. Use a local model if that matters to you.
 - **Times are claims.** `times.observed` says when the author says something happened. A key that you rotated out can no longer sign valid records, but the head key can write any time.
-- **The folder lock is local.** Commands on one folder take a lock on `local/lock`. Two machines that write to one network folder at the same time are not protected; sync between separate folders instead. On Windows the lock does nothing.
-- **gc erases for good.** `gc` refuses while the log has records from a newer bean or the identity is frozen, because validity can still change then.
+- **The folder lock is local, and absent on Windows.** Commands on one folder take an exclusive `flock` on `local/lock`, so two `bean` processes on one Mac or Linux machine cannot both write. It does not protect:
+  - **Two machines on one folder.** On a network or synced folder (SMB, NFS, iCloud Drive, Dropbox, Syncthing, a shared drive) a lock taken on one machine does not stop another machine, and some network file systems ignore `flock`. Two `rotate` or `restore` runs there can fork and freeze the identity for good, and two writers can race. Give each machine its own folder and use `bean sync` or rsync between them.
+  - **Windows.** There is no cross-process lock: only threads of one process are serialized. Run one `bean` command at a time per folder, and stop `bean mcp` and other agents before `rotate`, `restore`, `purge` or `gc`.
+  These limits are known and not fixed in this build.
+- **gc erases for good.** `gc` refuses while the log has records from a newer bean, the identity is frozen, or a seal set is incomplete, because validity can still change then.
+- **A thief can flood the old key.** Every record of the old key in the folder is sealed by default, so a thief who writes millions of records makes `rotate` slow, and above 200,200,000 records `rotate` refuses (`too large`). Rotate from a copy that does not hold the thief's records, for example a backup from before the theft: records that are not in the folder are not sealed, so they stay invalid.
+- **A missing seal part fails closed.** Someone who can delete files in a copy can delete a `bean.seal` part. Then every record of the retired key in that copy is not valid until the part comes back from another copy. Nothing is erased, and no one without the 24 words can add or replace a part.
 - **Equal files look equal.** Encryption is deterministic, so someone with the files can see that two of them hold the same content.
 
 ## Keys

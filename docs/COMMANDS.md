@@ -152,7 +152,7 @@ Reads an export into a log that has the same identity secret.
 
 ### `rotate [-no-seal <id>]... [-nostr new|<file>]`
 
-Changes your signing key. Reads the 24 words from stdin. Sync every copy first. Every record made with the old key that this folder has stays valid, because the new succession seals it; `-no-seal` excludes one (for example one that a thief made). Records the old key makes after the rotation are not valid. `-nostr` makes the new key a Nostr key, from a file because stdin carries the words.
+Changes your signing key. Reads the 24 words from stdin. Sync every copy first. Every record made with the old key that this folder has stays valid, because the new succession seals it; `-no-seal` excludes one (for example one that a thief made). Records the old key makes after the rotation are not valid. `-nostr` makes the new key a Nostr key, from a file because stdin carries the words. Above 200,000 records it also prints one `seal part <id>` line per extra seal record (C28); copy those with the rest of the log. It refuses above 200,200,000 records (`too large`).
 
 ### `restore [-no-seal <id>]... [-nostr new|<file>] [-identity <id>]`
 
@@ -166,7 +166,7 @@ Deletes a record about you. Writes a tombstone that every copy obeys, and erases
 
 ### `gc`
 
-Erases records that a deletion from another copy hid at least 7 days ago, and files that no record uses. Nothing is erased without `gc` or `purge`.
+Erases records that a deletion from another copy hid at least 7 days ago, and the files that only those records used. Nothing is erased without `gc` or `purge`. It refuses while the log has records from a newer bean, your identity is frozen, or a rotation's seal parts are missing (`incomplete seals`).
 
 ## Other
 
