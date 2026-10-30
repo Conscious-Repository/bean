@@ -1,15 +1,31 @@
 package core
 
-import "strings"
+import (
+	"math"
+	"strings"
+	"unicode/utf8"
+)
+
+// badIDPath names no file a store ever writes. PathOf and BlobPathOf
+// return it for a string that is not an id, so a bad id read from input
+// is "not found" instead of a panic or a path outside the shard (audit
+// MINOR).
+const badIDPath = "bad-id"
 
 // PathOf returns the objects/ path of a record id (SPEC.md 7.1).
 func PathOf(id string) string {
+	if !IsID(id) {
+		return "objects/" + badIDPath
+	}
 	h := id[7:]
 	return "objects/" + h[:2] + "/" + h[2:] + ".json"
 }
 
 // BlobPathOf returns the blobs/ path of a blob id.
 func BlobPathOf(id string) string {
+	if !IsID(id) {
+		return "blobs/" + badIDPath
+	}
 	h := id[7:]
 	return "blobs/" + h[:2] + "/" + h[2:]
 }
@@ -20,6 +36,12 @@ func BlobPathOf(id string) string {
 func SignRecord(obj map[string]any, s Signer) (string, []byte, error) {
 	delete(obj, "id")
 	delete(obj, "sig")
+	// Canonical would write invalid UTF-8 as U+FFFD and has no form for
+	// NaN or Inf, so the stored record would differ from what the caller
+	// gave. Refuse instead (audit MINOR).
+	if err := CheckValue(obj); err != nil {
+		return "", nil, err
+	}
 	id := RecordID(obj)
 	sig, err := s.Sign(id)
 	if err != nil {
@@ -74,3 +96,34 @@ func NewSuccession(identity, kid, parent, newKey, newCommitment string, sealed [
 
 // IsCoreType reports whether a type is reserved for the core.
 func IsCoreType(t string) bool { return strings.HasPrefix(t, "bean.") }
+
+// CheckValue reports a string that is not valid UTF-8 (ErrBadString) or a
+// number that JSON cannot carry exactly (ErrBadNumber) anywhere in v.
+func CheckValue(v any) error {
+	switch x := v.(type) {
+	case string:
+		if !utf8.ValidString(x) {
+			return ErrBadString
+		}
+	case float64:
+		if math.IsNaN(x) || math.IsInf(x, 0) || !numberInRange(x) {
+			return ErrBadNumber
+		}
+	case []any:
+		for _, e := range x {
+			if err := CheckValue(e); err != nil {
+				return err
+			}
+		}
+	case map[string]any:
+		for k, e := range x {
+			if !utf8.ValidString(k) {
+				return ErrBadString
+			}
+			if err := CheckValue(e); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}

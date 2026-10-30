@@ -241,6 +241,16 @@ check("v6 high-S", verify(v6["kid"], v6["id"], v6["high_s_sig"]), "bad signature
 raw = bytes.fromhex(v6["high_s_sig"][5:])
 pk.public_key().verify(utils.encode_dss_signature(int.from_bytes(raw[:32], "big"), int.from_bytes(raw[32:], "big")), id_raw(v6["id"]), ec.ECDSA(hashes.SHA256()))
 print("ok   v6 high-S twin is a valid ECDSA signature (rejected only by low-S rule)")
+# The reference signer uses RFC 6979 nonces, so low_s_sig is reproducible.
+try:
+    der = pk.sign(id_raw(v6["id"]), ec.ECDSA(hashes.SHA256(), deterministic_signing=True))
+    r6, s6 = utils.decode_dss_signature(der)
+    n256 = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+    if s6 > n256 // 2:
+        s6 = n256 - s6
+    check("v6 RFC 6979 low-S sig", "p256:" + r6.to_bytes(32, "big").hex() + s6.to_bytes(32, "big").hex(), v6["low_s_sig"])
+except TypeError:
+    print("skip v6 RFC 6979: this cryptography has no deterministic_signing")
 
 v7 = load("v7-commitment.json")
 check("v7 commitment", "sha256:" + hashlib.sha256(v7["tagged_key"].encode("ascii")).hexdigest(), v7["commitment"])
