@@ -4,9 +4,9 @@
 PY ?= python3
 FUZZTIME ?= 2m
 
-.PHONY: check build fmt vet test race lint vuln vectors demo fuzz smoke
+.PHONY: check build fmt vet test race lint vuln vectors second demo fuzz smoke
 
-check: fmt vet build race lint vuln vectors demo
+check: fmt vet build race lint vuln vectors second demo
 
 build:
 	go build ./...
@@ -36,6 +36,11 @@ vectors:
 	@test -z "$$(git status --porcelain -- vectors)" || { git status --porcelain -- vectors; exit 1; }
 	$(PY) -I tools/checkvectors.py >/dev/null
 	$(PY) -I tools/checksecp256k1.py >/dev/null
+
+# A second verifier, written from CORE.md and SPEC.md only, must print the
+# same verify lines and exit codes as bean on every scenario log.
+second:
+	PY=$(PY) bash tools/second/run.sh
 
 demo:
 	./demo.sh >/dev/null
