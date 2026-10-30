@@ -103,7 +103,7 @@ Check each file in this order. Stop at the first failure.
 
 | Action | Who | Key |
 |---|---|---|
-| Add a claim | Any author. Readers decide whom to trust. | A key on the chain of the author, or a bare key with `kid` equal to `author`. |
+| Add a claim | Any author. Readers decide whom to trust. | The head key, or an older key on the chain whose next succession lists the record in `sealed` (C26, 2026-10-30). A bare key with `kid` equal to `author` is always its own head. |
 | Correct (a record with a `supersedes` ref) | The author of the target. The target must not be an `bean.*` record. | The head key, or an older key on the chain whose next succession lists the record in `sealed`. |
 | Delete (an `bean.tombstone` with one `purges` ref and `author` equal to `subject`) | The subject of the target. The target must not be a genesis, a succession or a tombstone. | The same as for a correction. |
 | Rotate | The identity. | The recovery key to which the head commits. |
@@ -112,8 +112,9 @@ More rules:
 
 1. A recovery key signs only successions.
 2. If two or more valid records correct the same target, readers show the one with the lowest id.
-3. Valid records that have the same `subject`, `source.system` and `source.ref` are duplicates. Do not count corrected records. The record with the lowest id is the primary.
+3. Valid records that have the same `subject`, `author`, `source.system` and `source.ref` are duplicates (C27, 2026-10-30). Do not count corrected records. The record with the lowest id is the primary.
 4. A claim is not valid if the set has no genesis for its author.
+5. A rotation seals every valid record of the outgoing key by default. A retired key cannot add a valid record after the rotation. One key holds at most about 230,000 records, the size of one succession.
 
 ## 4. Folder and sync
 
@@ -125,6 +126,7 @@ More rules:
 4. The copy that wrote the tombstone erases the target at once. Any other copy that has the target hides it. It erases the target only when the person runs `gc`, 7 days or more later.
 5. If a tombstone becomes invalid, for example after a rotation that does not seal it, restore the target.
 6. You can also copy files with rsync, git or a USB drive. Then run `verify` on each copy.
+7. Erasure follows files, not validity (C25). `purge` and `gc` erase a blob only when they erase a record that names it and no other record file names it. `gc` erases nothing while any identity is too new or the local identity is frozen.
 
 ### 4.2 Blobs
 

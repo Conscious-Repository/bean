@@ -1,3 +1,8 @@
 *.test
 /bean
 /bean-import-*
+
+# A bean log never belongs in this repository (DECISIONS 116).
+/objects/
+/blobs/
+/local/

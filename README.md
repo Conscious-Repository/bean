@@ -224,9 +224,15 @@ If you lose the laptop:
 
    Type or paste the 24 words, then press Ctrl-D.
 
-Your identity and records stay the same. The lost key can no longer correct or delete anything. Use `bean rotate` the same way on a machine that you still have, for example when a key is old.
+Your identity and records stay the same. The lost key can no longer add, correct or delete anything: a record it signs after the rotation is not valid. Records of the old key that are in this folder when you restore stay valid, because the rotation seals them. Use `bean rotate` the same way on a machine that you still have, for example when a key is old.
 
-Sync every copy before you rotate or restore. Never rotate or restore on two machines from the same point: that freezes the identity, and you must make a new one.
+If `restore` says `ambiguous`, the folder holds more than one identity made from these words' public commitment (someone can copy it). Pass your identity id: `bean -dir ~/health restore -identity sha256:...`. Your identity id is on the first line that `init` printed, in any export's `manifest.json`, and in `bean whoami` on an old machine.
+
+Sync every copy before you rotate or restore. Records that a copy made with the old key and did not sync before the rotation stop being valid. Never rotate or restore on two machines from the same point: that freezes the identity, and you must make a new one.
+
+### Upgrading a log made before 2026-10-30
+
+Builds from 2026-10-30 on change three rules (SPEC.md C25 to C27). If you never ran `rotate` or `restore` on your log, nothing changes for you. If you did, the records that the old key signed were not sealed then, and they now show as `not sealed` in `bean verify`. Ask before you run a new build on such a log. A log from before the rename to bean (types `hlog.*`) fails with `old format`; make a new log with `bean init`.
 
 ## How it works
 

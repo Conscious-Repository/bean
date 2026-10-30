@@ -1,13 +1,19 @@
 # bean core specification v0.5, draft
 
 Status: draft. This text is not frozen. [CORE.md](CORE.md) section 6 tells when it freezes.
-Date: 2026-10-28.
+Date: 2026-10-30.
 Changes: v0.4 applied change notes C1 to C20: seed-only rotation, a fixed envelope, verify before copy in sync, and no erasure on a timer. v0.5 adds four change notes:
 
 - C21: secp256k1 (Nostr) signing keys (4.4, 4.5).
 - C22: restore on a new host (5.10).
 - C23: superseded records are not in duplicate groups (6.3 step 12).
 - C24: the protocol name is bean. The HKDF labels (4.7), the dedupe ref label (4.8), the blob label (4.9), the reserved types (3.3) and the wrapper `alt` tag (4.5) say `bean`. Keys, ids and vectors from builds before C24 do not match.
+
+On 2026-10-30 the audit of `b7a1626` added three change notes. They change which records are valid or erased. Records, ids, signatures, keys and the wire labels do not change.
+
+- C25: erasure follows record files, not validity. `purge` and `gc` erase only the blobs of the records that they erase, and only when no remaining record file names the blob. `gc` refuses on a too-new or frozen identity (7.4 step 4, 7.6 step 5, 7.7 step 5).
+- C26: a retired key writes nothing valid. A succession seals every valid record of the outgoing key, not only the destructive ones. A record of an older chain key that the next succession does not seal is invalid (5.4, 5.5 step 6, 6.3 step 7, 6.5). Benjamin decision.
+- C27: duplicate groups include the author (6.3 step 12). A record of one key is never a duplicate of a record of another key.
 
 Reference implementation: the `bean` repository.
 License: CC0 1.0 (section 19).
@@ -481,25 +487,26 @@ There is one kind of succession. It is signed by the recovery key that the paren
 
 The person rotates when a device is lost, a key is old, or a device leaves. Rotation needs the paper seed. Thus a stolen device can add claims, but it cannot take over the identity, because it cannot write a succession.
 
-### 5.4 Sealed rotation
+### 5.4 Sealed rotation (C26)
 
-A destructive record signed by the head key is valid.
-A destructive record signed by an older chain key is valid only when the succession that ends that key seals it.
+A record signed by the head key can be valid.
+A record signed by an older chain key is valid only when the succession that ends that key seals it. This applies to claims and to destructive records (C26). Before C26 it applied only to destructive records.
 The succession that ends a key is the next node on the chain after the node that names the key.
 Only that succession can seal records of that key.
-`bean rotate` MUST print every destructive record of the outgoing key and seal all of them by default. `-no-seal <id>` excludes one.
+`bean rotate` MUST print every record of the outgoing key and seal all of them by default. `-no-seal <id>` excludes one.
 The maximum file size of an `bean.succession` is 16 MiB, so `sealed` can hold about 230,000 ids. DEFAULT.
 
 `value.sealed` is an array of record ids.
 The ids MUST be unique and sorted in ascending order of their ASCII bytes. Error: `bad field: value.sealed`.
-An id in `sealed` that does not name a destructive record of the outgoing key has no effect.
+An id in `sealed` that does not name a record of the outgoing key has no effect.
 
 Thus every replica with the same files gets the same result. No trusted time is necessary.
-A thief who steals a key cannot keep a destructive record after a rotation, unless the person seals it.
+A thief who steals a key cannot keep any record after a rotation, unless the person seals it. A retired key cannot add a valid record after the rotation, with any `times.observed`.
+A key holds at most about 230,000 records, because one succession must seal all of them. `bean rotate` fails with `too large` above this limit (17).
 
 ### 5.5 Write a succession with the paper seed
 
-The person rotates when a device is lost, a key is stolen, or a device leaves. Sync all devices first. Destructive records that are not synced are not sealed and become invalid (5.4).
+The person rotates when a device is lost, a key is stolen, or a device leaves. Sync all devices first. Records of the outgoing key that are not synced are not sealed and become invalid (5.4).
 
 1. Enter the 24 words on one device.
 2. The parent is the chain head (6.3). Its position on the chain, counting the genesis as 0, is the recovery generation `g`.
@@ -510,9 +517,9 @@ The person rotates when a device is lost, a key is stolen, or a device leaves. S
    - `refs` = `[{"rel":"succeeds","id":<parent id>}]`.
    - `value.key` = the new tagged public key.
    - `value.recovery` = the commitment to recovery generation `g + 1`.
-   - `value.sealed` = the sorted ids of the parent key's valid destructive records in this replica, minus any the person excludes.
+   - `value.sealed` = the sorted ids of the parent key's valid records in this replica, except identity records, minus any the person excludes (C26).
 7. Sign with recovery key generation `g`. The `kid` is the recovery public key. This reveals the key.
-8. Store the new signing key in `local/`.
+8. Store the new signing key in `local/`. Write it to `local/signing-key.next` before the succession, and rename it to `local/signing-key` after. A load that finds `local/signing-key.next` renames it when the chain head names its key, and removes it when no chain node names its key. Thus a crash at any point leaves a folder that can write.
 9. Erase the paper seed and the recovery private keys.
 
 The identity secret does not change. See 17 for this limit.
@@ -560,7 +567,7 @@ If the identity secret leaks, the person MUST make a new identity and a new log,
 A person who lost the host, but has the paper and a copy of `objects/` and `blobs/`, restores:
 
 1. Sync every copy of the log that still exists into one folder. A copy that lacks a succession another device wrote makes a fork, and a fork freezes the identity (5.7).
-2. Enter the 24 words. Find the genesis whose `value.recovery` is the commitment of recovery generation 0 of the words. Error: `input missing: genesis for these words`.
+2. Enter the 24 words. Find the genesis whose `value.recovery` is the commitment of recovery generation 0 of the words. Error: `input missing: genesis for these words`. A commitment is public, so anyone can copy it into a genesis of their own. If two or more genesis records match, stop. Error: `ambiguous: <ids>`. The person then names the identity id (`-identity`, 12.3), for example from an old export or a printout.
 3. Write `local/identity-secret` from the words.
 4. Write a succession from the chain head to a new signing key, as 5.5 steps 2 to 9 do, with the same seals.
 5. Write `local/identity` last. Until it exists, the folder is not initialized, so a failed restore can run again.
@@ -638,15 +645,15 @@ For each record D in R that is not an identity record:
 4. Else if `D.kid` is the `value.key` of a node below a fork point, D is invalid. Error: `frozen`.
 5. Else D is invalid. Error: `key not in chain`.
 
-Step 7. Check seals for destructive records.
-For each destructive record D with an identity author and position p:
+Step 7. Check seals (C26).
+For each record D that is not an identity record, with an identity author and position p:
 
 1. If the node at p is the head, D passes this step.
 2. Else let Y be the chain node at position p + 1.
 3. If `D.id` is in `Y.value.sealed`, D passes this step.
 4. Else D is invalid. Error: `not sealed`.
 
-Destructive records with a bare-key author pass this step.
+Records with a bare-key author pass this step.
 
 Step 8. Apply the frozen rules in 5.7 to each frozen identity.
 
@@ -659,7 +666,7 @@ For each claim D whose `subject` has no genesis in R, report `unresolved subject
 D stays valid. The subject check is a warning because a lab can write about a person whose genesis the replica does not hold.
 
 Step 12. Find duplicates.
-Group the valid records by (`subject`, `source.system`, `source.ref`) where `source.ref` is not null. Do not include a record that a valid supersede record names (C23). A parser fix (9.7) keeps the ref of the record that it corrects. Without this rule, the verifier could report the fix as a duplicate of its own target.
+Group the valid records by (`subject`, `author`, `source.system`, `source.ref`) where `source.ref` is not null (C27). Before C27 the group had no `author`, so any key that wrote about a subject could copy a ref and hide the person's record as a duplicate. Do not include a record that a valid supersede record names (C23). A parser fix (9.7) keeps the ref of the record that it corrects. Without this rule, the verifier could report the fix as a duplicate of its own target.
 In each group, the record with the lowest id is the primary.
 Report the others as `duplicate: <id> of <primary id>`.
 Duplicates stay valid. Indexes and readers SHOULD ignore them.
@@ -670,11 +677,9 @@ Each step uses only R and the results of earlier steps.
 No step uses time or arrival order.
 Two verifiers with the same F MUST report the same valid set, the same errors and the same warnings.
 
-### 6.5 Claims from rotated-out keys
+### 6.5 Claims from rotated-out keys (C26)
 
-A claim signed by any chain key is valid, even after rotation.
-Thus a rotated-out key can still sign a claim with an old `times.observed`.
-See 17.
+A claim signed by a rotated-out chain key is valid only when the succession that retired the key seals it (5.4). Before C26 any chain key could still sign valid claims after rotation.
 
 ### 6.6 Supersede rules
 
@@ -717,6 +722,8 @@ A verifier reports a purged target that is hidden and past its hold as `hidden p
 | `local/hidden/<64 hex>.json` | Hidden records (7.6). | never |
 | `local/purged-refs.jsonl` | Purged dedupe refs (7.8). | never |
 | `local/cache/` | Indexes and other caches. | never |
+| `local/lock` | The folder lock (7.11). Empty. | never |
+| `local/signing-key.next` | The new signing key while a rotation runs (5.5 step 8). | never |
 
 Directories use mode 0700. Writers MUST write each file to a temporary name in the same directory and then rename it.
 A sync tool MUST NOT copy `local/`.
@@ -752,7 +759,7 @@ Sync from replica A (source) to replica B (destination) is a set union with one 
    5. If B holds a file for that id that fails step 12 of 3.8 and the file in A passes, replace B's file.
 4. For each blob in A that B does not have:
    1. If the SHA-256 of the bytes does not match the path, do not copy it.
-   2. If only purged or hidden records name it, do not copy it.
+   2. If only purged or hidden record files name it, do not copy it. A record file names a blob in `blobs[].hash` or `value.blob`, valid or not (C25).
    3. Otherwise copy it.
 5. Compute the valid set of B again. Apply 7.6 to new tombstones.
 
@@ -780,7 +787,7 @@ When a replica first finds a valid tombstone T for a target that it stores:
 2. Otherwise hide the target at once: move it to `local/hidden/`. Hidden records are still input to the local verifier (6.2) and never sync.
 3. Record the receipt time in `local/holds.json` as `{"<T id>": {"target": "<target id>", "received": "<UTC time>"}}`.
 4. A replica MUST NOT erase a hidden target on a timer.
-5. `bean gc` erases every target hidden for at least 7 days under a still-valid tombstone, and every blob that no valid, unpurged record names.
+5. `bean gc` erases every target hidden for at least 7 days under a still-valid tombstone. It then erases each blob that an erased target names, when no remaining record file names it (C25). It never erases a blob that no erased record named. If any identity is too new (8.2) or the local identity is frozen (5.7), `gc` erases nothing. Error: `too new: <id>` or `compromised: <id>`. Validity can change after an update or a fork, and erasure cannot be undone.
 6. `bean verify` reports each hidden target as `hidden pending gc: <id>` (a warning).
 
 When T becomes invalid while the target is hidden, restore the target.
@@ -799,7 +806,7 @@ The hold length is 7 days. DEFAULT. Nothing is erased without the person running
 2. Write a tombstone signed by the head key.
 3. Add the target dedupe ref to `local/purged-refs.jsonl`.
 4. Erase the target at once.
-5. Erase each blob that no valid, unpurged record names.
+5. Erase each blob that the target names, when no remaining record file names it (C25).
 
 The tombstone stays in the log forever.
 A program MUST NOT tombstone a genesis, a succession or a tombstone.
@@ -829,6 +836,14 @@ It encrypts each blob again. The deterministic encryption gives the same blob id
 An index is a cache in `local/cache/`.
 A program MUST be able to delete it and rebuild it from `objects/` and `blobs/`.
 A rebuild from the same files MUST give the same bytes.
+
+### 7.11 Lock
+
+Every command that writes to the folder, and `verify`, holds an exclusive lock on `local/lock` for its whole run. The reference implementation uses `flock`. Two commands on one folder thus never interleave: two rotations cannot fork the identity, and a purge cannot race a sync. A folder that cannot be written (read-only media) is read without the lock and without changes. The lock is local: it does not protect two hosts that write to one network folder at once.
+
+### 7.12 Write checks
+
+A write MUST NOT return an id for a record that the verifier of the same folder rejects. `append`, `add`, `purge` and the agent writes refuse when the author identity is too new (`too new: <id>`), frozen (`compromised: <id>`), not resolved, or when the local signing key is not the chain head key (`retired key: ...`). `append` refuses identity records (`bad type`). `SignRecord` refuses strings that are not UTF-8 and numbers that are not finite (`bad string`, `bad number`).
 
 ## 8. Versioning
 
@@ -1079,7 +1094,7 @@ Lines are sorted by their ASCII bytes, with the summary line last.
 
 A conforming CLI MUST use these exact strings. Ids follow after `: ` where shown.
 
-`bad path`, `too large`, `bad json`, `duplicate key`, `bad number`, `bad string`, `bad v`, `bad type`, `not canonical`, `bad field: <name>`, `id mismatch`, `unsupported key algorithm`, `bad key`, `bad signature`, `unknown core type`, `unknown rel`, `blob not listed`, `bad succession`, `key reuse`, `recovery not advanced`, `key not in chain`, `not sealed`, `frozen`, `not author`, `not subject`, `bad target`, `too new: <identity id>`, `compromised: <identity id>`, `seed does not match`, `input purged: <id>`, `input missing: <id>`, `input invalid: <id>`, `method unknown`, `method mismatch`, `replay mismatch`, `not initialized`, `already initialized`, `blob missing: <id>`, `blob corrupt: <id>`.
+`bad path`, `too large`, `bad json`, `duplicate key`, `bad number`, `bad string`, `bad v`, `bad type`, `not canonical`, `bad field: <name>`, `id mismatch`, `unsupported key algorithm`, `bad key`, `bad signature`, `unknown core type`, `unknown rel`, `blob not listed`, `bad succession`, `key reuse`, `recovery not advanced`, `key not in chain`, `not sealed`, `frozen`, `not author`, `not subject`, `bad target`, `too new: <identity id>`, `compromised: <identity id>`, `seed does not match`, `input purged: <id>`, `input missing: <id>`, `input invalid: <id>`, `old format`, `ambiguous: <ids>`, `retired key`, `method unknown`, `method mismatch`, `replay mismatch`, `not initialized`, `already initialized`, `blob missing: <id>`, `blob corrupt: <id>`.
 
 Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <id>`, `duplicate: <id> of <id>`, `superseded by sibling: <id>`, `hidden pending gc: <id>`, `blob missing: <id>` (for a purged or invalid record).
 
@@ -1118,16 +1133,16 @@ Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <
 `bean rotate [-no-seal <id>]... [-nostr new|<file>]`
 
 - Input: the 24 words on standard input. Numbering and case are ignored. `-nostr` selects a new secp256k1 key, as for `init`. The nsec comes from a file, because standard input carries the words.
-- Action: section 5.5. Seal every valid destructive record of the outgoing key in this replica except the ids that `-no-seal` names.
-- Output: one line `sealed <id>` or `not sealed <id>` per destructive record of the outgoing key, then `rotated to <tagged key>`, then `sealed <n>`. Before reading input, print `sync all devices before you rotate` to standard error.
+- Action: section 5.5. Seal every valid record of the outgoing key in this replica except the ids that `-no-seal` names (C26).
+- Output: one line `sealed <id>` or `not sealed <id>` per record of the outgoing key, then `rotated to <tagged key>`, then `sealed <n>`. Before reading input, print `sync all devices before you rotate` to standard error.
 - Errors: `seed does not match`, `compromised: <id>` (exit 4), `key reuse`.
 
-`bean restore [-no-seal <id>]... [-nostr new|<file>]`
+`bean restore [-no-seal <id>]... [-nostr new|<file>] [-identity <id>]`
 
 - Input: the 24 words on standard input.
-- Action: section 5.10.
+- Action: section 5.10. `-identity` picks one identity when the words match more than one genesis.
 - Output: `identity <id>`, then the `rotate` output.
-- Errors: `already initialized`, `seed does not match`, `input missing: genesis for these words`, `compromised: <id>` (exit 4), `key reuse`.
+- Errors: `already initialized`, `seed does not match`, `input missing: genesis for these words`, `ambiguous: <ids>`, `compromised: <id>` (exit 4), `key reuse`.
 
 `bean whoami`
 
@@ -1291,7 +1306,7 @@ Tests 1 to 22 cover the v0.2 acceptance tests 1 to 6 and the new decisions. Test
 21. Double rotation freeze.
     - Setup: I at head H on replicas A and B.
     - Action: rotate on A and on B without syncing. Sync.
-    - Expected: verify reports `compromised: <I>` and exits 4. Both successions and every destructive record of I are `frozen`. Claims on the trunk stay valid. `rotate` on a frozen identity fails with `compromised: <I>`.
+    - Expected: verify reports `compromised: <I>` and exits 4. Both successions and every destructive record of I are `frozen`. Claims of the fork-point key, and sealed claims of older trunk keys, stay valid. `rotate`, `append` and `gc` on a frozen identity fail with `compromised: <I>`.
 22. Recovery key cannot sign claims.
     - Action: write a claim whose `kid` is a recovery public key of I.
     - Expected: `key not in chain`.
@@ -1320,6 +1335,32 @@ Tests 1 to 22 cover the v0.2 acceptance tests 1 to 6 and the new decisions. Test
     - Setup: identities I and J.
     - Action: add an `bean.succession` file with `v` = 99, `author` = I, signed by J's key.
     - Expected: no `too new` line. The file is skipped.
+
+### Audit of b7a1626 (2026-10-30)
+
+32. Retired key claim (C26).
+    - Setup: I appends claim T. I rotates. A copy of the old key writes claim D.
+    - Expected: T is sealed and valid. D is `not sealed`. `append` on a replica that still holds the old key fails with `retired key`.
+33. Duplicates per author (C27).
+    - Setup: I appends claim T with ref R. A paired agent key writes claim D about I with ref R and an id lower than T.
+    - Expected: T and D are both current. Neither is a duplicate.
+34. gc fails closed (C25).
+    - Setup: a log with a blob B named by claim T. Add a `v` = 99 core record of I. In a second log, fork I.
+    - Action: `gc` on each.
+    - Expected: `too new: <I>` and `compromised: <I>`. B stays on both.
+35. Ambiguous restore.
+    - Setup: a stranger genesis that copies I's recovery commitment.
+    - Action: `restore` with I's words, then `restore -identity <I>`.
+    - Expected: `ambiguous: ...` and no `local/` files. Then the restore of I passes.
+36. Loose blob.
+    - Setup: `blob put` a file. Append and purge an unrelated claim.
+    - Expected: the blob stays.
+37. Concurrent rotation.
+    - Action: start four `rotate` runs on one folder at once.
+    - Expected: one chain of length 5. No fork.
+38. Crash during rotation.
+    - Action: stop `rotate` after the succession is written and before `local/signing-key` changes. Run `verify`.
+    - Expected: the new key is in `local/signing-key`. `local/signing-key.next` is gone. `append` passes.
 
 ### Exit and devices
 
@@ -1351,7 +1392,7 @@ Tests 1 to 22 cover the v0.2 acceptance tests 1 to 6 and the new decisions. Test
 The project MUST publish these vectors before the format freezes at version 1.
 Each vector is a JSON file in `vectors/` with inputs and expected outputs.
 Two independent implementations MUST produce each value before the vector is published.
-The reference implementation has published V1 to V12, V17 and V18. Its independent checks are `tools/checkvectors.py` and `tools/checksecp256k1.py`. V13 to V16 are not published yet.
+The reference implementation has published V1 to V12 and V17 to V20. Its independent checks are `tools/checkvectors.py` and `tools/checksecp256k1.py`. V13 to V16 are not published yet.
 
 | # | Vector | Inputs | Expected output |
 |---|---|---|---|
@@ -1360,7 +1401,7 @@ The reference implementation has published V1 to V12, V17 and V18. Its independe
 | V3 | JCS strings | Control characters, `/`, U+007F, a lone surrogate escape | Canonical bytes or `bad string`. Published. |
 | V4 | Record id | Three full records (genesis, claim, tombstone) | Canonical bytes without `id` and `sig`, and the id. Published. |
 | V5 | Ed25519 signature | A fixed private seed and a record id | `kid`, `sig`. Published. |
-| V6 | P-256 signature | A fixed private key, a record id, a low-S and a high-S signature | Accept and reject results. Published. |
+| V6 | P-256 signature | A fixed private key, a record id, a low-S and a high-S signature | Accept and reject results. The low-S signature uses an RFC 6979 nonce, so it is reproducible (regenerated 2026-10-30). Published. |
 | V7 | Commitment | A tagged recovery public key | Commitment id. Published. |
 | V8 | Paper seed | 32 fixed entropy bytes | The 24 words. Published. |
 | V9 | HKDF | The V8 seed | Identity secret, recovery generations 0, 1 and 2 (tagged public keys). Published. |
@@ -1372,13 +1413,15 @@ The reference implementation has published V1 to V12, V17 and V18. Its independe
 | V15 | Too new | Folder for test 24 | Verify output and exit code. Not published. |
 | V16 | Median method | Input records and `D.value` | Method hash and canonical output. Not published. |
 | V17 | Bad files | One file per error string in 3.8 | The error string. Published. |
+| V19 | Retired-key seals (C26) | A fixed identity, a rotation that seals some claims, and claims of the retired key | Valid or `not sealed` per record. Published. |
+| V20 | Duplicates per author (C27) | Records of two authors with one ref | The duplicate lines. Published. |
 | V18 | secp256k1 | A fixed secret key and a record id, created_at 0 and 1761566400, zero aux | `kid`, npub, nsec, wrapper bytes and id, `sig`, and five rejects. Published. Checked by `tools/checksecp256k1.py`. |
 
 The AES-SIV code MUST also pass the RFC 5297 Appendix A vectors. The HKDF code MUST pass the RFC 5869 Appendix A vectors.
 
 ## 15. Security considerations
 
-- Key theft. A thief with the head key can add claims, supersede, tombstone and rotate. Recovery with the paper seed ends this. The thief's destructive records become invalid unless the person seals them. The thief's claims on the chain trunk stay valid (17).
+- Key theft. A thief with the head key can add claims, supersede and tombstone. Recovery with the paper seed ends this. Every record of the thief that the person does not seal becomes invalid, and the retired key cannot add valid records after the rotation (C26). Records the thief wrote and the person synced before the rotation are sealed by default; review the `sealed` lines.
 - Paper seed theft. The seed holder can recover and take the identity. If the owner also recovers from the same parent, the identity freezes. There is no way back from a freeze in v0.
 - Seed exposure. Devices never store the seed. `init` and `recover` MUST erase it from memory after use, as far as the language allows.
 - No trusted time. Validity never uses a clock. Only the delete hold uses the local clock, and it never changes validity.
@@ -1403,14 +1446,14 @@ The AES-SIV code MUST also pass the RFC 5297 Appendix A vectors. The HKDF code M
 - Rotation needs the paper seed. A person who loses the paper and the device loses the identity. This limit is the cost of the rule that a stolen device cannot take over the identity.
 - Records are plaintext on disk. Only blobs are encrypted. Folder-level encryption is the sync tool's job in v0.
 
-1. A rotated-out chain key can still sign a claim that verifies, with any `times.observed`. Witness records are a later extension.
+1. One key holds at most about 230,000 records (5.4). Rotate before a key reaches this limit.
 2. An identity secret leak needs a new paper seed, a new identity and a new log. The old data must be re-encrypted into the new log.
 3. A replica that never saw a purged target does not have its dedupe ref. A re-import on that replica brings the data back.
 4. Two hosts that import the same source before they sync make duplicate records. Section 6.3 step 12 marks them. They stay in the log.
 5. Tuple dedupe refs merge two real readings with the same type, observed time and value in two different exports when the occurrence counts match.
 6. After erasure, a replica cannot restore a target from its own disk.
 7. A frozen identity cannot recover.
-8. Destructive records that a device signs and does not sync before a rotation become invalid.
+8. Records that a device signs and does not sync before a rotation become invalid (C26).
 9. Device records cannot carry encrypted blobs (11.4).
 
 ## 18. Out of scope

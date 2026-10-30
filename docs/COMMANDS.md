@@ -29,9 +29,9 @@ bean [-dir <folder>] <command> [arguments]
 
 ## Start
 
-### `init [-nostr new|-|<file>]`
+### `init [-nostr new|-|<file>] [-force]`
 
-Creates your identity and an empty log in the folder. Prints `identity <id>`, then `npub <npub>` if you chose a Nostr key, then the 24 words.
+Creates your identity and an empty log in the folder. It refuses inside a git work tree, because a commit could publish your keys; `-force` overrides. Prints `identity <id>`, then `npub <npub>` if you chose a Nostr key, then the 24 words.
 
 - No flag: the signing key is a new random Ed25519 key.
 - `-nostr new`: the signing key is a new Nostr (secp256k1) key, so the log has its own npub.
@@ -152,11 +152,11 @@ Reads an export into a log that has the same identity secret.
 
 ### `rotate [-no-seal <id>]... [-nostr new|<file>]`
 
-Changes your signing key. Reads the 24 words from stdin. Sync every copy first. Deletions and corrections made with the old key stay valid; `-no-seal` excludes one (for example one that a thief made). `-nostr` makes the new key a Nostr key, from a file because stdin carries the words.
+Changes your signing key. Reads the 24 words from stdin. Sync every copy first. Every record made with the old key that this folder has stays valid, because the new succession seals it; `-no-seal` excludes one (for example one that a thief made). Records the old key makes after the rotation are not valid. `-nostr` makes the new key a Nostr key, from a file because stdin carries the words.
 
-### `restore [-no-seal <id>]... [-nostr new|<file>]`
+### `restore [-no-seal <id>]... [-nostr new|<file>] [-identity <id>]`
 
-Rebuilds `local/` on a new machine. Copy `objects/` and `blobs/` from your backup into the folder, then run it and give the 24 words on stdin. It finds your identity, writes the identity secret, and moves you to a new signing key. Your identity id and records do not change. The lost key can no longer delete or correct anything. Sync every copy you still have into the folder first.
+Rebuilds `local/` on a new machine. Copy `objects/` and `blobs/` from your backup into the folder, then run it and give the 24 words on stdin. It finds your identity, writes the identity secret, and moves you to a new signing key. Your identity id and records do not change. The lost key can no longer add, delete or correct anything. Sync every copy you still have into the folder first. If more than one identity matches the words, it fails with `ambiguous` and writes nothing; pass `-identity <id>`.
 
 ## Delete
 

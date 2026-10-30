@@ -349,6 +349,67 @@ for c in v17["cases"]:
                     got = "accept"
     check(f"v17 {c['name']}", got, want)
 
+# ---- verifier rules C26 and C27 (2026-10-30) --------------------------
+
+
+def load_files(files):
+    recs = {}
+    for f in files:
+        rec, err = parse(f["bytes"])
+        check(f"file {f['path'][-12:]} parse", err, None)
+        rid, _ = record_id(rec)
+        check(f"file {f['path'][-12:]} id", rid, rec["id"])
+        check(f"file {f['path'][-12:]} path", "objects/" + rid[7:9] + "/" + rid[9:] + ".json", f["path"])
+        check(f"file {f['path'][-12:]} canonical", canonical(rec), f["bytes"])
+        if verify(rec["kid"], rid, rec["sig"]) == "accept":
+            recs[rid] = rec
+    return recs
+
+
+def chain_of(recs):
+    """The chain of the one identity in recs: genesis first. Linear chains only."""
+    (gid, g), = [(i, r) for i, r in recs.items() if r["type"] == "bean.genesis" and r["kid"] == r["value"]["key"] == r["author"]]
+    chain = [(gid, g)]
+    while True:
+        head_id, head = chain[-1]
+        kids = [(i, r) for i, r in recs.items() if r["type"] == "bean.succession" and r["author"] == r["subject"] == gid
+                and r["refs"] == [{"rel": "succeeds", "id": head_id}]
+                and "sha256:" + hashlib.sha256(r["kid"].encode("ascii")).hexdigest() == head["value"]["recovery"]]
+        if not kids:
+            return gid, chain
+        assert len(kids) == 1, "fork in a vector"
+        chain.append(kids[0])
+
+
+v19 = load("v19-retired-key-seals.json")
+recs = load_files(v19["files"])
+gid, chain = chain_of(recs)
+pos = {node["value"]["key"]: p for p, (_, node) in enumerate(chain)}
+for e in v19["expected"]:
+    r = recs[e["id"]]
+    if r["type"] in ("bean.genesis", "bean.succession"):
+        got = "valid" if any(i == e["id"] for i, _ in chain) else "invalid"
+    else:
+        p = pos.get(r["kid"])
+        if p is None:
+            got = "key not in chain"
+        elif p < len(chain) - 1 and e["id"] not in chain[p + 1][1]["value"]["sealed"]:
+            got = "not sealed"
+        else:
+            got = "valid"
+    check(f"v19 {e['name']}", got, e["result"])
+
+v20 = load("v20-duplicates-per-author.json")
+recs = load_files(v20["files"])
+gid, chain = chain_of(recs)
+groups = {}
+for i, r in sorted(recs.items()):
+    if r["type"].startswith("bean.") or r["source"]["ref"] is None:
+        continue
+    groups.setdefault((r["subject"], r["author"], r["source"]["system"], r["source"]["ref"]), []).append(i)
+dups = sorted([{"id": i, "primary": g[0]} for g in groups.values() for i in g[1:]], key=lambda d: d["id"])
+check("v20 duplicates", json.dumps(dups, sort_keys=True), json.dumps(sorted(v20["expected_duplicates"], key=lambda d: d["id"]), sort_keys=True))
+
 print()
 print("FAILURES:", failures)
 sys.exit(1 if failures else 0)
