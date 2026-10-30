@@ -22,6 +22,10 @@ func TestAddInputRefused(t *testing.T) {
 	if start, _, err := ParseWhen("2026-03-08 03:30", chicago); err != nil || start != "2026-03-08T03:30:00-05:00" {
 		t.Errorf("03:30: %s %v", start, err)
 	}
+	// Go accepts one hour digit; that is not a clock change (re-audit 1).
+	if start, _, err := ParseWhen("2026-03-09 9:30", chicago); err != nil || start != "2026-03-09T09:30:00-05:00" {
+		t.Errorf("9:30: %s %v", start, err)
+	}
 	// m4: a bad time says which forms work.
 	if _, _, err := ParseWhen("yesterday", chicago); err == nil || !strings.Contains(err.Error(), "YYYY-MM-DD") {
 		t.Errorf("yesterday: %v", err)

@@ -125,3 +125,25 @@ func TestMCPScopeAndProvenance(t *testing.T) {
 		}
 	}
 }
+
+// Re-audit 1: on an agent-only replica (no personal key) the read tools
+// work and still name the person self.
+func TestMCPAgentOnlyReplica(t *testing.T) {
+	s, ids := mcpStore(t)
+	a := core.Open(t.TempDir())
+	a.Now = s.Now
+	if _, err := a.Sync(s); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := a.AgentInit("", "cloud"); err != nil {
+		t.Fatal(err)
+	}
+	q, isErr := call(t, a, "query_records", map[string]any{"type": "heart.resting"})
+	if isErr {
+		t.Fatal(q)
+	}
+	rows := q["records"].([]any)
+	if len(rows) != 3 || rows[0].(map[string]any)["author"] != "self" || rows[0].(map[string]any)["id"] != ids["rhr1"] {
+		t.Errorf("agent-only rows %v", rows)
+	}
+}

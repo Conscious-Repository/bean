@@ -375,14 +375,14 @@ func callTool(s *core.Store, name string, raw json.RawMessage, write bool) (any,
 	case "list_types":
 		return toolListTypes(s, f)
 	case "query_records":
-		return toolQuery(s, f, a)
+		return toolQuery(s, f, a, self)
 	case "stats":
 		if a.Type == "" {
 			return nil, errors.New("type is required")
 		}
-		return toolStats(s, f, a.Bucket)
+		return toolStats(s, f, a.Bucket, self)
 	case "get_record":
-		return toolGetRecord(s, f, a.ID)
+		return toolGetRecord(s, f, a.ID, self)
 	case "read_blob":
 		return toolReadBlob(s, f, a.ID, a.MaxBytes)
 	case "log_entry":
@@ -398,8 +398,9 @@ func callTool(s *core.Store, name string, raw json.RawMessage, write bool) (any,
 // else the id.
 type namer func(id string) string
 
-func names(l *core.Loaded) namer {
-	self, labels := l.Local.Identity, l.AgentLabels()
+// self is the local identity: an agent-only replica has no l.Local.
+func names(l *core.Loaded, self string) namer {
+	labels := l.AgentLabels()
 	return func(id string) string {
 		if id == self {
 			return "self"
@@ -474,7 +475,7 @@ func toolListTypes(s *core.Store, f core.Filter) (any, error) {
 	return map[string]any{"types": out, "records": len(recs)}, nil
 }
 
-func toolQuery(s *core.Store, f core.Filter, a toolArgs) (any, error) {
+func toolQuery(s *core.Store, f core.Filter, a toolArgs, self string) (any, error) {
 	limit := a.Limit
 	if limit <= 0 {
 		limit = 100
@@ -486,7 +487,7 @@ func toolQuery(s *core.Store, f core.Filter, a toolArgs) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	name := names(l)
+	name := names(l, self)
 	if a.NewestFirst {
 		for i, j := 0, len(recs)-1; i < j; i, j = i+1, j-1 {
 			recs[i], recs[j] = recs[j], recs[i]
@@ -548,7 +549,7 @@ func bucketStart(t time.Time, bucket string) time.Time {
 	return time.Date(y, mo, d, 0, 0, 0, 0, time.Local)
 }
 
-func toolStats(s *core.Store, f core.Filter, bucket string) (any, error) {
+func toolStats(s *core.Store, f core.Filter, bucket, self string) (any, error) {
 	if bucket != "" && bucket != "day" && bucket != "week" && bucket != "month" {
 		return nil, fmt.Errorf("bad bucket: %q", bucket)
 	}
@@ -558,7 +559,7 @@ func toolStats(s *core.Store, f core.Filter, bucket string) (any, error) {
 	}
 	// One group per author, subject and unit: numbers from different
 	// writers, people or units are never averaged together.
-	name := names(l)
+	name := names(l, self)
 	type key struct{ author, subject, unit string }
 	groups := map[key][]reading{}
 	var keys []key
@@ -634,7 +635,7 @@ func summarizeGroup(rs []reading, bucket string) map[string]any {
 	return out
 }
 
-func toolGetRecord(s *core.Store, f core.Filter, id string) (any, error) {
+func toolGetRecord(s *core.Store, f core.Filter, id, self string) (any, error) {
 	if id == "" {
 		return nil, errors.New("id is required")
 	}
@@ -649,7 +650,7 @@ func toolGetRecord(s *core.Store, f core.Filter, id string) (any, error) {
 	if !l.Visible(r.ID) || !inScope(r, f) {
 		return nil, errors.New("input missing: " + id) // purged, invalid or about someone else
 	}
-	name := names(l)
+	name := names(l, self)
 	var blobs []any
 	for _, b := range r.Blobs {
 		blobs = append(blobs, map[string]any{"id": b.Hash, "role": b.Role, "media_type": b.MediaType})

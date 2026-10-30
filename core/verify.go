@@ -244,27 +244,38 @@ func (rp *Report) buildTrees(ids []string) map[string]*tree {
 	}
 	reached := map[string]bool{}
 	for gid, t := range trees {
-		// used counts the keys on the path from the genesis (5.8).
-		used := map[string]int{}
-		var walk func(p *Record)
-		walk = func(p *Record) {
-			used[p.ValueKey()]++
-			used[p.Kid]++
-			for _, s := range byParent[gid][p.ID] {
-				reached[s.ID] = true
-				if err := checkSuccession(s, p, used); err != nil {
-					rp.fail(s.ID, err.Error())
-					continue
-				}
-				t.nodes[s.ID] = s
-				t.children[p.ID] = append(t.children[p.ID], s)
-				walk(s)
-			}
-			used[p.ValueKey()]--
-			used[p.Kid]--
+		// Depth first with a stack of its own, so a long chain cannot
+		// exhaust the goroutine stack. used counts the keys on the path
+		// from the genesis (5.8).
+		type frame struct {
+			p    *Record
+			next int // index of the next child to check
 		}
 		g := t.nodes[gid]
-		walk(g)
+		used := map[string]int{g.ValueKey(): 1}
+		used[g.Kid]++
+		for stack := []frame{{p: g}}; len(stack) > 0; {
+			top := &stack[len(stack)-1]
+			kids := byParent[gid][top.p.ID]
+			if top.next == len(kids) {
+				used[top.p.ValueKey()]--
+				used[top.p.Kid]--
+				stack = stack[:len(stack)-1]
+				continue
+			}
+			s := kids[top.next]
+			top.next++
+			reached[s.ID] = true
+			if err := checkSuccession(s, top.p, used); err != nil {
+				rp.fail(s.ID, err.Error())
+				continue
+			}
+			t.nodes[s.ID] = s
+			t.children[top.p.ID] = append(t.children[top.p.ID], s)
+			used[s.ValueKey()]++
+			used[s.Kid]++
+			stack = append(stack, frame{p: s})
+		}
 		for x := g; ; {
 			t.chain = append(t.chain, x)
 			c := t.children[x.ID]
