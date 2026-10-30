@@ -64,7 +64,7 @@ Full reference: docs/COMMANDS.md`
 
 // syntax is the usage line of each command, shown on a usage error.
 var syntax = map[string]string{
-	"init":          "init [-nostr new|-|<nsec file>]",
+	"init":          "init [-nostr new|-|<nsec file>] [-force]",
 	"whoami":        "whoami",
 	"add":           "add <type> <value> [-unit <u>] [-at <time>] [-note <text>] [-about <id>] [-corrects <id>] [-photo <file>] [-agent]",
 	"append":        "append [-agent] < records.jsonl",
@@ -78,7 +78,7 @@ var syntax = map[string]string{
 	"export":        "export <empty folder>",
 	"import-export": "import-export <export folder>",
 	"rotate":        "rotate [-no-seal <id>]... [-nostr new|<nsec file>] < words.txt",
-	"restore":       "restore [-no-seal <id>]... [-nostr new|<nsec file>] < words.txt",
+	"restore":       "restore [-no-seal <id>]... [-nostr new|<nsec file>] [-identity <id>] < words.txt",
 	"purge":         "purge [-reason <text>] <id>",
 	"gc":            "gc",
 	"reindex":       "reindex",
@@ -175,8 +175,12 @@ func main() {
 		inf := flag.NewFlagSet("init", flag.ContinueOnError)
 		inf.SetOutput(io.Discard)
 		nostr := inf.String("nostr", "", "new, -, or a file holding an nsec")
+		force := inf.Bool("force", false, "init inside a git work tree anyway")
 		if err := inf.Parse(rest); err != nil || inf.NArg() != 0 {
 			usage()
+		}
+		if top := gitTree(logDir); top != "" && !*force {
+			fail(fmt.Errorf("inside a git work tree: %s; a commit or push would publish the log and its keys. Use a folder outside it, or pass -force", top))
 		}
 		key, err := nostrKey(*nostr, true)
 		if err != nil {
@@ -315,6 +319,7 @@ func main() {
 		var noSeal multiFlag
 		rf.Var(&noSeal, "no-seal", "leave this destructive record unsealed (repeatable)")
 		nostr := rf.String("nostr", "", "new, or a file holding an nsec")
+		ident := rf.String("identity", "", "the identity id to restore when the words match more than one genesis")
 		if err := rf.Parse(rest); err != nil || rf.NArg() != 0 {
 			usage()
 		}
@@ -327,7 +332,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		res, id, err := s.Restore(core.ParseWords(string(text)), noSeal, key)
+		res, id, err := s.RestoreIdentity(core.ParseWords(string(text)), noSeal, key, *ident)
 		if err != nil {
 			fail(err)
 		}
@@ -394,4 +399,20 @@ func hasLog(s *core.Store) bool {
 	}
 	_, err := os.Stat(filepath.Join(s.Dir, "objects"))
 	return err == nil
+}
+
+// gitTree returns the top of the git work tree that holds dir, or "".
+// It looks for a .git entry in dir and each parent; it runs no git.
+func gitTree(dir string) string {
+	d := dir
+	for {
+		if _, err := os.Lstat(filepath.Join(d, ".git")); err == nil {
+			return d
+		}
+		parent := filepath.Dir(d)
+		if parent == d {
+			return ""
+		}
+		d = parent
+	}
 }
