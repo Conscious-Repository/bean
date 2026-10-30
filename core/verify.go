@@ -548,7 +548,7 @@ func (rp *Report) Lines() []string {
 // held in local/, whose freeze is exit 4.
 func (rp *Report) ExitCode(local []string) int {
 	code := 0
-	if len(rp.Errors) > 0 {
+	if len(rp.Errors) > 0 || len(rp.Incomplete) > 0 {
 		code = 1
 	}
 	if len(rp.TooNew) > 0 {

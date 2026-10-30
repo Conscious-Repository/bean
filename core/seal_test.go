@@ -101,6 +101,9 @@ func TestMissingPartSealsNothing(t *testing.T) {
 		t.Fatalf("incomplete %v", l.Report.Incomplete)
 	}
 	wantWarning(t, l.Report, res.Succession, "incomplete seals: ")
+	if _, code, _ := s.VerifyLines(); code != 1 {
+		t.Errorf("verify exit %d with an incomplete seal set", code)
+	}
 	for _, c := range claims {
 		if l.Report.Errors[c] != "not sealed" {
 			t.Errorf("%s: %q, want not sealed", c[:16], l.Report.Errors[c])

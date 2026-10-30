@@ -1089,7 +1089,7 @@ Exit codes:
 | Code | Meaning |
 |---|---|
 | 0 | Success. `verify` found no errors. |
-| 1 | The command failed, or `verify` found one or more errors. |
+| 1 | The command failed, or `verify` found one or more errors or an incomplete seal set (5.4). |
 | 2 | Usage error: unknown command, bad flag or bad argument. |
 | 3 | Too new. The command found an identity it cannot process (8.2). For `verify`, other identities were still checked. |
 | 4 | Compromised. A local identity is frozen (5.7). |
