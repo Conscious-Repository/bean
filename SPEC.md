@@ -1001,6 +1001,13 @@ Credentials MUST NOT be in a record, a blob, an adapter output line or a tool bi
 A fetch job MUST remove credentials and authorization headers before it saves a response for import.
 A fetch job is a separate program, not part of the core (18).
 
+### 9.11 Signed source files and multi-file sources
+
+Both cases use the existing blob and claim rules, so the core needs no special case.
+
+1. A source file that comes with a detached signature file (for example `scan.dcm` and `scan.dcm.sig`): store both as blobs. Put both in `blobs` of each claim from that file. Use role `raw-export` for the file and role `signature` for the signature file. The core does not check the detached signature. Device signing of records is Extension 2 (11).
+2. A source with many files (for example a hospital export): write one claim per source file, with that file as a blob. Normal dedupe (9.5) applies. There is no manifest record type.
+
 ## 10. Extension 1: computed results
 
 ### 10.1 Status
