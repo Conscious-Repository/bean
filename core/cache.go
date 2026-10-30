@@ -43,10 +43,23 @@ type diskObject struct {
 	stamp stamp
 }
 
-// listObjects lists objects/ and local/hidden/ with their stamps, and the
-// ids in local/hidden/. objects/ wins when an id is in both; the id still
-// counts as hidden.
-func (s *Store) listObjects() ([]diskObject, map[string]bool, error) {
+// objectSet is what readObjects found: the files on disk, the hidden
+// ids, the record files as the verifier sees them, the paths this replica
+// already proved, entries that are not record files, and the cache size.
+type objectSet struct {
+	disk     []diskObject
+	hidden   map[string]bool
+	files    map[string][]byte
+	proven   map[string]bool
+	bad      []string // entries of objects/ that are not plain files (listShards)
+	cacheLen int
+}
+
+// listObjects lists objects/ and local/hidden/ with their stamps, the ids
+// in local/hidden/, and the entries of objects/ that are not record
+// files. objects/ wins when an id is in both; the id still counts as
+// hidden.
+func (s *Store) listObjects() ([]diskObject, map[string]bool, []string, error) {
 	var out []diskObject
 	seen := map[string]bool{}
 	hiddenIDs := map[string]bool{}
@@ -65,43 +78,30 @@ func (s *Store) listObjects() ([]diskObject, map[string]bool, error) {
 		out = append(out, diskObject{rel, path, stamp{info.Size(), info.ModTime().UnixNano()}})
 		return nil
 	}
-	shards, err := os.ReadDir(s.path(dirObjects))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, nil, err
+	files, bad, err := listShards(s.Dir, dirObjects)
+	if err != nil {
+		return nil, nil, nil, err
 	}
-	for _, sh := range shards {
-		if !sh.IsDir() {
-			continue
-		}
-		entries, err := os.ReadDir(s.path(dirObjects + "/" + sh.Name()))
-		if err != nil {
-			return nil, nil, err
-		}
-		for _, e := range entries {
-			if e.IsDir() || strings.HasPrefix(e.Name(), ".tmp-") {
-				continue
-			}
-			rel := dirObjects + "/" + sh.Name() + "/" + e.Name()
-			if err := add(rel, rel, e); err != nil {
-				return nil, nil, err
-			}
+	for _, f := range files {
+		if err := add(f.rel, f.rel, f.e); err != nil {
+			return nil, nil, nil, err
 		}
 	}
 	hidden, err := os.ReadDir(s.path(dirHidden))
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	for _, e := range hidden {
 		name := e.Name()
-		if e.IsDir() || !strings.HasSuffix(name, ".json") || len(name) != 69 {
+		if !e.Type().IsRegular() || !strings.HasSuffix(name, ".json") || len(name) != 69 {
 			continue
 		}
 		hiddenIDs["sha256:"+name[:64]] = true
 		if err := add(dirHidden+"/"+name, PathOf("sha256:"+name[:64]), e); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
-	return out, hiddenIDs, nil
+	return out, hiddenIDs, bad, nil
 }
 
 // errMoved: a listed file was gone when read. Another bean process hid or
@@ -139,13 +139,11 @@ func (s *Store) readObjCache() map[string]cached {
 	}
 }
 
-// readObjects returns the files on disk, the hidden ids, the record files
-// as the verifier sees them, which paths this replica already proved, and
-// the size of the cache. full ignores the cache.
-func (s *Store) readObjects(full bool) ([]diskObject, map[string]bool, map[string][]byte, map[string]bool, int, error) {
-	disk, hidden, err := s.listObjects()
+// readObjects reads objects/ and local/hidden/. full ignores the cache.
+func (s *Store) readObjects(full bool) (*objectSet, error) {
+	disk, hidden, bad, err := s.listObjects()
 	if err != nil {
-		return nil, nil, nil, nil, 0, err
+		return nil, err
 	}
 	cache := map[string]cached{}
 	if !full {
@@ -183,14 +181,14 @@ func (s *Store) readObjects(full bool) ([]diskObject, map[string]bool, map[strin
 	wg.Wait()
 	for i, d := range todo {
 		if errors.Is(errs[i], os.ErrNotExist) {
-			return nil, nil, nil, nil, 0, errMoved
+			return nil, errMoved
 		}
 		if errs[i] != nil {
-			return nil, nil, nil, nil, 0, errs[i]
+			return nil, errs[i]
 		}
 		files[d.path] = data[i]
 	}
-	return disk, hidden, files, proven, len(cache), nil
+	return &objectSet{disk, hidden, files, proven, bad, len(cache)}, nil
 }
 
 // writeObjCache stores every record that passed steps 1 to 15, unless

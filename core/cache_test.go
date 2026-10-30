@@ -11,7 +11,7 @@ import (
 // written an hour ago.
 func age(t *testing.T, s *Store) {
 	t.Helper()
-	disk, _, err := s.listObjects()
+	disk, _, _, err := s.listObjects()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -25,11 +25,11 @@ func age(t *testing.T, s *Store) {
 
 func proven(t *testing.T, s *Store) int {
 	t.Helper()
-	_, _, _, p, _, err := s.readObjects(false)
+	o, err := s.readObjects(false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return len(p)
+	return len(o.proven)
 }
 
 func TestObjectCache(t *testing.T) {
@@ -109,10 +109,11 @@ func TestParallelMatchesSerial(t *testing.T) {
 		lines = append(lines, partial("hrv.rmssd", float64(i), nil))
 	}
 	appendLines(t, s, lines...)
-	_, _, files, _, _, err := s.readObjects(true)
+	o, err := s.readObjects(true)
 	if err != nil {
 		t.Fatal(err)
 	}
+	files := o.files
 	files["objects/00/"+strings.Repeat("0", 62)+".json"] = []byte("{")
 	par := VerifyFiles(files)
 	for p, data := range files {

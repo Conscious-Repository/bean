@@ -771,7 +771,7 @@ A reader decides how much to trust a claim from another author: a device, an age
 
 Directories use mode 0700. Writers MUST write each file to a temporary name in the same directory and then rename it.
 A sync tool MUST NOT copy `local/`.
-Any other path in the log is not part of the log. A verifier ignores it. Files one directory below `objects/` are part of the log even when their name is wrong: 3.8 step 1 reports them as `bad path`.
+Names that start with `.` under `objects/` and `blobs/` are not part of the log: temporary files (7.2) and what operating systems and sync tools leave (`.DS_Store`, iCloud `.icloud` stubs, `.stversions`). A verifier ignores them. Every other entry under `objects/` and `blobs/` is part of the log: a plain file one directory down is checked (3.8; a wrong name is `bad path`), and anything else (a file directly in `objects/`, a symlink, a directory one level down, a device) is `bad path` and is not read. Paths outside `objects/` and `blobs/` are not part of the log.
 
 ### 7.2 Write a record
 
@@ -887,7 +887,7 @@ Every command that writes to the folder, and `verify`, holds an exclusive lock o
 
 ### 7.12 Write checks
 
-A write MUST NOT return an id for a record that the verifier of the same folder rejects. A copy that has `local/` but no genesis yet can write; its records are `unresolved author` until the genesis arrives. `append`, `add`, `purge` and the agent writes refuse when the author identity is too new (`too new: <id>`), frozen (`compromised: <id>`), has an invalid genesis in this folder, or when the local signing key is not the chain head key (`retired key: ...`). `append` refuses identity records (`bad type`). `SignRecord` refuses strings that are not UTF-8 and numbers that are not finite (`bad string`, `bad number`).
+A write MUST NOT return an id for a record that the verifier of the same folder rejects. A copy that has `local/` but no genesis yet can write; its records are `unresolved author` until the genesis arrives, and `verify` says `own identity missing`. While the own identity has no chain, `gc` refuses and no hidden target is restored. `append`, `add`, `purge` and the agent writes refuse when the author identity is too new (`too new: <id>`), frozen (`compromised: <id>`), has an invalid genesis in this folder, or when the local signing key is not the chain head key (`retired key: ...`). `append` refuses identity records (`bad type`). `SignRecord` refuses strings that are not UTF-8 and numbers that are not finite (`bad string`, `bad number`).
 
 ## 8. Versioning
 
@@ -1133,7 +1133,7 @@ Every command takes `-dir <path>`. The default is `$BEAN_DIR`, then the current 
 Commands write results to standard output and errors to standard error.
 An error line is `bean: <error string>`.
 Text output writes control characters, line and paragraph separators and bidirectional controls from records and file names as `\xNN` or `\uNNNN`, so a record cannot fake an output line or control the terminal. JSON output (`ls -json`, `bean mcp`) uses JSON escapes.
-Every command that loads the log applies the hold rules (7.6) first.
+Every command that loads the log applies the hold rules (7.6) first. A hidden target is restored only when every tombstone that hid it is invalid; a tombstone that is unresolved, held, too new or missing keeps it hidden.
 
 Exit codes:
 
@@ -1203,7 +1203,7 @@ Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <
 
 `bean verify`
 
-- Action: section 6 and the hold rules. Check every blob hash (`blob corrupt: <id>`) and every named blob (`blob missing: <id>`, a warning when the record is purged).
+- Action: section 6 and the hold rules. Check every blob hash (`blob corrupt: <id>`) and every named blob (`blob missing: <id>`, a warning when the record is purged). When `local/identity` names an identity with no chain in the folder that is not too new, add `error: <id>: own identity missing: sync from another copy` (exit 1). The line is not counted in `i`.
 - Output: 12.1 verify lines.
 
 `bean reindex`

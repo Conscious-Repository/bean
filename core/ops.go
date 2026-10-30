@@ -381,11 +381,12 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 			named[h] = true
 		}
 	}
-	paths, err := listShardFiles(src.Dir, dirBlobs)
+	blobFiles, _, err := listShards(src.Dir, dirBlobs)
 	if err != nil {
 		return res, err
 	}
-	for _, p := range paths {
+	for _, f := range blobFiles {
+		p := f.rel
 		id := blobIDOfPath(p)
 		if id == "" || !named[id] {
 			continue

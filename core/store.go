@@ -317,9 +317,9 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 	if err != nil && !errors.Is(err, ErrNotInitialized) && !errors.Is(err, os.ErrNotExist) {
 		return nil, err // an agent-only replica has no signing key; it still loads
 	}
-	disk, hidden, files, proven, cacheLen, err := s.readObjects(full)
+	o, err := s.readObjects(full)
 	for try := 0; errors.Is(err, errMoved) && try < 5; try++ {
-		disk, hidden, files, proven, cacheLen, err = s.readObjects(full)
+		o, err = s.readObjects(full)
 	}
 	if err != nil {
 		return nil, err
@@ -328,14 +328,18 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 	if err != nil {
 		return nil, err
 	}
-	rp := verifyFiles(files, proven, "")
+	files, hidden := o.files, o.hidden
+	rp := verifyFiles(files, o.proven, "")
+	for _, p := range o.bad {
+		rp.Errors[p] = ErrBadPath.Error()
+	}
 	if readOnly {
 		for target := range rp.Purged {
 			hidden[target] = true
 		}
 		return &Loaded{Files: files, Hidden: hidden, Report: rp, Holds: holds, Local: local}, nil
 	}
-	s.writeObjCache(disk, files, rp, proven, cacheLen)
+	s.writeObjCache(o.disk, files, rp, o.proven, o.cacheLen)
 	if done, removed, err := s.finishRotation(rp); err != nil {
 		return nil, err
 	} else if removed {
@@ -371,12 +375,14 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 			return nil, err
 		}
 	}
-	// Restores: hidden target no longer purged.
+	// Restores: a hidden target comes back only when every tombstone that
+	// hid it is judged invalid. A tombstone that is unresolved, held, too
+	// new or missing keeps it hidden (fail closed, audit 4 M4).
 	for target := range hidden {
 		if _, still := rp.Purged[target]; still {
 			continue
 		}
-		if _, exists := files[PathOf(target)]; !exists {
+		if _, exists := files[PathOf(target)]; !exists || heldHidden(holds, rp, target) {
 			continue
 		}
 		if err := os.MkdirAll(filepath.Dir(s.path(PathOf(target))), 0o700); err != nil {
@@ -399,6 +405,24 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 		}
 	}
 	return &Loaded{Files: files, Hidden: hidden, Report: rp, Holds: holds, Local: local}, nil
+}
+
+// heldHidden reports whether a hold for target names a tombstone that
+// this report did not judge invalid.
+func heldHidden(holds map[string]Hold, rp *Report, target string) bool {
+	for tid, h := range holds {
+		if _, bad := rp.Errors[tid]; h.Target == target && !bad {
+			return true
+		}
+	}
+	return false
+}
+
+// ownMissing reports whether the identity of this copy has no chain in
+// the folder: its genesis was never synced here, or it is lost. A too-new
+// identity is reported as too new instead.
+func (l *Loaded) ownMissing() bool {
+	return l.Local != nil && len(l.Report.Chains[l.Local.Identity]) == 0 && !contains(l.Report.TooNew, l.Local.Identity)
 }
 
 // Visible reports whether a record is valid and not hidden.
@@ -424,6 +448,9 @@ func (s *Store) GC() (records, blobs int, err error) {
 	}
 	if l.Local != nil && contains(l.Report.Compromised, l.Local.Identity) {
 		return 0, 0, errors.New("compromised: " + l.Local.Identity + ": gc refused")
+	}
+	if l.ownMissing() {
+		return 0, 0, errors.New("own identity missing: " + l.Local.Identity + ": sync from another copy before gc")
 	}
 	if len(l.Report.Incomplete) > 0 {
 		return 0, 0, errors.New("incomplete seals: " + strings.Join(l.Report.Incomplete, ", ") + ": sync the missing seal parts before gc")
@@ -583,12 +610,16 @@ func (s *Store) VerifyLines() ([]string, int, error) {
 		return nil, 1, err
 	}
 	rp := l.Report
-	paths, err := listShardFiles(s.Dir, dirBlobs)
+	blobFiles, bad, err := listShards(s.Dir, dirBlobs)
 	if err != nil {
 		return nil, 1, err
 	}
+	for _, p := range bad {
+		rp.Errors[p] = ErrBadPath.Error()
+	}
 	present := map[string]bool{}
-	for _, p := range paths {
+	for _, f := range blobFiles {
+		p := f.rel
 		id := blobIDOfPath(p)
 		b, err := os.ReadFile(s.path(p))
 		if err != nil {
@@ -624,6 +655,10 @@ func (s *Store) VerifyLines() ([]string, int, error) {
 	}
 	lines := rp.Lines()
 	code := rp.ExitCode(localIDs)
+	if l.ownMissing() {
+		lines = append([]string{"error: " + l.Local.Identity + ": own identity missing: sync from another copy"}, lines...)
+		code = max(code, 1)
+	}
 	sort.Strings(lines[:len(lines)-1])
 	return lines, code, nil
 }

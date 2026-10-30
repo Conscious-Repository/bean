@@ -6,7 +6,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -166,34 +165,51 @@ func writeIfAbsent(path string, data []byte, mode os.FileMode) (bool, error) {
 	return true, writeFileAtomic(path, data, mode)
 }
 
-// listShardFiles lists files under <root>/<dir>/<2 hex>/<name> and returns
-// log-relative paths, sorted.
-func listShardFiles(root, dir string) ([]string, error) {
-	var out []string
+// shardFile is one plain file at <dir>/<shard>/<name>.
+type shardFile struct {
+	rel string // log-relative path
+	e   os.DirEntry
+}
+
+// listShards lists <root>/<dir>/<shard>/<name>, sorted. Names that start
+// with "." are skipped at both levels: temporary files of a writer
+// (.tmp-) and what operating systems and sync tools leave (.DS_Store,
+// iCloud .icloud stubs, .stversions). Every other entry that is not a
+// plain file two levels down (a symlink, a directory, a device, a file
+// one level down) is returned in bad, unread: it is reported, never
+// skipped in silence and never opened (a FIFO would block).
+func listShards(root, dir string) (files []shardFile, bad []string, err error) {
 	shards, err := os.ReadDir(filepath.Join(root, dir))
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	for _, s := range shards {
-		if !s.IsDir() {
+	for _, sh := range shards {
+		if strings.HasPrefix(sh.Name(), ".") {
 			continue
 		}
-		files, err := os.ReadDir(filepath.Join(root, dir, s.Name()))
-		if err != nil {
-			return nil, err
+		if !sh.IsDir() {
+			bad = append(bad, dir+"/"+sh.Name())
+			continue
 		}
-		for _, f := range files {
-			if f.IsDir() || strings.HasPrefix(f.Name(), ".tmp-") {
-				continue
+		entries, err := os.ReadDir(filepath.Join(root, dir, sh.Name()))
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, e := range entries {
+			rel := dir + "/" + sh.Name() + "/" + e.Name()
+			switch {
+			case strings.HasPrefix(e.Name(), "."):
+			case e.Type().IsRegular():
+				files = append(files, shardFile{rel, e})
+			default:
+				bad = append(bad, rel)
 			}
-			out = append(out, dir+"/"+s.Name()+"/"+f.Name())
 		}
 	}
-	sort.Strings(out)
-	return out, nil
+	return files, bad, nil
 }
 
 func hiddenPath(root, id string) string {
