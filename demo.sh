@@ -42,7 +42,7 @@ bean -dir "$A" verify
 bean -dir "$B" verify
 
 echo "== purge one record on A, sync to B; B hides it"
-S=$(bean -dir "$A" ls -type hrv.rmssd | head -1 | awk '{print $NF}')
+S=$(bean -dir "$A" ls -type hrv.rmssd | awk 'NR == 1 {print $NF}')
 F=$(ls "$A"/objects/"${S:0:2}"/"${S:2}"*.json); F=${F#"$A"/objects/}; TARGET="sha256:${F%%/*}$(basename "$F" .json)"
 bean -dir "$A" purge -reason "demo" "$TARGET"
 bean -dir "$B" sync "$A"
