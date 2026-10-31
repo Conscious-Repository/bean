@@ -18,11 +18,9 @@ This page says what bean protects, what it does not protect, and where each key 
 - **If you lose the 24 words and the machine, you lose the identity.** Your records stay readable on any copy, but you cannot change keys again.
 - **An AI client sees what it reads.** `bean mcp` sends the records it returns to the AI provider. Use a local model if that matters to you.
 - **Times are claims.** `times.observed` says when the author says something happened. A key that you rotated out can no longer sign valid records, but the head key can write any time.
-- **The folder lock is local, and absent on Windows.** Commands on one folder take an exclusive `flock` on `local/lock`, so two `bean` processes on one Mac or Linux machine cannot both write. It does not protect:
-  - **Two machines on one folder.** On a network or synced folder (SMB, NFS, iCloud Drive, Dropbox, Syncthing, a shared drive) a lock taken on one machine does not stop another machine, and some network file systems ignore `flock`. Two `rotate` or `restore` runs there can fork and freeze the identity for good, and two writers can race. Give each machine its own folder and use `bean sync` or rsync between them.
-  - **Windows.** There is no cross-process lock: only threads of one process are serialized. Run one `bean` command at a time per folder, and stop `bean mcp` and other agents before `rotate`, `restore`, `purge` or `gc`.
-  These limits are known and not fixed in this build.
-- **gc erases for good.** `gc` refuses while the log has records from a newer bean, the identity is frozen, or a seal set is incomplete, because validity can still change then.
+- **The folder lock works on one machine only, and not on Windows.** Give each machine its own folder, never one network or synced folder (SMB, NFS, iCloud Drive, Dropbox): two `rotate` or `restore` runs there can fork and freeze the identity. On Windows, run one `bean` command at a time per folder, and stop `bean mcp` before `rotate`, `restore`, `purge` or `gc`. SPEC.md 7.11 has the details.
+- **Sync only from your own copies.** `bean sync` copies every record file of the source, and every later command reads them. A stranger's copy can fill your disk or make every command slow. `bean sync` refuses a source with more than 2 GiB of record files unless you raise the limit with `-max-mb`.
+- **gc erases for good.** `gc` refuses while your identity has records from a newer bean or is frozen, or a seal set is incomplete, because validity can still change then.
 - **A thief can flood the old key.** Every record of the old key in the folder is sealed by default, so a thief who writes millions of records makes `rotate` slow, and above 200,200,000 records `rotate` refuses (`too large`). Rotate from a copy that does not hold the thief's records, for example a backup from before the theft: records that are not in the folder are not sealed, so they stay invalid.
 - **A thief with your current key can halt the log until you rotate.** The thief can write one record in a made-up newer format. Every copy that syncs it then says `too new`, and `append`, `gc` and the agent writes refuse. No data is lost. `bean rotate` (or `bean restore` on a new machine) with the 24 words goes past the halt: it prints `past halt <id>`, and after the rotation the record is `ungated` on every copy. A key that you rotated out, or a stranger's key, cannot halt the log at all.
 - **A missing seal part fails closed.** Someone who can delete files in a copy can delete a `bean.seal` part. Then every record of the retired key in that copy is not valid until the part comes back from another copy. Nothing is erased, and no one without the 24 words can add or replace a part.
@@ -37,7 +35,7 @@ This page says what bean protects, what it does not protect, and where each key 
 | Identity secret | `local/identity-secret`, mode 0600 | Decrypt stored files; make dedupe refs. |
 | Agent key | `local/agent-key`, one per machine | Add records about you, as the agent. |
 
-`local/` never syncs. A backup of `local/` is as sensitive as the keys in it. You do not need one: the 24 words rebuild `local/` (`bean restore`).
+`local/` never syncs. A backup of `local/` is as sensitive as the keys in it. You do not need one: the 24 words rebuild `local/` (`bean restore`). A purge writes the import ref of the deleted record into its tombstone, so a re-import on any copy skips it. Purges made with an older build are the exception ([UPGRADING.md](UPGRADING.md)).
 
 ## Report a problem
 

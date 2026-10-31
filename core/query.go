@@ -7,9 +7,9 @@ import (
 	"time"
 )
 
-// Read side of the CLI and the MCP server (docs/ROADMAP.md M6, M9): list,
+// Read side of the CLI and the MCP server (DECISIONS 34, 39): list,
 // resolve, replies and status. None of this is in the spec. It reads the
-// loaded folder, never local/cache/index.json.
+// loaded folder, never a cache.
 
 // Filter selects records for List. Zero values select everything.
 type Filter struct {

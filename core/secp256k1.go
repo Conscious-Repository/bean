@@ -12,7 +12,7 @@ import (
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 )
 
-// secp256k1 signing keys (docs/ROADMAP.md M8, change note C21). The public key
+// secp256k1 signing keys (change note C21, DECISIONS 58). The public key
 // is the 32-byte BIP-340 x-only key, which is also the Nostr public key.
 // The signature is not over the record id directly: it is a Nostr event
 // signature over a wrapper event whose content is the record id, so any

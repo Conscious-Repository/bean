@@ -11,9 +11,9 @@ $ bean ls -since 2026-10-01
 2026-10-28 13:00  food              ramen, extra broth    [assistant]  f21a3641fc82
 ```
 
-This repository is the reference implementation of the **bean** protocol: [CORE.md](CORE.md) in two pages, [SPEC.md](SPEC.md) in full. The command is `bean`.
+This repository is the reference implementation of the **bean** protocol: [CORE.md](CORE.md) in short, [SPEC.md](SPEC.md) in full. The command is `bean`.
 
-> **Status: pre-release.** The record format is a draft. It freezes at version 1 after two weeks of real use with no change to [CORE.md](CORE.md). Until then, keep your source files (PDFs, exports), so that you can import them again if the format changes.
+> **Status: pre-release.** The record format is a draft. It freezes at `v` 0 after two weeks of real use with no change to [CORE.md](CORE.md). Until then, keep your source files (PDFs, exports), so that you can import them again if the format changes.
 
 ## Principles
 
@@ -182,9 +182,9 @@ rsync -a server:health/objects server:health/blobs ~/health/
 bean verify
 ```
 
-Never use `rsync --delete`: the log only grows, and deletions travel as records. Syncthing also works if you share `objects/` and `blobs/` only. Run `bean verify` after a copy made with another tool; it applies deletions that came with the copy.
+Sync only from your own copies: `bean sync` copies every record file of the source, and refuses a source with more than 2 GiB of them unless you pass `-max-mb`. Never use `rsync --delete`: the log only grows, and deletions travel as records. Syncthing also works if you share `objects/` and `blobs/` only. Run `bean verify` after a copy made with another tool; it applies deletions that came with the copy.
 
-Each machine needs its own folder. Do not point two machines at one shared or network folder (SMB, NFS, iCloud Drive, Dropbox): the folder lock works only inside one machine, so two `rotate` or `restore` runs on two machines can fork and freeze your identity. On Windows the lock does nothing at all, so run one `bean` command at a time and stop `bean mcp` before you rotate or restore.
+Each machine needs its own folder. Do not point two machines at one shared or network folder: the folder lock works only inside one machine ([SECURITY.md](SECURITY.md)).
 
 ### Run an agent on another machine
 
@@ -210,7 +210,7 @@ Anyone who can read the server's folder can read your records: they are plain JS
 
 ### Backups and a lost laptop
 
-Any copy of `objects/` and `blobs/` is a backup: Time Machine, a drive, another machine. You do not need a backup of `local/`; the 24 words rebuild it.
+Any copy of `objects/` and `blobs/` is a backup: Time Machine, a drive, another machine. You do not need a backup of `local/`; the 24 words rebuild it. A purge writes the import ref of the deleted record into its tombstone, so a re-import after a restore skips it. Purges made with an older build are the exception ([UPGRADING.md](UPGRADING.md)).
 
 If you lose the laptop:
 
@@ -235,9 +235,9 @@ If `restore` says `ambiguous`, the folder holds more than one identity made from
 
 Sync every copy before you rotate or restore. Records that a copy made with the old key and did not sync before the rotation stop being valid. A log of more than 200,000 records per key rotates into a succession plus `seal part` records; copy all of them. Until every part is in a copy, `bean verify` there says `incomplete seals` and the old key's records do not count, but nothing is deleted. Never rotate or restore on two machines from the same point: that freezes the identity, and you must make a new one.
 
-### Upgrading a log made before 2026-10-30
+### Upgrading
 
-Builds from 2026-10-30 on change four rules (change notes C25 to C28, [docs/history/SPEC-CHANGES.md](docs/history/SPEC-CHANGES.md)). If you never ran `rotate` or `restore` on your log, nothing changes for you. If you did, the records that the old key signed were not sealed then, and they now show as `not sealed` in `bean verify`. Ask before you run a new build on such a log. A log from before the rename to bean (types `hlog.*`) fails with `old format`; make a new log with `bean init`.
+Read [UPGRADING.md](UPGRADING.md) before you run a new build on your log. It lists the changes that alter results, and how to try a new build on a copy first.
 
 ## How it works
 
@@ -245,7 +245,7 @@ A record is a JSON file in `objects/`, named by the SHA-256 hash of its content 
 
 Every record is checked when it is first read, then cached, the same way git trusts its object store. `bean verify` checks everything again. At 20,000 records, `add` and an AI query take about 0.2 s and `verify` about 1 s. At 230,000 records on one machine (measured 2026-10-30), `add` takes about 7 s, `verify` about 11 s, `rotate` about 9 s, and each needs about 2.5 GB of memory. Every write goes to disk before it counts.
 
-[CORE.md](CORE.md) is the full protocol in two pages: enough to write a second implementation.
+[CORE.md](CORE.md) is a short summary of the protocol. [SPEC.md](SPEC.md) has every rule: enough to write a second implementation.
 
 ## Security
 
@@ -258,7 +258,8 @@ bean protects who wrote what, and protects your identity against a stolen device
 | [docs/COMMANDS.md](docs/COMMANDS.md) | Every command, flag and exit code. |
 | [cmd/bean/vocabulary.md](cmd/bean/vocabulary.md) | The usual record types and units. |
 | [SECURITY.md](SECURITY.md) | What is protected, and the keys. |
-| [CORE.md](CORE.md) | The protocol in two pages. |
+| [CORE.md](CORE.md) | The protocol, in short. |
+| [UPGRADING.md](UPGRADING.md) | Changes that alter results for an existing log. |
 | [SPEC.md](SPEC.md) | The full protocol: every rule, error and conformance test. |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | What is done and what comes next. |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Every design decision, numbered, with the reason. |
