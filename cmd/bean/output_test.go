@@ -8,7 +8,7 @@ import (
 )
 
 // Text from a record (a note, a value, a label, a file name) must not
-// control the terminal or fake output lines (audit 4, M3).
+// control the terminal or fake output lines.
 func TestCLIOutputEscapesControlCharacters(t *testing.T) {
 	dir := t.TempDir()
 	run(t, dir, "", "init")

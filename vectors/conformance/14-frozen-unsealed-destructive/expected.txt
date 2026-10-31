@@ -1,0 +1,6 @@
+compromised: sha256:33ce86e724fb631ec668d726b4ac26c71d49b2396e58bcba8d7e24a0f379faea
+error: sha256:78b3ebcaba0dbada3c9f9c25d1f5926bead7ab09ef8bf06d7c5e9ebe9b9eba5a: frozen
+error: sha256:c55e98ff87c6a05a12c31eebeeba1c6c7260fd52cd819ccc088551f2ef8b6a7b: frozen
+error: sha256:d8787018b96ef73691cd2cb14e5a6578c01f8aafdb10aac1e9affb0981afd4ed: not sealed
+summary: 3 valid, 3 invalid, 0 skipped, 0 held, 0 duplicate
+exit 1

@@ -1,0 +1,3 @@
+error: objects/ec/c4a202d92ba10deed4a2508517527645983c70078da6f7d6c83637d0375f4c.json: bad field: nonce
+summary: 1 valid, 1 invalid, 0 skipped, 0 held, 0 duplicate
+exit 1

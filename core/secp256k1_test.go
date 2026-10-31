@@ -164,7 +164,7 @@ func TestNostrLog(t *testing.T) {
 }
 
 // An agent with its own npub writes a claim about the person as a bare
-// key (Rob's point: agents sign as themselves, not as the person).
+// key (agents sign as themselves, not as the person).
 func TestAgentNpubClaim(t *testing.T) {
 	s, ident := initStore(t)
 	agentSecret := bytes.Repeat([]byte{7}, 32)

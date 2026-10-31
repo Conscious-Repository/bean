@@ -36,6 +36,9 @@ var (
 // Store is one replica folder.
 type Store struct {
 	Dir string
+	// SyncLimit is the largest total size of record files that Sync reads
+	// from a source; 0 means DefaultSyncLimit.
+	SyncLimit int64
 	// Now returns the current time. Tests and $BEAN_NOW inject it.
 	Now func() time.Time
 	// mu is the in-process half of the folder lock (lock.go).
@@ -273,6 +276,7 @@ type Loaded struct {
 	Report *Report
 	Holds  map[string]Hold
 	Local  *Local // nil when not initialized
+	ID     string // local/identity; set on an agent-only replica too
 }
 
 // Load reads the folder, verifies it, and applies the hold rules (SPEC.md
@@ -329,7 +333,7 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 		for target := range rp.Purged {
 			hidden[target] = true
 		}
-		return &Loaded{Files: files, Hidden: hidden, Report: rp, Holds: holds, Local: local}, nil
+		return &Loaded{Files: files, Hidden: hidden, Report: rp, Holds: holds, Local: local, ID: s.localID()}, nil
 	}
 	s.writeObjCache(o, rp)
 	if done, removed, err := s.finishRotation(rp); err != nil {
@@ -369,7 +373,7 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 	}
 	// Restores: a hidden target comes back only when every tombstone that
 	// hid it is judged invalid. A tombstone that is unresolved, held, too
-	// new or missing keeps it hidden (fail closed, audit 4 M4).
+	// new or missing keeps it hidden (fail closed).
 	for target := range hidden {
 		if _, still := rp.Purged[target]; still {
 			continue
@@ -396,7 +400,7 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 			return nil, err
 		}
 	}
-	return &Loaded{Files: files, Hidden: hidden, Report: rp, Holds: holds, Local: local}, nil
+	return &Loaded{Files: files, Hidden: hidden, Report: rp, Holds: holds, Local: local, ID: s.localID()}, nil
 }
 
 // heldHidden reports whether a hold for target names a tombstone that
@@ -417,6 +421,15 @@ func (l *Loaded) ownMissing() bool {
 	return l.Local != nil && len(l.Report.Chains[l.Local.Identity]) == 0 && !contains(l.Report.TooNew, l.Local.Identity)
 }
 
+// localID is the identity in local/identity, or "" when there is none.
+func (s *Store) localID() string {
+	id, err := s.Identity()
+	if err != nil {
+		return ""
+	}
+	return id
+}
+
 // Visible reports whether a record is valid and not hidden.
 func (l *Loaded) Visible(id string) bool { return l.Report.Valid[id] && !l.Hidden[id] }
 
@@ -434,12 +447,13 @@ func (s *Store) GC() (records, blobs int, err error) {
 		return 0, 0, err
 	}
 	// Fail closed (DECISIONS 107): erase nothing while the verifier cannot
-	// fully judge the identities in this folder.
-	if len(l.Report.TooNew) > 0 {
-		return 0, 0, errors.New("too new: " + strings.Join(l.Report.TooNew, ", ") + ": update bean before gc")
+	// judge the local identity. A tombstone of a too-new identity is never
+	// valid, so another too-new identity cannot change what gc erases.
+	if l.ID != "" && contains(l.Report.TooNew, l.ID) {
+		return 0, 0, errors.New("too new: " + l.ID + ": update bean before gc")
 	}
-	if l.Local != nil && contains(l.Report.Compromised, l.Local.Identity) {
-		return 0, 0, errors.New("compromised: " + l.Local.Identity + ": gc refused")
+	if l.ID != "" && contains(l.Report.Compromised, l.ID) {
+		return 0, 0, errors.New("compromised: " + l.ID + ": gc refused")
 	}
 	if l.ownMissing() {
 		return 0, 0, errors.New("own identity missing: " + l.Local.Identity + ": sync from another copy before gc")
@@ -454,7 +468,7 @@ func (s *Store) GC() (records, blobs int, err error) {
 		if perr != nil || recv.After(cutoff) {
 			continue
 		}
-		if l.Report.Purged[h.Target] != tid || !l.Hidden[h.Target] {
+		if _, purged := l.Report.Purged[h.Target]; !purged || !l.Report.Valid[tid] || !l.Hidden[h.Target] {
 			continue
 		}
 		if r := l.Report.Records[h.Target]; r != nil {
@@ -642,8 +656,8 @@ func (s *Store) VerifyLines() ([]string, int, error) {
 		rp.warn(target, "hidden pending gc: "+target)
 	}
 	var localIDs []string
-	if l.Local != nil {
-		localIDs = []string{l.Local.Identity}
+	if l.ID != "" {
+		localIDs = []string{l.ID}
 	}
 	lines := rp.Lines()
 	code := rp.ExitCode(localIDs)

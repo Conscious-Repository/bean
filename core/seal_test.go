@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// Seal continuations (C28, Benjamin decision 2026-10-30).
+// Seal continuations (C28).
 
 func withChunk(t *testing.T, n int) {
 	t.Helper()

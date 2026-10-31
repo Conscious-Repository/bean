@@ -103,7 +103,7 @@ var (
 	ErrUnknownCoreType = errors.New("unknown core type")
 	ErrUnknownRel      = errors.New("unknown rel")
 	ErrBlobNotListed   = errors.New("blob not listed")
-	ErrOldFormat       = errors.New("old format: core record from a build before the rename to bean; this log cannot be used, run bean init in a new folder")
+	ErrOldFormat       = errors.New("old format")
 )
 
 func badField(name string) error { return errors.New("bad field: " + name) }
@@ -245,10 +245,6 @@ func (r *Record) checkFields() error {
 			return badField("context")
 		}
 	}
-	// sig shape (verified earlier)
-	if _, ok := m["sig"].(string); !ok {
-		return badField("sig")
-	}
 	return r.checkReservedType()
 }
 
@@ -311,7 +307,8 @@ func (r *Record) checkReservedType() error {
 		return firstBad(
 			fieldRule{r.Subject != r.Author, "author"},
 			fieldRule{!oneRef("purges"), "refs"},
-			fieldRule{r.Value != nil || r.Blobs != nil, "value"},
+			fieldRule{r.Value != nil, "value"},
+			fieldRule{r.Blobs != nil, "blobs"},
 			fieldRule{hasReason && (!isText || len([]rune(s)) > 200), "context.reason"})
 	}
 	if strings.HasPrefix(r.Type, "bean.") {

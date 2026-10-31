@@ -195,7 +195,6 @@ PY
 echo "ls:     $(measure bean -dir "$P" ls)"
 echo "verify: $(measure bean -dir "$P" verify)"
 echo "add:    $(measure bean -dir "$P" add hr 60 -unit bpm)"
-echo "reindex:$(measure bean -dir "$P" reindex)"
 
 echo "== rotation of the perf log (C28 seal continuations)"
 before=$(bean -dir "$P" ls | wc -l)

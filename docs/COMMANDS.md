@@ -19,7 +19,7 @@ bean [-dir <folder>] <command> [arguments]
 | 0 | Success. For `verify`: no errors. |
 | 1 | The command failed, or `verify` found errors. |
 | 2 | Usage error: unknown command, bad flag or bad argument. |
-| 3 | The log has a record of a newer format version than this `bean` knows. Update `bean`. |
+| 3 | Your identity has a record of a newer format version than this `bean` knows. Update `bean`. Another identity that is too new only gets its `too new` line. |
 | 4 | Your identity is frozen: two rotations were made from the same point. Make a new identity. |
 
 | Environment variable | Meaning |
@@ -106,7 +106,7 @@ Reads and checks every file and signature, and every stored file's hash. Run it 
 | `warning: <id>: hidden pending gc: <id>` | A record deleted from another copy. `gc` erases it after 7 days. |
 | `warning: <id>: unresolved author: <id>` | A record by an identity whose first record this copy does not have. |
 | `warning: <id>: incomplete seals: <id>` | A rotation's `seal part` records are not all in this copy. The old key's records do not count until they arrive. Nothing is deleted. |
-| `too new: <id>` | Records from a newer bean for this identity. Update bean. Exit code 3. |
+| `too new: <id>` | Records from a newer bean for this identity. Its records are not checked. Exit code 3 when it is yours: update bean. |
 | `warning: <id>: ungated: <id>` | A record from a newer bean signed by a key that may not change the rules for the identity: an old key or a stranger. It is skipped and does not stop anything. |
 | `compromised: <id>` | The identity forked and is frozen. Exit code 4 when it is yours. |
 | `summary: <v> valid, <i> invalid, <s> skipped, <h> held, <d> duplicate` | The counts. |
@@ -142,9 +142,9 @@ Run on your own machine. Records that you trust this agent key to write about yo
 
 ## Copies and keys
 
-### `sync <folder>`
+### `sync [-max-mb <n>] <folder>`
 
-Copies to this log every record and file that the other folder has and this one does not. It checks each signature first. It does not copy a record that a valid deletion names. Run it both ways to make two copies the same. Prints `copied <r> records, <b> blobs, refused <p> purged`.
+Copies to this log every record and file that the other folder has and this one does not. It checks each file first, and replaces a stored copy that fails the checks. It does not copy a record that a valid deletion names. Run it both ways to make two copies the same. Prints `copied <r> records, <b> blobs, refused <p> purged`. Sync only from your own copies: it refuses a folder with more than `<n>` MiB of record files (default 2048).
 
 ### `export <folder>`
 
@@ -166,17 +166,13 @@ Rebuilds `local/` on a new machine. Copy `objects/` and `blobs/` from your backu
 
 ### `purge [-reason <text>] <id>`
 
-Deletes a record about you. Writes a tombstone that every copy obeys, and erases the record here at once. A later import of the same data adds nothing. You cannot purge identity records or other tombstones.
+Deletes a record about you. Writes a tombstone that every copy obeys, and erases the record here at once. The tombstone keeps the import ref of the record, so a later import of the same data adds nothing on any copy. You cannot purge identity records or other tombstones.
 
 ### `gc`
 
-Erases records that a deletion from another copy hid at least 7 days ago, and the files that only those records used. Nothing is erased without `gc` or `purge`. It refuses while the log has records from a newer bean, your identity is frozen, or a rotation's seal parts are missing (`incomplete seals`).
+Erases records that a deletion from another copy hid at least 7 days ago, and the files that only those records used. Nothing is erased without `gc` or `purge`. It refuses while your identity has records from a newer bean or is frozen, or a rotation's seal parts are missing (`incomplete seals`).
 
 ## Other
-
-### `reindex`
-
-Deletes `local/cache/` and writes `local/cache/index.json` again: one summary line per record, for other programs to read.
 
 ### `help`, `version`
 
@@ -207,5 +203,5 @@ Reads a CSV file with a header row. Column `value` is required. Column `time` (R
 | `local/identity-secret` | The key for stored files and dedupe. | No. |
 | `local/signing-key` | Your signing key. | No. |
 | `local/agent-key` | The agent key of this machine. | No. |
-| `local/hidden/`, `local/holds.json`, `local/purged-refs.jsonl` | Deletion state of this copy. | No. |
+| `local/hidden/`, `local/holds.json`, `local/purged-refs.jsonl` | Deletion state of this copy. A lost `holds.json` starts each wait again. | No. |
 | `local/cache/` | Caches. Safe to delete. | No. |

@@ -1,4 +1,4 @@
-// Command genvectors computes vectors V1 to V12 (SPEC.md section 14) with the
+// Command genvectors computes the vectors of SPEC.md section 14 with the
 // core package and writes them to vectors/. A second implementation
 // (tools/checkvectors.py) must agree before a vector is final.
 package main

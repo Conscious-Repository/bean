@@ -54,7 +54,6 @@ Delete
   gc                            Erase deleted records after the 7-day hold.
 
 Other
-  reindex                       Rebuild local/cache/index.json.
   help                          Show this help.
   version                       Show the version.
 
@@ -74,14 +73,13 @@ var syntax = map[string]string{
 	"verify":        "verify",
 	"mcp":           "mcp [-write] [-label <name>]",
 	"agent":         "agent init [-label <name>] [-identity <id>] | agent pair <npub> [-label <name>]",
-	"sync":          "sync <source folder>",
+	"sync":          "sync [-max-mb <n>] <source folder>",
 	"export":        "export <empty folder>",
 	"import-export": "import-export <export folder>",
 	"rotate":        "rotate [-no-seal <id>]... [-nostr new|<nsec file>] < words.txt",
 	"restore":       "restore [-no-seal <id>]... [-nostr new|<nsec file>] [-identity <id>] < words.txt",
 	"purge":         "purge [-reason <text>] <id>",
 	"gc":            "gc",
-	"reindex":       "reindex",
 	"help":          "help",
 	"version":       "version",
 }
@@ -170,7 +168,7 @@ func main() {
 	case "help":
 		fmt.Println(help)
 	case "version":
-		fmt.Printf("bean %s (spec v0.5)\n", core.Version)
+		fmt.Printf("bean %s (records v 0)\n", core.Version)
 	case "init":
 		inf := flag.NewFlagSet("init", flag.ContinueOnError)
 		inf.SetOutput(io.Discard)
@@ -259,12 +257,6 @@ func main() {
 			fmt.Println(safe(l))
 		}
 		os.Exit(code)
-	case "reindex":
-		n, err := s.Reindex()
-		if err != nil {
-			fail(err)
-		}
-		fmt.Printf("indexed %d records\n", n)
 	case "purge":
 		pf := flag.NewFlagSet("purge", flag.ContinueOnError)
 		pf.SetOutput(io.Discard)
@@ -358,10 +350,14 @@ func main() {
 		fmt.Println("rotated to", res.NewKey)
 		fmt.Printf("sealed %d\n", len(res.Sealed))
 	case "sync":
-		if len(rest) != 1 {
+		sf := flag.NewFlagSet("sync", flag.ContinueOnError)
+		sf.SetOutput(io.Discard)
+		maxMB := sf.Int64("max-mb", core.DefaultSyncLimit>>20, "refuse a source whose record files are larger than this many MiB")
+		if err := sf.Parse(rest); err != nil || sf.NArg() != 1 || *maxMB < 1 {
 			usage()
 		}
-		src := core.Open(rest[0])
+		s.SyncLimit = *maxMB << 20
+		src := core.Open(sf.Arg(0))
 		src.Now = s.Now
 		res, err := s.Sync(src)
 		if err != nil {
@@ -400,7 +396,7 @@ func main() {
 var needsLog = map[string]bool{
 	"whoami": true, "add": true, "append": true, "blob": true, "ls": true, "show": true,
 	"verify": true, "mcp": true, "export": true, "import-export": true, "rotate": true,
-	"purge": true, "gc": true, "reindex": true,
+	"purge": true, "gc": true,
 }
 
 // hasLog reports whether the folder holds a log: an identity, or synced

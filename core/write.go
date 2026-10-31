@@ -8,8 +8,7 @@ import (
 
 // badIDPath names no file a store ever writes. PathOf and BlobPathOf
 // return it for a string that is not an id, so a bad id read from input
-// is "not found" instead of a panic or a path outside the shard (audit
-// MINOR).
+// is "not found" instead of a panic or a path outside the shard.
 const badIDPath = "bad-id"
 
 // PathOf returns the objects/ path of a record id (SPEC.md 7.1).
@@ -38,7 +37,7 @@ func SignRecord(obj map[string]any, s Signer) (string, []byte, error) {
 	delete(obj, "sig")
 	// Canonical would write invalid UTF-8 as U+FFFD and has no form for
 	// NaN or Inf, so the stored record would differ from what the caller
-	// gave. Refuse instead (audit MINOR).
+	// gave. Refuse instead.
 	if err := CheckValue(obj); err != nil {
 		return "", nil, err
 	}

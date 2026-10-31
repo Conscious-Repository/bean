@@ -1,21 +1,22 @@
 # Contributing
 
-For people and agents who change the code. Read [CORE.md](CORE.md) first: it is the protocol in two pages. [SPEC.md](SPEC.md) is the full text. [docs/ROADMAP.md](docs/ROADMAP.md) says what comes next, and [docs/DECISIONS.md](docs/DECISIONS.md) says why things are the way they are.
+For people and agents who change the code. Read [CORE.md](CORE.md) first: it is the protocol in short. [SPEC.md](SPEC.md) is the full text. [docs/ROADMAP.md](docs/ROADMAP.md) says what comes next, and [docs/DECISIONS.md](docs/DECISIONS.md) says why things are the way they are.
 
 ## Build and test
 
-Needs Go 1.24 or later. Check with `go version`. An older Go fails with `package crypto/hkdf is not in GOROOT`.
+Needs Go 1.24 or later. Check with `go version`. The `toolchain` line in `go.mod` names the Go release that the checks use; `go` gets it when your release is older. An older Go fails with `package crypto/hkdf is not in GOROOT`.
 
 ```
 go build ./...
-go test -race ./...                  # unit, conformance, vector, CLI and concurrency tests
+go test -race ./...                  # unit, conformance folder, vector, CLI and concurrency tests
 go vet ./... && gofmt -l .           # gofmt must print nothing
 ./demo.sh                            # two-folder walkthrough: import, sync, purge, gc, export
 python3 -I tools/checksecp256k1.py   # independent BIP-340 and npub check, pure Python
-python3 -I tools/checkvectors.py     # independent check of V1 to V20; needs a cryptography package with AES-SIV
+python3 -I tools/checkvectors.py     # independent check of the vectors; needs `pip install -r tools/requirements.txt`
+PY=python3 bash tools/second/run.sh  # the second verifier against bean and against vectors/conformance
 ```
 
-Run all of them before every commit; `make check` runs them, plus staticcheck, govulncheck and a check that `tools/genvectors` reproduces every vector byte for byte. `make fuzz` runs the fuzz targets (2 minutes each) and `make smoke` runs the end-to-end and adversarial suite in `tools/smoke.sh`. When you change a test vector, run `go run ./tools/genvectors` and both Python checks. Every vector is reproducible; V6 uses an RFC 6979 nonce since 2026-10-30.
+Run all of them before every commit; `make check` runs them, plus staticcheck, govulncheck and a check that `tools/genvectors` reproduces every vector byte for byte. `make fuzz` runs the fuzz targets (2 minutes each) and `make smoke` runs the end-to-end and adversarial suite in `tools/smoke.sh`. When you change a test vector, run `go run ./tools/genvectors` and the Python checks. The conformance folders come from `tools/second/cases.py`: delete `vectors/conformance`, run `python3 tools/second/cases.py vectors/conformance`, then `go run ./tools/genvectors` to write each `expected.txt`. Every vector is reproducible; V6 uses an RFC 6979 nonce since 2026-10-30.
 
 ## Layout
 
@@ -28,8 +29,10 @@ cmd/bean/                 the CLI; read.go (ls, show, add), mcp.go (MCP server),
 cmd/bean-import-csv/      CSV importer
 cmd/bean-import-labcorp/  Labcorp patient report importer
 tools/genvectors/         writes vectors/
-tools/check*.py           independent second implementations
-vectors/                  published test vectors V1 to V12 and V17 to V20
+tools/check*.py           independent checks of the vectors
+tools/second/             a second verifier in Python, and the conformance cases
+vectors/                  published test vectors (SPEC.md 14); conformance/ has
+                          folders of record files with their verify output
 ```
 
 ## Rules
@@ -61,7 +64,7 @@ vectors/                  published test vectors V1 to V12 and V17 to V20
 - A sync that carries a rotation and a deletion that it invalidates needs two passes. Run sync twice if something looks hidden that should not be.
 - `local/` never syncs. If you copy a log with `cp -r`, delete `local/cache`, `local/holds.json` and `local/purged-refs.jsonl` in the copy.
 - `$BEAN_NOW` overrides the clock for every command. Unset it outside tests.
-- `SPEC.md` is a read-only file on purpose: change it only with a change note (C21 onward) and new vectors where a result changes.
+- Change `SPEC.md` only with a change note, and with new vectors where a result changes. Add the change to [UPGRADING.md](UPGRADING.md) when it alters a result for an existing log.
 
 ## Commits
 

@@ -1,6 +1,6 @@
 package main
 
-// bean mcp (docs/ROADMAP.md M9): a read-only Model Context Protocol server on
+// bean mcp (DECISIONS 39): a read-only Model Context Protocol server on
 // standard input and output, so an AI client can ask questions of the log.
 // JSON-RPC 2.0, one message per line. Standard library only. Every tool
 // call loads and verifies the folder, as bean ls does, so a client never

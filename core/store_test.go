@@ -165,36 +165,6 @@ func TestBlobFlip(t *testing.T) {
 	}
 }
 
-// Conformance test 3: index rebuild is byte-identical.
-func TestReindex(t *testing.T) {
-	s, _ := initStore(t)
-	var lines []string
-	for i := 0; i < 10; i++ {
-		lines = append(lines, partial("hrv.rmssd", float64(i), []any{"bean/v0/ref", "id", "test", fmt.Sprint(i), 0.0}))
-	}
-	res := appendLines(t, s, lines...)
-	sup := map[string]any{"type": "hrv.rmssd", "value": map[string]any{"n": 99.0}, "times": map[string]any{"observed": nil},
-		"source": map[string]any{"system": "test", "adapter": "t@1", "ref": nil},
-		"refs":   []any{map[string]any{"rel": "supersedes", "id": res.IDs[0]}}}
-	appendLines(t, s, string(Canonical(sup)))
-	if _, err := s.Purge(res.IDs[1], "test"); err != nil {
-		t.Fatal(err)
-	}
-	n, err := s.Reindex()
-	if err != nil || n != 12 { // genesis, 9 remaining claims, supersede, tombstone
-		t.Fatalf("reindex %d %v", n, err)
-	}
-	first, _ := os.ReadFile(s.path(fileIndex))
-	s.Reindex()
-	second, _ := os.ReadFile(s.path(fileIndex))
-	if !bytes.Equal(first, second) {
-		t.Error("index bytes differ")
-	}
-	if !strings.Contains(string(first), `"superseded_by"`) || !strings.Contains(string(first), `"bean.tombstone"`) {
-		t.Error("index lacks supersede or tombstone")
-	}
-}
-
 // Conformance test 4: union of two folders.
 func TestSyncUnion(t *testing.T) {
 	a, _ := initStore(t)

@@ -7,7 +7,7 @@ import (
 	"github.com/Conscious-Repository/bean/core"
 )
 
-// Audit 4, M1: the read tools show the person's own records by default,
+// The read tools show the person's own records by default,
 // every row names its author and subject, stats never mixes authors or
 // units, record text is framed as data, and an agent writes only types
 // from the vocabulary.
@@ -126,7 +126,7 @@ func TestMCPScopeAndProvenance(t *testing.T) {
 	}
 }
 
-// Re-audit 1: on an agent-only replica (no personal key) the read tools
+// On an agent-only replica (no personal key) the read tools
 // work and still name the person self.
 func TestMCPAgentOnlyReplica(t *testing.T) {
 	s, ids := mcpStore(t)

@@ -380,6 +380,9 @@ func (rp *Report) dropTooNew(trees map[string]*tree) []string {
 		if tooNew(r.Author) || tooNew(r.Subject) || (r.Type == "bean.genesis" && tooNew(r.ID)) {
 			rp.Dropped[id] = r
 			delete(rp.Records, id)
+			delete(rp.Errors, id) // step 3 ran before the gate; 8.2 item 2
+			delete(rp.Warnings, id)
+			delete(rp.Held, id)
 			rp.Skipped++
 		}
 	}
@@ -447,16 +450,21 @@ func (rp *Report) checkKeys(ids []string, trees map[string]*tree, position map[s
 			rp.fail(id, "key not in chain")
 			continue
 		}
-		// Off-chain keys exist only below a fork. A frozen identity keeps
-		// the claims of chain keys and loses its destructive records.
-		if t.forked && (r.IsDestructive() || p == offChain) {
+		// Step 6.4: off-chain keys exist only below a fork.
+		if p == offChain {
 			rp.fail(id, "frozen")
 			continue
 		}
-		// Step 7 (C26, Benjamin decision 2026-10-30): every record of a
-		// retired key needs the seal of the succession that retired it.
+		// Step 7 (C26): every record of a retired key needs the seal of
+		// the succession that retired it.
 		if p < len(t.chain)-1 && !sealedBy[t.chain[p+1].ID][id] {
 			rp.fail(id, "not sealed")
+			continue
+		}
+		// Step 8: a frozen identity keeps the claims of chain keys and
+		// loses its destructive records.
+		if t.forked && r.IsDestructive() {
+			rp.fail(id, "frozen")
 		}
 	}
 }
@@ -468,12 +476,12 @@ func (rp *Report) checkSupersedes(ids []string) {
 		if !rp.Valid[id] || r.IsIdentity() {
 			continue
 		}
+		held := false
 		for _, t := range r.Targets("supersedes") {
 			target, ok := rp.Records[t]
 			switch {
 			case !ok:
-				rp.warn(id, "held: "+id)
-				rp.Held[id] = true
+				held = true
 			case strings.HasPrefix(target.Type, "bean."):
 				rp.fail(id, "bad target")
 			case target.Author != r.Author:
@@ -482,6 +490,11 @@ func (rp *Report) checkSupersedes(ids []string) {
 			if !rp.Valid[id] {
 				break
 			}
+		}
+		// One warning per record, and only for a record that stays valid.
+		if held && rp.Valid[id] {
+			rp.warn(id, "held: "+id)
+			rp.Held[id] = true
 		}
 	}
 }
@@ -598,16 +611,17 @@ func (rp *Report) Lines() []string {
 }
 
 // ExitCode is the verify exit code (SPEC.md 12.1). local lists the identities
-// held in local/, whose freeze is exit 4.
+// held in local/: only their state is exit 3 (too new) or 4 (frozen). Any
+// other too-new identity is a line, not a halt (8.2).
 func (rp *Report) ExitCode(local []string) int {
 	code := 0
 	if len(rp.Errors) > 0 || len(rp.Incomplete) > 0 {
 		code = 1
 	}
-	if len(rp.TooNew) > 0 {
-		code = 3
-	}
 	for _, l := range local {
+		if contains(rp.TooNew, l) {
+			code = max(code, 3)
+		}
 		if contains(rp.Compromised, l) {
 			code = 4
 		}

@@ -1,12 +1,21 @@
 # make check runs every check that a commit needs. make fuzz and make smoke
 # run the longer checks. Tools: staticcheck and govulncheck on the PATH,
-# and a python3 with the cryptography package (AES-SIV) for the vectors.
+# and a python3 with tools/requirements.txt installed for the vectors.
 PY ?= python3
 FUZZTIME ?= 2m
 
-.PHONY: check build fmt vet test race lint vuln vectors second differential demo fuzz smoke
+.PHONY: help check build fmt vet test lint vuln vectors second differential demo fuzz smoke
 
-check: fmt vet build race lint vuln vectors second differential demo
+help:
+	@echo "make check         every check a commit needs (fmt vet build test lint vuln vectors second differential demo)"
+	@echo "make test          go test -race -failfast ./..."
+	@echo "make vectors       regenerate vectors/ and check them byte for byte and with Python"
+	@echo "make second        compare bean with the second verifier and the conformance folders"
+	@echo "make differential  compare this build with OLD (default origin/main)"
+	@echo "make fuzz          run each fuzz target for FUZZTIME (default 2m)"
+	@echo "make smoke         build a large log and time the commands"
+
+check: fmt vet build test lint vuln vectors second differential demo
 
 build:
 	go build ./...
@@ -18,10 +27,7 @@ vet:
 	go vet ./...
 
 test:
-	go test ./...
-
-race:
-	go test -race ./...
+	go test -race -failfast ./...
 
 lint:
 	staticcheck ./...

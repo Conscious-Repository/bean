@@ -83,6 +83,15 @@ func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, err
 	if err != nil {
 		return res, err
 	}
+	for id, r := range l.Report.Records {
+		if r.Type == "bean.tombstone" && l.Report.Valid[id] {
+			if pr, _ := r.Context["purged_ref"].(map[string]any); pr != nil {
+				sys, _ := pr["system"].(string)
+				ref, _ := pr["ref"].(string)
+				purged[refLine(r.Subject, sys, ref)] = true
+			}
+		}
+	}
 	// Existing valid refs of this author and, per 9.7, the ids they belong
 	// to. Dedupe is per author (C27): another key's record with the same
 	// ref never hides or blocks this author's record.
@@ -254,6 +263,16 @@ func (s *Store) Purge(id, reason string) (string, error) {
 		return "", err
 	}
 	t := NewTombstone(l.Local.Identity, l.Local.Signer.Public(), id, reason, Adapter, s.nowString())
+	if target.Source.Ref != "" {
+		// The log keeps the decision: a copy that never saw the target, or
+		// that lost local/, still skips a re-import of it (7.8).
+		ctx, _ := t["context"].(map[string]any)
+		if ctx == nil {
+			ctx = map[string]any{}
+			t["context"] = ctx
+		}
+		ctx["purged_ref"] = map[string]any{"system": target.Source.System, "ref": target.Source.Ref}
+	}
 	tid, bytes, err := SignRecord(t, l.Local.Signer)
 	if err != nil {
 		return "", err
@@ -285,6 +304,34 @@ func (s *Store) Purge(id, reason string) (string, error) {
 	return tid, nil
 }
 
+// DefaultSyncLimit is the default SyncLimit: 2 GiB of record files, about
+// two million records.
+const DefaultSyncLimit = 2 << 30
+
+// checkSyncSize refuses a source whose record files are larger than the
+// limit, before any of them is read.
+func (s *Store) checkSyncSize(src *Store) error {
+	limit := s.SyncLimit
+	if limit <= 0 {
+		limit = DefaultSyncLimit
+	}
+	files, _, err := listShards(src.Dir, dirObjects)
+	if err != nil {
+		return err
+	}
+	var total int64
+	for _, f := range files {
+		info, err := f.e.Info()
+		if err != nil {
+			return err
+		}
+		if total += info.Size(); total > limit {
+			return fmt.Errorf("too large: the source has more than %d MiB of record files: sync only from your own copies, or raise -max-mb", limit>>20)
+		}
+	}
+	return nil
+}
+
 // SyncResult is the output of Sync.
 type SyncResult struct {
 	Records, Blobs, Refused, Replaced int
@@ -300,6 +347,12 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 		return res, err
 	}
 	defer unlock()
+	// Every command reads the whole log into memory, so a peer could make
+	// this folder unusable with a flood of large files (seal parts are up
+	// to 16 MiB each). Refuse a source above the limit before reading it.
+	if err := s.checkSyncSize(src); err != nil {
+		return res, err
+	}
 	// The source is read without its lock and without changes: a sync never
 	// writes to the folder it copies from.
 	a, err := src.loadReadOnly()
@@ -495,17 +548,27 @@ func (s *Store) ImportExport(dir string) (records, blobs int, err error) {
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return 0, 0, err
 	}
+	secret, err := s.identitySecret()
+	if err != nil {
+		return 0, 0, err
+	}
 	for _, e := range entries {
 		pt, err := os.ReadFile(filepath.Join(dir, "blobs", e.Name()))
 		if err != nil {
 			return 0, 0, err
 		}
-		id, err := s.PutBlob(pt)
+		// Check the name before anything is written, so a bad export leaves
+		// no blob behind.
+		out, err := EncryptBlob(BlobKey(secret), pt)
 		if err != nil {
 			return 0, 0, err
 		}
-		if !IsID("sha256:"+e.Name()) || id[7:] != e.Name() {
+		id := HashID(out)
+		if id != "sha256:"+e.Name() {
 			return 0, 0, errors.New("blob corrupt: sha256:" + e.Name())
+		}
+		if _, err := writeIfAbsent(s.path(BlobPathOf(id)), out, 0o600); err != nil {
+			return 0, 0, err
 		}
 		blobs++
 	}
@@ -535,56 +598,6 @@ func (s *Store) ImportExport(dir string) (records, blobs int, err error) {
 		}
 	}
 	return records, blobs, nil
-}
-
-// Reindex deletes local/cache and rebuilds the index (7.10). The index is
-// the canonical bytes of a sorted list of record summaries.
-func (s *Store) Reindex() (int, error) {
-	unlock, err := s.lock()
-	if err != nil {
-		return 0, err
-	}
-	defer unlock()
-	if err := os.RemoveAll(s.path(dirCache)); err != nil {
-		return 0, err
-	}
-	l, err := s.load(false)
-	if err != nil {
-		return 0, err
-	}
-	var rows []any
-	for _, id := range sortedKeys(l.Report.Records) {
-		r := l.Report.Records[id]
-		row := map[string]any{
-			"id": id, "type": r.Type, "author": r.Author, "kid": r.Kid,
-			"imported": r.Imported, "observed": r.Observed, "system": r.Source.System,
-			"valid": l.Visible(id), "hidden": l.Hidden[id],
-		}
-		if r.Subject != "" {
-			row["subject"] = r.Subject
-		}
-		if r.Source.Ref != "" {
-			row["ref"] = r.Source.Ref
-		}
-		if sup := l.Report.Superseded[id]; len(sup) > 0 {
-			row["superseded_by"] = sup[0]
-		}
-		if tid, ok := l.Report.Purged[id]; ok {
-			row["purged_by"] = tid
-		}
-		if e, ok := l.Report.Errors[id]; ok {
-			row["error"] = e
-		}
-		rows = append(rows, row)
-	}
-	if rows == nil {
-		rows = []any{}
-	}
-	idx := map[string]any{"spec": "bean-core-v0.5", "records": rows}
-	if err := writeFileAtomic(s.path(fileIndex), append(Canonical(idx), '\n'), 0o600); err != nil {
-		return 0, err
-	}
-	return len(rows), nil
 }
 
 // isSealPath reports whether p holds a bean.seal record of l.

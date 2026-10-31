@@ -1,6 +1,6 @@
 # bean core
 
-This document gives the rules that two independent implementations must agree on. [SPEC.md](SPEC.md) (version 0.5) gives all rules, the error strings and the conformance tests. If the two documents are different, SPEC.md is correct. This is a draft. Section 6 tells when it freezes.
+This document is a short summary of the rules that two independent implementations must agree on. [SPEC.md](SPEC.md) gives all rules, the error strings and the conformance tests. If the two documents are different, SPEC.md is correct. The vectors and the conformance folders in `vectors/` test both. This is a draft. Section 6 tells when it freezes.
 
 ## 0. Summary
 
@@ -15,7 +15,7 @@ A health log is a folder of signed claims about one person. Programs add files t
 3. The path is `objects/<h0h1>/<h2…h63>.json`. `h` is the 64 hex digits after `sha256:` in the record id.
 4. Before you parse a file, its size must be 16 MiB or less. After you know the type, the size must be 1 MiB or less, but a succession or a seal part can be 16 MiB.
 5. Every number is an IEEE 754 double that converts to the same canonical text and back. A number whose canonical form has no `.` and no `e` is an integer. An integer must be in the range ±(2^53−1). Thus `9.007199254740992e15` is invalid and `1e21` is valid.
-6. Strings are UTF-8. A string must not contain an escaped lone surrogate.
+6. Strings are UTF-8. A string must not contain an escaped lone surrogate. No value is nested deeper than 256 levels: the record object is level 0.
 7. An object must not contain the same key two times.
 8. Keep unknown fields. Include them in the hash. Do not interpret them.
 9. All hex digits in ids, keys and signatures are lowercase.
@@ -26,18 +26,20 @@ A health log is a folder of signed claims about one person. Programs add files t
 |---|---|
 | `v` | Format version. This draft uses `0`. |
 | `nonce` | 32 lowercase hex digits. Make a new random value for each record. |
-| `type` | Matches `^[a-z0-9][a-z0-9_-]*(\.[a-z0-9_-]+)*$`. 128 characters or less. Types that start with `bean.` are reserved. |
+| `type` | Matches `^[a-z0-9][a-z0-9_-]*(\.[a-z0-9_-]+)*$`. 128 ASCII characters or less. Types that start with `bean.` are reserved. |
 | `subject` | The identity id that the claim is about. Only a genesis has no `subject`. |
 | `author` | An identity id, or a tagged key used directly. A key used directly is a bare key, for example the key of a device or an agent. |
 | `kid` | The tagged public key that made `sig`. |
 | `value` | Optional object. The usual forms are `{"n", "unit"}`, `{"s"}`, `{"b"}` and `{"blob"}`. |
 | `times` | `imported` is required, in the form `YYYY-MM-DDTHH:MM:SSZ`. `observed` is null, or `{"start", "end", "precision"}` in RFC 3339. `end` is optional. |
-| `source` | `system`, `adapter` (`name@version`) and `ref` (a dedupe ref, or null). |
+| `source` | `system` (1 to 64 bytes in UTF-8), `adapter` (`name@version`: one `@`, text on both sides, no space, TAB, LF, FF or CR) and `ref` (a dedupe ref, or null). |
 | `refs` | Optional list of `{"rel", "id"}`. `rel` is `succeeds`, `supersedes`, `purges`, `seals` or `about`. Any other `rel` makes the record invalid. |
 | `blobs` | Optional list of `{"hash", "role", "media_type"}`. If `value.blob` is present, it must also be in this list. |
 | `context` | Optional object. The verifier does not interpret it. |
 | `id` | `sha256:` and the hex SHA-256 of the canonical bytes of the object without `id` and `sig`. It must agree with the path. |
 | `sig` | A tagged signature. |
+
+A pattern matches the whole string: a final newline does not match `$`. A list that must be absent can also be an empty list.
 
 ### 1.3 Keys and signatures
 
@@ -45,7 +47,7 @@ A tagged key is `<alg>:<lowercase hex>`. The signed message comes from the 32 by
 
 | alg | Public key | Signature |
 |---|---|---|
-| `ed25519` | 32 bytes. | `ed25519:<128 hex>`. RFC 8032 over the 32 bytes. Verify without the cofactor and reject a non-canonical S, as Go `crypto/ed25519.Verify` does. |
+| `ed25519` | 32 bytes. | `ed25519:<128 hex>`. RFC 8032 over the 32 bytes. Verify without the cofactor and reject a non-canonical S, as Go `crypto/ed25519.Verify` does. The key is not checked to be a point. Vector V23 has the edge cases. |
 | `p256` | 33-byte compressed point. For hardware keys in devices. | `p256:<128 hex>`, which is r and s. ECDSA with SHA-256 of the 32 bytes. s must be n/2 or less. |
 | `secp256k1` | 32-byte BIP-340 x-only key. This is a Nostr public key. | `secp256k1:<created_at>:<128 hex>`. BIP-340 over the SHA-256 of the wrapper event (below). |
 
@@ -105,8 +107,8 @@ Check each file in this order. Stop at the first failure.
 | Action | Who | Key |
 |---|---|---|
 | Add a claim | Any author. Readers decide whom to trust. | The head key, or an older key on the chain whose next succession lists the record in `sealed`. A bare key with `kid` equal to `author` is always its own head. |
-| Correct (a record with a `supersedes` ref) | The author of the target. The target must not be an `bean.*` record. | The head key, or an older key on the chain whose next succession lists the record in `sealed`. |
-| Delete (an `bean.tombstone` with one `purges` ref and `author` equal to `subject`) | The subject of the target. The target must not be a genesis, a succession, a seal part or a tombstone. | The same as for a correction. |
+| Correct (a record with a `supersedes` ref) | The author of the target. The target must not be a `bean.*` record. | The head key, or an older key on the chain whose next succession lists the record in `sealed`. |
+| Delete (a `bean.tombstone` with one `purges` ref, `author` equal to `subject`, no `value`, no `blobs`, and an optional `context.reason` of 200 code points or less) | The subject of the target. The target must not be a genesis, a succession, a seal part or a tombstone. | The same as for a correction. |
 | Rotate | The identity. | The recovery key to which the head commits. |
 
 More rules:
@@ -115,19 +117,19 @@ More rules:
 2. If two or more valid records correct the same target, readers show the one with the lowest id.
 3. Valid records that have the same `subject`, `author`, `source.system` and `source.ref` are duplicates. Do not count corrected records. The record with the lowest id is the primary.
 4. A claim is not valid if the set has no genesis for its author.
-5. A rotation seals every valid record of the outgoing key by default. A retired key cannot add a valid record after the rotation. The sealed set of a succession is its own list plus the lists of its n parts. If any part number from 1 to n does not have exactly one valid part, the set is empty: every record of the outgoing key is not valid until the parts arrive, and `gc` erases nothing. Write the parts before the succession, and sync them first.
+5. A rotation seals every record of the outgoing key by default. A retired key cannot add a valid record after the rotation. The sealed set of a succession is its own list plus the lists of its n parts. If any part number from 1 to n does not have exactly one valid part, the set is empty: every record of the outgoing key is not valid until the parts arrive, and `gc` erases nothing. Write the parts before the succession, and sync them first.
 
 ## 4. Folder and sync
 
 ### 4.1 Sync
 
 1. `objects/` and `blobs/` sync. `local/` holds keys, deletion state and caches. It does not sync.
-2. To sync from copy A to copy B, copy each file that B does not have, if it passes the checks up to the signature.
+2. To sync from copy A to copy B, copy each file that B does not have, if it passes the checks of 1.4. A file of an unknown version passes after check 4. Replace a stored copy that fails the checks.
 3. Do not copy a record that a valid tombstone names.
 4. The copy that wrote the tombstone erases the target at once. Any other copy that has the target hides it. It erases the target only when the person runs `gc`, 7 days or more later.
 5. If a tombstone becomes invalid, for example after a rotation that does not seal it, restore the target.
 6. You can also copy files with rsync, git or a USB drive. Then run `verify` on each copy.
-7. Erasure follows files, not validity. `purge` and `gc` erase a blob only when they erase a record that names it and no other record file names it. `gc` erases nothing while any identity is too new or the local identity is frozen.
+7. Erasure follows files, not validity. `purge` and `gc` erase a blob only when they erase a record that names it and no other record file names it. `gc` erases nothing while the local identity is too new or frozen, or a seal set is incomplete.
 
 ### 4.2 Blobs
 
@@ -156,4 +158,4 @@ These parts are not in the core: indexes and caches, the CLI, the MCP server, im
 1. Nostr keys sign through a wrapper event of kind 29944. This kind is not in the NIPs registry. It is in the NIP-01 ephemeral range, so relays do not store it. A NIP-46 signer can give permission for this kind only (`sign_event:29944`). Then a client that logs health records cannot sign other events for the person. The NIP-31 `alt` tag tells the signer what the event is. `created_at` is in `sig` because NIP-46 does not say that a signer keeps the value from the client.
 2. Records are not Nostr events. Medical records must not go to relays by default. Records also have structure and device keys that a Nostr event cannot hold. A Nostr key can sign a record. A later extension can send records over Nostr, encrypted, for sharing.
 3. Only the paper seed can change the signing key, and a fork freezes the identity. A custodian can keep the daily signing key while the person keeps the 24 words. To leave the custodian, the person rotates one time. The history stays, and nothing is signed again. A fork means that two parties have the seed. There is no rule to choose a branch, so a thief cannot win.
-4. The format freezes after use, not after review. The owner runs a real log for two weeks, with lab results, Apple Health data and records from an AI assistant. If nothing in this document must change, `v` becomes `1` and every DEFAULT in SPEC.md becomes final. Reviews can change the format until then.
+4. The format freezes after use, not after review. The owner runs a real log for two weeks, with lab results, Apple Health data and records from an AI assistant. If nothing in this document must change, the format freezes at `v` = 0 and every DEFAULT in SPEC.md becomes final. A later rule change needs a new `v` that says how it treats `v` 0 records. Reviews can change the format until the freeze.

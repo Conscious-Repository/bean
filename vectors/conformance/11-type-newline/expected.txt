@@ -1,0 +1,3 @@
+error: objects/a0/23259eadc5ebd42f0fae70abdd13639c14bf66b40fd9601dc1274b73a52cde.json: bad field: type
+summary: 1 valid, 1 invalid, 0 skipped, 0 held, 0 duplicate
+exit 1

@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// Audit 4, M2: verify is linear in the number of identities and in the
+// Verify is linear in the number of identities and in the
 // length of a succession chain. Signatures are marked proven so the test
 // times the rules, not the arithmetic.
 func TestVerifyScales(t *testing.T) {
