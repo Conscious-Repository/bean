@@ -8,7 +8,6 @@ package main
 
 import (
 	"bufio"
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -24,9 +23,6 @@ import (
 
 	"github.com/Conscious-Repository/bean/core"
 )
-
-//go:embed vocabulary.md
-var vocabulary string
 
 const writeInstructions = `
 Writing is on: log_entry adds a claim signed by this machine's agent key, not the person's key, so readers can tell what came through an AI. It cannot change or delete anything.
@@ -163,17 +159,21 @@ func init() {
 	}
 }
 
-func instructions(zone string, write bool) string {
+func instructions(zone string, write bool, vocab string) string {
 	text := fmt.Sprintf(mcpInstructions, time.Local.String()+" ("+zone+")")
 	if write {
 		text += writeInstructions
 	}
-	return text + "\n\n" + vocabulary
+	return text + "\n\n" + vocab
 }
 
 // toolLogEntry writes one claim with the agent key (bean add -agent).
 func toolLogEntry(s *core.Store, a toolArgs) (any, error) {
-	if !vocabularyType(a.Type) {
+	v, _, err := loadVocabulary(s.Dir)
+	if err != nil {
+		return nil, err
+	}
+	if !v.allows(a.Type) {
 		return nil, fmt.Errorf("type not in the vocabulary: %q", a.Type)
 	}
 	var value string
@@ -281,11 +281,15 @@ func handleMCP(s *core.Store, req rpcRequest, write bool) (any, *rpcError) {
 			v = p.ProtocolVersion
 		}
 		zone, _ := time.Now().Zone()
+		_, vocab, err := loadVocabulary(s.Dir)
+		if err != nil {
+			return nil, &rpcError{-32603, err.Error()}
+		}
 		return map[string]any{
 			"protocolVersion": v,
 			"capabilities":    map[string]any{"tools": map[string]any{}},
 			"serverInfo":      map[string]any{"name": "bean", "version": core.Adapter},
-			"instructions":    instructions(zone, write),
+			"instructions":    instructions(zone, write, vocab),
 		}, nil
 	case "ping":
 		return map[string]any{}, nil
@@ -722,42 +726,4 @@ func sortedStrings[V any](m map[string]V) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-// vocabularyTypes are the types in the vocabulary table: exact names, and
-// prefixes for a name written as `exercise.<kind>`.
-var vocabularyTypes, vocabularyPrefixes = func() (map[string]bool, []string) {
-	exact, prefixes := map[string]bool{}, []string(nil)
-	for _, line := range strings.Split(vocabulary, "\n") {
-		cells := strings.Split(line, "|")
-		if len(cells) < 3 || !strings.HasPrefix(strings.TrimSpace(cells[1]), "`") {
-			continue
-		}
-		names, _, _ := strings.Cut(cells[1], " (") // drop examples in parentheses
-		for _, part := range strings.Split(names, "`") {
-			part = strings.TrimSpace(part)
-			if part == "" || part == "," {
-				continue
-			}
-			if p, _, ok := strings.Cut(part, "<"); ok {
-				prefixes = append(prefixes, p)
-			} else {
-				exact[part] = true
-			}
-		}
-	}
-	return exact, prefixes
-}()
-
-// vocabularyType reports whether an agent may write typ.
-func vocabularyType(typ string) bool {
-	if vocabularyTypes[typ] {
-		return true
-	}
-	for _, p := range vocabularyPrefixes {
-		if rest, ok := strings.CutPrefix(typ, p); ok && rest != "" && !strings.Contains(rest, ".") {
-			return true
-		}
-	}
-	return false
 }

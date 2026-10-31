@@ -27,10 +27,23 @@ Conventions for what goes in the log, so that a month of entries lines up for `s
 | `symptom.<name>` (`headache`, `nausea`, `soreness`) | number 0 to 10, `{score}` | `location`, `trigger` |
 | `mood`, `energy`, `stress` | number 0 to 10, `{score}` | |
 | `weight` | number, `kg` | |
+| `heart.resting` | number, `/min`: resting heart rate, beats per minute | `device` |
+| `lab.<test>` (`glucose`, `tsh`, `wbc`) | number with the unit the lab printed (`mg/dL`, `uIU/mL`), or text (`Negative`, `<0.5`) | `test` (the name as printed), `panel`, `flag` (High, Low), `reference_interval`, `performing_lab`, `fasting` |
 | `bp` | text `120/80` | `systolic`, `diastolic` as numbers, `pulse` |
 | `note` | text | Anything else. Use `about` to attach it to an entry. |
 
-Importers write their own types: `lab.<test>` for Labcorp, `hrv.rmssd` for a CSV of HRV.
+`<test>` in `lab.<test>` is the test name as the lab prints it, in lowercase with `-` for spaces and punctuation: "BUN/Creatinine Ratio" is `lab.bun-creatinine-ratio`. `bean-import-labcorp` writes these types. Importers may write other types of their own, for example `hrv.rmssd` for a CSV of HRV.
+
+## Your own types
+
+To let your assistant log a type that is not here, add a file `vocabulary.md` to your bean folder (the folder of `-dir` or `$BEAN_DIR`), with a table in the same form:
+
+    | Type | Value | Useful details |
+    |---|---|---|
+    | `kombucha` | number, `mL` | `brand` |
+    | `cgm.<sensor>` (`libre`) | number, `mg/dL` | |
+
+Your terms are added to these. A term in your file cannot reuse a type from this list or `bean.*`, `agent.pair` or `device.pair`; a changed meaning is a new term. If it does, the assistant gets an error that names the term until you fix the file. Your assistant reads the file as instructions, so only you should write it. `bean sync` does not copy it; copy it yourself to each computer that runs `bean mcp -write`.
 
 ## Uncertainty
 
