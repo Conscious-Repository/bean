@@ -54,7 +54,6 @@ Delete
   gc                            Erase deleted records after the 7-day hold.
 
 Other
-  reindex                       Rebuild local/cache/index.json.
   help                          Show this help.
   version                       Show the version.
 
@@ -81,7 +80,6 @@ var syntax = map[string]string{
 	"restore":       "restore [-no-seal <id>]... [-nostr new|<nsec file>] [-identity <id>] < words.txt",
 	"purge":         "purge [-reason <text>] <id>",
 	"gc":            "gc",
-	"reindex":       "reindex",
 	"help":          "help",
 	"version":       "version",
 }
@@ -259,12 +257,6 @@ func main() {
 			fmt.Println(safe(l))
 		}
 		os.Exit(code)
-	case "reindex":
-		n, err := s.Reindex()
-		if err != nil {
-			fail(err)
-		}
-		fmt.Printf("indexed %d records\n", n)
 	case "purge":
 		pf := flag.NewFlagSet("purge", flag.ContinueOnError)
 		pf.SetOutput(io.Discard)
@@ -404,7 +396,7 @@ func main() {
 var needsLog = map[string]bool{
 	"whoami": true, "add": true, "append": true, "blob": true, "ls": true, "show": true,
 	"verify": true, "mcp": true, "export": true, "import-export": true, "rotate": true,
-	"purge": true, "gc": true, "reindex": true,
+	"purge": true, "gc": true,
 }
 
 // hasLog reports whether the folder holds a log: an identity, or synced

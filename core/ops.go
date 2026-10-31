@@ -600,56 +600,6 @@ func (s *Store) ImportExport(dir string) (records, blobs int, err error) {
 	return records, blobs, nil
 }
 
-// Reindex deletes local/cache and rebuilds the index (7.10). The index is
-// the canonical bytes of a sorted list of record summaries.
-func (s *Store) Reindex() (int, error) {
-	unlock, err := s.lock()
-	if err != nil {
-		return 0, err
-	}
-	defer unlock()
-	if err := os.RemoveAll(s.path(dirCache)); err != nil {
-		return 0, err
-	}
-	l, err := s.load(false)
-	if err != nil {
-		return 0, err
-	}
-	var rows []any
-	for _, id := range sortedKeys(l.Report.Records) {
-		r := l.Report.Records[id]
-		row := map[string]any{
-			"id": id, "type": r.Type, "author": r.Author, "kid": r.Kid,
-			"imported": r.Imported, "observed": r.Observed, "system": r.Source.System,
-			"valid": l.Visible(id), "hidden": l.Hidden[id],
-		}
-		if r.Subject != "" {
-			row["subject"] = r.Subject
-		}
-		if r.Source.Ref != "" {
-			row["ref"] = r.Source.Ref
-		}
-		if sup := l.Report.Superseded[id]; len(sup) > 0 {
-			row["superseded_by"] = sup[0]
-		}
-		if tid, ok := l.Report.Purged[id]; ok {
-			row["purged_by"] = tid
-		}
-		if e, ok := l.Report.Errors[id]; ok {
-			row["error"] = e
-		}
-		rows = append(rows, row)
-	}
-	if rows == nil {
-		rows = []any{}
-	}
-	idx := map[string]any{"spec": "bean-core-v0.5", "records": rows}
-	if err := writeFileAtomic(s.path(fileIndex), append(Canonical(idx), '\n'), 0o600); err != nil {
-		return 0, err
-	}
-	return len(rows), nil
-}
-
 // isSealPath reports whether p holds a bean.seal record of l.
 func isSealPath(l *Loaded, p string) bool {
 	m := pathPattern.FindStringSubmatch(p)

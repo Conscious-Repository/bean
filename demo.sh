@@ -42,7 +42,8 @@ bean -dir "$A" verify
 bean -dir "$B" verify
 
 echo "== purge one record on A, sync to B; B hides it"
-TARGET=$(bean -dir "$A" reindex >/dev/null && python3 -c "import json;d=json.load(open('$A/local/cache/index.json'));print([r['id'] for r in d['records'] if r['type']=='hrv.rmssd'][0])")
+S=$(bean -dir "$A" ls -type hrv.rmssd | head -1 | awk '{print $NF}')
+F=$(ls "$A"/objects/"${S:0:2}"/"${S:2}"*.json); F=${F#"$A"/objects/}; TARGET="sha256:${F%%/*}$(basename "$F" .json)"
 bean -dir "$A" purge -reason "demo" "$TARGET"
 bean -dir "$B" sync "$A"
 bean -dir "$B" verify | grep -c "hidden pending gc" | sed 's/^/hidden on B: /'
