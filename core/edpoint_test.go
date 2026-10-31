@@ -61,3 +61,31 @@ func TestEdSmallOrderR(t *testing.T) {
 		t.Errorf("good signature: %v", err)
 	}
 }
+
+// The y list of edSmallOrderR agrees with the arithmetic: every encoding
+// whose point has small order is listed, and no other point.
+func TestEdSmallOrderRMatchesArithmetic(t *testing.T) {
+	for _, hx := range []string{
+		"0100000000000000000000000000000000000000000000000000000000000000",
+		"ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+		"0000000000000000000000000000000000000000000000000000000000000080",
+		"26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85",
+		"c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a",
+		"edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+		"eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+	} {
+		b, _ := hex.DecodeString(hx)
+		if !edSmallOrderR(b) {
+			t.Errorf("missed %s", hx)
+		}
+	}
+	for i := range 300 {
+		seed := make([]byte, 32)
+		seed[0], seed[1] = byte(i), byte(i>>8)
+		pub := ed25519.NewKeyFromSeed(seed).Public().(ed25519.PublicKey)
+		x, y, _ := edDecode(pub)
+		if edSmallOrderR(pub) != edSmallOrder(x, y) {
+			t.Fatalf("disagree on %x", pub)
+		}
+	}
+}

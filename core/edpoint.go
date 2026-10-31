@@ -1,6 +1,9 @@
 package core
 
-import "math/big"
+import (
+	"math/big"
+	"sync"
+)
 
 // The strict Ed25519 rules of SPEC.md 4.4 and 4.5 (change N2), in the
 // words of libsodium's crypto_sign_verify_detached: a public key must be
@@ -74,16 +77,46 @@ func edSmallOrder(x, y *big.Int) bool {
 	return x.Sign() == 0 && y.Cmp(big.NewInt(1)) == 0
 }
 
+// edKeys remembers edStrictKey by key: a log has few keys and many records.
+var edKeys sync.Map
+
 // edStrictKey reports whether b is a canonical point encoding that is not
 // of small order.
 func edStrictKey(b []byte) bool {
+	if ok, seen := edKeys.Load(string(b)); seen {
+		return ok.(bool)
+	}
 	x, y, ok := edDecode(b)
-	return ok && !edSmallOrder(x, y)
+	ok = ok && !edSmallOrder(x, y)
+	edKeys.Store(string(b), ok)
+	return ok
 }
 
-// edSmallOrderR reports whether the R half of a signature decodes to a
-// point of small order. An R that does not decode fails the ordinary check.
+// edSmallY holds y mod p of the eight points of small order: 1 and p-1
+// (x = 0), 0 (order 4) and the two y values of the points of order 8.
+var edSmallY = func() map[string]bool {
+	out := map[string]bool{}
+	for _, s := range []string{"1", "0"} {
+		y, _ := new(big.Int).SetString(s, 10)
+		out[y.String()] = true
+	}
+	out[new(big.Int).Sub(edP, big.NewInt(1)).String()] = true
+	y8, _ := new(big.Int).SetString("05fc536d880238b13933c6d305acdfd5f098eff289f4c345b027b2c28f95e826", 16)
+	out[y8.String()] = true
+	out[new(big.Int).Sub(edP, y8).String()] = true
+	return out
+}()
+
+// edSmallOrderR reports whether the R half of a signature encodes a point
+// of small order, in any encoding, as libsodium's blocklist does. Every y
+// in edSmallY is on the curve with both signs, so y alone decides. An R
+// that is no point fails the ordinary check.
 func edSmallOrderR(r []byte) bool {
-	x, y, ok := edDecode(r)
-	return ok && edSmallOrder(x, y)
+	le := make([]byte, 32)
+	for i := range r {
+		le[31-i] = r[i]
+	}
+	le[0] &= 0x7f
+	y := new(big.Int).SetBytes(le)
+	return edSmallY[y.Mod(y, edP).String()]
 }
