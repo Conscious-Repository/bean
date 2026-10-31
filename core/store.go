@@ -96,8 +96,6 @@ func signerFromLine(line string) (Signer, error) {
 		return NewEd25519Signer(raw), nil
 	case "secp256k1":
 		return NewSecp256k1Signer(raw)
-	case "p256":
-		return NewP256Signer(raw)
 	}
 	return nil, ErrUnsupportedKeyAlgorithm
 }

@@ -96,7 +96,7 @@ bean add food "toast" -photo breakfast.jpg
 - `-at` says when it happened. Without it, the time is now.
 - `-about <id>` attaches a record to another one. An id can be shortened to its first 6 or more hex digits.
 - `-photo` attaches an image, stored encrypted.
-- The [type vocabulary](cmd/bean/vocabulary.md) lists the usual types and units, so that your records line up over time.
+- The [type vocabulary](cmd/bean/vocabulary.md) lists the usual types and units, so that your records line up over time. To add types of your own, put a `vocabulary.md` in your bean folder ([Your own types](cmd/bean/vocabulary.md#your-own-types)).
 
 Find things:
 
@@ -157,7 +157,7 @@ Add it to your client as an MCP server that uses stdio. Most clients take a JSON
 "bean": {"command": "/Users/you/go/bin/bean", "args": ["-dir", "/Users/you/health", "mcp", "-write", "-label", "assistant"]}
 ```
 
-Then tell the assistant what happened, for example "had ramen with extra broth around 1" or "took 400 mg magnesium". You can also ask questions: "is my resting heart rate going up this month?" The assistant logs your words with the correct type and time. It puts a calorie or sodium estimate in a separate record that points to the meal. Your words do not change. Its records show as `[assistant]` in `bean ls`. Use a different `-label` for each assistant.
+Then tell the assistant what happened, for example "had ramen with extra broth around 1" or "took 400 mg magnesium". You can also ask questions: "is my resting heart rate going up this month?" The assistant logs your words with the correct type and time. It puts a calorie or sodium estimate in a separate record that points to the meal. Your words do not change. Its records show as `[assistant]` in `bean ls`. Use a different `-label` for each assistant. The assistant can log only the types in the vocabulary and in your own `vocabulary.md`, if you have one.
 
 Without `-write`, the server can only read. With `-write`, the assistant signs with its own **agent key**, not your key. An agent can add records about you. It cannot correct or delete your records, and it cannot sign as you. The server sends the records it returns to the AI provider. Use a local model if that is a problem for you.
 

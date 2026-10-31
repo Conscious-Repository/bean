@@ -981,7 +981,7 @@ Each adapter document MUST say which source field is the native id, or that the 
 
 ### 9.9 Vocabulary and uncertainty
 
-The type vocabulary is one document (`cmd/bean/vocabulary.md`): each `type`, its `value`, its unit and the suggested `context` keys (meeting R6, R7). The verifier does not check it. A new term is added to the document before an adapter uses it. A term is never redefined: a changed meaning is a new term.
+The type vocabulary is one document (`cmd/bean/vocabulary.md`): each `type`, its `value`, its unit and the suggested `context` keys (meeting R6, R7). The verifier does not check it. A new term is added to the document before an adapter uses it. A term is never redefined: a changed meaning is a new term. An app MAY add a person's own terms from a file in the folder (the reference MCP server reads `vocabulary.md`); such a file is not part of the log (7.1) and does not redefine a document term.
 
 Measurement uncertainty travels with the data (meeting R8). `context.uncertainty` is optional. Its form is `{"kind": "cv" | "sd", "value": <number>, "unit": <string>, "source": <string>}`; `unit` and `source` are optional. `"cv"` is the coefficient of variation as a fraction. `"sd"` is the standard deviation in `unit`, or in the unit of the value when `unit` is absent. `source` names the calibration or the document that gives the value. Two kinds cover the calibration data that device makers publish. An adapter writes it only from a published or measured number.
 

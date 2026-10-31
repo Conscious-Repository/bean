@@ -114,12 +114,12 @@ func TestMCPScopeAndProvenance(t *testing.T) {
 		t.Error("instructions do not frame record text as data")
 	}
 	mcpWrite = true
-	for _, typ := range []string{"agent.pair", "device.pair", "bean.tombstone", "lab.glucose", "weight.fake"} {
+	for _, typ := range []string{"agent.pair", "device.pair", "bean.tombstone", "lab.glucose.fasting", "weight.fake"} {
 		if m, isErr := call(t, s, "log_entry", map[string]any{"type": typ, "value": "x"}); !isErr {
 			t.Errorf("agent wrote %s: %v", typ, m)
 		}
 	}
-	for _, typ := range []string{"food", "exercise.run", "symptom.nausea", "drink.tea", "note"} {
+	for _, typ := range []string{"food", "exercise.run", "symptom.nausea", "drink.tea", "note", "heart.resting", "lab.glucose"} {
 		if m, isErr := call(t, s, "log_entry", map[string]any{"type": typ, "value": "x", "at": "2026-10-24"}); isErr {
 			t.Errorf("agent cannot write %s: %v", typ, m)
 		}

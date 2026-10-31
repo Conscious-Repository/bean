@@ -3,10 +3,11 @@ package core
 import (
 	"crypto/ecdsa"
 	"crypto/ed25519"
-	"crypto/elliptic"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"math/big"
+	"os"
 	"strings"
 	"testing"
 )
@@ -102,38 +103,42 @@ func TestEd25519SignVerify(t *testing.T) {
 	}
 }
 
+// P-256 is verified, not written, by the core (DECISIONS 150): the
+// signatures come from V6. The high-S twin is a valid ECDSA signature but
+// MUST be rejected (SPEC 4.5).
 func TestP256LowS(t *testing.T) {
-	d := make([]byte, 32)
-	d[31] = 9
-	s, err := NewP256Signer(d)
+	b, err := os.ReadFile("../vectors/v6-p256.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	id := RecordID(mustParse(`{"a":1}`))
-	sig, err := s.Sign(id)
+	var v struct {
+		Kid      string `json:"kid"`
+		ID       string `json:"id"`
+		LowSSig  string `json:"low_s_sig"`
+		HighSSig string `json:"high_s_sig"`
+	}
+	if err := json.Unmarshal(b, &v); err != nil {
+		t.Fatal(err)
+	}
+	if err := Verify(v.Kid, v.ID, v.LowSSig); err != nil {
+		t.Errorf("low-S: %v", err)
+	}
+	k, err := ParseKey(v.Kid)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := Verify(s.Public(), id, sig); err != nil {
-		t.Error(err)
-	}
-	// Build the high-S twin: s' = n - s. It is a valid ECDSA signature but
-	// MUST be rejected (SPEC 4.5).
-	raw, _ := hex.DecodeString(sig[5:])
-	n := elliptic.P256().Params().N
-	sv := new(big.Int).SetBytes(raw[32:])
-	hs := new(big.Int).Sub(n, sv)
-	hb := make([]byte, 32)
-	hs.FillBytes(hb)
-	high := "p256:" + hex.EncodeToString(append(raw[:32], hb...))
-	// Sanity: standard ECDSA accepts the high-S twin.
-	pub := s.key.Public().(*ecdsa.PublicKey)
-	msg := sha256.Sum256(idRaw(id))
-	if !ecdsa.Verify(pub, msg[:], new(big.Int).SetBytes(raw[:32]), hs) {
+	raw, _ := hex.DecodeString(strings.TrimPrefix(v.HighSSig, "p256:"))
+	msg := sha256.Sum256(idRaw(v.ID))
+	if !ecdsa.Verify(k.ecdsa, msg[:], new(big.Int).SetBytes(raw[:32]), new(big.Int).SetBytes(raw[32:])) {
 		t.Fatal("high-S twin is not a valid ECDSA signature; test is wrong")
 	}
-	if err := Verify(s.Public(), id, high); err == nil || err.Error() != "bad signature" {
+	if err := Verify(v.Kid, v.ID, v.HighSSig); err == nil || err.Error() != "bad signature" {
 		t.Errorf("high-S accepted: %v", err)
+	}
+	// The core has no P-256 signer: a P-256 key is a hardware key, and a
+	// key handle is not a key the core can load.
+	if _, err := signerFromLine("p256:" + strings.Repeat("22", 32)); err != ErrUnsupportedKeyAlgorithm {
+		t.Errorf("p256 local key: %v", err)
 	}
 }
 

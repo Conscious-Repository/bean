@@ -1,13 +1,10 @@
 package core
 
 import (
-	"crypto"
-	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/sha256"
-	"encoding/asn1"
 	"encoding/hex"
 	"errors"
 	"math/big"
@@ -68,11 +65,6 @@ func ParseKey(tagged string) (*Key, error) {
 // TagEd25519 returns the tagged form of an Ed25519 public key.
 func TagEd25519(pub ed25519.PublicKey) string {
 	return "ed25519:" + hex.EncodeToString(pub)
-}
-
-// TagP256 returns the tagged form of a P-256 public key (SEC1 compressed).
-func TagP256(pub *ecdsa.PublicKey) string {
-	return "p256:" + hex.EncodeToString(elliptic.MarshalCompressed(elliptic.P256(), pub.X, pub.Y))
 }
 
 // Verify checks sig over the id bytes for the tagged key (SPEC.md 4.5).
@@ -142,56 +134,4 @@ func (s ed25519Signer) Sign(id string) (string, error) {
 		return "", ErrBadSignature
 	}
 	return "ed25519:" + hex.EncodeToString(ed25519.Sign(s.priv, idRaw(id))), nil
-}
-
-type p256Signer struct{ key *ecdsa.PrivateKey }
-
-// NewP256Signer makes a software P-256 signer from a 32-byte scalar.
-func NewP256Signer(d []byte) (*p256Signer, error) {
-	if len(d) != 32 {
-		return nil, ErrBadKey
-	}
-	k := new(ecdsa.PrivateKey)
-	k.Curve = elliptic.P256()
-	k.D = new(big.Int).SetBytes(d)
-	if k.D.Sign() == 0 || k.D.Cmp(k.Curve.Params().N) >= 0 {
-		return nil, ErrBadKey
-	}
-	ek, err := ecdh.P256().NewPrivateKey(d)
-	if err != nil {
-		return nil, ErrBadKey
-	}
-	pub := ek.PublicKey().Bytes() // 0x04 || X || Y
-	k.X, k.Y = new(big.Int).SetBytes(pub[1:33]), new(big.Int).SetBytes(pub[33:])
-	return &p256Signer{k}, nil
-}
-
-func (s *p256Signer) Public() string { return TagP256(&s.key.PublicKey) }
-
-// Sign produces r||s with low-S (SPEC.md 4.5). The nonce is
-// deterministic (RFC 6979, through crypto/ecdsa with a nil random source,
-// Go 1.24 and later), so a software signer makes reproducible test
-// vectors and never depends on the system random source while signing.
-// A hardware signer may use random nonces; verifiers accept both.
-func (s *p256Signer) Sign(id string) (string, error) {
-	if !IsID(id) {
-		return "", ErrBadSignature
-	}
-	h := sha256.Sum256(idRaw(id))
-	der, err := s.key.Sign(nil, h[:], crypto.SHA256)
-	if err != nil {
-		return "", err
-	}
-	var rs struct{ R, S *big.Int }
-	if rest, err := asn1.Unmarshal(der, &rs); err != nil || len(rest) != 0 {
-		return "", ErrBadSignature
-	}
-	r, sv := rs.R, rs.S
-	if sv.Cmp(halfN) > 0 {
-		sv.Sub(s.key.Curve.Params().N, sv)
-	}
-	out := make([]byte, 64)
-	r.FillBytes(out[:32])
-	sv.FillBytes(out[32:])
-	return "p256:" + hex.EncodeToString(out), nil
 }
