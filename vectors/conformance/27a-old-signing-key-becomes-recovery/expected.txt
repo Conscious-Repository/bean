@@ -1,0 +1,5 @@
+error: sha256:2e7f41e6c4eedd3eae9fa459358a06161185172156107a46e56e111af3b44236: key not in chain
+error: sha256:4910e6cb249483e8dab93acc55fe3be24fa09a0589bb3edcd7082110887114d6: key reuse
+warning: sha256:4c3712513698ee7f9fe4a1923ad661a34fb6dde154d0bc7add168a90f84c0ae5: held: sha256:4c3712513698ee7f9fe4a1923ad661a34fb6dde154d0bc7add168a90f84c0ae5
+summary: 2 valid, 2 invalid, 0 skipped, 1 held, 0 duplicate
+exit 1

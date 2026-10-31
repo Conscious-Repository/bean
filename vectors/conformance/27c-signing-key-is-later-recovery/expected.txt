@@ -1,0 +1,4 @@
+error: sha256:8d5bb3730f449afb002e352fefed88cd62eece046dafbf9837a00fde87794ab2: key reuse
+warning: sha256:2d034fcdb63fb9bbe4a8a6a50085771634a0bb89e71f59ec326a66bb6fbae7f5: held: sha256:2d034fcdb63fb9bbe4a8a6a50085771634a0bb89e71f59ec326a66bb6fbae7f5
+summary: 4 valid, 1 invalid, 0 skipped, 1 held, 0 duplicate
+exit 1

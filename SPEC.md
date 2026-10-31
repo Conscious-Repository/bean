@@ -567,10 +567,17 @@ DEFAULT for items 2 to 4.
 
 ### 5.8 Key rules
 
-- A succession MUST NOT reuse a key in `value.key`. Error: `key reuse`. A key is reused when it is the `value.key` of a node on the path from genesis to the parent, or the `kid` of a succession on that path.
-- A signing key MUST NOT be a recovery key (N4). Error: `key reuse`. A genesis is invalid when the commitment (4.6) to its `value.key` equals its `value.recovery`. A succession is invalid when the commitment to its `value.key` equals the `value.recovery` of its parent (so `value.key` is its own `kid`) or its own `value.recovery`.
-- A succession MUST name a `value.recovery` that differs from the parent commitment. Error: `recovery not advanced`.
-- A recovery key signs only successions and seal parts. A record of any other type signed by a recovery key is invalid. Error: `key not in chain`.
+No key is both a signing key and a recovery key on one chain, and no key or recovery commitment comes back.
+The path of a succession S is the nodes from the genesis to its parent P. The keys of the path are the `value.key` of each node and the `kid` of each succession on it. The recovery commitments of the path are the `value.recovery` of each node. Commitments are as in 4.6.
+
+A verifier checks S in this order:
+
+1. If `S.value.recovery` is a recovery commitment of the path, S is invalid. Error: `recovery not advanced`.
+2. S is invalid with `key reuse` when `S.value.key` is a key of the path, when the commitment to `S.value.key` is `S.value.recovery` or a recovery commitment of the path (so `value.key` is never `S.kid` or another committed recovery key), or when `S.value.recovery` is the commitment to a key of the path (so a current or earlier signing key never becomes the next recovery key).
+
+A genesis G is invalid with `key reuse` when the commitment to `G.value.key` is `G.value.recovery`.
+
+A recovery key of identity I signs only successions and seal parts of I. A record whose `author` is I and whose `kid` is a recovery key committed on the chain of I, and that is no succession or seal part, is invalid. Error: `key not in chain`. A record whose `author` is the recovery key itself is a bare-key claim like any other (conformance case 17c).
 
 ### 5.9 Identity secret
 
@@ -741,7 +748,7 @@ For each tombstone D with target T:
 5. Otherwise D is a valid tombstone for T. T is purged.
 
 A purged target is not valid data. A reader MUST NOT show it.
-A verifier reports every purged target that is hidden in this replica as `hidden pending gc: <id>` (a warning), from the moment it is hidden (7.6 step 6). `bean gc` erases it (7.6).
+A verifier reports every purged target that is hidden in this replica as `hidden pending gc: <id>` (a warning), from the moment it is hidden (7.6 step 6), unless its author or subject is too new (8.2). `bean gc` erases it (7.6).
 
 ### 6.8 Trust is reader policy
 
@@ -831,7 +838,7 @@ When a replica first finds a valid tombstone T for a target that it stores:
 3. Record the receipt time in `local/holds.json` as `{"<T id>": {"target": "<target id>", "received": "<UTC time>"}}`.
 4. A replica MUST NOT erase a hidden target on a timer.
 5. `bean gc` erases every target hidden for at least 7 days under a still-valid tombstone. It then erases each blob that an erased target names, when no remaining record file names it. It never erases a blob that no erased record named. If the local identity is too new (8.2) or frozen (5.7), or any seal set is incomplete (5.4), `gc` erases nothing. Error: `too new: <id>`, `compromised: <id>` or `incomplete seals: <ids>`. Validity can change after an update or a fork, and erasure cannot be undone. Another too-new identity does not stop `gc`: `gc` erases only targets of valid tombstones, a record of a too-new identity is never valid (8.2), and only the keys of an identity can make it too new, so a too-new identity cannot change which tombstones of another identity are valid.
-6. `bean verify` reports each hidden target as `hidden pending gc: <id>` (a warning).
+6. `bean verify` reports each hidden target as `hidden pending gc: <id>` (a warning), unless its author or subject is too new (8.2).
 
 A lost `local/holds.json` starts each hold again. Erasure is then later, never earlier.
 
@@ -1377,7 +1384,7 @@ The independent checks are `tools/checkvectors.py`, `tools/checksecp256k1.py` an
 | V22 | Too-new gate and going past a halt | One identity with records of `v` = 99 by the head key, a retired key, recovery keys 0 and 1 and a stranger, with and without a rotation | Too-new identities, `ungated` ids, valid ids, and the halting records that 5.5 step 4a passes, per scenario. Published. |
 | V18 | secp256k1 | A fixed secret key and a record id, created_at 0 and 1761566400, zero aux | `kid`, npub, nsec, wrapper bytes and id, `sig`, and five rejects. Published. Checked by `tools/checksecp256k1.py`. |
 | V23 | Ed25519 edge cases | A good signature, `S` = `S` + L, the small-order identity key with one signature for two ids, a non-canonical encoding of it, and a key that is not a point | `bad key` or not, and accept or `bad signature`, as 4.4 and 4.5 say. Published. Conformance case 18d adds a small-order `R` under a mixed-order key. |
-| V24 | Conformance folders | Folders of record files in `vectors/conformance/`, written by `tools/second/cases.py`: nesting depth, empty arrays, byte and code point lengths, whole-string patterns, held and not-sealed order, too-new identities, recovery keys as signing keys, Ed25519 keys, unknown `v`, old types | `expected.txt`: the verify lines (12.1) and the exit code of a replica with no local identity. Published. |
+| V24 | Conformance folders | Folders of record files in `vectors/conformance/`, written by `tools/second/cases.py`: nesting depth, empty arrays, byte and code point lengths, whole-string patterns, held and not-sealed order, too-new identities, recovery keys as signing keys, keys and recovery commitments that come back on a path, Ed25519 keys, unknown `v`, old types | `expected.txt`: the verify lines (12.1) and the exit code of a replica with no local identity. Published. |
 
 Hand-built AES-SIV code MUST also pass the RFC 4493 and RFC 5297 Appendix A vectors (4.9). The HKDF code MUST pass the RFC 5869 Appendix A vectors.
 

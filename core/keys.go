@@ -73,7 +73,9 @@ func TagEd25519(pub ed25519.PublicKey) string {
 // Verify checks sig over the id bytes for the tagged key (SPEC.md 4.5).
 // It returns bad signature on any failure, including a tag mismatch and a
 // high-S P-256 signature. A secp256k1 signature is over a Nostr wrapper
-// event (secp256k1.go).
+// event (secp256k1.go). The object cache skips this function for files it
+// already proved: a change to what it accepts must change objCacheRules
+// (cache.go), so that an older cache is dropped.
 func Verify(taggedKey, id, sig string) error {
 	k, err := ParseKey(taggedKey)
 	if err != nil {

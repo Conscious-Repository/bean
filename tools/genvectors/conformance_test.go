@@ -8,7 +8,7 @@ import (
 
 // Every conformance folder gives the verify output in its expected.txt.
 func TestConformanceFolders(t *testing.T) {
-	dirs := sortedDirs(filepath.Join("..", "..", conformanceDir, "*"))
+	dirs, _ := filepath.Glob(filepath.Join("..", "..", conformanceDir, "*")) // sorted
 	if len(dirs) == 0 {
 		t.Fatal("no conformance folders")
 	}

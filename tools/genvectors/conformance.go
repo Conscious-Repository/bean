@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/Conscious-Repository/bean/core"
@@ -57,10 +56,4 @@ func conformanceResult(files map[string][]byte) string {
 	rp := core.VerifyFiles(files)
 	lines := rp.Lines()
 	return strings.Join(lines, "\n") + fmt.Sprintf("\nexit %d\n", rp.ExitCode(nil))
-}
-
-func sortedDirs(glob string) []string {
-	d, _ := filepath.Glob(glob)
-	sort.Strings(d)
-	return d
 }

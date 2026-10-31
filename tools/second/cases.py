@@ -176,4 +176,38 @@ L = Log("18d-ed-small-order-r"); I = Ident(L, 42); mk = MixedKey()
 for x in range(1, 200):
     r = rec(mk, type="hr", subject=I.id, author=mk.pub, value={"n": x, "unit": "bpm"})
     if r["sig"] != "ed25519:00": L.put(r); break
+# 27 N4 over the whole path (5.8): no key is both a signing key and a
+# recovery key on one chain, and no key or recovery commitment comes back.
+def succ(I, signer, parent, key, rc, sealed=()):
+    return I.log.put(rec(signer, type="bean.succession", subject=I.id, author=I.id, refs=[{"rel": "succeeds", "id": parent}], value={"key": key, "recovery": rc, "sealed": sorted(sealed)}))
+# 27a S1 commits to the genesis signing key as the next recovery key; that key then signs S2.
+L = Log("27a-old-signing-key-becomes-recovery"); I = Ident(L, 43); g0 = I.key
+s1 = succ(I, I.rec(0), I.id, Key(b"\xc1" * 32).pub, commitment(g0.pub))
+succ(I, g0, s1, Key(b"\xc2" * 32).pub, commitment(Key(b"\xc3" * 32).pub))
+I.claim(1, key=Key(b"\xc2" * 32))
+# 27b S2 commits again to recovery key 0, which S1 revealed; S3 signs with it.
+L = Log("27b-recommit-revealed-recovery"); I = Ident(L, 44)
+s1 = succ(I, I.rec(0), I.id, Key(b"\xc4" * 32).pub, commitment(I.rec(1).pub))
+s2 = succ(I, I.rec(1), s1, Key(b"\xc5" * 32).pub, commitment(I.rec(0).pub))
+succ(I, I.rec(0), s2, Key(b"\xc6" * 32).pub, commitment(I.rec(2).pub))
+# 27c S1's signing key is recovery key 2; S2 commits to it as the next recovery key.
+L = Log("27c-signing-key-is-later-recovery"); I = Ident(L, 45)
+s1 = succ(I, I.rec(0), I.id, I.rec(2).pub, commitment(I.rec(1).pub))
+I.claim(1, key=I.rec(2))
+s2 = succ(I, I.rec(1), s1, Key(b"\xc7" * 32).pub, commitment(I.rec(2).pub))
+succ(I, I.rec(2), s2, Key(b"\xc8" * 32).pub, commitment(I.rec(3).pub))
+# 27d S2's signing key is the kid of S1 (recovery key 0).
+L = Log("27d-key-is-old-kid"); I = Ident(L, 46)
+s1 = succ(I, I.rec(0), I.id, Key(b"\xc9" * 32).pub, commitment(I.rec(1).pub))
+succ(I, I.rec(1), s1, I.rec(0).pub, commitment(I.rec(2).pub))
+# 27e S1 seals a claim and names the sealed genesis key as the next recovery key;
+# the old key signs again after S1.
+L = Log("27e-sealed-key-becomes-recovery"); I = Ident(L, 47); g0 = I.key
+c = I.claim(1)
+succ(I, I.rec(0), I.id, Key(b"\xca" * 32).pub, commitment(g0.pub), sealed=[c])
+I.claim(2, key=g0)
+# 27f a revealed recovery key as the bare-key author of a claim about another identity.
+L = Log("27f-revealed-recovery-bare-author"); I = Ident(L, 48); J = Ident(L, 49)
+succ(I, I.rec(0), I.id, Key(b"\xcb" * 32).pub, commitment(I.rec(1).pub))
+L.put(rec(I.rec(0), type="hr", subject=J.id, author=I.rec(0).pub, value={"n": 3, "unit": "bpm"}))
 print("wrote", len(os.listdir(OUT)), "cases")

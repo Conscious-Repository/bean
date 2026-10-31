@@ -113,7 +113,7 @@ Check each file in this order. Stop at the first failure.
 
 More rules:
 
-1. A recovery key signs only successions and seal parts. A signing key is never a recovery key: the commitment to `value.key` differs from `value.recovery`, and in a succession also from the `value.recovery` of the parent. A succession does not use again a signing key or a recovery key of a node on its path. Else the record is invalid with `key reuse`.
+1. A recovery key of an identity signs only its successions and seal parts. No key is both a signing key and a recovery key on one chain, and nothing comes back. A succession is invalid with `recovery not advanced` when its `value.recovery` is a `value.recovery` already on its path. It is invalid with `key reuse` when its `value.key` is a key already on its path, or commits to its own or an earlier `value.recovery`, or when its `value.recovery` commits to a key already on its path. A genesis whose `value.key` commits to its own `value.recovery` is `key reuse`. A recovery key used as a bare-key author is an ordinary bare key.
 2. If two or more valid records correct the same target, readers show the one with the lowest id.
 3. Valid records that have the same `subject`, `author`, `source.system` and `source.ref` are duplicates. Do not count corrected records. The record with the lowest id is the primary.
 4. A claim is not valid if the set has no genesis for its author.

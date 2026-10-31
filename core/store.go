@@ -650,7 +650,9 @@ func (s *Store) VerifyLines() ([]string, int, error) {
 		}
 	}
 	for target := range l.Hidden {
-		rp.warn(target, "hidden pending gc: "+target)
+		if rp.Dropped[target] == nil { // 8.2: nothing is reported for a too-new identity
+			rp.warn(target, "hidden pending gc: "+target)
+		}
 	}
 	var localIDs []string
 	if l.ID != "" {

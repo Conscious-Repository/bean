@@ -127,3 +127,39 @@ func TestUngatedSilentOnTooNewIdentity(t *testing.T) {
 		t.Fatalf("too new %v, warnings %v", l.Report.TooNew, l.Report.Warnings[stranger])
 	}
 }
+
+// A hidden record of a too-new identity gets no "hidden pending gc"
+// warning: 8.2 reports nothing for it (DECISIONS 171).
+func TestTooNewHiddenNoWarning(t *testing.T) {
+	s, me := initStore(t)
+	xid := writeRaw(t, s, `{"type":"weight","value":{"n":1,"unit":"kg"},"times":{"observed":null},"source":{"system":"self","adapter":"x@1"}}`)
+	loc, _ := s.ReadLocal()
+	tid, b, err := SignRecord(NewTombstone(me, loc.Signer.Public(), xid, "", Adapter, "2026-10-28T12:00:00Z"), loc.Signer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFileAtomic(s.path(PathOf(tid)), b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if l, err := s.Load(); err != nil || !l.Hidden[xid] {
+		t.Fatalf("setup: not hidden, %v", err)
+	}
+	f := NewTombstone(me, loc.Signer.Public(), tid, "", Adapter, "2026-10-28T12:00:00Z")
+	f["v"] = 9.0
+	fid, fb, err := SignRecord(f, loc.Signer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFileAtomic(s.path(PathOf(fid)), fb, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	lines, code, err := s.VerifyLines()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range lines {
+		if strings.Contains(l, "hidden pending gc") {
+			t.Errorf("exit %d, warning for a too-new record: %v", code, lines)
+		}
+	}
+}

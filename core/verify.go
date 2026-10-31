@@ -251,35 +251,34 @@ func (rp *Report) buildTrees(ids []string) map[string]*tree {
 	reached := map[string]bool{}
 	for gid, t := range trees {
 		// Depth first with a stack of its own, so a long chain cannot
-		// exhaust the goroutine stack. used counts the keys on the path
-		// from the genesis (5.8).
+		// exhaust the goroutine stack. On the path from the genesis (5.8),
+		// used counts the keys, commits the commitments to those keys,
+		// and recs the recovery commitments.
 		type frame struct {
 			p    *Record
 			next int // index of the next child to check
 		}
 		g := t.nodes[gid]
-		used := map[string]int{g.ValueKey(): 1}
-		used[g.Kid]++
+		p := path{used: map[string]int{}, commits: map[string]int{}, recs: map[string]int{}}
+		p.add(g, 1)
 		for stack := []frame{{p: g}}; len(stack) > 0; {
 			top := &stack[len(stack)-1]
 			kids := byParent[gid][top.p.ID]
 			if top.next == len(kids) {
-				used[top.p.ValueKey()]--
-				used[top.p.Kid]--
+				p.add(top.p, -1)
 				stack = stack[:len(stack)-1]
 				continue
 			}
 			s := kids[top.next]
 			top.next++
 			reached[s.ID] = true
-			if err := checkSuccession(s, top.p, used); err != nil {
+			if err := p.check(s, top.p); err != nil {
 				rp.fail(s.ID, err.Error())
 				continue
 			}
 			t.nodes[s.ID] = s
 			t.children[top.p.ID] = append(t.children[top.p.ID], s)
-			used[s.ValueKey()]++
-			used[s.Kid]++
+			p.add(s, 1)
 			stack = append(stack, frame{p: s})
 		}
 		for x := g; ; {
@@ -301,18 +300,32 @@ func (rp *Report) buildTrees(ids []string) map[string]*tree {
 	return trees
 }
 
-// checkSuccession applies SPEC.md 6.3 step 3 and 5.8 with the seed-only
-// rule. used counts the keys on the path from the genesis to p.
-func checkSuccession(s, p *Record, used map[string]int) error {
-	if Commitment(s.Kid) != p.Recovery() {
+// path holds the keys and commitments of the nodes from a genesis to the
+// node that the walk is at (5.8).
+type path struct{ used, commits, recs map[string]int }
+
+// add counts node n in (d = 1) or out (d = -1) of the path.
+func (p path) add(n *Record, d int) {
+	for _, k := range []string{n.ValueKey(), n.Kid} {
+		p.used[k] += d
+		p.commits[Commitment(k)] += d
+	}
+	p.recs[n.Recovery()] += d
+}
+
+// check applies SPEC.md 6.3 step 3 and 5.8 to succession s of parent par.
+// No key serves as both a signing key and a recovery key, and no key or
+// recovery commitment on the path comes back (DECISIONS 172).
+func (p path) check(s, par *Record) error {
+	if Commitment(s.Kid) != par.Recovery() {
 		return errors.New("bad succession")
 	}
-	if s.Recovery() == p.Recovery() {
+	rec := s.Recovery()
+	if p.recs[rec] > 0 {
 		return errors.New("recovery not advanced")
 	}
-	// 5.8 (N4): value.key is no key on the path and no recovery key: not
-	// the one that signs this succession, not the one it commits to.
-	if c := Commitment(s.ValueKey()); used[s.ValueKey()] > 0 || c == p.Recovery() || c == s.Recovery() {
+	c := Commitment(s.ValueKey())
+	if p.used[s.ValueKey()] > 0 || c == rec || p.recs[c] > 0 || p.commits[rec] > 0 {
 		return errors.New("key reuse")
 	}
 	return nil
