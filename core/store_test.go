@@ -373,7 +373,7 @@ func TestHoldRestore(t *testing.T) {
 		t.Fatal("B did not hide T")
 	}
 	// Day 3: the person rotates without sealing D. Build the succession by
-	// hand (M5 adds the command); we need the paper seed, so make a fresh
+	// hand; we need the paper seed, so make a fresh
 	// identity whose seed we hold instead.
 	seed := bytes.Repeat([]byte{5}, 32)
 	a2 := newStore(t)

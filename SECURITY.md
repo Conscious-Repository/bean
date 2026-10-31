@@ -19,7 +19,8 @@ This page says what bean protects, what it does not protect, and where each key 
 - **An AI client sees what it reads.** `bean mcp` sends the records it returns to the AI provider. Use a local model if that matters to you.
 - **Times are claims.** `times.observed` says when the author says something happened. A key that you rotated out can no longer sign valid records, but the head key can write any time.
 - **The folder lock works on one machine only, and not on Windows.** Give each machine its own folder, never one network or synced folder (SMB, NFS, iCloud Drive, Dropbox): two `rotate` or `restore` runs there can fork and freeze the identity. On Windows, run one `bean` command at a time per folder, and stop `bean mcp` before `rotate`, `restore`, `purge` or `gc`. SPEC.md 7.11 has the details.
-- **Sync only from your own copies.** `bean sync` copies every record file of the source, and every later command reads them. A stranger's copy can fill your disk or make every command slow. `bean sync` refuses a source with more than 2 GiB of record files unless you raise the limit with `-max-mb`.
+- **Sync only from your own copies.** `bean sync` copies every record file of the source, and every later command reads them. A stranger's copy can fill your disk or make every command slow.
+- **Back up `local/purged-refs.jsonl`.** A purge erases the record and writes a tombstone that names only its id. The file is the only place that remembers which import the record came from. If you lose it, or import the same source data on a copy that never had the record, the deleted data comes back as a new record. The tombstone does not carry this ref on purpose: it syncs everywhere, and the ref would let anyone with your identity secret test guesses of what you deleted.
 - **gc erases for good.** `gc` refuses while your identity has records from a newer bean or is frozen, or a seal set is incomplete, because validity can still change then.
 - **A thief can flood the old key.** Every record of the old key in the folder is sealed by default, so a thief who writes millions of records makes `rotate` slow, and above 200,200,000 records `rotate` refuses (`too large`). Rotate from a copy that does not hold the thief's records, for example a backup from before the theft: records that are not in the folder are not sealed, so they stay invalid.
 - **A thief with your current key can halt the log until you rotate.** The thief can write one record in a made-up newer format. Every copy that syncs it then says `too new`, and `append`, `gc` and the agent writes refuse. No data is lost. `bean rotate` (or `bean restore` on a new machine) with the 24 words goes past the halt: it prints `past halt <id>`, and after the rotation the record is `ungated` on every copy. A key that you rotated out, or a stranger's key, cannot halt the log at all.
@@ -35,7 +36,7 @@ This page says what bean protects, what it does not protect, and where each key 
 | Identity secret | `local/identity-secret`, mode 0600 | Decrypt stored files; make dedupe refs. |
 | Agent key | `local/agent-key`, one per machine | Add records about you, as the agent. |
 
-`local/` never syncs. A backup of `local/` is as sensitive as the keys in it. You do not need one: the 24 words rebuild `local/` (`bean restore`). A purge writes the import ref of the deleted record into its tombstone, so a re-import on any copy skips it. Purges made with an older build are the exception ([UPGRADING.md](UPGRADING.md)).
+`local/` never syncs. A backup of `local/` is as sensitive as the keys in it. The 24 words rebuild the keys (`bean restore`). They do not rebuild `local/purged-refs.jsonl`, so back up that file (above).
 
 ## Report a problem
 

@@ -97,7 +97,7 @@ func TestAgentOnlyReplica(t *testing.T) {
 	if _, err := cloud.Sync(a); err != nil {
 		t.Fatal(err)
 	}
-	pub, pairID, err := cloud.AgentInit("", "hermes")
+	pub, pairID, err := cloud.AgentInit("", "cloud")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,16 +130,16 @@ func TestAgentOnlyReplica(t *testing.T) {
 	}
 	l := verifyOK(t, a)
 	if !l.Current(id) || l.Report.Records[id].Author != pub {
-		t.Fatal("hermes entry missing on the person's machine")
+		t.Fatal("cloud entry missing on the person's machine")
 	}
 	if _, ok := l.AgentLabels()[pub]; ok {
 		t.Error("labelled before pairing")
 	}
-	if _, err := a.Pair(pub, "hermes"); err != nil {
+	if _, err := a.Pair(pub, "cloud"); err != nil {
 		t.Fatal(err)
 	}
 	l = verifyOK(t, a)
-	if l.AgentLabels()[pub] != "hermes" {
+	if l.AgentLabels()[pub] != "cloud" {
 		t.Errorf("labels %v", l.AgentLabels())
 	}
 	// Agent init on a folder with no log yet tells you to sync first.

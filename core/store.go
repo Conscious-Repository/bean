@@ -14,9 +14,9 @@ import (
 	"time"
 )
 
-// Version is the version of this implementation. It follows the spec
-// version until the format freezes at v1.
-const Version = "0.5.0"
+// Version is the version of this implementation, not of the record format
+// (records are v 0, SPEC 8.1).
+const Version = "0.6.0"
 
 // Adapter is the source.adapter string the core writes on its own records.
 const Adapter = "bean@" + Version
@@ -36,9 +36,6 @@ var (
 // Store is one replica folder.
 type Store struct {
 	Dir string
-	// SyncLimit is the largest total size of record files that Sync reads
-	// from a source; 0 means DefaultSyncLimit.
-	SyncLimit int64
 	// Now returns the current time. Tests and $BEAN_NOW inject it.
 	Now func() time.Time
 	// mu is the in-process half of the folder lock (lock.go).
@@ -347,17 +344,18 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 		}
 	}
 	changed := false
-	// New valid purges: hide the target.
+	// New valid purges: hide the target. The tombstone that purges it
+	// gets its own hold, also when an earlier tombstone hid the target.
 	for target, tid := range rp.Purged {
-		if hidden[target] {
-			continue
-		}
 		if _, ok := files[PathOf(target)]; !ok {
 			continue
 		}
 		if _, held := holds[tid]; !held {
 			holds[tid] = Hold{Target: target, Received: s.nowString()}
 			changed = true
+		}
+		if hidden[target] {
+			continue
 		}
 		if err := os.MkdirAll(s.path(dirHidden), 0o700); err != nil {
 			return nil, err
@@ -418,7 +416,7 @@ func heldHidden(holds map[string]Hold, rp *Report, target string) bool {
 // the folder: its genesis was never synced here, or it is lost. A too-new
 // identity is reported as too new instead.
 func (l *Loaded) ownMissing() bool {
-	return l.Local != nil && len(l.Report.Chains[l.Local.Identity]) == 0 && !contains(l.Report.TooNew, l.Local.Identity)
+	return l.ID != "" && len(l.Report.Chains[l.ID]) == 0 && !contains(l.Report.TooNew, l.ID)
 }
 
 // localID is the identity in local/identity, or "" when there is none.
@@ -456,7 +454,7 @@ func (s *Store) GC() (records, blobs int, err error) {
 		return 0, 0, errors.New("compromised: " + l.ID + ": gc refused")
 	}
 	if l.ownMissing() {
-		return 0, 0, errors.New("own identity missing: " + l.Local.Identity + ": sync from another copy before gc")
+		return 0, 0, errors.New("own identity missing: " + l.ID + ": sync from another copy before gc")
 	}
 	if len(l.Report.Incomplete) > 0 {
 		return 0, 0, errors.New("incomplete seals: " + strings.Join(l.Report.Incomplete, ", ") + ": sync the missing seal parts before gc")
@@ -479,7 +477,11 @@ func (s *Store) GC() (records, blobs int, err error) {
 		if err := os.Remove(hiddenPath(s.Dir, h.Target)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return 0, 0, err
 		}
-		delete(l.Holds, tid)
+		for t, o := range l.Holds {
+			if o.Target == h.Target {
+				delete(l.Holds, t)
+			}
+		}
 		delete(l.Files, PathOf(h.Target))
 		delete(l.Hidden, h.Target)
 		records++
@@ -653,7 +655,9 @@ func (s *Store) VerifyLines() ([]string, int, error) {
 		}
 	}
 	for target := range l.Hidden {
-		rp.warn(target, "hidden pending gc: "+target)
+		if rp.Dropped[target] == nil { // 8.2: nothing is reported for a too-new identity
+			rp.warn(target, "hidden pending gc: "+target)
+		}
 	}
 	var localIDs []string
 	if l.ID != "" {
@@ -662,7 +666,7 @@ func (s *Store) VerifyLines() ([]string, int, error) {
 	lines := rp.Lines()
 	code := rp.ExitCode(localIDs)
 	if l.ownMissing() {
-		lines = append([]string{"error: " + l.Local.Identity + ": own identity missing: sync from another copy"}, lines...)
+		lines = append([]string{"error: " + l.ID + ": own identity missing: sync from another copy"}, lines...)
 		code = max(code, 1)
 	}
 	sort.Strings(lines[:len(lines)-1])

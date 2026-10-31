@@ -11,7 +11,7 @@ import (
 // Tests of command behavior: dedupe per author, retired keys, purge and gc
 // limits, restore, write refusals, the folder lock and crash recovery.
 
-// M1, C27: another key's record with the same ref is not a duplicate of
+// DECISIONS 113: another key's record with the same ref is not a duplicate of
 // the person's record and cannot hide it.
 func TestDedupePerAuthor(t *testing.T) {
 	s, ident := initStore(t)
@@ -52,7 +52,7 @@ func TestDedupePerAuthor(t *testing.T) {
 	}
 }
 
-// M2, C26: a record of the retired key that the succession does not seal
+// DECISIONS 112: a record of the retired key that the succession does not seal
 // is invalid.
 func TestRetiredKeyClaimInvalid(t *testing.T) {
 	s, ident, words := initWithWords(t)
@@ -158,7 +158,7 @@ func TestGCRefusesCompromised(t *testing.T) {
 	}
 }
 
-// M3, DECISIONS 109: a stranger's genesis with a copied commitment makes
+// DECISIONS 109: a stranger's genesis with a copied commitment makes
 // restore ambiguous; -identity picks the person's own.
 func TestRestoreAmbiguous(t *testing.T) {
 	s, ident, words := initWithWords(t)
@@ -195,7 +195,7 @@ func TestRestoreAmbiguous(t *testing.T) {
 	verifyOK(t, n)
 }
 
-// M4, DECISIONS 108: a write that the verifier would reject is refused.
+// DECISIONS 108: a write that the verifier would reject is refused.
 func TestWriteRefusesTooNew(t *testing.T) {
 	s, ident := initStore(t)
 	loc := s.mustLocal(t)
@@ -275,7 +275,7 @@ func TestConcurrentWrites(t *testing.T) {
 	verifyOK(t, s)
 }
 
-// M5, DECISIONS 110: a crash after the succession is written finishes the
+// DECISIONS 110: a crash after the succession is written finishes the
 // rotation on the next load.
 func TestRotateCrashAfterSuccession(t *testing.T) {
 	s, id, words := initWithWords(t)
@@ -306,7 +306,7 @@ func TestRotateCrashAfterSuccession(t *testing.T) {
 	verifyOK(t, snap)
 }
 
-// M5: a crash before the succession discards the pending key.
+// DECISIONS 110: a crash before the succession discards the pending key.
 func TestRotateCrashBeforeSuccession(t *testing.T) {
 	s, _ := initStore(t)
 	key := s.mustLocal(t).Signer.Public()
@@ -416,7 +416,7 @@ func TestNoSealTombstoneRestoresTarget(t *testing.T) {
 	}
 }
 
-// M4 must not block a new copy that has local/ but has not synced yet.
+// DECISIONS 108 must not block a new copy that has local/ but has not synced yet.
 func TestWriteBeforeFirstSync(t *testing.T) {
 	a, _ := initStore(t)
 	b := newStore(t)

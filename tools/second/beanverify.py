@@ -452,15 +452,19 @@ def verify(files, blobfiles):
                     path.append(N[x])
                     if N[x]["type"] == "bean.genesis": break
                     x = N[x]["refs"][0]["id"]
+                # 5.8 in its order: recovery commitments never come back, then
+                # keys never come back and no key is both kinds.
                 used = set()
                 for n in path:
                     used.add(n["value"]["key"])
                     if n["type"] == "bean.succession": used.add(n["kid"])
-                c = commitment(s["value"]["key"])
-                if s["value"]["key"] in used or c in (P["value"]["recovery"], s["value"]["recovery"]):
-                    errors[i] = "key reuse"; continue
-                if s["value"]["recovery"] == P["value"]["recovery"]:
+                recs = {n["value"]["recovery"] for n in path}
+                rec = s["value"]["recovery"]
+                if rec in recs:
                     errors[i] = "recovery not advanced"; continue
+                c = commitment(s["value"]["key"])
+                if s["value"]["key"] in used or c == rec or c in recs or rec in {commitment(k) for k in used}:
+                    errors[i] = "key reuse"; continue
                 N[i] = s; changed = True
         return N
     trees = {g: tree(g) for g in genesis}

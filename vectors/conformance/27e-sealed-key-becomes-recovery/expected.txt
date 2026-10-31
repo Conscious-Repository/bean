@@ -1,0 +1,3 @@
+error: sha256:98014fd7265bb1ffd33f690d8ba4c58944a910cdcdf823979dc4adb7cb111b29: key reuse
+summary: 3 valid, 1 invalid, 0 skipped, 0 held, 0 duplicate
+exit 1

@@ -142,9 +142,9 @@ Run on your own machine. Records that you trust this agent key to write about yo
 
 ## Copies and keys
 
-### `sync [-max-mb <n>] <folder>`
+### `sync <folder>`
 
-Copies to this log every record and file that the other folder has and this one does not. It checks each file first, and replaces a stored copy that fails the checks. It does not copy a record that a valid deletion names. Run it both ways to make two copies the same. Prints `copied <r> records, <b> blobs, refused <p> purged`. Sync only from your own copies: it refuses a folder with more than `<n>` MiB of record files (default 2048).
+Copies to this log every record and file that the other folder has and this one does not. It checks each file first, and replaces a stored copy that fails the checks. It does not copy a record that a valid deletion names. Run it both ways to make two copies the same. Prints `copied <r> records, <b> blobs, refused <p> purged`. Sync only from your own copies.
 
 ### `export <folder>`
 
@@ -203,5 +203,6 @@ Reads a CSV file with a header row. Column `value` is required. Column `time` (R
 | `local/identity-secret` | The key for stored files and dedupe. | No. |
 | `local/signing-key` | Your signing key. | No. |
 | `local/agent-key` | The agent key of this machine. | No. |
-| `local/hidden/`, `local/holds.json`, `local/purged-refs.jsonl` | Deletion state of this copy. A lost `holds.json` starts each wait again. | No. |
+| `local/hidden/`, `local/holds.json` | Deletion state of this copy. A lost `holds.json` starts each wait again. | No. |
+| `local/purged-refs.jsonl` | The import refs of purged records. Without it, a new import of the same data brings them back. | Back it up; do not sync it. |
 | `local/cache/` | Caches. Safe to delete. | No. |

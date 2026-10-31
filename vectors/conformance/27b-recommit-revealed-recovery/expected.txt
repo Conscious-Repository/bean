@@ -1,0 +1,4 @@
+error: sha256:893b3fbded46673065ac474bbdf976c7185e54fcc7e45969d757da30e3bf7ff9: recovery not advanced
+warning: sha256:7a24f5160904533535d36c33f309afd35382ba5a8dac07bc1b8f36d17c671f6c: held: sha256:7a24f5160904533535d36c33f309afd35382ba5a8dac07bc1b8f36d17c671f6c
+summary: 3 valid, 1 invalid, 0 skipped, 1 held, 0 duplicate
+exit 1

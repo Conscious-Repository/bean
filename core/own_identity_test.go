@@ -112,3 +112,26 @@ func TestFolderJunk(t *testing.T) {
 		t.Fatalf("symlinked shard: exit %d\n%s", code, strings.Join(lines, "\n"))
 	}
 }
+
+// An agent-only replica whose person's genesis is gone says so and fails,
+// as the person's own copy does (DECISIONS 142).
+func TestAgentReplicaOwnMissing(t *testing.T) {
+	a, me := initStore(t)
+	b := newStore(t)
+	if _, err := b.Sync(a); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := b.AgentInit(me, "x"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(b.path(PathOf(me))); err != nil {
+		t.Fatal(err)
+	}
+	lines, code, err := b.VerifyLines()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != 1 || len(lines) == 0 || !strings.Contains(lines[0], "own identity missing") {
+		t.Errorf("exit %d, lines %v", code, lines)
+	}
+}

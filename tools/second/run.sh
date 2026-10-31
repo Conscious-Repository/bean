@@ -17,7 +17,7 @@ bash "$HERE/diff.sh" "$T/logs" "$T/logs/bin/bean" || rc=1
 bash "$HERE/diff.sh" "$T/craft" "$T/logs/bin/bean" || rc=1
 C="$ROOT/vectors/conformance"
 "$PY" "$HERE/cases.py" "$T/cases" >/dev/null || { echo "cases failed"; exit 1; }
-if diff -r -x expected.txt "$T/cases" "$C" >/dev/null; then echo "cases.py reproduces $C"; else echo "DIFFER cases.py output and $C"; rc=1; fi
+if diff -r -x expected.txt -x README.md "$T/cases" "$C" >/dev/null; then echo "cases.py reproduces $C"; else echo "DIFFER cases.py output and $C"; rc=1; fi
 pass=0; fail=0
 for d in "$C"/*/; do
   n=$(basename "$d")

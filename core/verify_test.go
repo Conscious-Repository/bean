@@ -249,7 +249,7 @@ func TestUnknownVersion(t *testing.T) {
 		t.Error("J file error lost")
 	}
 	// Exit 3 only on a replica of I; J's replica sees the line and the
-	// file error (L1).
+	// file error (DECISIONS 155).
 	if rp.ExitCode([]string{i.id}) != 3 || rp.ExitCode([]string{j.id}) != 1 || rp.ExitCode(nil) != 1 {
 		t.Errorf("exit %d %d %d", rp.ExitCode([]string{i.id}), rp.ExitCode([]string{j.id}), rp.ExitCode(nil))
 	}
