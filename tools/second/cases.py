@@ -139,4 +139,6 @@ r = rec(I.key, type="hr", subject=I.id, author=I.id, value={"n": 0}, v=7); L.put
 L = Log("25-v-float"); I = Ident(L, 36)
 r = rec(I.key, type="bean.tombstone", subject=I.id, author=I.id, refs=[{"rel": "purges", "id": I.id}], v=7)
 L.put(r, raw=canonical(r).replace('"v":7', '"v":7.0').encode())
+# 26 a claim of an old core type from before the rename: old format (3.3)
+L = Log("26-old-format"); I = Ident(L, 37); I.claim(1, type="hlog.tombstone")
 print("wrote", len(os.listdir(OUT)), "cases")

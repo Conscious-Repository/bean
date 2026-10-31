@@ -103,7 +103,7 @@ var (
 	ErrUnknownCoreType = errors.New("unknown core type")
 	ErrUnknownRel      = errors.New("unknown rel")
 	ErrBlobNotListed   = errors.New("blob not listed")
-	ErrOldFormat       = errors.New("old format: core record from a build before the rename to bean; this log cannot be used, run bean init in a new folder")
+	ErrOldFormat       = errors.New("old format")
 )
 
 func badField(name string) error { return errors.New("bad field: " + name) }

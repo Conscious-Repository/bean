@@ -270,6 +270,7 @@ def check_fields(r):
     if not isinstance(r.get("nonce"), str) or not re.fullmatch(r"^[0-9a-f]{32}$", r["nonce"]): raise Fail("bad field: nonce")
     t = r["type"]
     if not (1 <= len(t) <= 128) or not TYPE_RE.fullmatch(t): raise Fail("bad field: type")
+    if t in ("hlog.genesis", "hlog.succession", "hlog.tombstone"): raise Fail("old format")  # 3.3
     if t.startswith("bean.") and t not in ("bean.genesis", "bean.succession", "bean.seal", "bean.tombstone"):
         raise Fail("unknown core type")
     if t == "bean.genesis":
