@@ -1,5 +1,5 @@
 // Command narrowscan lists the records of a bean folder that the
-// narrowed rules N1 to N4 (SPEC.md Appendix) make invalid. It only reads:
+// narrowed rules N1 to N4 (UPGRADING.md) make invalid. It only reads:
 // it opens the files in objects/ and local/hidden/ and does not take the
 // folder lock, write a cache or move a file. It prints the path, the id
 // and the rule of each hit, never the content. Exit 0: nothing changes.

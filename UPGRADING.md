@@ -17,7 +17,22 @@ Only `purge` and `gc` erase anything. Delete the two copies when you are done: t
 
 ## Changes
 
-### Too new, purged refs and output (this release)
+### Narrowed rules N1 to N4 (this release)
+
+Four rules got stricter. bean never wrote a record that breaks them, so a log that only bean wrote does not change. Check yours before you upgrade. This only reads the folder:
+
+```
+go run ./tools/narrowscan ~/health
+```
+
+It prints the path and the rule of each record that would become invalid, and `scanned <n> files, 0 hits` when nothing changes.
+
+- N1: one time syntax (SPEC 3.5). A time is `YYYY-MM-DDTHH:MM:SS`, an optional dot and 1 to 9 digits, then `Z` or `±HH:MM`, with real ranges. A comma, an offset of `+24:00`, the year 0000 and more than 9 fraction digits are now invalid. `bean add -at`, `bean mcp` and `bean-import-csv` take only this form; the CSV importer keeps any other time text in `context.raw_time`.
+- N2: Ed25519 as libsodium checks it (SPEC 4.4, 4.5). A key that is not the canonical encoding of a curve point, or that has small order, is `bad key`. A signature whose R has small order is `bad signature`. Random keys never hit these cases. The object cache of an older build is dropped once.
+- N3: the canonical check comes before the version check (SPEC 3.8 steps 13 and 14). A file of a newer `v` that is not in canonical form is now `not canonical`: it is not synced and cannot halt an identity.
+- N4: a signing key is never a recovery key (SPEC 5.8). A genesis whose `value.key` is its own recovery key, and a succession whose `value.key` is the key that signs it or its own next recovery key, are `key reuse`.
+
+### Too new, purged refs and output (the release before)
 
 - `verify` exits 3, and `gc` refuses, only when your own identity has records from a newer bean. Another identity that is too new, for example a stranger's genesis of a newer format, only prints `too new: <id>`.
 - `purge` writes the import ref of the deleted record into the tombstone (`context.purged_ref`), so a re-import on any copy skips it, also after `local/` is lost. A purge made with an older build keeps the ref only in `local/purged-refs.jsonl` of the copy that purged it. Keep that file when you move to a new machine, or a re-import there brings those records back.
