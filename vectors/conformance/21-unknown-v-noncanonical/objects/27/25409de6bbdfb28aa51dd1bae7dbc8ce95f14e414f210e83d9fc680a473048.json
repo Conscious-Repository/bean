@@ -1,0 +1,22 @@
+{
+ "v": 7,
+ "nonce": "00000000000000000000000badc0de43",
+ "kid": "ed25519:4a72e4035bb435d0aa42d43b8873d9f07cb9bf476fe2ade0aba49983eebd425e",
+ "times": {
+  "observed": null,
+  "imported": "2026-10-30T12:00:00Z"
+ },
+ "source": {
+  "system": "self",
+  "adapter": "sat@1",
+  "ref": null
+ },
+ "type": "hr",
+ "subject": "sha256:35f3c4f4e57678217a80fbce7372ec7b22b8c370d6a071dbefee78eb607b1efa",
+ "author": "sha256:35f3c4f4e57678217a80fbce7372ec7b22b8c370d6a071dbefee78eb607b1efa",
+ "value": {
+  "n": 1
+ },
+ "id": "sha256:2725409de6bbdfb28aa51dd1bae7dbc8ce95f14e414f210e83d9fc680a473048",
+ "sig": "ed25519:82eded5b28b3215f268d659f6efd12757a43a7a55ea099f468eed8cf72941367d46444152804696c04d779320d1f860fbfaeb8dc809ecedd03380d0a2a221c0b"
+}

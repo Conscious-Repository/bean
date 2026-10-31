@@ -1,0 +1,3 @@
+error: sha256:6182ee836611e3207bc64ff8f75c944b2a0424583fc8ac3782553081a0338593: bad signature
+summary: 1 valid, 1 invalid, 0 skipped, 0 held, 0 duplicate
+exit 1

@@ -307,7 +307,8 @@ func (r *Record) checkReservedType() error {
 		return firstBad(
 			fieldRule{r.Subject != r.Author, "author"},
 			fieldRule{!oneRef("purges"), "refs"},
-			fieldRule{r.Value != nil || r.Blobs != nil, "value"},
+			fieldRule{r.Value != nil, "value"},
+			fieldRule{r.Blobs != nil, "blobs"},
 			fieldRule{hasReason && (!isText || len([]rune(s)) > 200), "context.reason"})
 	}
 	if strings.HasPrefix(r.Type, "bean.") {

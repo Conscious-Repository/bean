@@ -1,0 +1,3 @@
+error: objects/cd/0fd3fa086890cf6dd910f0c11ca562373ab2b6d279fcfa380d5998d7c9459f.json: bad json
+summary: 1 valid, 1 invalid, 0 skipped, 0 held, 0 duplicate
+exit 1

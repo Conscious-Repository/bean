@@ -1,0 +1,3 @@
+error: objects/bd/6f8c4fe912f53841293d72f4e950ce5913d0f91149ca83b2ed1b2de32bd47b.json: bad field: source.system
+summary: 1 valid, 1 invalid, 0 skipped, 0 held, 0 duplicate
+exit 1

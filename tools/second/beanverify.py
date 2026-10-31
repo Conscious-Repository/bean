@@ -14,13 +14,14 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
 from cryptography.exceptions import InvalidSignature
 
+MAXDEPTH = 256
 MAXINT = 2**53 - 1
 MIB = 1 << 20
 ID_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 TYPE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*(\.[a-z0-9_-]+)*$")
 PATH_RE = re.compile(r"^objects/([0-9a-f]{2})/([0-9a-f]{62})\.json$")
 REF_RE = re.compile(r"^hmac-sha256:[0-9a-f]{64}$")
-IMPORTED_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+IMPORTED_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
 P256_N = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
 
 class Fail(Exception):
@@ -67,6 +68,16 @@ def parse(data):
         raise Fail("bad json")
     if not isinstance(obj, dict):
         raise Fail("bad json")
+    # 3.8 step 3: the record object is depth 0; a value deeper than 256 is bad json.
+    stack = [(obj, 0)]
+    while stack:
+        x, d = stack.pop()
+        if d > MAXDEPTH:
+            raise Fail("bad json")
+        if isinstance(x, dict):
+            stack.extend((v, d + 1) for v in x.values())
+        elif isinstance(x, list):
+            stack.extend((v, d + 1) for v in x)
     if dup:
         raise Fail("duplicate key")
     if badnum:
@@ -185,7 +196,7 @@ def parse_key(kid):
     if alg not in ("ed25519", "p256", "secp256k1"):
         raise Fail("unsupported key algorithm")
     want = {"ed25519": 64, "p256": 66, "secp256k1": 64}[alg]
-    if len(h) != want or not HEX.match(h):
+    if len(h) != want or not HEX.fullmatch(h):
         raise Fail("bad key")
     b = bytes.fromhex(h)
     try:
@@ -207,14 +218,14 @@ def check_sig(kid, rid, sig):
         raise Fail("bad signature")
     rest = sig[len(alg) + 1:]
     if alg == "secp256k1":
-        m = re.match(r"^(0|[1-9][0-9]*):([0-9a-f]{128})$", rest)
+        m = re.fullmatch(r"^(0|[1-9][0-9]*):([0-9a-f]{128})$", rest)
         if not m or int(m.group(1)) > MAXINT: raise Fail("bad signature")
         created, hexsig = int(m.group(1)), m.group(2)
         wrapper = json.dumps([0, pub.hex(), created, 29944, [["alt", "bean record signature"]], rid], separators=(",", ":"))
         eid = hashlib.sha256(wrapper.encode()).digest()
         if not schnorr_verify(eid, pub, bytes.fromhex(hexsig)): raise Fail("bad signature")
         return
-    if len(rest) != 128 or not HEX.match(rest): raise Fail("bad signature")
+    if len(rest) != 128 or not HEX.fullmatch(rest): raise Fail("bad signature")
     sb = bytes.fromhex(rest)
     try:
         if alg == "ed25519":
@@ -238,7 +249,7 @@ def is_tagged_key(s):
 
 def rfc3339(s):
     if not isinstance(s, str): return None
-    m = re.match(r"^(\d{4}-\d{2}-\d{2})[Tt](\d{2}:\d{2}:\d{2})(\.\d+)?([Zz]|[+-]\d{2}:\d{2})$", s)
+    m = re.fullmatch(r"^(\d{4}-\d{2}-\d{2})[Tt](\d{2}:\d{2}:\d{2})(\.\d+)?([Zz]|[+-]\d{2}:\d{2})$", s)
     if not m: return None
     try:
         frac = m.group(3) or ""
@@ -248,7 +259,7 @@ def rfc3339(s):
         return None
 
 def check_sealed_list(v, nonempty):
-    if not isinstance(v, list) or any(not isinstance(x, str) or not ID_RE.match(x) for x in v):
+    if not isinstance(v, list) or any(not isinstance(x, str) or not ID_RE.fullmatch(x) for x in v):
         raise Fail("bad field: value.sealed")
     if v != sorted(set(v)) or (nonempty and not v):
         raise Fail("bad field: value.sealed")
@@ -256,21 +267,21 @@ def check_sealed_list(v, nonempty):
 def check_fields(r):
     # GUESS(3): the spec gives no order inside step 15 and no <name> for
     # most failures. Order here: 3.2 table order, then 3.3.
-    if not isinstance(r.get("nonce"), str) or not re.match(r"^[0-9a-f]{32}$", r["nonce"]): raise Fail("bad field: nonce")
+    if not isinstance(r.get("nonce"), str) or not re.fullmatch(r"^[0-9a-f]{32}$", r["nonce"]): raise Fail("bad field: nonce")
     t = r["type"]
-    if not (1 <= len(t) <= 128) or not TYPE_RE.match(t): raise Fail("bad field: type")
+    if not (1 <= len(t) <= 128) or not TYPE_RE.fullmatch(t): raise Fail("bad field: type")
     if t.startswith("bean.") and t not in ("bean.genesis", "bean.succession", "bean.seal", "bean.tombstone"):
         raise Fail("unknown core type")
     if t == "bean.genesis":
         if "subject" in r: raise Fail("bad field: subject")
-    elif not isinstance(r.get("subject"), str) or not ID_RE.match(r["subject"]): raise Fail("bad field: subject")
+    elif not isinstance(r.get("subject"), str) or not ID_RE.fullmatch(r["subject"]): raise Fail("bad field: subject")
     a = r["author"]
-    if not (ID_RE.match(a) or is_tagged_key(a)): raise Fail("bad field: author")
+    if not (ID_RE.fullmatch(a) or is_tagged_key(a)): raise Fail("bad field: author")
     if "value" in r and not isinstance(r["value"], dict): raise Fail("bad field: value")
     tm = r.get("times")
     if not isinstance(tm, dict) or "observed" not in tm or "imported" not in tm: raise Fail("bad field: times")
     imp = tm["imported"]
-    if not isinstance(imp, str) or not IMPORTED_RE.match(imp) or rfc3339(imp) is None: raise Fail("bad field: times.imported")
+    if not isinstance(imp, str) or not IMPORTED_RE.fullmatch(imp) or rfc3339(imp) is None: raise Fail("bad field: times.imported")
     ob = tm["observed"]
     if ob is not None:
         if not isinstance(ob, dict) or "start" not in ob or "precision" not in ob: raise Fail("bad field: times.observed")
@@ -282,15 +293,15 @@ def check_fields(r):
         if ob["precision"] not in ("year", "month", "day", "hour", "minute", "second", "millisecond"): raise Fail("bad field: times.observed.precision")
     src = r.get("source")
     if not isinstance(src, dict) or not all(k in src for k in ("system", "adapter", "ref")): raise Fail("bad field: source")
-    if not isinstance(src["system"], str) or not 1 <= len(src["system"]) <= 64: raise Fail("bad field: source.system")
-    if not isinstance(src["adapter"], str) or not re.match(r"^[^@]+@[^@]+$", src["adapter"]): raise Fail("bad field: source.adapter")  # GUESS(4)
-    if src["ref"] is not None and (not isinstance(src["ref"], str) or not REF_RE.match(src["ref"])): raise Fail("bad field: source.ref")
+    if not isinstance(src["system"], str) or not 1 <= len(src["system"].encode("utf-8")) <= 64: raise Fail("bad field: source.system")  # 3.6: UTF-8 bytes
+    if not isinstance(src["adapter"], str) or not re.fullmatch(r"[^@\t\n\f\r ]+@[^@\t\n\f\r ]+", src["adapter"]): raise Fail("bad field: source.adapter")  # 3.6: no @, space, TAB, LF, FF or CR
+    if src["ref"] is not None and (not isinstance(src["ref"], str) or not REF_RE.fullmatch(src["ref"])): raise Fail("bad field: source.ref")
     refs = r.get("refs", [])
     if "refs" in r:
         if not isinstance(refs, list): raise Fail("bad field: refs")
         seen = set()
         for x in refs:
-            if not isinstance(x, dict) or not isinstance(x.get("rel"), str) or not isinstance(x.get("id"), str) or not ID_RE.match(x["id"]):
+            if not isinstance(x, dict) or not isinstance(x.get("rel"), str) or not isinstance(x.get("id"), str) or not ID_RE.fullmatch(x["id"]):
                 raise Fail("bad field: refs")
             # GUESS(5): 3.7 lists four rels; 3.3 and CORE 2.1 add `seals`.
             if x["rel"] not in ("succeeds", "supersedes", "purges", "about", "seals"): raise Fail("unknown rel")
@@ -302,7 +313,7 @@ def check_fields(r):
     if "blobs" in r:
         if not isinstance(blobs, list): raise Fail("bad field: blobs")
         for b in blobs:
-            if not isinstance(b, dict) or not isinstance(b.get("hash"), str) or not ID_RE.match(b["hash"]) or not isinstance(b.get("role"), str) or not isinstance(b.get("media_type"), str):
+            if not isinstance(b, dict) or not isinstance(b.get("hash"), str) or not ID_RE.fullmatch(b["hash"]) or not isinstance(b.get("role"), str) or not isinstance(b.get("media_type"), str):
                 raise Fail("bad field: blobs")
     if "context" in r and not isinstance(r["context"], dict): raise Fail("bad field: context")
     val = r.get("value")
@@ -310,41 +321,41 @@ def check_fields(r):
         if val["blob"] not in [b["hash"] for b in (blobs or [])]: raise Fail("blob not listed")
     selfsrc = src["system"] == "self" and src["ref"] is None
     if t == "bean.genesis":
-        if not isinstance(val, dict) or set(val) != {"key", "recovery"} or not is_tagged_key(val["key"]) or not isinstance(val["recovery"], str) or not ID_RE.match(val["recovery"]): raise Fail("bad field: value")
+        if not isinstance(val, dict) or set(val) != {"key", "recovery"} or not is_tagged_key(val["key"]) or not isinstance(val["recovery"], str) or not ID_RE.fullmatch(val["recovery"]): raise Fail("bad field: value")
         if not (a == r["kid"] == val["key"]): raise Fail("bad field: author")
         if refs: raise Fail("bad field: refs")
         if ob is not None: raise Fail("bad field: times.observed")
         if not selfsrc: raise Fail("bad field: source")
     elif t == "bean.succession":
-        if r["subject"] != a or not ID_RE.match(a): raise Fail("bad field: author")
+        if r["subject"] != a or not ID_RE.fullmatch(a): raise Fail("bad field: author")
         if len(refs) != 1 or refs[0]["rel"] != "succeeds": raise Fail("bad field: refs")
         keys = {"key", "recovery", "sealed"}
         if isinstance(val, dict) and "parts" in val:
             keys.add("parts")
             p = val["parts"]
             if not is_int(p) or not 1 <= p <= 1000: raise Fail("bad field: value.parts")
-        if not isinstance(val, dict) or set(val) != keys or not is_tagged_key(val["key"]) or not isinstance(val["recovery"], str) or not ID_RE.match(val["recovery"]): raise Fail("bad field: value")
+        if not isinstance(val, dict) or set(val) != keys or not is_tagged_key(val["key"]) or not isinstance(val["recovery"], str) or not ID_RE.fullmatch(val["recovery"]): raise Fail("bad field: value")
         check_sealed_list(val["sealed"], False)
         # GUESS(6): 3.3 does not require times.observed null or a self source for a succession.
     elif t == "bean.seal":
-        if r["subject"] != a or not ID_RE.match(a): raise Fail("bad field: author")
+        if r["subject"] != a or not ID_RE.fullmatch(a): raise Fail("bad field: author")
         if len(refs) != 1 or refs[0]["rel"] != "seals": raise Fail("bad field: refs")
         if not isinstance(val, dict) or set(val) != {"part", "sealed"} or not is_int(val["part"]) or not 1 <= val["part"] <= 1000: raise Fail("bad field: value")
         check_sealed_list(val["sealed"], True)
         if ob is not None: raise Fail("bad field: times.observed")
-        if "blobs" in r: raise Fail("bad field: blobs")
+        if r.get("blobs"): raise Fail("bad field: blobs")
         if not selfsrc: raise Fail("bad field: source")
     elif t == "bean.tombstone":
         if r["subject"] != a: raise Fail("bad field: author")
         if len(refs) != 1 or refs[0]["rel"] != "purges": raise Fail("bad field: refs")
         if "value" in r: raise Fail("bad field: value")
-        if "blobs" in r: raise Fail("bad field: blobs")
+        if r.get("blobs"): raise Fail("bad field: blobs")
         ctx = r.get("context") or {}
         if "reason" in ctx and (not isinstance(ctx["reason"], str) or len(ctx["reason"]) > 200): raise Fail("bad field: context.reason")
 
 # ---------- one file (3.8) ----------
 def check_file(path, data):
-    if data is None or not PATH_RE.match(path): raise Fail("bad path")
+    if data is None or not PATH_RE.fullmatch(path): raise Fail("bad path")
     if len(data) > 16 * MIB: raise Fail("too large")
     r = parse(data)
     v = r.get("v")
@@ -354,7 +365,7 @@ def check_file(path, data):
     if not isinstance(r.get("author"), str): raise Fail("bad field: author")
     if not isinstance(r.get("kid"), str): raise Fail("bad field: kid")
     rid = record_id(r)
-    m = PATH_RE.match(path)
+    m = PATH_RE.fullmatch(path)
     if r.get("id") != rid or rid != "sha256:" + m.group(1) + m.group(2): raise Fail("id mismatch")
     check_sig(r["kid"], rid, r.get("sig"))
     if v != 0:
@@ -434,6 +445,7 @@ def verify(files, blobfiles):
     for i, r in list(R.items()):
         if r["author"] in too_new or r.get("subject") in too_new or i in too_new:
             del R[i]; skipped += 1  # GUESS(8): records of a too-new identity count as skipped
+            errors.pop(i, None); warnings.pop(i, None)  # 8.2 item 2: step 3 lines of it are not reported
     for g in too_new:
         genesis.pop(g, None); trees.pop(g, None)
     for i, s in R.items():
@@ -486,7 +498,7 @@ def verify(files, blobfiles):
     for i, d in sorted(R.items()):
         if d["type"] in identity_types or i in errors: continue
         a = d["author"]
-        if not ID_RE.match(a):
+        if not ID_RE.fullmatch(a):
             if d["kid"] != a: errors[i] = "bad signature"
             continue
         if a not in genesis:
@@ -556,7 +568,7 @@ def verify(files, blobfiles):
     for p, data in blobfiles.items():
         if data is None:
             errors[p] = "bad path"; continue
-        m = re.match(r"^blobs/([0-9a-f]{2})/([0-9a-f]{62})$", p)
+        m = re.fullmatch(r"^blobs/([0-9a-f]{2})/([0-9a-f]{62})$", p)
         bid = "sha256:" + m.group(1) + m.group(2) if m else None
         if bid is None or hashlib.sha256(data).hexdigest() != bid[7:]:
             errors[bid or p] = "blob corrupt: " + (bid or p); continue
@@ -579,7 +591,6 @@ def verify(files, blobfiles):
     lines.sort()
     lines.append("summary: %d valid, %d invalid, %d skipped, %d held, %d duplicate" % (nvalid, ninvalid, skipped, nheld, dups))
     code = 1 if ninvalid or incomplete else 0
-    if too_new: code = 3
     return lines, code, {"valid": {i for i in R if valid(i)}, "errors": {i: e for i, e in errors.items() if e}, "purged": purged}
 
 def load_dir(d):
@@ -613,7 +624,9 @@ if __name__ == "__main__":
     f, b = load_dir(sys.argv[1])
     lines, code, info = verify(f, b)
     lid = local_identity(sys.argv[1])
-    # Exit 4 when the local identity (7.1 local/identity) is frozen (12.1).
+    # Exit 3 when the local identity (7.1 local/identity) is too new, 4 when
+    # it is frozen (12.1). Other identities only print their line.
+    if ("too new: %s" % lid) in lines: code = max(code, 3)
     if ("compromised: %s" % lid) in lines: code = 4
     # 12.3 verify: the local identity has no genesis here, and is not too new.
     if lid and lid not in info["valid"] and ("too new: %s" % lid) not in lines:
