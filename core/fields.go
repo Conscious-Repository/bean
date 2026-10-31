@@ -120,8 +120,7 @@ func IsTaggedKey(s string) bool {
 func (r *Record) checkFields() error {
 	m := r.Raw
 	// nonce
-	nonce, ok := m["nonce"].(string)
-	if !ok || !isLowerHex(nonce, 32) {
+	if nonce, _ := m["nonce"].(string); !isLowerHex(nonce, 32) {
 		return badField("nonce")
 	}
 	// type
@@ -134,17 +133,11 @@ func (r *Record) checkFields() error {
 		return ErrOldFormat
 	}
 	// subject
+	// subject: on every record but a genesis
 	subj, hasSubj := m["subject"]
-	if r.Type == "bean.genesis" {
-		if hasSubj {
-			return badField("subject")
-		}
-	} else {
-		s, ok := subj.(string)
-		if !hasSubj || !ok || !IsID(s) {
-			return badField("subject")
-		}
-		r.Subject = s
+	r.Subject, _ = subj.(string)
+	if hasSubj == (r.Type == "bean.genesis") || (hasSubj && !IsID(r.Subject)) {
+		return badField("subject")
 	}
 	// author
 	if !IsID(r.Author) && !IsTaggedKey(r.Author) {
@@ -152,15 +145,13 @@ func (r *Record) checkFields() error {
 	}
 	// value
 	if v, has := m["value"]; has {
-		obj, ok := v.(map[string]any)
-		if !ok {
+		if r.Value, _ = v.(map[string]any); r.Value == nil {
 			return badField("value")
 		}
-		r.Value = obj
 	}
 	// times
-	times, ok := m["times"].(map[string]any)
-	if !ok {
+	times, _ := m["times"].(map[string]any)
+	if times == nil {
 		return badField("times")
 	}
 	imp, ok := times["imported"].(string)
@@ -179,16 +170,16 @@ func (r *Record) checkFields() error {
 		r.Observed = obs
 	}
 	// source
-	src, ok := m["source"].(map[string]any)
-	if !ok {
+	src, _ := m["source"].(map[string]any)
+	if src == nil {
 		return badField("source")
 	}
-	sys, ok := src["system"].(string)
-	if !ok || len(sys) < 1 || len(sys) > 64 {
+	sys, _ := src["system"].(string)
+	if len(sys) < 1 || len(sys) > 64 {
 		return badField("source.system")
 	}
-	ad, ok := src["adapter"].(string)
-	if !ok || !adapterPattern.MatchString(ad) {
+	ad, _ := src["adapter"].(string)
+	if !adapterPattern.MatchString(ad) {
 		return badField("source.adapter")
 	}
 	ref, has := src["ref"]
@@ -211,10 +202,7 @@ func (r *Record) checkFields() error {
 		}
 		seen := map[Ref]bool{}
 		for _, it := range arr {
-			obj, ok := it.(map[string]any)
-			if !ok {
-				return badField("refs")
-			}
+			obj, _ := it.(map[string]any) // a nil map fails the next check
 			rel, ok1 := obj["rel"].(string)
 			id, ok2 := obj["id"].(string)
 			if !ok1 || !ok2 || !IsID(id) {
@@ -241,10 +229,7 @@ func (r *Record) checkFields() error {
 			return badField("blobs")
 		}
 		for _, it := range arr {
-			obj, ok := it.(map[string]any)
-			if !ok {
-				return badField("blobs")
-			}
+			obj, _ := it.(map[string]any) // a nil map fails the next check
 			hash, ok1 := obj["hash"].(string)
 			role, ok2 := obj["role"].(string)
 			mt, ok3 := obj["media_type"].(string)
@@ -256,11 +241,9 @@ func (r *Record) checkFields() error {
 	}
 	// context
 	if raw, has := m["context"]; has {
-		obj, ok := raw.(map[string]any)
-		if !ok {
+		if r.Context, _ = raw.(map[string]any); r.Context == nil {
 			return badField("context")
 		}
-		r.Context = obj
 	}
 	// sig shape (verified earlier)
 	if _, ok := m["sig"].(string); !ok {
@@ -269,105 +252,79 @@ func (r *Record) checkFields() error {
 	return r.checkReservedType()
 }
 
+// fieldRule is one check of 3.7: when bad, the record fails with field.
+type fieldRule struct {
+	bad   bool
+	field string
+}
+
+// firstBad returns the error of the first rule that fails, in order.
+func firstBad(rules ...fieldRule) error {
+	for _, x := range rules {
+		if x.bad {
+			return badField(x.field)
+		}
+	}
+	return nil
+}
+
+// checkReservedType applies the rules of the bean.* types (3.7, C28).
 func (r *Record) checkReservedType() error {
+	selfSource := r.Source.System == "self" && r.Source.Ref == ""
+	oneRef := func(rel string) bool { return len(r.Refs) == 1 && r.Refs[0].Rel == rel }
 	switch r.Type {
 	case "bean.genesis":
 		key := r.ValueKey()
-		if r.Value == nil || len(r.Value) != 2 || !IsTaggedKey(key) || !IsID(r.Recovery()) {
-			return badField("value")
-		}
-		if r.Author != key || r.Kid != key {
-			return badField("author")
-		}
-		if len(r.Refs) != 0 {
-			return badField("refs")
-		}
-		if r.Observed != nil {
-			return badField("times.observed")
-		}
-		if r.Source.System != "self" || r.Source.Ref != "" {
-			return badField("source")
-		}
+		return firstBad(
+			fieldRule{r.Value == nil || len(r.Value) != 2 || !IsTaggedKey(key) || !IsID(r.Recovery()), "value"},
+			fieldRule{r.Author != key || r.Kid != key, "author"},
+			fieldRule{len(r.Refs) != 0, "refs"},
+			fieldRule{r.Observed != nil, "times.observed"},
+			fieldRule{!selfSource, "source"})
 	case "bean.succession":
-		if r.Subject != r.Author || !IsID(r.Author) {
-			return badField("author")
-		}
-		if len(r.Refs) != 1 || r.Refs[0].Rel != "succeeds" {
-			return badField("refs")
-		}
 		// value.parts is present only when seal continuations follow (C28).
+		parts, hasParts := r.Value["parts"]
 		n := 3
-		if _, has := r.Value["parts"]; has {
+		if hasParts {
 			n = 4
-			if !isCount(r.Value["parts"]) {
-				return badField("value.parts")
-			}
 		}
-		if r.Value == nil || len(r.Value) != n || !IsTaggedKey(r.ValueKey()) || !IsID(r.Recovery()) {
-			return badField("value")
-		}
-		if err := checkSealedList(r.Value["sealed"], false); err != nil {
-			return err
-		}
+		return firstBad(
+			fieldRule{r.Subject != r.Author || !IsID(r.Author), "author"},
+			fieldRule{!oneRef("succeeds"), "refs"},
+			fieldRule{hasParts && !isCount(parts), "value.parts"},
+			fieldRule{r.Value == nil || len(r.Value) != n || !IsTaggedKey(r.ValueKey()) || !IsID(r.Recovery()), "value"},
+			fieldRule{!sealedList(r.Value["sealed"], false), "value.sealed"})
 	case "bean.seal":
 		// A seal continuation (C28): more ids for the seal set of the
 		// succession that its one "seals" ref names.
-		if r.Subject != r.Author || !IsID(r.Author) {
-			return badField("author")
-		}
-		if len(r.Refs) != 1 || r.Refs[0].Rel != "seals" {
-			return badField("refs")
-		}
-		if r.Value == nil || len(r.Value) != 2 || !isCount(r.Value["part"]) {
-			return badField("value")
-		}
-		if err := checkSealedList(r.Value["sealed"], true); err != nil {
-			return err
-		}
-		if r.Observed != nil {
-			return badField("times.observed")
-		}
-		if r.Blobs != nil {
-			return badField("blobs")
-		}
-		if r.Source.System != "self" || r.Source.Ref != "" {
-			return badField("source")
-		}
+		return firstBad(
+			fieldRule{r.Subject != r.Author || !IsID(r.Author), "author"},
+			fieldRule{!oneRef("seals"), "refs"},
+			fieldRule{r.Value == nil || len(r.Value) != 2 || !isCount(r.Value["part"]), "value"},
+			fieldRule{!sealedList(r.Value["sealed"], true), "value.sealed"},
+			fieldRule{r.Observed != nil, "times.observed"},
+			fieldRule{r.Blobs != nil, "blobs"},
+			fieldRule{!selfSource, "source"})
 	case "bean.tombstone":
-		if r.Subject != r.Author {
-			return badField("author")
-		}
-		if len(r.Refs) != 1 || r.Refs[0].Rel != "purges" {
-			return badField("refs")
-		}
-		if r.Value != nil || r.Blobs != nil {
-			return badField("value")
-		}
-		if reason, has := r.Context["reason"]; has {
-			s, ok := reason.(string)
-			if !ok || len([]rune(s)) > 200 {
-				return badField("context.reason")
+		reason, hasReason := r.Context["reason"]
+		s, isText := reason.(string)
+		return firstBad(
+			fieldRule{r.Subject != r.Author, "author"},
+			fieldRule{!oneRef("purges"), "refs"},
+			fieldRule{r.Value != nil || r.Blobs != nil, "value"},
+			fieldRule{hasReason && (!isText || len([]rune(s)) > 200), "context.reason"})
+	}
+	if strings.HasPrefix(r.Type, "bean.") {
+		return ErrUnknownCoreType
+	}
+	if b, has := r.Value["blob"]; has {
+		id, _ := b.(string)
+		for _, bl := range r.Blobs {
+			if bl.Hash == id && IsID(id) {
+				return nil
 			}
 		}
-	default:
-		if strings.HasPrefix(r.Type, "bean.") {
-			return ErrUnknownCoreType
-		}
-		if b, has := r.Value["blob"]; has {
-			id, ok := b.(string)
-			if !ok || !IsID(id) {
-				return ErrBlobNotListed
-			}
-			found := false
-			for _, bl := range r.Blobs {
-				if bl.Hash == id {
-					found = true
-				}
-			}
-			if !found {
-				return ErrBlobNotListed
-			}
-		}
+		return ErrBlobNotListed
 	}
 	return nil
 }
@@ -421,20 +378,20 @@ func isCount(v any) bool {
 	return ok && f == float64(int(f)) && f >= 1 && f <= MaxSealParts
 }
 
-// checkSealedList checks value.sealed: unique ids in ascending ASCII order.
-// A continuation must seal at least one id.
-func checkSealedList(v any, nonEmpty bool) error {
+// sealedList reports whether value.sealed is a list of unique ids in
+// ascending ASCII order. A continuation must seal at least one id.
+func sealedList(v any, nonEmpty bool) bool {
 	sealed, ok := v.([]any)
 	if !ok || (nonEmpty && len(sealed) == 0) {
-		return badField("value.sealed")
+		return false
 	}
 	prev := ""
 	for _, x := range sealed {
 		s, ok := x.(string)
 		if !ok || !IsID(s) || s <= prev {
-			return badField("value.sealed")
+			return false
 		}
 		prev = s
 	}
-	return nil
+	return true
 }

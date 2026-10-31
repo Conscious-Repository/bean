@@ -184,16 +184,16 @@ func TestRestoreAmbiguous(t *testing.T) {
 	n := newStore(t)
 	os.CopyFS(n.Dir, os.DirFS(s.Dir))
 	os.RemoveAll(n.path(dirLocal))
-	if _, _, err := n.Restore(words, nil, NewKey{}); err == nil || !strings.HasPrefix(err.Error(), "ambiguous: ") {
+	if _, _, err := n.Restore(words, nil, NewKey{}, ""); err == nil || !strings.HasPrefix(err.Error(), "ambiguous: ") {
 		t.Fatalf("restore with two matches: %v", err)
 	}
 	if _, err := n.ReadLocal(); err == nil {
 		t.Fatal("ambiguous restore wrote local files")
 	}
-	if _, _, err := n.RestoreIdentity(words, nil, NewKey{}, "sha256:"+strings.Repeat("0", 64)); err == nil {
+	if _, _, err := n.Restore(words, nil, NewKey{}, "sha256:"+strings.Repeat("0", 64)); err == nil {
 		t.Error("restore to an identity that does not match")
 	}
-	_, got, err := n.RestoreIdentity(words, nil, NewKey{}, ident)
+	_, got, err := n.Restore(words, nil, NewKey{}, ident)
 	if err != nil || got != ident {
 		t.Fatalf("restore -identity: %s %v", got, err)
 	}

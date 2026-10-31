@@ -24,20 +24,21 @@ var forbiddenPartial = []string{"v", "nonce", "author", "kid", "id", "sig"}
 // Append reads JSONL partial records (SPEC.md 9.2), completes, dedupes,
 // signs and writes them (12.3 bean append). On the first error it stops;
 // records before it stay written.
-func (s *Store) Append(in io.Reader) (AppendResult, error) {
-	var res AppendResult
+func (s *Store) Append(in io.Reader) (AppendResult, error) { return s.appendAs(in, false) }
+
+func (s *Store) appendAs(in io.Reader, agent bool) (AppendResult, error) {
 	unlock, err := s.lock()
 	if err != nil {
-		return res, err
+		return AppendResult{}, err
 	}
 	defer unlock()
 	l, err := s.load(false)
 	if err != nil {
-		return res, err
+		return AppendResult{}, err
 	}
-	w, err := s.writerFor(l, false)
+	w, err := s.writerFor(l, agent)
 	if err != nil {
-		return res, err
+		return AppendResult{}, err
 	}
 	return s.appendWith(l, w, in)
 }
@@ -128,33 +129,25 @@ func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, err
 		if src == nil {
 			return res, fmt.Errorf("bad field: source: line %d", lineNo)
 		}
-		if _, has := src["ref_input"]; has && dedupeKey == nil {
-			return res, fmt.Errorf("no identity secret on this replica: line %d", lineNo)
+		ref, hasInput, err := inputRef(src, "ref_input", dedupeKey, lineNo)
+		if err != nil {
+			return res, err
 		}
-		if ri, has := src["ref_input"]; has {
-			arr, ok := ri.([]any)
-			if !ok {
-				return res, fmt.Errorf("bad field: source.ref_input: line %d", lineNo)
-			}
-			src["ref"] = DedupeRef(dedupeKey, arr)
-			delete(src, "ref_input")
+		if hasInput {
+			src["ref"] = ref
 		}
 		if _, has := src["ref"]; !has {
 			src["ref"] = nil
 		}
 		// C17: supersede by ref.
-		if _, has := src["supersedes_ref"]; has && dedupeKey == nil {
-			return res, fmt.Errorf("no identity secret on this replica: line %d", lineNo)
+		sref, hasSuper, err := inputRef(src, "supersedes_ref", dedupeKey, lineNo)
+		if err != nil {
+			return res, err
 		}
-		if sr, has := src["supersedes_ref"]; has {
-			arr, ok := sr.([]any)
-			if !ok {
-				return res, fmt.Errorf("bad field: source.supersedes_ref: line %d", lineNo)
-			}
+		if hasSuper {
 			subject, _ := obj["subject"].(string)
 			system, _ := src["system"].(string)
-			target, found := existing[refLine(subject, system, DedupeRef(dedupeKey, arr))]
-			delete(src, "supersedes_ref")
+			target, found := existing[refLine(subject, system, sref)]
 			if !found {
 				res.Skipped++
 				continue
@@ -213,6 +206,24 @@ func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, err
 	return res, nil
 }
 
+// inputRef removes source.<key> (ref_input or supersedes_ref) from src
+// and returns the dedupe ref it stands for (9.5).
+func inputRef(src map[string]any, key string, dedupeKey []byte, lineNo int) (string, bool, error) {
+	raw, has := src[key]
+	if !has {
+		return "", false, nil
+	}
+	delete(src, key)
+	if dedupeKey == nil {
+		return "", true, fmt.Errorf("no identity secret on this replica: line %d", lineNo)
+	}
+	arr, ok := raw.([]any)
+	if !ok {
+		return "", true, fmt.Errorf("bad field: source.%s: line %d", key, lineNo)
+	}
+	return DedupeRef(dedupeKey, arr), true, nil
+}
+
 // Purge writes a tombstone for id (or a 6+ hex prefix of it) and erases
 // the target at once (7.7).
 func (s *Store) Purge(id, reason string) (string, error) {
@@ -261,14 +272,7 @@ func (s *Store) Purge(id, reason string) (string, error) {
 			return "", err
 		}
 	}
-	l.Holds[tid] = Hold{Target: id, Received: s.nowString()}
-	// A local purge erases at once; the hold entry records it so gc and
-	// restores agree, but there is nothing hidden to erase or restore.
-	delete(l.Holds, tid)
-	if err := s.writeHolds(l.Holds); err != nil {
-		return "", err
-	}
-	// Erase the target's own blobs, unless another record file names them
+	// A local purge erases at once: there is nothing to hold. Erase the target's own blobs, unless another record file names them
 	// (C25). Never erase any other blob here.
 	delete(l.Files, PathOf(id))
 	var candidates []string
@@ -381,11 +385,12 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 			named[h] = true
 		}
 	}
-	paths, err := listShardFiles(src.Dir, dirBlobs)
+	blobFiles, _, err := listShards(src.Dir, dirBlobs)
 	if err != nil {
 		return res, err
 	}
-	for _, p := range paths {
+	for _, f := range blobFiles {
+		p := f.rel
 		id := blobIDOfPath(p)
 		if id == "" || !named[id] {
 			continue

@@ -149,118 +149,176 @@ func (rp *Report) fail(id, msg string) {
 
 // VerifyFiles runs SPEC.md section 6 on a set of files (path -> bytes). The
 // result depends only on the set.
-func VerifyFiles(files map[string][]byte) *Report { return verifyFiles(files, nil, "") }
+func VerifyFiles(files map[string][]byte) *Report { return verifyFiles(files, nil) }
 
-// checkAll runs checkFile on every path on all CPUs. Results are by index,
-// so the outcome does not depend on scheduling.
-func checkAll(paths []string, files map[string][]byte, proven map[string]bool) []FileResult {
-	out := make([]FileResult, len(paths))
+// parallel runs f(0) to f(n-1) on all CPUs. Callers write results by
+// index, so the outcome does not depend on scheduling.
+func parallel(n int, f func(i int)) {
 	var next atomic.Int64
 	var wg sync.WaitGroup
 	for w := 0; w < runtime.GOMAXPROCS(0); w++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for {
-				i := int(next.Add(1) - 1)
-				if i >= len(paths) {
-					return
-				}
-				out[i] = checkFile(paths[i], files[paths[i]], proven[paths[i]])
+			for i := int(next.Add(1) - 1); i < n; i = int(next.Add(1) - 1) {
+				f(i)
 			}
 		}()
 	}
 	wg.Wait()
-	return out
 }
 
 // verifyFiles is VerifyFiles; proven names paths whose signatures this
-// replica has already checked. past is empty, or an identity whose halt by
-// head-key records is ignored: rotate and restore use it to evaluate the
-// identity before they write the succession that ends the halt (C29). It
-// is never used for a verdict that is reported.
-func verifyFiles(files map[string][]byte, proven map[string]bool, past string) *Report {
+// replica has already checked. Each step is one pass; none of them looks
+// at the records of an identity more than once per pass.
+func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 	rp := &Report{
 		Records: map[string]*Record{}, Valid: map[string]bool{}, Errors: map[string]string{},
 		Warnings: map[string][]string{}, Chains: map[string][]*Record{}, Superseded: map[string][]string{},
 		Purged: map[string]string{}, Held: map[string]bool{}, Duplicates: map[string]string{},
 		HeadHalt: map[string][]string{}, Dropped: map[string]*Record{},
 	}
-	paths := make([]string, 0, len(files))
-	for p := range files {
-		paths = append(paths, p)
-	}
-	sort.Strings(paths)
+	unknown := rp.checkFiles(files, proven)        // step 1
+	trees := rp.buildTrees(sortedKeys(rp.Records)) // steps 2 and 3
+	rp.gate(unknown, trees)                        // 8.2
+	ids := rp.dropTooNew(trees)
+	position := rp.freeze(trees)                 // steps 4 and 5
+	sealedBy := sealSets(rp, ids)                // step 5b
+	rp.checkKeys(ids, trees, position, sealedBy) // steps 6 to 8
+	rp.checkSupersedes(ids)                      // step 9
+	rp.checkTombstones(ids)                      // step 10
+	rp.mapSuperseded(ids)
+	rp.checkSubjects(ids, trees) // step 11
+	rp.findDuplicates(ids)       // step 12
+	return rp
+}
 
-	// Step 1: check files.
+// checkFiles is step 1. It returns the records of an unknown version.
+func (rp *Report) checkFiles(files map[string][]byte, proven map[string]bool) []*Record {
+	paths := sortedKeys(files)
+	results := make([]FileResult, len(paths))
+	parallel(len(paths), func(i int) { results[i] = checkFile(paths[i], files[paths[i]], proven[paths[i]]) })
 	var unknown []*Record
-	for i, fr := range checkAll(paths, files, proven) {
-		p := paths[i]
+	for i, fr := range results {
 		switch {
 		case fr.Err != nil:
-			rp.Errors[p] = fr.Err.Error()
+			rp.Errors[paths[i]] = fr.Err.Error()
 		case fr.Unknown:
 			unknown = append(unknown, fr.Record)
 		default:
 			rp.Records[fr.Record.ID] = fr.Record
 		}
 	}
-	ids := make([]string, 0, len(rp.Records))
-	for id := range rp.Records {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
+	return unknown
+}
 
-	// Step 2: identities.
-	genesis := map[string]*Record{}
+// tree is the succession tree of one identity (6.3 step 3) and its chain
+// from the genesis through single children (step 5).
+type tree struct {
+	nodes    map[string]*Record   // node id -> node, the genesis included
+	children map[string][]*Record // node id -> accepted successions
+	chain    []*Record            // genesis to head; at a fork the fork point is the head
+	forked   bool
+}
+
+// buildTrees is steps 2 and 3 (seed-only rule, change set C5 to C11). Each
+// succession is checked once, from its parent; one that no walk reaches is
+// held.
+func (rp *Report) buildTrees(ids []string) map[string]*tree {
+	trees := map[string]*tree{}
+	byParent := map[string]map[string][]*Record{} // identity -> parent id -> successions
+	var succs []*Record
 	for _, id := range ids {
 		r := rp.Records[id]
-		if r.Type == "bean.genesis" {
-			genesis[id] = r
+		switch r.Type {
+		case "bean.genesis":
+			trees[id] = &tree{nodes: map[string]*Record{id: r}, children: map[string][]*Record{}}
+		case "bean.succession":
+			succs = append(succs, r)
+			if byParent[r.Author] == nil {
+				byParent[r.Author] = map[string][]*Record{}
+			}
+			p := r.Targets("succeeds")[0]
+			byParent[r.Author][p] = append(byParent[r.Author][p], r)
 		}
 	}
-	// Step 3: succession trees (seed-only rule, change set C5 to C11).
-	nodes := map[string]map[string]*Record{} // identity -> node id -> node
-	for gid, g := range genesis {
-		n := map[string]*Record{gid: g}
-		pending := []*Record{}
-		for _, id := range ids {
-			r := rp.Records[id]
-			if r.Type == "bean.succession" && r.Author == gid {
-				pending = append(pending, r)
-			}
+	reached := map[string]bool{}
+	for gid, t := range trees {
+		// Depth first with a stack of its own, so a long chain cannot
+		// exhaust the goroutine stack. used counts the keys on the path
+		// from the genesis (5.8).
+		type frame struct {
+			p    *Record
+			next int // index of the next child to check
 		}
-		for progress := true; progress; {
-			progress = false
-			var rest []*Record
-			for _, s := range pending {
-				p, ok := n[s.Targets("succeeds")[0]]
-				if !ok {
-					rest = append(rest, s)
-					continue
-				}
-				progress = true
-				if err := checkSuccession(s, p, n); err != nil {
-					rp.fail(s.ID, err.Error())
-					continue
-				}
-				n[s.ID] = s
+		g := t.nodes[gid]
+		used := map[string]int{g.ValueKey(): 1}
+		used[g.Kid]++
+		for stack := []frame{{p: g}}; len(stack) > 0; {
+			top := &stack[len(stack)-1]
+			kids := byParent[gid][top.p.ID]
+			if top.next == len(kids) {
+				used[top.p.ValueKey()]--
+				used[top.p.Kid]--
+				stack = stack[:len(stack)-1]
+				continue
 			}
-			pending = rest
+			s := kids[top.next]
+			top.next++
+			reached[s.ID] = true
+			if err := checkSuccession(s, top.p, used); err != nil {
+				rp.fail(s.ID, err.Error())
+				continue
+			}
+			t.nodes[s.ID] = s
+			t.children[top.p.ID] = append(t.children[top.p.ID], s)
+			used[s.ValueKey()]++
+			used[s.Kid]++
+			stack = append(stack, frame{p: s})
 		}
-		for _, s := range pending {
+		for x := g; ; {
+			t.chain = append(t.chain, x)
+			c := t.children[x.ID]
+			if len(c) != 1 {
+				t.forked = len(c) > 1
+				break
+			}
+			x = c[0]
+		}
+	}
+	for _, s := range succs {
+		if _, ok := trees[s.Author]; ok && !reached[s.ID] {
 			rp.warn(s.ID, "held: "+s.ID)
 			rp.Held[s.ID] = true
 		}
-		nodes[gid] = n
 	}
-	// Too new (SPEC.md 8.2, change K1): an unknown-v bean.* record halts its
-	// author identity only when it is signed by the head key or by a
-	// recovery key that a chain node commits to. Only the head key or the
-	// seed holder can change the rules for an identity; a rotated-out key,
-	// a stranger or a forged file cannot halt it.
+	return trees
+}
+
+// checkSuccession applies SPEC.md 6.3 step 3 and 5.8 with the seed-only
+// rule. used counts the keys on the path from the genesis to p.
+func checkSuccession(s, p *Record, used map[string]int) error {
+	if Commitment(s.Kid) != p.Recovery() {
+		return errors.New("bad succession")
+	}
+	if s.Recovery() == p.Recovery() {
+		return errors.New("recovery not advanced")
+	}
+	if used[s.ValueKey()] > 0 {
+		return errors.New("key reuse")
+	}
+	return nil
+}
+
+// gate is SPEC.md 8.2 with change K1: an unknown-v bean.* record halts
+// its author identity only when it is signed by the head key or by a
+// recovery key that a chain node commits to. Only the head key or the
+// seed holder can change the rules for an identity; a rotated-out key, a
+// stranger or a forged file cannot halt it.
+func (rp *Report) gate(unknown []*Record, trees map[string]*tree) {
 	tooNew := map[string]bool{}
 	byRecovery := map[string]bool{} // halted by a record of a recovery key or a genesis
+	commits := map[string]map[string]bool{}
 	var ungated []*Record
 	for _, r := range unknown {
 		rp.Skipped++
@@ -274,21 +332,23 @@ func verifyFiles(files map[string][]byte, proven map[string]bool, past string) *
 			}
 			continue
 		}
-		g, ok := genesis[r.Author]
+		t, ok := trees[r.Author]
 		if !ok {
 			continue
 		}
-		switch gates(g, nodes[r.Author], r.Kid) {
-		case gateHead:
-			if r.Author == past {
-				ungated = append(ungated, r)
-				continue
+		if commits[r.Author] == nil {
+			commits[r.Author] = map[string]bool{}
+			for _, x := range t.chain {
+				commits[r.Author][x.Recovery()] = true
 			}
-			tooNew[r.Author] = true
-			rp.HeadHalt[r.Author] = append(rp.HeadHalt[r.Author], r.ID)
-		case gateRecovery:
+		}
+		switch {
+		case commits[r.Author][Commitment(r.Kid)]:
 			tooNew[r.Author] = true
 			byRecovery[r.Author] = true
+		case t.chain[len(t.chain)-1].ValueKey() == r.Kid:
+			tooNew[r.Author] = true
+			rp.HeadHalt[r.Author] = append(rp.HeadHalt[r.Author], r.ID)
 		default:
 			ungated = append(ungated, r)
 		}
@@ -306,84 +366,65 @@ func verifyFiles(files map[string][]byte, proven map[string]bool, past string) *
 			rp.warn(r.ID, "ungated: "+r.ID)
 		}
 	}
-	for id := range tooNew {
-		rp.TooNew = append(rp.TooNew, id)
+	rp.TooNew = sortedKeys(tooNew)
+}
+
+// dropTooNew removes every record of a too-new identity and returns the
+// sorted ids of the records left, which start out valid unless they failed.
+func (rp *Report) dropTooNew(trees map[string]*tree) []string {
+	for _, id := range rp.TooNew {
+		delete(trees, id)
 	}
-	sort.Strings(rp.TooNew)
-	// Drop everything of a too-new identity.
-	for _, id := range ids {
-		r := rp.Records[id]
-		if tooNew[r.Author] || tooNew[r.Subject] || (r.Type == "bean.genesis" && tooNew[r.ID]) {
+	tooNew := func(id string) bool { return contains(rp.TooNew, id) }
+	for id, r := range rp.Records {
+		if tooNew(r.Author) || tooNew(r.Subject) || (r.Type == "bean.genesis" && tooNew(r.ID)) {
 			rp.Dropped[id] = r
 			delete(rp.Records, id)
 			rp.Skipped++
 		}
 	}
-	for gid := range tooNew {
-		delete(genesis, gid)
-		delete(nodes, gid)
-	}
-	ids = ids[:0]
-	for id := range rp.Records {
-		ids = append(ids, id)
+	ids := sortedKeys(rp.Records)
+	for _, id := range ids {
 		if _, failed := rp.Errors[id]; !failed {
 			rp.Valid[id] = true
 		}
 	}
-	sort.Strings(ids)
+	return ids
+}
 
-	// Steps 4 and 5: freeze and chain. Any fork is a freeze (C7, C11).
-	frozen := map[string]*Record{} // identity -> lowest common ancestor
+// offChain marks a key of a tree node that is below a freeze point.
+const offChain = 1 << 30
+
+// freeze is steps 4 and 5: any fork is a freeze (C7, C11), and a node off
+// the chain is frozen. It returns the chain position of each key.
+func (rp *Report) freeze(trees map[string]*tree) map[string]map[string]int {
 	position := map[string]map[string]int{}
-	for gid, g := range genesis {
-		n := nodes[gid]
-		chain := []*Record{g}
-		pos := map[string]int{g.ValueKey(): 0}
-		x := g
-		for {
-			var children []*Record
-			for _, s := range n {
-				if s != g && s.Targets("succeeds")[0] == x.ID {
-					children = append(children, s)
-				}
-			}
-			if len(children) == 0 {
-				break
-			}
-			if len(children) > 1 {
-				frozen[gid] = x
-				rp.Compromised = append(rp.Compromised, gid)
-				break
-			}
-			x = children[0]
-			chain = append(chain, x)
-			pos[x.ValueKey()] = len(chain) - 1
+	for gid, t := range trees {
+		rp.Chains[gid] = t.chain
+		if t.forked {
+			rp.Compromised = append(rp.Compromised, gid)
 		}
-		rp.Chains[gid] = chain
-		position[gid] = pos
+		pos := map[string]int{}
 		onChain := map[string]bool{}
-		for _, c := range chain {
+		for i, c := range t.chain {
+			pos[c.ValueKey()] = i
 			onChain[c.ID] = true
 		}
-		for id, s := range n {
+		for id, s := range t.nodes {
 			if !onChain[id] {
 				rp.fail(id, "frozen")
 				pos[s.ValueKey()] = offChain
 			}
 		}
+		position[gid] = pos
 	}
 	sort.Strings(rp.Compromised)
+	return position
+}
 
-	// Step 5b (C28): seal sets. A succession with value.parts = n seals the
-	// union of its own value.sealed and the value.sealed of n continuation
-	// records, part 1 to n. Only a complete set seals anything: with a part
-	// missing or doubled, the set is empty, so every record of the retired
-	// key is "not sealed" until the parts arrive. Fail closed; nothing is
-	// erased, and validity comes back with the missing files.
-	sealedBy := sealSets(rp, ids)
-
-	// Step 6: resolve signing keys; step 7: seals; step 8: frozen rules.
-	recPos := map[string]int{}
+// checkKeys is steps 6 to 8: resolve the signing key, check the seal of a
+// retired key, and apply the freeze.
+func (rp *Report) checkKeys(ids []string, trees map[string]*tree, position map[string]map[string]int, sealedBy map[string]map[string]bool) {
 	for _, id := range ids {
 		r := rp.Records[id]
 		if r.IsIdentity() {
@@ -395,7 +436,8 @@ func verifyFiles(files map[string][]byte, proven map[string]bool, past string) *
 			}
 			continue
 		}
-		if _, ok := genesis[r.Author]; !ok {
+		t, ok := trees[r.Author]
+		if !ok {
 			rp.warn(id, "unresolved author: "+r.Author)
 			delete(rp.Valid, id)
 			continue
@@ -405,28 +447,22 @@ func verifyFiles(files map[string][]byte, proven map[string]bool, past string) *
 			rp.fail(id, "key not in chain")
 			continue
 		}
-		recPos[id] = p
-		chain := rp.Chains[r.Author]
-		if lca, isFrozen := frozen[r.Author]; isFrozen {
-			if r.IsDestructive() || p > recPos0(chain, lca) {
-				rp.fail(id, "frozen")
-				continue
-			}
-		} else if p == offChain {
-			rp.fail(id, "key not in chain")
+		// Off-chain keys exist only below a fork. A frozen identity keeps
+		// the claims of chain keys and loses its destructive records.
+		if t.forked && (r.IsDestructive() || p == offChain) {
+			rp.fail(id, "frozen")
 			continue
 		}
 		// Step 7 (C26, Benjamin decision 2026-10-30): every record of a
 		// retired key needs the seal of the succession that retired it.
-		// Before C26 only destructive records did.
-		if p < len(chain)-1 {
-			if !sealedBy[chain[p+1].ID][id] {
-				rp.fail(id, "not sealed")
-			}
+		if p < len(t.chain)-1 && !sealedBy[t.chain[p+1].ID][id] {
+			rp.fail(id, "not sealed")
 		}
 	}
+}
 
-	// Step 9: supersede rules.
+// checkSupersedes is step 9.
+func (rp *Report) checkSupersedes(ids []string) {
 	for _, id := range ids {
 		r := rp.Records[id]
 		if !rp.Valid[id] || r.IsIdentity() {
@@ -448,7 +484,10 @@ func verifyFiles(files map[string][]byte, proven map[string]bool, past string) *
 			}
 		}
 	}
-	// Step 10: tombstones.
+}
+
+// checkTombstones is step 10.
+func (rp *Report) checkTombstones(ids []string) {
 	for _, id := range ids {
 		r := rp.Records[id]
 		if !rp.Valid[id] || r.Type != "bean.tombstone" {
@@ -473,130 +512,67 @@ func verifyFiles(files map[string][]byte, proven map[string]bool, past string) *
 	for t := range rp.Purged {
 		delete(rp.Valid, t)
 	}
-	// Supersede map after purges (a purged supersede record no longer counts).
+}
+
+// mapSuperseded records the valid supersedes after purges: a purged
+// supersede record no longer counts.
+func (rp *Report) mapSuperseded(ids []string) {
 	for _, id := range ids {
-		r := rp.Records[id]
 		if !rp.Valid[id] {
 			continue
 		}
-		for _, t := range r.Targets("supersedes") {
+		for _, t := range rp.Records[id].Targets("supersedes") {
 			if _, ok := rp.Records[t]; ok {
 				rp.Superseded[t] = append(rp.Superseded[t], id)
 			}
 		}
 	}
-	for t, list := range rp.Superseded {
-		sort.Strings(list)
-		rp.Superseded[t] = list
+	for _, list := range rp.Superseded {
+		// ids is sorted, so each list is too.
 		for _, id := range list[1:] {
 			rp.warn(id, "superseded by sibling: "+list[0])
 		}
 	}
-	// Step 11: subjects.
+}
+
+// checkSubjects is step 11.
+func (rp *Report) checkSubjects(ids []string, trees map[string]*tree) {
 	for _, id := range ids {
 		r := rp.Records[id]
 		if rp.Valid[id] && r.Subject != "" && !r.IsIdentity() {
-			if _, ok := genesis[r.Subject]; !ok {
+			if _, ok := trees[r.Subject]; !ok {
 				rp.warn(id, "unresolved subject: "+r.Subject)
 			}
 		}
 	}
-	// Step 12: duplicates. A superseded record is left out: a parser fix
-	// (9.7) keeps the ref of the record it corrects, and grouping the two
-	// would hide the fix as a duplicate whenever its id is the higher one.
-	// The author is part of the group (C27): a record of one key is never
-	// a duplicate of another key's record, so no key can hide another
-	// key's record by copying its ref.
-	groups := map[[4]string][]string{}
+}
+
+// findDuplicates is step 12. A superseded record is left out: a parser fix
+// (9.7) keeps the ref of the record it corrects, and grouping the two
+// would hide the fix as a duplicate whenever its id is the higher one.
+// The author is part of the group (C27): a record of one key is never a
+// duplicate of another key's record, so no key can hide another key's
+// record by copying its ref.
+func (rp *Report) findDuplicates(ids []string) {
+	first := map[[4]string]string{}
 	for _, id := range ids {
 		r := rp.Records[id]
-		if rp.Valid[id] && r.Source.Ref != "" && !r.IsIdentity() && len(rp.Superseded[id]) == 0 {
-			k := [4]string{r.Subject, r.Author, r.Source.System, r.Source.Ref}
-			groups[k] = append(groups[k], id)
+		if !rp.Valid[id] || r.Source.Ref == "" || r.IsIdentity() || len(rp.Superseded[id]) > 0 {
+			continue
+		}
+		k := [4]string{r.Subject, r.Author, r.Source.System, r.Source.Ref}
+		if p, ok := first[k]; ok {
+			rp.Duplicates[id] = p
+			rp.warn(id, "duplicate: "+id+" of "+p)
+		} else {
+			first[k] = id
 		}
 	}
-	for _, g := range groups {
-		sort.Strings(g)
-		for _, id := range g[1:] {
-			rp.Duplicates[id] = g[0]
-			rp.warn(id, "duplicate: "+id+" of "+g[0])
-		}
-	}
-	return rp
-}
-
-// Results of gates.
-const (
-	gateNone     = iota // kid cannot halt the identity: ungated
-	gateHead            // kid is the head key
-	gateRecovery        // kid is a recovery key that a chain node commits to
-)
-
-// gates says whether kid may halt the identity of genesis g (SPEC.md 8.2,
-// K1): kid is the head key, or a recovery key that a node of the chain
-// commits to. The chain is followed from g through single children; at a
-// fork the fork point is the head (6.3 step 5).
-func gates(g *Record, n map[string]*Record, kid string) int {
-	c := Commitment(kid)
-	x := g
-	for {
-		if x.Recovery() == c {
-			return gateRecovery
-		}
-		var next *Record
-		count := 0
-		for _, s := range n {
-			if s != g && s.Targets("succeeds")[0] == x.ID {
-				next = s
-				count++
-			}
-		}
-		if count != 1 {
-			if x.ValueKey() == kid {
-				return gateHead
-			}
-			return gateNone
-		}
-		x = next
-	}
-}
-
-// offChain marks a key of a tree node that is below a freeze point.
-const offChain = 1 << 30
-
-func recPos0(chain []*Record, node *Record) int {
-	for i, c := range chain {
-		if c == node {
-			return i
-		}
-	}
-	return -1
 }
 
 func contains(list []string, s string) bool {
 	i := sort.SearchStrings(list, s)
 	return i < len(list) && list[i] == s
-}
-
-// checkSuccession applies SPEC.md 6.3 step 3 and 5.8 with the seed-only rule.
-func checkSuccession(s, p *Record, tree map[string]*Record) error {
-	if Commitment(s.Kid) != p.Recovery() {
-		return errors.New("bad succession")
-	}
-	if s.Recovery() == p.Recovery() {
-		return errors.New("recovery not advanced")
-	}
-	// key reuse: along the path from genesis to the parent.
-	for x := p; x != nil; {
-		if x.ValueKey() == s.ValueKey() || x.Kid == s.ValueKey() {
-			return errors.New("key reuse")
-		}
-		if x.Type == "bean.genesis" {
-			break
-		}
-		x = tree[x.Targets("succeeds")[0]]
-	}
-	return nil
 }
 
 // Lines renders the verify output of SPEC.md 12.1, sorted, summary last.

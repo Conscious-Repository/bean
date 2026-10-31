@@ -149,13 +149,13 @@ func TestNostrLog(t *testing.T) {
 	if _, err := b.Sync(s); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := b.Restore(words, nil, NewKey{Alg: "secp256k1", Secret: sec}); err == nil || err.Error() != "key reuse" {
+	if _, _, err := b.Restore(words, nil, NewKey{Alg: "secp256k1", Secret: sec}, ""); err == nil || err.Error() != "key reuse" {
 		t.Errorf("restore to a used npub: %v", err)
 	}
 	if _, err := b.ReadLocal(); err != ErrNotInitialized {
 		t.Errorf("failed restore left local/: %v", err)
 	}
-	if _, got, err := b.Restore(words, nil, NewKey{}); err != nil || got != id {
+	if _, got, err := b.Restore(words, nil, NewKey{}, ""); err != nil || got != id {
 		t.Fatalf("restore: %s %v", got, err)
 	}
 	if lb := verifyOK(t, b); len(lb.Report.Chains[id]) != 3 {

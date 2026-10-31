@@ -95,11 +95,14 @@ func fileSet(t *testing.T, s *Store) string {
 	t.Helper()
 	var out []string
 	for _, d := range []string{dirObjects, dirBlobs} {
-		ps, err := listShardFiles(s.Dir, d)
+		fs, bad, err := listShards(s.Dir, d)
 		if err != nil {
 			t.Fatal(err)
 		}
-		out = append(out, ps...)
+		for _, f := range fs {
+			out = append(out, f.rel)
+		}
+		out = append(out, bad...)
 	}
 	return strings.Join(out, "\n")
 }

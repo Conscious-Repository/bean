@@ -96,7 +96,7 @@ func cmdList(s *core.Store, args []string) {
 	labels := l.AgentLabels()
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	for _, r := range recs {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", whenText(r), r.Type, valueText(r), byText(r, me, labels), r.ID[7:19])
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", whenText(r), r.Type, safe(valueText(r)), safe(byText(r, me, labels)), r.ID[7:19])
 	}
 	tw.Flush()
 }
@@ -119,9 +119,11 @@ func cmdShow(s *core.Store, args []string) {
 	if err := json.Indent(&pretty, r.Bytes, "", "  "); err != nil {
 		fail(err)
 	}
-	fmt.Println(pretty.String())
+	for _, line := range strings.Split(pretty.String(), "\n") {
+		fmt.Println(safe(line))
+	}
 	for _, b := range r.Blobs {
-		fmt.Printf("blob %s %s %s\n", b.Hash, b.Role, b.MediaType)
+		fmt.Printf("blob %s %s %s\n", b.Hash, safe(b.Role), safe(b.MediaType))
 	}
 	for _, x := range l.Replies(r.ID) {
 		rel := ""
@@ -131,7 +133,7 @@ func cmdShow(s *core.Store, args []string) {
 				break
 			}
 		}
-		fmt.Printf("reply %s %s %s %s\n", x.ID, rel, x.Type, valueText(x))
+		fmt.Printf("reply %s %s %s %s\n", x.ID, rel, x.Type, safe(valueText(x)))
 	}
 }
 

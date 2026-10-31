@@ -237,7 +237,7 @@ Sync every copy before you rotate or restore. Records that a copy made with the 
 
 ### Upgrading a log made before 2026-10-30
 
-Builds from 2026-10-30 on change four rules (SPEC.md C25 to C28). If you never ran `rotate` or `restore` on your log, nothing changes for you. If you did, the records that the old key signed were not sealed then, and they now show as `not sealed` in `bean verify`. Ask before you run a new build on such a log. A log from before the rename to bean (types `hlog.*`) fails with `old format`; make a new log with `bean init`.
+Builds from 2026-10-30 on change four rules (change notes C25 to C28, [docs/history/SPEC-CHANGES.md](docs/history/SPEC-CHANGES.md)). If you never ran `rotate` or `restore` on your log, nothing changes for you. If you did, the records that the old key signed were not sealed then, and they now show as `not sealed` in `bean verify`. Ask before you run a new build on such a log. A log from before the rename to bean (types `hlog.*`) fails with `old format`; make a new log with `bean init`.
 
 ## How it works
 

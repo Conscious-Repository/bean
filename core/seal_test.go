@@ -622,7 +622,7 @@ func TestRestoreCrashBetweenParts(t *testing.T) {
 		}
 	}
 	defer func() { hookAfterPart = nil }()
-	if _, _, err := b.Restore(words, nil, NewKey{}); err != nil {
+	if _, _, err := b.Restore(words, nil, NewKey{}, ""); err != nil {
 		t.Fatal(err)
 	}
 	hookAfterPart = nil
@@ -630,7 +630,7 @@ func TestRestoreCrashBetweenParts(t *testing.T) {
 	if _, err := snap.Load(); err != nil && !strings.Contains(err.Error(), "not initialized") {
 		t.Fatal(err)
 	}
-	res, got, err := snap.Restore(words, nil, NewKey{})
+	res, got, err := snap.Restore(words, nil, NewKey{}, "")
 	if err != nil || got != id {
 		t.Fatalf("restore again: %v %s", err, got)
 	}

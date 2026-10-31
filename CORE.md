@@ -67,7 +67,7 @@ Check each file in this order. Stop at the first failure.
 2. `v`, `type`, `author` and `kid` are present.
 3. The id, the key and the signature.
 4. The version. The earlier checks use only the envelope fields. These fields do not change between versions. An unknown version has two cases:
-   - The type starts with `bean.` and the head key of that identity, or a recovery key that a node of its chain commits to, signed the record. The identity is too new. Do not evaluate its records. Any other signer (a rotated-out key, a stranger) cannot halt the identity: skip the record with the warning `ungated: <id>` (K1). When only the head key halts the identity, the 24 words still rotate: the succession retires that key and ends the halt (C29).
+   - The type starts with `bean.` and the head key of that identity, or a recovery key that a node of its chain commits to, signed the record. The identity is too new. Do not evaluate its records. Any other signer (a rotated-out key, a stranger) cannot halt the identity: skip the record with the warning `ungated: <id>`. When only the head key halts the identity, the 24 words still rotate: the succession retires that key and ends the halt.
    - Any other type. Skip the record, but sync it.
 5. The canonical bytes.
 6. The fields.
@@ -79,7 +79,7 @@ Check each file in this order. Stop at the first failure.
 | Type | Rules |
 |---|---|
 | `bean.genesis` | No `subject` and no `refs`. `author`, `kid` and `value.key` are the same key. `value.recovery` is the commitment to recovery key 0. The id of the genesis is the identity id. It does not change. |
-| `bean.succession` | `subject` and `author` are the identity id. One `succeeds` ref names the parent. `value` is `{"key", "recovery", "sealed"}`: the new signing key, the commitment to recovery key g+1, and a sorted list of ids. Recovery key g signs it. g is the position of the parent on the chain. The genesis has position 0. When the list is too long for one file, `value` also has `"parts": n` (1 to 1000), and n seal parts carry the rest (C28, 2026-10-30). |
+| `bean.succession` | `subject` and `author` are the identity id. One `succeeds` ref names the parent. `value` is `{"key", "recovery", "sealed"}`: the new signing key, the commitment to recovery key g+1, and a sorted list of ids. Recovery key g signs it. g is the position of the parent on the chain. The genesis has position 0. When the list is too long for one file, `value` also has `"parts": n` (1 to 1000), and n seal parts carry the rest. |
 | `bean.seal` | A seal part. `subject` and `author` are the identity id, `kid` is the `kid` of the succession, and one `seals` ref names it. `value` is `{"part": k, "sealed": [ids]}`, k from 1 to 1000, the list sorted, unique and not empty. `times.observed` is null, no blobs, `source` is `{"system":"self","adapter","ref":null}`. A part with another subject or key, a k above n, or a succession that is not on the chain is invalid (`bad seal`). Two parts with one k are both invalid. A part whose succession is missing is held. |
 
 ### 2.2 Paper seed and derived keys
@@ -104,7 +104,7 @@ Check each file in this order. Stop at the first failure.
 
 | Action | Who | Key |
 |---|---|---|
-| Add a claim | Any author. Readers decide whom to trust. | The head key, or an older key on the chain whose next succession lists the record in `sealed` (C26, 2026-10-30). A bare key with `kid` equal to `author` is always its own head. |
+| Add a claim | Any author. Readers decide whom to trust. | The head key, or an older key on the chain whose next succession lists the record in `sealed`. A bare key with `kid` equal to `author` is always its own head. |
 | Correct (a record with a `supersedes` ref) | The author of the target. The target must not be an `bean.*` record. | The head key, or an older key on the chain whose next succession lists the record in `sealed`. |
 | Delete (an `bean.tombstone` with one `purges` ref and `author` equal to `subject`) | The subject of the target. The target must not be a genesis, a succession, a seal part or a tombstone. | The same as for a correction. |
 | Rotate | The identity. | The recovery key to which the head commits. |
@@ -113,9 +113,9 @@ More rules:
 
 1. A recovery key signs only successions and seal parts.
 2. If two or more valid records correct the same target, readers show the one with the lowest id.
-3. Valid records that have the same `subject`, `author`, `source.system` and `source.ref` are duplicates (C27, 2026-10-30). Do not count corrected records. The record with the lowest id is the primary.
+3. Valid records that have the same `subject`, `author`, `source.system` and `source.ref` are duplicates. Do not count corrected records. The record with the lowest id is the primary.
 4. A claim is not valid if the set has no genesis for its author.
-5. A rotation seals every valid record of the outgoing key by default. A retired key cannot add a valid record after the rotation. The sealed set of a succession is its own list plus the lists of its n parts. If any part number from 1 to n does not have exactly one valid part, the set is empty: every record of the outgoing key is not valid until the parts arrive, and `gc` erases nothing (C28). Write the parts before the succession, and sync them first.
+5. A rotation seals every valid record of the outgoing key by default. A retired key cannot add a valid record after the rotation. The sealed set of a succession is its own list plus the lists of its n parts. If any part number from 1 to n does not have exactly one valid part, the set is empty: every record of the outgoing key is not valid until the parts arrive, and `gc` erases nothing. Write the parts before the succession, and sync them first.
 
 ## 4. Folder and sync
 
@@ -127,7 +127,7 @@ More rules:
 4. The copy that wrote the tombstone erases the target at once. Any other copy that has the target hides it. It erases the target only when the person runs `gc`, 7 days or more later.
 5. If a tombstone becomes invalid, for example after a rotation that does not seal it, restore the target.
 6. You can also copy files with rsync, git or a USB drive. Then run `verify` on each copy.
-7. Erasure follows files, not validity (C25). `purge` and `gc` erase a blob only when they erase a record that names it and no other record file names it. `gc` erases nothing while any identity is too new or the local identity is frozen.
+7. Erasure follows files, not validity. `purge` and `gc` erase a blob only when they erase a record that names it and no other record file names it. `gc` erases nothing while any identity is too new or the local identity is frozen.
 
 ### 4.2 Blobs
 

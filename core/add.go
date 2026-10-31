@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -36,15 +37,23 @@ func ParseWhen(s string, loc *time.Location) (string, string, error) {
 	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
 		return t.Format(time.RFC3339Nano), "second", nil
 	}
-	for _, layout := range []string{"2006-01-02 15:04", "2006-01-02T15:04"} {
-		if t, err := time.ParseInLocation(layout, s, loc); err == nil {
-			return t.Format(time.RFC3339), "minute", nil
+	// A local time in a clock change gap does not exist; Go would move it
+	// by an hour. Refuse it (audit 4, m3).
+	for _, layout := range []string{"2006-01-02 15:04", "2006-01-02T15:04", "2006-01-02"} {
+		t, err := time.ParseInLocation(layout, s, loc)
+		if err != nil {
+			continue
 		}
+		// The same text read in UTC has the wall clock that was typed.
+		if wall, _ := time.Parse(layout, s); t.Format(time.DateTime) != wall.Format(time.DateTime) {
+			return "", "", fmt.Errorf("bad time: %q does not exist in this time zone: the clock changed then", s)
+		}
+		if layout == "2006-01-02" {
+			return s + "T00:00:00" + t.Format("Z07:00"), "day", nil
+		}
+		return t.Format(time.RFC3339), "minute", nil
 	}
-	if t, err := time.ParseInLocation("2006-01-02", s, loc); err == nil {
-		return t.Format("2006-01-02") + "T00:00:00" + t.Format("Z07:00"), "day", nil
-	}
-	return "", "", errors.New("bad field: times.observed.start")
+	return "", "", fmt.Errorf("bad time: %q: use YYYY-MM-DD, YYYY-MM-DD HH:MM or RFC 3339", s)
 }
 
 // AddOptions are the inputs of Add beyond type and value.
@@ -74,10 +83,14 @@ type AddOptions struct {
 // the record id.
 func (s *Store) Add(typ, value string, o AddOptions) (string, error) {
 	if !typePattern.MatchString(typ) || len(typ) > 128 {
-		return "", ErrBadType
+		return "", fmt.Errorf("%w: %q: use lowercase letters, digits, - and _, in parts joined by dots, for example weight or drink.water", ErrBadType, typ)
 	}
 	if IsCoreType(typ) {
 		return "", errors.New("unknown core type")
+	}
+	v := ManualValue(value, o.Unit)
+	if _, isNumber := v["n"]; o.Unit != "" && !isNumber {
+		return "", fmt.Errorf("not a number: %q: a value with a unit must be a number like 80.5", value)
 	}
 	start, precision := o.Start, o.Precision
 	if start == "" {
@@ -85,7 +98,7 @@ func (s *Store) Add(typ, value string, o AddOptions) (string, error) {
 	}
 	obj := map[string]any{
 		"type":   typ,
-		"value":  ManualValue(value, o.Unit),
+		"value":  v,
 		"times":  map[string]any{"observed": map[string]any{"start": start, "precision": precision}},
 		"source": map[string]any{"system": "self", "adapter": Adapter, "ref": nil},
 	}

@@ -108,7 +108,7 @@ func (m *multiFlag) String() string     { return strings.Join(*m, ",") }
 func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
 
 func fail(err error) {
-	fmt.Fprintf(os.Stderr, "bean: %s\n", err)
+	fmt.Fprintf(os.Stderr, "bean: %s\n", safe(err.Error()))
 	if errors.Is(err, core.ErrNotInitialized) {
 		fmt.Fprintf(os.Stderr, "bean: no log in %s: run bean init, or point -dir or BEAN_DIR at your log\n", logDir)
 	}
@@ -256,7 +256,7 @@ func main() {
 			fail(err)
 		}
 		for _, l := range lines {
-			fmt.Println(l)
+			fmt.Println(safe(l))
 		}
 		os.Exit(code)
 	case "reindex":
@@ -338,7 +338,7 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		res, id, err := s.RestoreIdentity(core.ParseWords(string(text)), noSeal, key, *ident)
+		res, id, err := s.Restore(core.ParseWords(string(text)), noSeal, key, *ident)
 		if err != nil {
 			fail(err)
 		}

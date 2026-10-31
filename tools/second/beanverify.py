@@ -6,7 +6,7 @@ the 12.1 code. It does not read local/hidden, so it never prints
 "hidden pending gc". Each place where the spec did not say what to do is
 marked GUESS(n); SPEC.md now answers them (DECISIONS 134), except
 GUESS(2), the Ed25519 point rules (SPEC 17 item 11)."""
-import hashlib, json, os, re, sys
+import hashlib, json, os, re, stat, sys
 from datetime import datetime
 from decimal import Decimal
 from cryptography.hazmat.primitives.asymmetric import ed25519, ec
@@ -344,7 +344,7 @@ def check_fields(r):
 
 # ---------- one file (3.8) ----------
 def check_file(path, data):
-    if not PATH_RE.match(path): raise Fail("bad path")
+    if data is None or not PATH_RE.match(path): raise Fail("bad path")
     if len(data) > 16 * MIB: raise Fail("too large")
     r = parse(data)
     v = r.get("v")
@@ -554,6 +554,8 @@ def verify(files, blobfiles):
     # Blobs (12.3 verify).
     present = set()
     for p, data in blobfiles.items():
+        if data is None:
+            errors[p] = "bad path"; continue
         m = re.match(r"^blobs/([0-9a-f]{2})/([0-9a-f]{62})$", p)
         bid = "sha256:" + m.group(1) + m.group(2) if m else None
         if bid is None or hashlib.sha256(data).hexdigest() != bid[7:]:
@@ -581,19 +583,24 @@ def verify(files, blobfiles):
     return lines, code, {"valid": {i for i in R if valid(i)}, "errors": {i: e for i, e in errors.items() if e}, "purged": purged}
 
 def load_dir(d):
-    """The regular files exactly one directory below objects/ and blobs/,
-    except .tmp- names (SPEC 3.8 step 1, 7.1). Anything else is ignored."""
+    """The plain files exactly one directory below objects/ and blobs/
+    (SPEC 7.1). Names that start with "." are not part of the log. Any
+    other entry (a file directly in objects/, a symlink, a directory one
+    level down) maps to None: a bad path, not read."""
     files, blobs = {}, {}
     for sub, out in (("objects", files), ("blobs", blobs)):
         base = os.path.join(d, sub)
         if not os.path.isdir(base): continue
         for shard in sorted(os.listdir(base)):
             sd = os.path.join(base, shard)
-            if not os.path.isdir(sd): continue
+            if shard.startswith("."): continue
+            if os.path.islink(sd) or not os.path.isdir(sd):
+                out[sub + "/" + shard] = None; continue
             for n in sorted(os.listdir(sd)):
                 full = os.path.join(sd, n)
-                if n.startswith(".tmp-") or not os.path.isfile(full): continue
-                out[sub + "/" + shard + "/" + n] = open(full, "rb").read()
+                if n.startswith("."): continue
+                st = os.lstat(full)
+                out[sub + "/" + shard + "/" + n] = open(full, "rb").read() if stat.S_ISREG(st.st_mode) else None
     return files, blobs
 
 def local_identity(d):
@@ -604,8 +611,13 @@ def local_identity(d):
 
 if __name__ == "__main__":
     f, b = load_dir(sys.argv[1])
-    lines, code, _ = verify(f, b)
+    lines, code, info = verify(f, b)
+    lid = local_identity(sys.argv[1])
     # Exit 4 when the local identity (7.1 local/identity) is frozen (12.1).
-    if ("compromised: %s" % local_identity(sys.argv[1])) in lines: code = 4
+    if ("compromised: %s" % lid) in lines: code = 4
+    # 12.3 verify: the local identity has no genesis here, and is not too new.
+    if lid and lid not in info["valid"] and ("too new: %s" % lid) not in lines:
+        lines = sorted(lines[:-1] + ["error: %s: own identity missing: sync from another copy" % lid]) + lines[-1:]
+        code = max(code, 1)
     print("\n".join(lines))
     sys.exit(code)

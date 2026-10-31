@@ -39,14 +39,14 @@ func TestRotateRestoreTooNewError(t *testing.T) {
 	if _, err := b.Sync(a); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := b.Restore(words, nil, NewKey{}); err == nil || !strings.HasPrefix(err.Error(), "too new: "+id) {
+	if _, _, err := b.Restore(words, nil, NewKey{}, ""); err == nil || !strings.HasPrefix(err.Error(), "too new: "+id) {
 		t.Fatalf("restore: %v, want too new", err)
 	}
 	c := newStore(t)
 	if _, err := c.Sync(a); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := c.RestoreIdentity(words, nil, NewKey{}, id); err == nil || !strings.HasPrefix(err.Error(), "too new: "+id) {
+	if _, _, err := c.Restore(words, nil, NewKey{}, id); err == nil || !strings.HasPrefix(err.Error(), "too new: "+id) {
 		t.Fatalf("restore -identity: %v, want too new", err)
 	}
 }
