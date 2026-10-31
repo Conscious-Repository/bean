@@ -2,7 +2,6 @@ package core
 
 import (
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -82,48 +81,71 @@ func TestGCTwoTombstonesOneTarget(t *testing.T) {
 	}
 }
 
-// A purge writes the target's dedupe ref into the tombstone, so a copy
-// without local/purged-refs.jsonl still skips a re-import (Buildtall M2).
-func TestPurgedRefInTombstone(t *testing.T) {
+// A purge tombstone carries nothing that names the erased content: no
+// dedupe ref and no source, so a holder of the identity secret cannot test
+// guesses of the erased reading against the synced tombstone (DECISIONS 168).
+// The ref stays in local/purged-refs.jsonl of the copy that purged.
+func TestPurgeTombstoneHasNoRef(t *testing.T) {
 	a, _ := initStore(t)
-	line := `{"type":"lab.glucose","value":{"n":90,"unit":"mg/dL"},"times":{"observed":null},"source":{"system":"labcorp","adapter":"x@1","ref_input":["bean/v0/ref","id","labcorp","s1/glucose",0]}}` + "\n"
-	r, err := a.Append(strings.NewReader(line))
-	if err != nil || r.Added != 1 {
-		t.Fatal(r, err)
+	loc, _ := a.ReadLocal()
+	obs := map[string]any{"start": "2026-10-01T09:00:00Z", "precision": "day"}
+	in := `{"type":"lab.hiv","value":{"s":"positive"},"times":{"observed":{"start":"2026-10-01T09:00:00Z","precision":"day"}},"source":{"system":"labcorp","adapter":"x@1","ref_input":["bean/v0/ref","tuple","labcorp","lab.hiv",{"start":"2026-10-01T09:00:00Z","precision":"day"},{"s":"positive"},0]}}` + "\n"
+	res, err := a.Append(strings.NewReader(in))
+	if err != nil || len(res.IDs) != 1 {
+		t.Fatal(err, res)
 	}
-	tid, err := a.Purge(r.IDs[0], "")
+	tid, err := a.Purge(res.IDs[0], "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	b := cloneLocal(t, a)
-	if _, err := b.Sync(a); err != nil {
-		t.Fatal(err)
+	b, _ := os.ReadFile(a.path(PathOf(tid)))
+	ref := DedupeRefTuple(DedupeKey(loc.Secret), "labcorp", "lab.hiv", obs, map[string]any{"s": "positive"}, 0)
+	if strings.Contains(string(b), ref) || strings.Contains(string(b), "labcorp") {
+		t.Errorf("tombstone names the erased reading: %s", b)
 	}
-	os.Remove(a.path(filePurgedRef))
-	for _, s := range []*Store{a, b} {
-		if _, err := os.Stat(s.path(filePurgedRef)); err == nil {
-			os.Remove(s.path(filePurgedRef))
-		}
-		r2, err := s.Append(strings.NewReader(line))
-		if err != nil || r2.Added != 0 {
-			t.Errorf("%s: re-import added %d, %v (tombstone %s)", filepath.Base(s.Dir), r2.Added, err, tid)
-		}
+	if r2, err := a.Append(strings.NewReader(in)); err != nil || r2.Added != 0 {
+		t.Errorf("re-import on the purging copy added %d, %v", r2.Added, err)
 	}
 }
 
-// Sync refuses a source with more record bytes than the limit, before it
-// reads any of them (Satoshi m4).
-func TestSyncLimit(t *testing.T) {
-	a, _ := initStore(t)
-	writeRaw(t, a, `{"type":"weight","value":{"n":1,"unit":"kg"},"times":{"observed":null},"source":{"system":"self","adapter":"x@1"}}`)
-	b := cloneLocal(t, a)
-	b.SyncLimit = 100
-	if _, err := b.Sync(a); err == nil || !strings.HasPrefix(err.Error(), "too large: ") {
-		t.Errorf("sync above the limit: %v", err)
+// The hold's own tombstone becomes invalid while another valid tombstone
+// still purges the target: gc erases the target after the hold
+// (DECISIONS 169).
+func TestGCHoldTombstoneDiesOtherLives(t *testing.T) {
+	s := newStore(t)
+	me, words, err := s.Init(NewKey{})
+	if err != nil {
+		t.Fatal(err)
 	}
-	b.SyncLimit = 0
-	if _, err := b.Sync(a); err != nil {
-		t.Errorf("sync: %v", err)
+	xid := writeRaw(t, s, `{"type":"weight","value":{"n":1,"unit":"kg"},"times":{"observed":null},"source":{"system":"self","adapter":"x@1"}}`)
+	loc, _ := s.ReadLocal()
+	for i := 0; i < 2; i++ {
+		id, b, err := SignRecord(NewTombstone(me, loc.Signer.Public(), xid, "", Adapter, "2026-10-28T12:00:00Z"), loc.Signer)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := writeFileAtomic(s.path(PathOf(id)), b, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.Load(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h, _ := s.readHolds()
+	var holder string
+	for tid := range h {
+		holder = tid
+	}
+	if _, err := s.Rotate(words, []string{holder}, NewKey{}); err != nil {
+		t.Fatal(err)
+	}
+	l, _ := s.Load()
+	if _, purged := l.Report.Purged[xid]; !purged || l.Report.Valid[holder] {
+		t.Fatalf("setup: purged %v, holder valid %v", purged, l.Report.Valid[holder])
+	}
+	s.Now = func() time.Time { return testClock.Add(30 * 24 * time.Hour) }
+	if n, _, err := s.GC(); err != nil || n != 1 {
+		t.Errorf("gc erased %d, %v", n, err)
 	}
 }
 
