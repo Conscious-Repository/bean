@@ -39,8 +39,11 @@ func TestParseWhen(t *testing.T) {
 			t.Errorf("ParseWhen(%q) = %q %q %v, want %q %q", c.in, start, p, err, c.start, c.precision)
 		}
 	}
-	if _, _, err := ParseWhen("yesterday", loc); err == nil {
-		t.Error("ParseWhen accepted yesterday")
+	// Times that Go's time.Parse takes and SPEC.md 3.5 does not (N1).
+	for _, in := range []string{"yesterday", "2026-10-28T09:00:00,5Z", "2026-10-28T09:00:00+24:00", "0000-01-01T00:00:00Z", "2026-10-28T09:00:00.1234567891Z"} {
+		if _, _, err := ParseWhen(in, loc); err == nil {
+			t.Errorf("ParseWhen accepted %q", in)
+		}
 	}
 }
 

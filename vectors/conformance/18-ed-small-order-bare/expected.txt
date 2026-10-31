@@ -1,2 +1,3 @@
-summary: 2 valid, 0 invalid, 0 skipped, 0 held, 0 duplicate
-exit 0
+error: objects/4a/822e272acbe55d4443584e6dabf73051abab7cd4cc482d0b0e428b63584669.json: bad key
+summary: 1 valid, 1 invalid, 0 skipped, 0 held, 0 duplicate
+exit 1

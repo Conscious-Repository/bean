@@ -194,7 +194,47 @@ def id_raw(i):
     return bytes.fromhex(i[7:])
 
 
+# SPEC 4.4 and 4.5 (N2): an Ed25519 key is a canonical point that is not of
+# small order, and the R of a signature is not of small order.
+EDP = 2**255 - 19
+EDD = -121665 * pow(121666, EDP - 2, EDP) % EDP
+
+
+def ed_point(b):
+    y = int.from_bytes(b, "little") % 2**255
+    if y >= EDP:
+        return None
+    u, v = (y * y - 1) % EDP, (EDD * y * y + 1) % EDP
+    x = u * pow(v, 3, EDP) * pow(u * pow(v, 7, EDP), (EDP - 5) // 8, EDP) % EDP
+    if (v * x * x - u) % EDP:
+        x = x * pow(2, (EDP - 1) // 4, EDP) % EDP
+    if (v * x * x - u) % EDP or (x == 0 and b[31] >> 7):
+        return None
+    return (EDP - x if x & 1 != b[31] >> 7 else x, y)
+
+
+def ed_small(p):
+    x, y = p
+    for _ in range(3):
+        t = EDD * x * x * y * y % EDP
+        x, y = 2 * x * y * pow(1 + t, EDP - 2, EDP) % EDP, (y * y + x * x) * pow(1 - t, EDP - 2, EDP) % EDP
+    return (x, y) == (0, 1)
+
+
+def key_result(kid):
+    alg, hx = kid.split(":")
+    if len(hx) != 64 or hx != hx.lower():
+        return "bad key"
+    if alg == "ed25519":
+        p = ed_point(bytes.fromhex(hx))
+        if p is None or ed_small(p):
+            return "bad key"
+    return "ok"
+
+
 def verify(kid, rid, sig):
+    if kid.startswith("ed25519:") and key_result(kid) != "ok":
+        return "bad key"
     alg, hx = kid.split(":")
     salg, shx = sig.split(":")
     if alg != salg or len(shx) != 128 or shx != shx.lower():
@@ -203,6 +243,9 @@ def verify(kid, rid, sig):
     msg = id_raw(rid)
     try:
         if alg == "ed25519":
+            r = ed_point(raw[:32])
+            if r is not None and ed_small(r):
+                return "bad signature"
             ed25519.Ed25519PublicKey.from_public_bytes(bytes.fromhex(hx)).verify(raw, msg)
         elif alg == "p256":
             r, s = int.from_bytes(raw[:32], "big"), int.from_bytes(raw[32:], "big")
@@ -523,8 +566,7 @@ for sc in v22["scenarios"]:
 # OpenSSL agrees: it checks S < L and no point on the key.
 v23 = load("v23-ed25519-edges.json")
 for c in v23["cases"]:
-    hx = c["kid"].split(":")[1]
-    check(f"v23 {c['name']}: key", "ok" if len(hx) == 64 and hx == hx.lower() else "bad key", c["parse_key"])
+    check(f"v23 {c['name']}: key", key_result(c["kid"]), c["parse_key"])
     check(f"v23 {c['name']}: verify", verify(c["kid"], c["id"], c["sig"]), c["verify"])
 
 print()

@@ -1,2 +1,4 @@
-summary: 3 valid, 0 invalid, 0 skipped, 0 held, 0 duplicate
-exit 0
+error: sha256:1768ac6122e6eb8d1b78ad11600abe0b10e2033e9418b5421efac9b54f35e945: key reuse
+error: sha256:de9d99dc6babc2607b7cb9268c845bfc37924ff1ad385981e818e05341225870: key not in chain
+summary: 1 valid, 2 invalid, 0 skipped, 0 held, 0 duplicate
+exit 1

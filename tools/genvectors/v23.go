@@ -7,9 +7,9 @@ import (
 	"github.com/Conscious-Repository/bean/core"
 )
 
-// V23 pins what Ed25519 accepts today (SPEC 4.5): Go crypto/ed25519.Verify
-// with no point check on the key (4.4). A second implementation must give
-// the same result for each case.
+// V23 pins the Ed25519 edge cases (SPEC 4.4 and 4.5, change N2): a key is
+// a canonical point that is not of small order, and S is below the group
+// order. A second implementation must give the same result for each case.
 func init() { extra = append(extra, genV23) }
 
 func genV23(signer core.Signer, _ map[string]any) {

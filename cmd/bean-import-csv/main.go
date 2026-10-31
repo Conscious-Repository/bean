@@ -18,7 +18,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/Conscious-Repository/bean/core"
@@ -127,7 +126,7 @@ func convert(in io.Reader, out io.Writer, o options) error {
 		var observed any
 		if raw := get(ti); hasTime && raw != "" {
 			// Keep the time as written, with its own offset.
-			if _, err := time.Parse(time.RFC3339Nano, raw); err == nil {
+			if _, ok := core.ParseTime(raw); ok {
 				observed = map[string]any{"start": raw, "precision": o.precision}
 			} else {
 				context["raw_time"] = raw

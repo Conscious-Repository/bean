@@ -76,7 +76,7 @@ func TestSecp256k1Signatures(t *testing.T) {
 	if err := Verify(s.Public(), HashID([]byte("another")), sig); err != ErrBadSignature {
 		t.Errorf("other id: %v", err)
 	}
-	if err := Verify(TagEd25519(make([]byte, 32)), id, sig); err != ErrBadSignature {
+	if err := Verify(NewEd25519Signer(make([]byte, 32)).Public(), id, sig); err != ErrBadSignature {
 		t.Errorf("tag mismatch: %v", err)
 	}
 	hx := sig[strings.LastIndexByte(sig, ':')+1:]

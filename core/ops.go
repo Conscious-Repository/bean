@@ -382,7 +382,7 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 		data := a.Files[p]
 		fr := CheckFile(p, data)
 		if fr.Err != nil {
-			continue // 3.1: fails steps 1 to 12
+			continue // 7.4: fails a step from 1 to 15
 		}
 		id := fr.Record.ID
 		if a.Hidden[id] {

@@ -141,4 +141,39 @@ r = rec(I.key, type="bean.tombstone", subject=I.id, author=I.id, refs=[{"rel": "
 L.put(r, raw=canonical(r).replace('"v":7', '"v":7.0').encode())
 # 26 a claim of an old core type from before the rename: old format (3.3)
 L = Log("26-old-format"); I = Ident(L, 37); I.claim(1, type="hlog.tombstone")
+# 05..09e the time syntax of 3.5 (N1), last so that the nonces of the
+# other cases stay as they were; 08 and 09c compare all fraction digits
+L = Log("05-time-lowercase-t"); I = Ident(L, 5); I.claim(1, times=obs("2026-10-20t07:00:00z"))
+L = Log("06-time-offset-24"); I = Ident(L, 6); I.claim(1, times=obs("2026-10-20T07:00:00+24:00"))
+L = Log("07-time-comma"); I = Ident(L, 7); I.claim(1, times=obs("2026-10-20T07:00:00,5Z"))
+L = Log("08-time-100ns"); I = Ident(L, 8); I.claim(1, times=obs("2026-10-20T07:00:00.0000001Z", "2026-10-20T07:00:00.0000000Z"))
+L = Log("09-time-year0"); I = Ident(L, 9); I.claim(1, times=obs("0000-01-01T00:00:00Z", p="year"))
+L = Log("09b-time-leap"); I = Ident(L, 10); I.claim(1, times=obs("2016-12-31T23:59:60Z"))
+L = Log("09c-time-10digits"); I = Ident(L, 11); I.claim(1, times=obs("2026-10-20T07:00:00.0000000001Z", "2026-10-20T07:00:00.0000000000Z"))
+L = Log("09d-time-feb29"); I = Ident(L, 40); I.claim(1, times=obs("2025-02-29T07:00:00Z"))
+L = Log("09e-time-good-forms"); I = Ident(L, 41); I.claim(1, times=obs("2024-02-29T23:59:59.123456789-05:00", "2024-03-01T04:59:59.123456789Z")); I.claim(2, times=obs("0001-01-01T00:00:00+23:59", "9999-12-31T23:59:59Z"))
+# 18d a mixed-order key and a signature whose R has order 8 (4.5, N2).
+# crypto/ed25519 takes it: [S]B - [k]A = R when k = -1 mod 8.
+from beanverify import ed_decode, ed_add, EP
+EL = 2**252 + 27742317777372353535851937790883648493
+def ed_mul(P, n):
+    Q = (0, 1)
+    while n:
+        if n & 1: Q = ed_add(Q, P)
+        P = ed_add(P, P); n >>= 1
+    return Q
+def ed_enc(P): return (P[1] | ((P[0] & 1) << 255)).to_bytes(32, "little")
+T8 = bytes.fromhex("26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05")
+EB = ed_decode((4 * pow(5, EP - 2, EP) % EP).to_bytes(32, "little"))
+a = 0x1234567 * 8 + 1
+A = ed_enc(ed_add(ed_mul(EB, a), ed_decode(T8)))
+class MixedKey:
+    pub = "ed25519:" + A.hex()
+    def sign(self, rid):
+        k = int.from_bytes(hashlib.sha512(T8 + A + bytes.fromhex(rid[7:])).digest(), "little") % EL
+        return "ed25519:" + (T8 + (k * a % EL).to_bytes(32, "little")).hex() if k % 8 == 7 else "ed25519:00"
+L = Log("18d-ed-small-order-r"); I = Ident(L, 42); mk = MixedKey()
+for x in range(1, 200):
+    r = rec(mk, type="hr", subject=I.id, author=mk.pub, value={"n": x, "unit": "bpm"})
+    if r["sig"] != "ed25519:00": L.put(r); break
 print("wrote", len(os.listdir(OUT)), "cases")

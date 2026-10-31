@@ -1,0 +1,3 @@
+error: objects/44/ef44d3be5a47eef01b597e133c4ce560ceae4eac37fac95cf681696eacc36f.json: bad field: times.observed.start
+summary: 1 valid, 1 invalid, 0 skipped, 0 held, 0 duplicate
+exit 1

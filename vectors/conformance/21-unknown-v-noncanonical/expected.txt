@@ -1,2 +1,3 @@
-summary: 2 valid, 0 invalid, 1 skipped, 0 held, 0 duplicate
-exit 0
+error: objects/27/25409de6bbdfb28aa51dd1bae7dbc8ce95f14e414f210e83d9fc680a473048.json: not canonical
+summary: 2 valid, 1 invalid, 0 skipped, 0 held, 0 duplicate
+exit 1

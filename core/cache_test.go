@@ -159,3 +159,22 @@ func TestConcurrentLoads(t *testing.T) {
 		}
 	}
 }
+
+// A cache from a build with other signature rules is not used (N2): its
+// entries skipped the small-order R check.
+func TestObjectCacheOldRules(t *testing.T) {
+	s, _ := initStore(t)
+	appendLines(t, s, partial("hrv.rmssd", 1, nil))
+	age(t, s)
+	if _, err := s.Load(); err != nil {
+		t.Fatal(err)
+	}
+	if n := proven(t, s); n == 0 {
+		t.Fatal("nothing cached")
+	}
+	b, _ := os.ReadFile(s.path(fileObjCache))
+	os.WriteFile(s.path(fileObjCache), []byte(strings.TrimPrefix(string(b), objCacheRules)), 0o600)
+	if n := proven(t, s); n != 0 {
+		t.Errorf("old cache used: %d", n)
+	}
+}

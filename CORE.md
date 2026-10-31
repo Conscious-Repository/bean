@@ -31,7 +31,7 @@ A health log is a folder of signed claims about one person. Programs add files t
 | `author` | An identity id, or a tagged key used directly. A key used directly is a bare key, for example the key of a device or an agent. |
 | `kid` | The tagged public key that made `sig`. |
 | `value` | Optional object. The usual forms are `{"n", "unit"}`, `{"s"}`, `{"b"}` and `{"blob"}`. |
-| `times` | `imported` is required, in the form `YYYY-MM-DDTHH:MM:SSZ`. `observed` is null, or `{"start", "end", "precision"}` in RFC 3339. `end` is optional. |
+| `times` | `imported` is required, in the form `YYYY-MM-DDTHH:MM:SSZ`. `observed` is null, or `{"start", "end", "precision"}`. `start` and `end` match `YYYY-MM-DDTHH:MM:SS`, then an optional dot and 1 to 9 digits, then `Z` or `+HH:MM` or `-HH:MM`, with real ranges (year 0001 to 9999, a real day, hour to 23, no leap second, offset hour to 23). `end` is optional and not earlier than `start`. |
 | `source` | `system` (1 to 64 bytes in UTF-8), `adapter` (`name@version`: one `@`, text on both sides, no space, TAB, LF, FF or CR) and `ref` (a dedupe ref, or null). |
 | `refs` | Optional list of `{"rel", "id"}`. `rel` is `succeeds`, `supersedes`, `purges`, `seals` or `about`. Any other `rel` makes the record invalid. |
 | `blobs` | Optional list of `{"hash", "role", "media_type"}`. If `value.blob` is present, it must also be in this list. |
@@ -47,7 +47,7 @@ A tagged key is `<alg>:<lowercase hex>`. The signed message comes from the 32 by
 
 | alg | Public key | Signature |
 |---|---|---|
-| `ed25519` | 32 bytes. | `ed25519:<128 hex>`. RFC 8032 over the 32 bytes. Verify without the cofactor and reject a non-canonical S, as Go `crypto/ed25519.Verify` does. The key is not checked to be a point. Vector V23 has the edge cases. |
+| `ed25519` | 32 bytes: the canonical encoding of a curve point that is not of small order, else `bad key`. | `ed25519:<128 hex>`. RFC 8032 over the 32 bytes, as libsodium verifies: without the cofactor, reject S ≥ L and an R of small order. Vector V23 and conformance case 18d have the edge cases. |
 | `p256` | 33-byte compressed point. For hardware keys in devices. | `p256:<128 hex>`, which is r and s. ECDSA with SHA-256 of the 32 bytes. s must be n/2 or less. |
 | `secp256k1` | 32-byte BIP-340 x-only key. This is a Nostr public key. | `secp256k1:<created_at>:<128 hex>`. BIP-340 over the SHA-256 of the wrapper event (below). |
 
@@ -68,10 +68,10 @@ Check each file in this order. Stop at the first failure.
 1. Path, size, JSON, duplicate keys, numbers and strings.
 2. `v`, `type`, `author` and `kid` are present.
 3. The id, the key and the signature.
-4. The version. The earlier checks use only the envelope fields. These fields do not change between versions. An unknown version has two cases:
+4. The canonical bytes. They do not depend on the version.
+5. The version. The earlier checks use only the envelope fields. These fields do not change between versions. An unknown version has two cases:
    - The type starts with `bean.` and the head key of that identity, or a recovery key that a node of its chain commits to, signed the record. The identity is too new. Do not evaluate its records. Any other signer (a rotated-out key, a stranger) cannot halt the identity: skip the record with the warning `ungated: <id>`. When only the head key halts the identity, the 24 words still rotate: the succession retires that key and ends the halt.
    - Any other type. Skip the record, but sync it.
-5. The canonical bytes.
 6. The fields.
 
 ## 2. Identity
@@ -113,7 +113,7 @@ Check each file in this order. Stop at the first failure.
 
 More rules:
 
-1. A recovery key signs only successions and seal parts.
+1. A recovery key signs only successions and seal parts. A signing key is never a recovery key: the commitment to `value.key` differs from `value.recovery`, and in a succession also from the `value.recovery` of the parent. A succession does not use again a signing key or a recovery key of a node on its path. Else the record is invalid with `key reuse`.
 2. If two or more valid records correct the same target, readers show the one with the lowest id.
 3. Valid records that have the same `subject`, `author`, `source.system` and `source.ref` are duplicates. Do not count corrected records. The record with the lowest id is the primary.
 4. A claim is not valid if the set has no genesis for its author.

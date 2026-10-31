@@ -326,15 +326,27 @@ func (r *Record) checkReservedType() error {
 	return nil
 }
 
+// timePattern is the one time syntax of SPEC.md 3.5 (change N1): ASCII
+// digits, uppercase T and Z, 1 to 9 fraction digits, a numeric offset.
+var timePattern = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?(Z|[+-][0-9]{2}:[0-9]{2})$`)
+
 func isImportedTime(s string) bool {
-	if len(s) != 20 {
-		return false
-	}
-	_, err := time.Parse("2006-01-02T15:04:05Z", s)
-	return err == nil
+	_, ok := ParseTime(s)
+	return ok && len(s) == 20 && s[19] == 'Z'
 }
 
-func parseRFC3339(s string) (time.Time, bool) {
+// ParseTime reads a time of SPEC.md 3.5. Beyond the pattern: year 0001 to
+// 9999, a real calendar day, hour 00 to 23, minute and second 00 to 59,
+// offset hour 00 to 23 and offset minute 00 to 59. Nine fraction digits
+// are nanoseconds, so comparisons are exact.
+func ParseTime(s string) (time.Time, bool) {
+	m := timePattern.FindStringSubmatch(s)
+	if m == nil || s[:4] == "0000" {
+		return time.Time{}, false
+	}
+	if off := m[2]; off != "Z" && (off[1:3] > "23" || off[4:6] > "59") {
+		return time.Time{}, false
+	}
 	t, err := time.Parse(time.RFC3339Nano, s)
 	return t, err == nil
 }
@@ -348,7 +360,7 @@ func checkInterval(v any) error {
 	if !ok {
 		return badField("times.observed.start")
 	}
-	st, ok := parseRFC3339(start)
+	st, ok := ParseTime(start)
 	if !ok {
 		return badField("times.observed.start")
 	}
@@ -357,7 +369,7 @@ func checkInterval(v any) error {
 		if !ok {
 			return badField("times.observed.end")
 		}
-		et, ok := parseRFC3339(end)
+		et, ok := ParseTime(end)
 		if !ok || et.Before(st) {
 			return badField("times.observed.end")
 		}

@@ -55,3 +55,22 @@ func TestConvert(t *testing.T) {
 		t.Error("no value column accepted")
 	}
 }
+
+// A time that Go's time.Parse takes and SPEC.md 3.5 does not goes to
+// context.raw_time, not into an invalid record (N1).
+func TestConvertStrictTime(t *testing.T) {
+	in := "time,value\n\"2026-10-20T03:00:00,5Z\",1\n2026-10-20T03:00:00+24:00,2\n"
+	var out bytes.Buffer
+	if err := convert(strings.NewReader(in), &out, options{typ: "x", system: "csv", precision: "second"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+		var m map[string]any
+		if err := json.Unmarshal([]byte(l), &m); err != nil {
+			t.Fatal(err)
+		}
+		if m["times"].(map[string]any)["observed"] != nil || m["context"].(map[string]any)["raw_time"] == nil {
+			t.Errorf("not kept raw: %s", l)
+		}
+	}
+}
