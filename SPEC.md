@@ -914,6 +914,8 @@ For a too-new identity, the verifier MUST:
 3. Not erase or hide anything for that identity.
 4. Process all other identities as usual.
 
+So an identity J that makes itself too new stops only the evaluation of records about J. Records of other authors with `subject` = J are not evaluated either. No other identity changes.
+
 Commands that write for a too-new identity, or a record whose `subject` is a too-new identity, MUST stop with exit code 3. The one exception is a rotation past a halt by the head key (5.5 step 4a).
 
 ### 8.3 Unknown fields

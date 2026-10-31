@@ -1,6 +1,6 @@
 # make check runs every check that a commit needs. make fuzz and make smoke
 # run the longer checks. Tools: staticcheck and govulncheck on the PATH,
-# and a python3 with the cryptography package (AES-SIV) for the vectors.
+# and a python3 with tools/requirements.txt installed for the vectors.
 PY ?= python3
 FUZZTIME ?= 2m
 

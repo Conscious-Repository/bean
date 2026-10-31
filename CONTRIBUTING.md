@@ -12,7 +12,7 @@ go test -race ./...                  # unit, conformance folder, vector, CLI and
 go vet ./... && gofmt -l .           # gofmt must print nothing
 ./demo.sh                            # two-folder walkthrough: import, sync, purge, gc, export
 python3 -I tools/checksecp256k1.py   # independent BIP-340 and npub check, pure Python
-python3 -I tools/checkvectors.py     # independent check of the vectors; needs a cryptography package with AES-SIV
+python3 -I tools/checkvectors.py     # independent check of the vectors; needs `pip install -r tools/requirements.txt`
 PY=python3 bash tools/second/run.sh  # the second verifier against bean and against vectors/conformance
 ```
 

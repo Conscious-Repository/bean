@@ -168,7 +168,7 @@ func main() {
 	case "help":
 		fmt.Println(help)
 	case "version":
-		fmt.Printf("bean %s (spec v0.5)\n", core.Version)
+		fmt.Printf("bean %s (records v 0)\n", core.Version)
 	case "init":
 		inf := flag.NewFlagSet("init", flag.ContinueOnError)
 		inf.SetOutput(io.Discard)
