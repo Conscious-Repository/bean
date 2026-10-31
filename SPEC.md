@@ -567,13 +567,12 @@ DEFAULT for items 2 to 4.
 
 ### 5.8 Key rules
 
-No key is both a signing key and a recovery key on one chain, and no key or recovery commitment comes back.
 The path of a succession S is the nodes from the genesis to its parent P. The keys of the path are the `value.key` of each node and the `kid` of each succession on it. The recovery commitments of the path are the `value.recovery` of each node. Commitments are as in 4.6.
 
 A verifier checks S in this order:
 
 1. If `S.value.recovery` is a recovery commitment of the path, S is invalid. Error: `recovery not advanced`.
-2. S is invalid with `key reuse` when `S.value.key` is a key of the path, when the commitment to `S.value.key` is `S.value.recovery` or a recovery commitment of the path (so `value.key` is never `S.kid` or another committed recovery key), or when `S.value.recovery` is the commitment to a key of the path (so a current or earlier signing key never becomes the next recovery key).
+2. S is invalid with `key reuse` when `S.value.key` is a key of the path, when the commitment to `S.value.key` is `S.value.recovery` or a recovery commitment of the path, or when `S.value.recovery` is the commitment to a key of the path.
 
 A genesis G is invalid with `key reuse` when the commitment to `G.value.key` is `G.value.recovery`.
 
@@ -855,7 +854,7 @@ The hold length is 7 days. DEFAULT. Nothing is erased without the person running
 `bean purge <id>` does these steps:
 
 1. Check that the local identity is the subject of the target.
-2. Write a tombstone signed by the head key. The tombstone names only the target id. It MUST NOT carry the target's `source` or dedupe ref: a dedupe ref lets a holder of the identity secret test guesses of the erased content.
+2. Write a tombstone signed by the head key. The tombstone names only the target id. It MUST NOT carry the target's `source` or dedupe ref (15).
 3. Add the target dedupe ref to `local/purged-refs.jsonl`.
 4. Erase the target at once.
 5. Erase each blob that the target names, when no remaining record file names it.
