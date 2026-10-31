@@ -248,8 +248,10 @@ func TestUnknownVersion(t *testing.T) {
 	if rp.Errors["objects/00/"+strings.Repeat("0", 62)+".json"] != "bad json" {
 		t.Error("J file error lost")
 	}
-	if rp.ExitCode(nil) != 3 {
-		t.Errorf("exit %d", rp.ExitCode(nil))
+	// Exit 3 only on a replica of I; J's replica sees the line and the
+	// file error (L1).
+	if rp.ExitCode([]string{i.id}) != 3 || rp.ExitCode([]string{j.id}) != 1 || rp.ExitCode(nil) != 1 {
+		t.Errorf("exit %d %d %d", rp.ExitCode([]string{i.id}), rp.ExitCode([]string{j.id}), rp.ExitCode(nil))
 	}
 	lines := rp.Lines()
 	if !strings.HasPrefix(lines[len(lines)-1], "summary: ") || !contains(lines[:len(lines)-1], "too new: "+i.id) {

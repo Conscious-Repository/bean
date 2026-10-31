@@ -74,7 +74,7 @@ var syntax = map[string]string{
 	"verify":        "verify",
 	"mcp":           "mcp [-write] [-label <name>]",
 	"agent":         "agent init [-label <name>] [-identity <id>] | agent pair <npub> [-label <name>]",
-	"sync":          "sync <source folder>",
+	"sync":          "sync [-max-mb <n>] <source folder>",
 	"export":        "export <empty folder>",
 	"import-export": "import-export <export folder>",
 	"rotate":        "rotate [-no-seal <id>]... [-nostr new|<nsec file>] < words.txt",
@@ -358,10 +358,14 @@ func main() {
 		fmt.Println("rotated to", res.NewKey)
 		fmt.Printf("sealed %d\n", len(res.Sealed))
 	case "sync":
-		if len(rest) != 1 {
+		sf := flag.NewFlagSet("sync", flag.ContinueOnError)
+		sf.SetOutput(io.Discard)
+		maxMB := sf.Int64("max-mb", core.DefaultSyncLimit>>20, "refuse a source whose record files are larger than this many MiB")
+		if err := sf.Parse(rest); err != nil || sf.NArg() != 1 || *maxMB < 1 {
 			usage()
 		}
-		src := core.Open(rest[0])
+		s.SyncLimit = *maxMB << 20
+		src := core.Open(sf.Arg(0))
 		src.Now = s.Now
 		res, err := s.Sync(src)
 		if err != nil {

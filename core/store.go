@@ -36,6 +36,9 @@ var (
 // Store is one replica folder.
 type Store struct {
 	Dir string
+	// SyncLimit is the largest total size of record files that Sync reads
+	// from a source; 0 means DefaultSyncLimit.
+	SyncLimit int64
 	// Now returns the current time. Tests and $BEAN_NOW inject it.
 	Now func() time.Time
 	// mu is the in-process half of the folder lock (lock.go).
@@ -434,9 +437,10 @@ func (s *Store) GC() (records, blobs int, err error) {
 		return 0, 0, err
 	}
 	// Fail closed (DECISIONS 107): erase nothing while the verifier cannot
-	// fully judge the identities in this folder.
-	if len(l.Report.TooNew) > 0 {
-		return 0, 0, errors.New("too new: " + strings.Join(l.Report.TooNew, ", ") + ": update bean before gc")
+	// judge the local identity. gc erases only targets of its tombstones,
+	// so another too-new identity cannot change what it erases.
+	if l.Local != nil && contains(l.Report.TooNew, l.Local.Identity) {
+		return 0, 0, errors.New("too new: " + l.Local.Identity + ": update bean before gc")
 	}
 	if l.Local != nil && contains(l.Report.Compromised, l.Local.Identity) {
 		return 0, 0, errors.New("compromised: " + l.Local.Identity + ": gc refused")
@@ -454,7 +458,7 @@ func (s *Store) GC() (records, blobs int, err error) {
 		if perr != nil || recv.After(cutoff) {
 			continue
 		}
-		if l.Report.Purged[h.Target] != tid || !l.Hidden[h.Target] {
+		if _, purged := l.Report.Purged[h.Target]; !purged || !l.Report.Valid[tid] || !l.Hidden[h.Target] {
 			continue
 		}
 		if r := l.Report.Records[h.Target]; r != nil {

@@ -21,9 +21,9 @@ type RotateResult struct {
 }
 
 // Rotate writes a recovery-signed succession from the chain head to a new
-// random signing key (SPEC.md 5.3 to 5.5 as changed by C5 and C6). words
-// are the 24 paper words. Every valid destructive record of the outgoing key
-// in this replica is sealed unless its id is in noSeal.
+// random signing key (SPEC.md 5.3 to 5.5). words are the 24 paper words.
+// Every record of the outgoing key in this replica, valid or not, is sealed
+// unless its id is in noSeal (C26).
 func (s *Store) Rotate(words []string, noSeal []string, key NewKey) (RotateResult, error) {
 	var res RotateResult
 	unlock, err := s.lock()

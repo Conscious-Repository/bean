@@ -245,10 +245,6 @@ func (r *Record) checkFields() error {
 			return badField("context")
 		}
 	}
-	// sig shape (verified earlier)
-	if _, ok := m["sig"].(string); !ok {
-		return badField("sig")
-	}
 	return r.checkReservedType()
 }
 
