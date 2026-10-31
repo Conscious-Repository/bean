@@ -142,9 +142,9 @@ Run on your own machine. Records that you trust this agent key to write about yo
 
 ## Copies and keys
 
-### `sync [-max-mb <n>] <folder>`
+### `sync <folder>`
 
-Copies to this log every record and file that the other folder has and this one does not. It checks each file first, and replaces a stored copy that fails the checks. It does not copy a record that a valid deletion names. Run it both ways to make two copies the same. Prints `copied <r> records, <b> blobs, refused <p> purged`. Sync only from your own copies: it refuses a folder with more than `<n>` MiB of record files (default 2048).
+Copies to this log every record and file that the other folder has and this one does not. It checks each file first, and replaces a stored copy that fails the checks. It does not copy a record that a valid deletion names. Run it both ways to make two copies the same. Prints `copied <r> records, <b> blobs, refused <p> purged`. Sync only from your own copies.
 
 ### `export <folder>`
 

@@ -761,7 +761,7 @@ A reader decides how much to trust a claim from another author: a device, an age
 | `local/signing-key` | `<alg>:<hex private key>`, one line. File mode 0600. For Ed25519, the hex is the 32-byte seed. For secp256k1, it is the 32-byte secret key (the bytes of an nsec). | never |
 | `local/holds.json` | Hold state (7.6). | never |
 | `local/hidden/<64 hex>.json` | Hidden records (7.6). | never |
-| `local/purged-refs.jsonl` | Purged dedupe refs that no tombstone carries (7.8). | never |
+| `local/purged-refs.jsonl` | Purged dedupe refs of this replica (7.8). | never |
 | `local/cache/` | Caches (7.10). | never |
 | `local/lock` | The folder lock (7.11). Empty. | never |
 | `local/signing-key.next` | The new signing key while a rotation runs (5.5 step 8). | never |
@@ -807,7 +807,7 @@ Sync from replica A (source) to replica B (destination) is a set union with one 
 
 Sync MUST copy files with an unknown `v`. Newer verifiers need them.
 Sync copies a file that passes steps 1 to 15 also when section 6 finds the record invalid. Validity is a verifier result, not a sync rule. A file that fails steps 1 to 15 is not copied, and a stored copy that fails them is replaced. Thus a reformatted copy of a record (other whitespace or key order, with the same id and signature) cannot spread, and a replica that got one heals at the next sync from a good copy.
-A replica MAY refuse a source whose record files are larger than a limit. The reference CLI refuses more than 2 GiB of record files unless `-max-mb` raises the limit. Sync only from copies that you or the people you trust control (15).
+Sync only from copies that you or the people you trust control (15).
 A succession and a tombstone that it invalidates can arrive in the same sync. The target then comes back on the next sync (step 5). Two passes are sufficient.
 Sync with rsync, git, Syncthing or a USB drive is allowed if the person then runs `bean verify` on each replica. Such tools do not apply the tombstone exception. `bean verify` then hides or erases the target (7.6).
 
@@ -848,7 +848,7 @@ The hold length is 7 days. DEFAULT. Nothing is erased without the person running
 `bean purge <id>` does these steps:
 
 1. Check that the local identity is the subject of the target.
-2. Write a tombstone signed by the head key. When the target has a non-null `source.ref`, the tombstone has `context.purged_ref` = `{"system": <target source.system>, "ref": <target source.ref>}`.
+2. Write a tombstone signed by the head key. The tombstone names only the target id. It MUST NOT carry the target's `source` or dedupe ref: a dedupe ref lets a holder of the identity secret test guesses of the erased content.
 3. Add the target dedupe ref to `local/purged-refs.jsonl`.
 4. Erase the target at once.
 5. Erase each blob that the target names, when no remaining record file names it.
@@ -858,12 +858,12 @@ A program MUST NOT tombstone a genesis, a succession or a tombstone.
 
 ### 7.8 Purged refs
 
-The purged refs of a replica are the triples (`subject`, `context.purged_ref.system`, `context.purged_ref.ref`) of its valid tombstones, plus the lines of `local/purged-refs.jsonl`.
-The tombstone carries the ref, so every replica that has the tombstone has the ref, also after `local/` is lost.
-`local/purged-refs.jsonl` keeps the refs that no tombstone carries: purges from builds before `context.purged_ref`, and targets that a sync refused (7.5). Each line is the canonical bytes of `["<subject>", "<source.system>", "<source.ref>"]`.
-`bean append` MUST skip a record whose (`subject`, `source.system`, `source.ref`) is a purged ref.
-Thus a new import after a purge adds nothing.
-The verifier does not read `context.purged_ref` (3.2). A wrong value can only stop an import of the subject's own data.
+`local/purged-refs.jsonl` has one line per purged target.
+Each line is the canonical bytes of `["<subject>", "<source.system>", "<source.ref>"]`.
+A replica writes a line when it erases or does not copy a purged target that has a non-null `source.ref`.
+`bean append` MUST skip a record whose (`subject`, `source.system`, `source.ref`) is in this file.
+Thus a new import after a purge adds nothing on this replica.
+A replica that never had the target, or that lost this file, does not know the ref, and a new import of the same source data adds it again (17).
 
 ### 7.9 Export
 
@@ -1141,7 +1141,7 @@ Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <
 - Action: section 7.7.
 - Errors: `not subject`, `bad target`, `input missing: <id>` when the target is not in the replica.
 
-`bean sync [-max-mb <n>] <source dir>`
+`bean sync <source dir>`
 
 - Action: section 7.4 into the `-dir` log. Refuse a source with more than `<n>` MiB of record files (default 2048). Error: `too large: ...`.
 - Output: `copied <r> records, <b> blobs, refused <p> purged`, then `replaced <n> bad copies` when n > 0.
@@ -1409,7 +1409,7 @@ Hand-built AES-SIV code MUST also pass the RFC 4493 and RFC 5297 Appendix A vect
 2. Records are plaintext on disk. Only blobs are encrypted. Folder-level encryption is the sync tool's job in v0.
 3. One key holds at most 200,200,000 records (5.4). A rotation of more than 200,000 records writes seal continuations.
 4. An identity secret leak needs a new paper seed, a new identity and a new log. The old data must be re-encrypted into the new log.
-5. A tombstone from a build before `context.purged_ref` (7.7) does not carry the dedupe ref of its target. A replica without the `local/purged-refs.jsonl` of the purging replica brings that data back on a re-import.
+5. A tombstone does not carry the dedupe ref of its target (7.7). A replica without the `local/purged-refs.jsonl` of the purging replica brings purged data back when it imports the same source data again. Back up that file with the log.
 6. Two hosts that import the same source before they sync make duplicate records. Section 6.3 step 12 marks them. They stay in the log.
 7. Tuple dedupe refs merge two real readings with the same type, observed time and value in two different exports when the occurrence counts match.
 8. After erasure, a replica cannot restore a target from its own disk.

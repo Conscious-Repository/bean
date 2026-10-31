@@ -182,7 +182,7 @@ rsync -a server:health/objects server:health/blobs ~/health/
 bean verify
 ```
 
-Sync only from your own copies: `bean sync` copies every record file of the source, and refuses a source with more than 2 GiB of them unless you pass `-max-mb`. Never use `rsync --delete`: the log only grows, and deletions travel as records. Syncthing also works if you share `objects/` and `blobs/` only. Run `bean verify` after a copy made with another tool; it applies deletions that came with the copy.
+Sync only from your own copies: `bean sync` copies every record file of the source. Never use `rsync --delete`: the log only grows, and deletions travel as records. Syncthing also works if you share `objects/` and `blobs/` only. Run `bean verify` after a copy made with another tool; it applies deletions that came with the copy.
 
 Each machine needs its own folder. Do not point two machines at one shared or network folder: the folder lock works only inside one machine ([SECURITY.md](SECURITY.md)).
 
@@ -210,7 +210,7 @@ Anyone who can read the server's folder can read your records: they are plain JS
 
 ### Backups and a lost laptop
 
-Any copy of `objects/` and `blobs/` is a backup: Time Machine, a drive, another machine. You do not need a backup of `local/`; the 24 words rebuild it. A purge writes the import ref of the deleted record into its tombstone, so a re-import after a restore skips it. Purges made with an older build are the exception ([UPGRADING.md](UPGRADING.md)).
+Any copy of `objects/` and `blobs/` is a backup: Time Machine, a drive, another machine. The 24 words rebuild the keys in `local/`. Also back up `local/purged-refs.jsonl`: it is the only record of which imports you deleted. Without it, importing the same source data again brings deleted readings back ([SECURITY.md](SECURITY.md)).
 
 If you lose the laptop:
 
