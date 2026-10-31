@@ -77,6 +77,9 @@ func TestGCTwoTombstonesOneTarget(t *testing.T) {
 	if _, err := os.Stat(hiddenPath(c.Dir, xid)); err == nil {
 		t.Error("target still on disk")
 	}
+	if h, err := c.readHolds(); err != nil || len(h) != 0 {
+		t.Errorf("holds left: %v %v", h, err)
+	}
 }
 
 // A purge writes the target's dedupe ref into the tombstone, so a copy
