@@ -103,10 +103,10 @@ func loadVocabulary(dir string) (vocab, string, error) {
 		return vocab{}, "", errors.New("vocabulary.md in the bean folder: cannot read it")
 	}
 	if len(b) > 64<<10 {
-		return vocab{}, "", errors.New("vocabulary.md: larger than 64 KiB")
+		return vocab{}, "", errors.New("vocabulary.md in the bean folder: larger than 64 KiB")
 	}
 	mine := parseVocabulary(string(b))
-	for t := range mine.exact {
+	for _, t := range sortedStrings(mine.exact) {
 		if takenTerm(t) {
 			return vocab{}, "", fmt.Errorf("vocabulary.md in the bean folder: `%s` is a built-in or reserved term; a changed meaning is a new term", t)
 		}
@@ -116,12 +116,6 @@ func loadVocabulary(dir string) (vocab, string, error) {
 			return vocab{}, "", fmt.Errorf("vocabulary.md in the bean folder: `%s<...>` overlaps a built-in or reserved term; a changed meaning is a new term", p)
 		}
 	}
-	all := vocab{exact: map[string]bool{}, prefixes: append(slices.Clone(builtin.prefixes), mine.prefixes...)}
-	for t := range builtin.exact {
-		all.exact[t] = true
-	}
-	for t := range mine.exact {
-		all.exact[t] = true
-	}
-	return all, vocabulary + "\n\n# Personal vocabulary (vocabulary.md in the bean folder)\n\n" + string(b), nil
+	text := vocabulary + "\n\n# Personal vocabulary (vocabulary.md in the bean folder)\n\n" + string(b)
+	return parseVocabulary(text), text, nil
 }

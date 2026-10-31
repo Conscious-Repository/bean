@@ -43,7 +43,7 @@ To let your assistant log a type that is not here, add a file `vocabulary.md` to
     | `kombucha` | number, `mL` | `brand` |
     | `cgm.<sensor>` (`libre`) | number, `mg/dL` | |
 
-Your terms are added to these. A term in your file cannot reuse a type from this list or `bean.*`, `agent.pair` or `device.pair`; a changed meaning is a new term. If it does, the assistant gets an error that names the term until you fix the file. Your assistant reads the file as instructions, so only you should write it. `bean sync` does not copy it; copy it yourself to each computer that runs `bean mcp -write`.
+Your terms are added to these. A term in your file cannot reuse a type from this list or `bean.*`, `agent.pair` or `device.pair`; a changed meaning is a new term. If it does, the assistant gets an error that names the term until you fix the file. Your assistant reads the file as instructions, so only you should write it; it can be up to 64 KiB. `bean sync` does not copy it; copy it yourself to each computer that runs `bean mcp -write`.
 
 ## Uncertainty
 
