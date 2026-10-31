@@ -19,12 +19,17 @@ import (
 // other check still runs. bean verify ignores the cache, proves every
 // file, and rebuilds it: verify is the fsck.
 //
-// Each line is "<path on disk>\t<size>\t<mtime ns>\t<file bytes>". Only
-// canonical records are cached, and canonical JSON has no raw tab or
-// newline. The cache is never the truth (SPEC.md 7.10): a missing or
+// After the first line (objCacheRules), each line is "<path on disk>\t
+// <size>\t<mtime ns>\t<file bytes>". Only canonical records are cached,
+// and canonical JSON has no raw tab or newline. The cache is never the truth (SPEC.md 7.10): a missing or
 // garbled cache only costs time.
 
 const fileObjCache = "local/cache/objects"
+
+// objCacheRules is the first line of the cache. A cache written under
+// other signature rules is dropped: its entries skipped checks that this
+// build makes (N2, the small-order R).
+const objCacheRules = "bean objects N2\n"
 
 // racyWindow keeps files modified this recently out of the cache, as git
 // does with "racily clean" entries: an edit in the same clock tick as the
@@ -118,6 +123,9 @@ func (s *Store) readObjCache() map[string]cached {
 	}
 	defer f.Close()
 	r := bufio.NewReaderSize(f, 1<<20)
+	if head, err := r.ReadString('\n'); err != nil || head != objCacheRules {
+		return out
+	}
 	for {
 		line, err := r.ReadBytes('\n')
 		if err != nil {
@@ -184,6 +192,7 @@ func (s *Store) writeObjCache(o *objectSet, rp *Report) {
 	}
 	sort.Slice(o.disk, func(i, j int) bool { return o.disk[i].rel < o.disk[j].rel })
 	var buf bytes.Buffer
+	buf.WriteString(objCacheRules)
 	n := 0
 	for _, d := range o.disk {
 		if !good[d.path] || d.stamp.mtime > racy {

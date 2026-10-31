@@ -216,13 +216,20 @@ The core does not bless a series format. The method that reads the blob defines 
 
 `times.imported` is REQUIRED and MUST NOT be null.
 The writer sets it when the record enters the log.
-Format: `YYYY-MM-DDTHH:MM:SSZ`, UTC, second precision.
+Format: `YYYY-MM-DDTHH:MM:SSZ`, UTC, second precision. It is a time (below) with no fraction and the offset `Z`.
 
 `times.observed` is REQUIRED as a key. Its value is null or an interval.
 An interval is `{"start": time, "end": time, "precision": p}`. `end` is optional.
-`start` and `end` are RFC 3339 date-time strings with a numeric offset or `Z`.
-Fractional seconds are allowed.
-If `end` is present, `end` MUST NOT be earlier than `start`.
+`start` and `end` are times.
+A time is a string that matches `^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?(Z|[+-][0-9]{2}:[0-9]{2})$` as a whole, with these ranges:
+
+- Year 0001 to 9999, month 01 to 12, a day that exists in that month (February 29 only in a leap year of the Gregorian calendar).
+- Hour 00 to 23, minute 00 to 59, second 00 to 59. There is no leap second.
+- Offset hour 00 to 23, offset minute 00 to 59.
+
+This is a strict subset of RFC 3339: uppercase `T` and `Z` only, a dot before the fraction, at most 9 fraction digits.
+Any other string is invalid with `bad field: <name>`.
+If `end` is present, `end` MUST NOT be earlier than `start`. Compare the two instants exactly, with all fraction digits.
 `p` is one of `year`, `month`, `day`, `hour`, `minute`, `second`, `millisecond`. DEFAULT.
 
 A writer MUST set `times.observed` to null when the source does not give a time.
@@ -259,7 +266,7 @@ A record MUST NOT have two refs with the same rel and id.
 
 ### 3.8 Validation order
 
-The fields `v`, `type`, `author`, `kid`, `id` and `sig` are the envelope. Their meaning and constraints do not change between record versions. A verifier of any version checks the envelope, the id and the signature before it reads `v`.
+The fields `v`, `type`, `author`, `kid`, `id` and `sig` are the envelope. Their meaning and constraints do not change between record versions. A verifier of any version checks the envelope, the id, the signature and the canonical bytes before it reads `v`.
 
 A verifier MUST check each file in this order.
 At the first failure, the verifier reports the error string and stops checking that file.
@@ -276,8 +283,8 @@ At the first failure, the verifier reports the error string and stops checking t
 10. `id` is a string equal to the recomputed id and to the id from the path. Error: `id mismatch`.
 11. `kid` parses as a supported tagged key. Error: `unsupported key algorithm` or `bad key`.
 12. `sig` verifies for `kid` over the id bytes (section 4.5). Error: `bad signature`.
-13. If `v` is not a version that this verifier knows, apply section 8 and stop.
-14. The file bytes are equal to the canonical bytes of the parsed object. Error: `not canonical`.
+13. The file bytes are equal to the canonical bytes of the parsed object. Error: `not canonical`. Canonical bytes (4.1) do not depend on `v`.
+14. If `v` is not a version that this verifier knows, apply section 8 and stop.
 15. All required fields are present with the correct JSON types and constraints in 3.2 to 3.7. Error: `bad field: <name>`, where `<name>` is the dotted path of the failing field, for example `times.observed.start` or `value.parts`. When more than one field fails, which one is named is not normative. Conformance tests compare the name only for files with one bad field.
 16. Apply the authority rules in section 6.
 
@@ -335,7 +342,7 @@ A tagged key is `<alg>:<lowercase hex>`.
 | `p256` | 33-byte SEC1 compressed point (prefix 0x02 or 0x03) | 66 | Allowed for hardware-backed device keys. Verifiers MUST support it. |
 | `secp256k1` | 32-byte BIP-340 x-only public key (the Nostr public key) | 64 | Allowed for signing keys and bare-key authors, so a Nostr key can sign records. Verifiers MUST support it. A recovery key is never secp256k1. |
 
-A verifier MUST reject uppercase hex or a wrong length. Error: `bad key`. For `p256` and `secp256k1`, a verifier MUST also reject an invalid point with `bad key`; for `secp256k1`, the point is invalid when BIP-340 `lift_x` fails. For `ed25519`, a verifier does not check the point when it reads a key: a key that is not a point fails at the signature (4.5, vector V23).
+A verifier MUST reject uppercase hex or a wrong length. Error: `bad key`. For `p256` and `secp256k1`, a verifier MUST also reject an invalid point with `bad key`; for `secp256k1`, the point is invalid when BIP-340 `lift_x` fails. For `ed25519`, a key is invalid with `bad key` when it is not the canonical encoding of a curve point (RFC 8032 5.1.3: y below p, and not x = 0 with the sign bit set), or when the point has small order ([8]A is the neutral point). This is the key check of libsodium. Vector V23 has these cases.
 A verifier MUST reject any other tag. Error: `unsupported key algorithm`.
 
 ### 4.5 Signatures
@@ -348,7 +355,7 @@ Ed25519:
 
 - `sig` = `ed25519:` + 128 lowercase hex digits (the 64-byte RFC 8032 signature).
 - Sign with RFC 8032 Ed25519 (pure, no prehash, no context).
-- Verify as Go `crypto/ed25519.Verify` does. DEFAULT. In words: reject `S` ≥ L (the group order); decode `A`, accepting a non-canonical encoding of a valid point and rejecting a string that is no point; compute k = SHA-512(R || A || id bytes) mod L and R' = [S]B − [k]A, with no cofactor; the signature is good only when the 32-byte encoding of R' equals the R bytes of the signature. Small-order `A` and `R` are not rejected. Vector V23 has these cases.
+- Verify as libsodium `crypto_sign_verify_detached` does. The key passed 4.4. Reject `S` ≥ L (the group order). Reject an `R` that decodes to a point of small order. Compute k = SHA-512(R || A || id bytes) mod L and R' = [S]B − [k]A, with no cofactor. The signature is good only when the 32-byte encoding of R' equals the R bytes of the signature. Vector V23 and conformance case 18d have the edge cases.
 
 P-256:
 
@@ -560,7 +567,8 @@ DEFAULT for items 2 to 4.
 
 ### 5.8 Key rules
 
-- A succession MUST NOT reuse a key in `value.key`. Error: `key reuse`. A key is reused when it is the signing key or recovery key of a node on the path from genesis to the parent.
+- A succession MUST NOT reuse a key in `value.key`. Error: `key reuse`. A key is reused when it is the `value.key` of a node on the path from genesis to the parent, or the `kid` of a succession on that path.
+- A signing key MUST NOT be a recovery key (N4). Error: `key reuse`. A genesis is invalid when the commitment (4.6) to its `value.key` equals its `value.recovery`. A succession is invalid when the commitment to its `value.key` equals the `value.recovery` of its parent (so `value.key` is its own `kid`) or its own `value.recovery`.
 - A succession MUST name a `value.recovery` that differs from the parent commitment. Error: `recovery not advanced`.
 - A recovery key signs only successions and seal parts. A record of any other type signed by a recovery key is invalid. Error: `key not in chain`.
 
@@ -629,6 +637,7 @@ Apply section 8 to files with an unknown `v`.
 
 Step 2. Find identities.
 For each genesis G in R: G passed its signature check with `kid` = `value.key`.
+If the commitment to `G.value.key` equals `G.value.recovery`, G is invalid with `key reuse` and starts no identity (5.8).
 The identity id is the id of G.
 If an identity is too new (8.2), do not process it. Report `too new: <identity id>`.
 
@@ -785,7 +794,7 @@ Sync from replica A (source) to replica B (destination) is a set union with one 
 1. Compute the valid set of A and of B (section 6).
 2. Collect the valid tombstones of A and of B.
 3. For each record file in A that B does not have, `bean.seal` files first:
-   1. If the file fails a step from 1 to 15 of 3.8, do not copy it. A file with an unknown `v` stops at step 13 and passes.
+   1. If the file fails a step from 1 to 15 of 3.8, do not copy it. A file with an unknown `v` stops at step 14 and passes.
    2. If a valid tombstone of A or B names it, apply 7.5. Do not copy it.
    3. If B hides it under a hold, do not copy it.
    4. Otherwise copy it.
@@ -898,7 +907,7 @@ A verifier MUST NOT interpret a record whose `v` it does not know.
 - If `type` starts with `bean.`, the affected identity is too new.
 - Otherwise the verifier skips the record.
 
-The record reached step 13 of 3.8, so its envelope, id and signature are good. The affected identity is:
+The record reached step 14 of 3.8, so its envelope, id, signature and bytes are good. The affected identity is:
 
 1. For `bean.genesis`: the record's own id, when `author` = `kid`.
 2. For other `bean.*` types: the `author` field I, when I has a genesis in R and `kid` is the head key of I or a recovery public key whose commitment (4.6) is the `value.recovery` of a node on the chain of I. The chain is followed from the genesis through nodes with one child; at a fork the fork point is the head (6.3 step 5). When the chain is the genesis alone, the head key is the genesis key.
@@ -1150,7 +1159,7 @@ Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <
 `bean-import-<source> [flags] <file>`
 
 - Output: JSONL partial records (9.2) on standard output.
-- `bean-import-csv -type <type> -system <system> -blob <blob id> [-unit <unit>] <file.csv>` reads a header row. It uses column `value`, optional column `time` (RFC 3339) and optional column `id` (native id). Get `<blob id>` from `bean blob put <file.csv>` first.
+- `bean-import-csv -type <type> -system <system> -blob <blob id> [-unit <unit>] <file.csv>` reads a header row. It uses column `value`, optional column `time` (a time of 3.5; any other text goes to `context.raw_time`) and optional column `id` (native id). Get `<blob id>` from `bean blob put <file.csv>` first.
 
 Test clock: the reference CLI reads the current time from `$BEAN_NOW` (RFC 3339) when it is set. Tests use it for holds and `times.imported`. DEFAULT.
 
@@ -1367,7 +1376,7 @@ The independent checks are `tools/checkvectors.py`, `tools/checksecp256k1.py` an
 | V21 | Seal continuations | A fixed identity, a succession with 2 parts, a duplicate part, a forged part and a part for a missing succession | Valid, `bad seal`, `not sealed`, held or incomplete per record and per scenario. Published. |
 | V22 | Too-new gate and going past a halt | One identity with records of `v` = 99 by the head key, a retired key, recovery keys 0 and 1 and a stranger, with and without a rotation | Too-new identities, `ungated` ids, valid ids, and the halting records that 5.5 step 4a passes, per scenario. Published. |
 | V18 | secp256k1 | A fixed secret key and a record id, created_at 0 and 1761566400, zero aux | `kid`, npub, nsec, wrapper bytes and id, `sig`, and five rejects. Published. Checked by `tools/checksecp256k1.py`. |
-| V23 | Ed25519 edge cases | A good signature, `S` = `S` + L, the small-order identity key with one signature for two ids, a non-canonical encoding of it, and a key that is not a point | `bad key` or not, and accept or `bad signature`, as 4.4 and 4.5 say. Published. |
+| V23 | Ed25519 edge cases | A good signature, `S` = `S` + L, the small-order identity key with one signature for two ids, a non-canonical encoding of it, and a key that is not a point | `bad key` or not, and accept or `bad signature`, as 4.4 and 4.5 say. Published. Conformance case 18d adds a small-order `R` under a mixed-order key. |
 | V24 | Conformance folders | Folders of record files in `vectors/conformance/`, written by `tools/second/cases.py`: nesting depth, empty arrays, byte and code point lengths, whole-string patterns, held and not-sealed order, too-new identities, recovery keys as signing keys, Ed25519 keys, unknown `v`, old types | `expected.txt`: the verify lines (12.1) and the exit code of a replica with no local identity. Published. |
 
 Hand-built AES-SIV code MUST also pass the RFC 4493 and RFC 5297 Appendix A vectors (4.9). The HKDF code MUST pass the RFC 5869 Appendix A vectors.
@@ -1407,9 +1416,8 @@ Hand-built AES-SIV code MUST also pass the RFC 4493 and RFC 5297 Appendix A vect
 9. A frozen identity cannot recover.
 10. Records that a device signs and does not sync before a rotation become invalid.
 11. The folder lock does not work across hosts on a network or synced folder, and the reference implementation has none on Windows (7.11). Give each host its own folder.
-12. Ed25519 verification follows Go `crypto/ed25519` (4.5): it accepts small-order and non-canonical keys, and the small-order identity key has one signature for every id. Vector V23 pins this. A verifier built on a strict library, for example libsodium, disagrees on such signatures.
-13. Every command reads and checks the whole log. Time and memory grow with the number of records: about 1 s and 0.2 GB of live heap at 50,000 records on a laptop-class machine. Batch dense series (9.4).
-14. A thief with the head signing key can halt the identity with one `bean.*` record of an unknown `v` (8.2) until the person rotates with the paper seed (5.5 step 4a). Until then every copy that has the record refuses writes for the identity. When the fork point of a frozen identity signs the halt, `verify` reports `too new`, not `compromised`; `rotate` reports `compromised`.
+12. Every command reads and checks the whole log. Time and memory grow with the number of records: about 1 s and 0.2 GB of live heap at 50,000 records on a laptop-class machine. Batch dense series (9.4).
+13. A thief with the head signing key can halt the identity with one `bean.*` record of an unknown `v` (8.2) until the person rotates with the paper seed (5.5 step 4a). Until then every copy that has the record refuses writes for the identity. When the fork point of a frozen identity signs the halt, `verify` reports `too new`, not `compromised`; `rotate` reports `compromised`.
 
 ## 18. Out of scope
 

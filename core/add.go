@@ -30,11 +30,11 @@ func ManualValue(text, unit string) map[string]any {
 	return map[string]any{"s": text}
 }
 
-// ParseWhen reads the -at flag of bean add. It accepts RFC 3339 (second
-// precision), "YYYY-MM-DD HH:MM" or "YYYY-MM-DDTHH:MM" in loc (minute),
+// ParseWhen reads the -at flag of bean add. It accepts a time of SPEC.md
+// 3.5 (second precision), "YYYY-MM-DD HH:MM" or "YYYY-MM-DDTHH:MM" in loc (minute),
 // and "YYYY-MM-DD" (day). It returns the start string and the precision.
 func ParseWhen(s string, loc *time.Location) (string, string, error) {
-	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+	if t, ok := ParseTime(s); ok {
 		return t.Format(time.RFC3339Nano), "second", nil
 	}
 	// A local time in a clock change gap does not exist; Go would move it

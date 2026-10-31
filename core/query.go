@@ -31,7 +31,7 @@ type Filter struct {
 func When(r *Record) time.Time {
 	if obs, ok := r.Observed.(map[string]any); ok {
 		if s, ok := obs["start"].(string); ok {
-			if t, ok := parseRFC3339(s); ok {
+			if t, ok := ParseTime(s); ok {
 				return t
 			}
 		}

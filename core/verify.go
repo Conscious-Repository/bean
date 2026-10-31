@@ -33,13 +33,14 @@ var knownVersions = map[int]bool{0: true}
 
 // FileResult is the outcome of SPEC.md 3.8 steps 1 to 15 for one file.
 type FileResult struct {
-	Record  *Record // set when steps 1 to 15 pass, or for an unknown version after step 12
+	Record  *Record // set when steps 1 to 15 pass, or for an unknown version after step 13
 	Err     error   // first failure
 	Unknown bool    // unknown v: Record has only the envelope
 }
 
-// CheckFile applies SPEC.md 3.8 steps 1 to 15 (order from change set C2:
-// envelope, id and signature come before the version check).
+// CheckFile applies SPEC.md 3.8 steps 1 to 15 (order from change sets C2
+// and N3: envelope, id, signature and canonical bytes come before the
+// version check).
 func CheckFile(path string, data []byte) FileResult { return checkFile(path, data, false) }
 
 // checkFile is CheckFile. proven skips only the signature arithmetic of
@@ -99,13 +100,13 @@ func checkFile(path string, data []byte, proven bool) FileResult {
 			return FileResult{Err: err}
 		}
 	}
-	// 13. version
-	if !knownVersions[r.V] {
-		return FileResult{Record: r, Unknown: true}
-	}
-	// 14. canonical
+	// 13. canonical, for every version (N3): JCS does not depend on v.
 	if string(Canonical(obj)) != string(data) {
 		return FileResult{Err: ErrNotCanonical}
+	}
+	// 14. version
+	if !knownVersions[r.V] {
+		return FileResult{Record: r, Unknown: true}
 	}
 	// 15. fields
 	if err := r.checkFields(); err != nil {
@@ -232,6 +233,11 @@ func (rp *Report) buildTrees(ids []string) map[string]*tree {
 		r := rp.Records[id]
 		switch r.Type {
 		case "bean.genesis":
+			// 5.8 (N4): the signing key is not the recovery key.
+			if Commitment(r.ValueKey()) == r.Recovery() {
+				rp.fail(id, "key reuse")
+				continue
+			}
 			trees[id] = &tree{nodes: map[string]*Record{id: r}, children: map[string][]*Record{}}
 		case "bean.succession":
 			succs = append(succs, r)
@@ -304,7 +310,9 @@ func checkSuccession(s, p *Record, used map[string]int) error {
 	if s.Recovery() == p.Recovery() {
 		return errors.New("recovery not advanced")
 	}
-	if used[s.ValueKey()] > 0 {
+	// 5.8 (N4): value.key is no key on the path and no recovery key: not
+	// the one that signs this succession, not the one it commits to.
+	if c := Commitment(s.ValueKey()); used[s.ValueKey()] > 0 || c == p.Recovery() || c == s.Recovery() {
 		return errors.New("key reuse")
 	}
 	return nil

@@ -140,7 +140,7 @@ var writeTools = []mcpTool{
 			"type":       strProp("Record type from the vocabulary, for example food, drink.water, symptom.headache, food.estimate."),
 			"value":      map[string]any{"type": []string{"string", "number", "boolean"}, "description": "A number with unit, or text in the person's words."},
 			"unit":       strProp("Unit of a number value, for example kg, L, mg, kcal, {score}."),
-			"at":         strProp("When it happened: RFC 3339, YYYY-MM-DD HH:MM or YYYY-MM-DD in the local zone. Omit for now."),
+			"at":         strProp("When it happened: YYYY-MM-DDTHH:MM:SS with Z or an offset, YYYY-MM-DD HH:MM or YYYY-MM-DD in the local zone. Omit for now."),
 			"note":       strProp("Free text from the person."),
 			"about":      strProp("Id or 6+ hex prefix of the entry this one is about (required for food.estimate)."),
 			"corrects":   strProp("Id or 6+ hex prefix of an entry you wrote earlier that this one replaces."),

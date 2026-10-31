@@ -1,2 +1,4 @@
-summary: 3 valid, 0 invalid, 0 skipped, 0 held, 0 duplicate
-exit 0
+error: objects/ae/9e287d1f80fae411785c9fec6b36e980e0a5dc52f2f8550b2b95f2b4f4b58c.json: bad field: value
+warning: sha256:a97877474c3a727d28656bc278d25f3e9bfd3ad0704ecd97ffa2a8a6cf173a70: held: sha256:a97877474c3a727d28656bc278d25f3e9bfd3ad0704ecd97ffa2a8a6cf173a70
+summary: 2 valid, 1 invalid, 0 skipped, 1 held, 0 duplicate
+exit 1

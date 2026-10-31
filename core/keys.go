@@ -40,6 +40,9 @@ func ParseKey(tagged string) (*Key, error) {
 			return nil, ErrBadKey
 		}
 		b, _ := hex.DecodeString(hx)
+		if !edStrictKey(b) {
+			return nil, ErrBadKey
+		}
 		return &Key{Alg: alg, ed: ed25519.PublicKey(b)}, nil
 	case "p256":
 		if !isLowerHex(hx, 66) || (hx[:2] != "02" && hx[:2] != "03") {
@@ -93,7 +96,7 @@ func Verify(taggedKey, id, sig string) error {
 	msg := idRaw(id)
 	switch k.Alg {
 	case "ed25519":
-		if !ed25519.Verify(k.ed, msg, raw) {
+		if edSmallOrderR(raw[:32]) || !ed25519.Verify(k.ed, msg, raw) {
 			return ErrBadSignature
 		}
 	case "p256":

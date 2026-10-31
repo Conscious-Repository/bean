@@ -188,6 +188,28 @@ def schnorr_verify(msg, pub, sig):
     R = _add(_mul(SG, s), _mul(P, SN - e))
     return R is not None and R[1] % 2 == 0 and R[0] == r
 
+# Ed25519 points (RFC 8032 5.1.3) for the strict rules of 4.4 and 4.5.
+EP = 2**255 - 19
+ED = -121665 * pow(121666, EP - 2, EP) % EP
+def ed_decode(b):
+    y = int.from_bytes(b, "little") & ((1 << 255) - 1)
+    sign = b[31] >> 7
+    if y >= EP: return None
+    x2 = (y * y - 1) * pow(ED * y * y + 1, EP - 2, EP) % EP
+    x = pow(x2, (EP + 3) // 8, EP)
+    if (x * x - x2) % EP: x = x * pow(2, (EP - 1) // 4, EP) % EP
+    if (x * x - x2) % EP: return None
+    if x == 0 and sign: return None
+    if x & 1 != sign: x = EP - x
+    return (x, y)
+def ed_add(P, Q):
+    (x1, y1), (x2, y2) = P, Q
+    t = ED * x1 * x2 * y1 * y2 % EP
+    return ((x1 * y2 + y1 * x2) * pow(1 + t, EP - 2, EP) % EP, (y1 * y2 + x1 * x2) * pow(1 - t, EP - 2, EP) % EP)
+def ed_small(P):
+    for _ in range(3): P = ed_add(P, P)
+    return P == (0, 1)
+
 HEX = re.compile(r"^[0-9a-f]*$")
 def parse_key(kid):
     if not isinstance(kid, str) or ":" not in kid:
@@ -201,7 +223,8 @@ def parse_key(kid):
     b = bytes.fromhex(h)
     try:
         if alg == "ed25519":
-            ed25519.Ed25519PublicKey.from_public_bytes(b)  # GUESS(2): which A encodings are invalid
+            P = ed_decode(b)  # 4.4: a canonical point, not of small order
+            if P is None or ed_small(P): raise ValueError
         elif alg == "p256":
             if b[0] not in (2, 3): raise ValueError
             ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), b)
@@ -231,6 +254,8 @@ def check_sig(kid, rid, sig):
         if alg == "ed25519":
             if int.from_bytes(sb[32:], "little") >= 2**252 + 27742317777372353535851937790883648493:
                 raise Fail("bad signature")
+            R = ed_decode(sb[:32])
+            if R is not None and ed_small(R): raise Fail("bad signature")  # 4.5
             ed25519.Ed25519PublicKey.from_public_bytes(pub).verify(sb, msg)
         else:
             r, s = int.from_bytes(sb[:32], "big"), int.from_bytes(sb[32:], "big")
@@ -247,16 +272,26 @@ def is_tagged_key(s):
     except Fail:
         return False
 
+TIME_RE = re.compile(r"([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.([0-9]{1,9}))?(Z|[+-][0-9]{2}:[0-9]{2})")
 def rfc3339(s):
+    # 3.5: the whole string, real ranges. Returns (UTC seconds, nanoseconds)
+    # so that end and start compare exactly.
     if not isinstance(s, str): return None
-    m = re.fullmatch(r"^(\d{4}-\d{2}-\d{2})[Tt](\d{2}:\d{2}:\d{2})(\.\d+)?([Zz]|[+-]\d{2}:\d{2})$", s)
+    m = TIME_RE.fullmatch(s)
     if not m: return None
+    y, mo, d, h, mi, sec = (int(g) for g in m.groups()[:6])
+    if y < 1 or h > 23 or mi > 59 or sec > 59: return None
     try:
-        frac = m.group(3) or ""
-        tz = m.group(4).upper().replace("Z", "+00:00")
-        return datetime.fromisoformat(m.group(1) + "T" + m.group(2) + (frac[:7] if frac else "") + tz)
+        day = datetime(y, mo, d)
     except ValueError:
         return None
+    off = 0
+    if m.group(8) != "Z":
+        oh, om = int(m.group(8)[1:3]), int(m.group(8)[4:6])
+        if oh > 23 or om > 59: return None
+        off = (oh * 60 + om) * 60 * (1 if m.group(8)[0] == "+" else -1)
+    days = (day - datetime(1970, 1, 1)).days
+    return (days * 86400 + h * 3600 + mi * 60 + sec - off, int((m.group(7) or "").ljust(9, "0")))
 
 def check_sealed_list(v, nonempty):
     if not isinstance(v, list) or any(not isinstance(x, str) or not ID_RE.fullmatch(x) for x in v):
@@ -369,9 +404,9 @@ def check_file(path, data):
     m = PATH_RE.fullmatch(path)
     if r.get("id") != rid or rid != "sha256:" + m.group(1) + m.group(2): raise Fail("id mismatch")
     check_sig(r["kid"], rid, r.get("sig"))
+    if canonical(r).encode("utf-8") != data: raise Fail("not canonical")
     if v != 0:
         return r, "unknown v"
-    if canonical(r).encode("utf-8") != data: raise Fail("not canonical")
     check_fields(r)
     return r, None
 
@@ -393,7 +428,12 @@ def verify(files, blobfiles):
         else: R[r["id"]] = r
     skipped = 0
     # Step 2 and 8.2: identities, too new.
-    genesis = {i: r for i, r in R.items() if r["type"] == "bean.genesis"}
+    genesis = {}
+    for i, r in R.items():
+        if r["type"] != "bean.genesis": continue
+        if commitment(r["value"]["key"]) == r["value"]["recovery"]:
+            errors[i] = "key reuse"; continue  # 5.8: the signing key is not the recovery key
+        genesis[i] = r
     def tree(gid):
         N = {gid: genesis[gid]}
         changed = True
@@ -416,7 +456,8 @@ def verify(files, blobfiles):
                 for n in path:
                     used.add(n["value"]["key"])
                     if n["type"] == "bean.succession": used.add(n["kid"])
-                if s["value"]["key"] in used:
+                c = commitment(s["value"]["key"])
+                if s["value"]["key"] in used or c in (P["value"]["recovery"], s["value"]["recovery"]):
                     errors[i] = "key reuse"; continue
                 if s["value"]["recovery"] == P["value"]["recovery"]:
                     errors[i] = "recovery not advanced"; continue
