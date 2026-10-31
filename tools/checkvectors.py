@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Independent check of vectors V1 to V12 (SPEC.md section 14).
+"""Independent check of the vectors of SPEC.md section 14.
 
 This script shares no code with the Go implementation. It uses the Python
 standard library and the `cryptography` package. Run from the repo root:
@@ -518,6 +518,14 @@ for sc in v22["scenarios"]:
     check(f"v22 {sc['name']}: ungated", sorted(ungated), sc["ungated"])
     check(f"v22 {sc['name']}: valid", sorted(valid), sc["valid"])
     check(f"v22 {sc['name']}: rotate past", past, sc["rotate_past"])
+
+# V23: Ed25519 edge cases, as Go crypto/ed25519 decides them today (4.5).
+# OpenSSL agrees: it checks S < L and no point on the key.
+v23 = load("v23-ed25519-edges.json")
+for c in v23["cases"]:
+    hx = c["kid"].split(":")[1]
+    check(f"v23 {c['name']}: key", "ok" if len(hx) == 64 and hx == hx.lower() else "bad key", c["parse_key"])
+    check(f"v23 {c['name']}: verify", verify(c["kid"], c["id"], c["sig"]), c["verify"])
 
 print()
 print("FAILURES:", failures)
