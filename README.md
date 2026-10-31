@@ -163,7 +163,7 @@ Without `-write`, the server can only read. With `-write`, the assistant signs w
 
 ## More than one machine
 
-Only `objects/` and `blobs/` are the log. `local/` holds the keys of one machine: never copy it.
+Only `objects/` and `blobs/` are the log. `local/` holds the keys of one machine: never sync it.
 
 ### Keep two copies the same
 
@@ -228,6 +228,12 @@ If you lose the laptop:
    ```
 
    Type or paste the 24 words, then press Ctrl-D.
+
+4. Put back your backup of the deleted-imports file:
+
+   ```
+   cp /Volumes/Backup/health/local/purged-refs.jsonl ~/health/local/
+   ```
 
 Your identity and records stay the same. The lost key can no longer add, correct or delete anything: a record it signs after the rotation is not valid. Records of the old key that are in this folder when you restore stay valid, because the rotation seals them. Use `bean rotate` the same way on a machine that you still have, for example when a key is old.
 

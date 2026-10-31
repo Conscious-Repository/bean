@@ -1,58 +1,72 @@
 # Upgrading
 
-Read this before you run a new build of `bean` on a log that you already have. It lists the changes that alter what an existing log shows. Records, ids and signatures never change: a new build reads the same files and can judge them differently.
+Read this before you run a new build of `bean` on a log that you already have. It lists the changes that alter what an existing log shows. Records, ids and signatures never change. A new build reads the same files and can judge them differently.
 
 ## Check a new build on copies of your log
 
-This is the one way to see what a new build changes in your log. `verify` and the other commands hide and restore files (SPEC.md 7.6), so each build gets its own copy. Set `log` to your folder, `repo` to your checkout of the bean source, and `ref` to the build you want to try (`origin/main`, or a pull request branch such as `origin/round3`):
+This is the one way to see what a new build changes in your log. Each build gets its own copy, because commands hide and restore files (SPEC.md 7.6). Save this as `bean-check.sh`. Set `log` to your folder, `repo` to your checkout of the bean source, and `ref` to the build to try (`origin/main`, or a branch such as `origin/round3`). Then run `bash bean-check.sh`.
 
 ```
+set -euo pipefail
 log=~/health; repo=~/src/bean; ref=origin/main
-d=$(mktemp -d "$HOME/bean-check.XXXXXX")     # new and empty each run, mode 0700
+d=$(mktemp -d "$HOME/bean-check.XXXXXX")      # new, empty, mode 0700
+trap 'rm -rf "$d"' EXIT                         # the copies hold your keys
 git -C "$repo" fetch -q origin
-mkdir "$d/src" && git -C "$repo" archive "$ref" | tar -x -C "$d/src"
+mkdir "$d/src"
+git -C "$repo" archive "$ref" | tar -x -C "$d/src"
 (cd "$d/src" && go build -o "$d/bean-new" ./cmd/bean)
-cp "$(command -v bean)" "$d/bean-old"         # the build you use today
-cp -R "$log" "$d/old" && cp -R "$log" "$d/new"
+cp "$(command -v bean)" "$d/bean-old"          # the build you use today
+cp -R "$log" "$d/old"
+cp -R "$log" "$d/new"
 for b in old new; do
-  "$d/bean-$b" -dir "$d/$b" verify > "$d/$b-verify.txt"; echo "exit $?" >> "$d/$b-verify.txt"
+  rc=0; "$d/bean-$b" -dir "$d/$b" verify > "$d/$b-verify.txt" || rc=$?
+  echo "exit $rc" >> "$d/$b-verify.txt"
   "$d/bean-$b" -dir "$d/$b" ls -all -json | sort > "$d/$b-records.txt"
 done
-diff "$d/old-verify.txt" "$d/new-verify.txt"
-diff "$d/old-records.txt" "$d/new-records.txt"
+same=yes
+diff "$d/old-verify.txt" "$d/new-verify.txt" || same=no
+diff "$d/old-records.txt" "$d/new-records.txt" || same=no
+echo "same: $same"
 ```
 
-The first `diff` shows new errors, warnings and exit codes. The second shows every record that is shown in one build and not in the other: lines with `<` are valid only under the old build, lines with `>` are valid only under the new one (for example a tombstone that now applies, or a record that a deletion no longer hides). No output from both means the new build shows your log exactly as the old one does. Delete the folder when you are done, because the copies hold your keys: `rm -rf "$d"`.
-
-Only `purge` and `gc` erase anything, so do not run them on the copies to test.
+The script stops with an error if a step fails, for example the fetch or the build. Then it has checked nothing.
+The first `diff` shows new errors, warnings and exit codes.
+The second shows each record that only one build shows. A line with `<` is valid only under the old build. A line with `>` is valid only under the new build.
+`same: yes` means the new build shows your log exactly as the old one does.
+The script deletes its folder when it ends.
+Do not run `purge` or `gc` on the copies. Only they erase anything.
 
 ## Changes
 
-### This release
+### 0.6.0
 
-- `purge` no longer writes the import ref of the deleted record into the tombstone. The ref was a fingerprint of the deleted reading: anyone with your identity secret could test guesses against it. The ref is kept only in `local/purged-refs.jsonl` of the copy that purged. Back that file up; without it, a new import of the same source data brings the reading back. Tombstones written by the build of 2026-10-30 that carry `context.purged_ref` stay as they are; nothing reads that field now.
-- `bean sync -max-mb` is gone. `bean sync` has no size limit; sync only from your own copies.
-- A rotation can no longer name a current or earlier signing key, or a recovery key already committed on the chain, as its next recovery key (`key reuse` or `recovery not advanced`, SPEC 5.8). bean never writes such a rotation. Where an older tool did, the rotation and the rotations after it stop counting, so the key it would have retired stays the head key and its later records become valid.
-- `bean version` says 0.6.0, and `export` writes `"spec": "bean-v0"` in `manifest.json`. Nothing reads that string.
-- On an agent-only replica, `verify` fails with `own identity missing` when the person's genesis is gone, as on the person's own copy.
-- `gc` erases a target whose hold's tombstone became invalid while another valid tombstone still deletes it.
-- A record of a too-new identity no longer gets a `hidden pending gc` warning.
+- `purge` no longer writes the import ref of the deleted record into the tombstone. Anyone with your identity secret could test guesses of the deleted reading against it. Only `local/purged-refs.jsonl` keeps the ref. Back that file up. Without it, a new import of the same source data brings the reading back. Tombstones from the build of 2026-10-30 keep `context.purged_ref`. Nothing reads it.
+- `bean sync -max-mb` is gone. Sync only from your own copies.
+- A rotation can no longer name a current or earlier signing key, or a recovery key already on the chain, as its next recovery key (`key reuse` or `recovery not advanced`, SPEC 5.8). bean never writes such a rotation. If another tool did, that rotation and the rotations after it stop counting. The key that it would have retired stays the head key, so its later records become valid. The records of the new key become invalid (`key not in chain`).
+- `bean version` says 0.6.0. `export` writes `"spec": "bean-v0"` in `manifest.json`. Nothing reads that string.
+- On an agent-only copy, `verify` fails with `own identity missing` when the person's genesis is gone.
+- `gc` erases a target whose first tombstone became invalid while another valid tombstone still deletes it. It waits 7 days from that other tombstone's hold.
+- A record of a too-new identity gets no `hidden pending gc` warning.
 
 ### Rules N1 to N4 (2026-10-30)
 
-Four rules changed. bean never wrote a record that the new rules reject. Most effects make records invalid, but some make records valid: a record of an unknown version that is not in canonical form no longer halts its identity, so that identity's records, and its tombstones, count again; and a deletion with a small-order signature is now invalid, so its target comes back. Use the check above to see both kinds.
+Four rules changed. bean never wrote a record that the new rules reject. Most effects make records invalid, but some make records valid. A record of an unknown version that is not in canonical form no longer halts its identity, so the records and tombstones of that identity count again. A deletion with a small-order signature is now invalid, so its target comes back. The check above shows both kinds.
 
-- N1: one time syntax (SPEC 3.5). A time is `YYYY-MM-DDTHH:MM:SS`, an optional dot and 1 to 9 digits, then `Z` or `±HH:MM`, with real ranges. A comma, an offset of `+24:00`, the year 0000 and more than 9 fraction digits are now invalid. `bean add -at`, `bean mcp` and `bean-import-csv` take only this form; the CSV importer keeps any other time text in `context.raw_time`.
+- N1: one time syntax (SPEC 3.5). A time is `YYYY-MM-DDTHH:MM:SS`, an optional dot and 1 to 9 digits, then `Z` or `±HH:MM`, with real ranges. A comma, the offset `+24:00`, the year 0000 and more than 9 fraction digits are now invalid. `bean add -at`, `bean mcp` and `bean-import-csv` take only this form. The CSV importer keeps other time text in `context.raw_time`.
 - N2: Ed25519 as libsodium checks it (SPEC 4.4, 4.5). A key that is not the canonical encoding of a curve point, or that has small order, is `bad key`. A signature whose R has small order is `bad signature`. Random keys never hit these cases. The object cache of an older build is dropped once.
-- N3: the canonical check comes before the version check (SPEC 3.8 steps 13 and 14). A file of a newer `v` that is not in canonical form is now `not canonical`: it is not synced and cannot halt an identity.
-- N4: a signing key is never a recovery key (SPEC 5.8). A genesis whose `value.key` is its own recovery key, and a succession whose `value.key` is the key that signs it or its own next recovery key, are `key reuse`.
+- N3: the canonical check comes before the version check (SPEC 3.8 steps 13 and 14). A file of a newer `v` that is not in canonical form is `not canonical`. It does not sync and cannot halt an identity.
+- N4: a signing key is never a recovery key (SPEC 5.8). A genesis whose `value.key` is its own recovery key is `key reuse`. So is a succession whose `value.key` is the key that signs it or its own next recovery key.
 
-### Too new, purged refs and output (2026-10-30)
+### Too new and output (2026-10-30)
 
-- `verify` exits 3, and `gc` refuses, only when your own identity has records from a newer bean. Another identity that is too new, for example a stranger's genesis of a newer format, only prints `too new: <id>`.
-- `purge` wrote the import ref of the deleted record into the tombstone, and `bean sync` had `-max-mb`. Both are gone again (this release).
+- `verify` exits 3, and `gc` refuses, only when your own identity has records from a newer bean. Another too-new identity, for example a stranger's genesis of a newer format, only prints `too new: <id>`.
 - `reindex` and `local/cache/index.json` are gone. Nothing read the file. You can delete it.
-- Verify output: a correction with missing targets prints one `held` line, and none when it is invalid; a retired key's deletion that the rotation did not seal is `not sealed` also when the identity is frozen; an identity that is too new gets no other lines; a tombstone with blobs names `blobs`; a record of an `hlog.*` core type says `old format` only. No record changes between valid and invalid.
+- Verify output changed, but no record changed between valid and invalid:
+  - a correction with missing targets prints one `held` line, and none when it is invalid;
+  - a retired key's deletion that the rotation did not seal is `not sealed`, also when the identity is frozen;
+  - a too-new identity gets no other lines;
+  - a tombstone with blobs names `blobs`;
+  - a record of an `hlog.*` core type says only `old format`.
 
 ### Change notes C25 to C29 and K1 (builds from 2026-10-30)
 

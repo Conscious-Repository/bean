@@ -551,7 +551,7 @@ A stolen signing key cannot fork an identity, because it cannot write a successi
 
 ### 5.7 Freeze
 
-Two successions with the same parent freeze the identity.
+Two valid successions with the same parent (both in N, 6.3 step 3) freeze the identity. A succession that fails 6.3 step 3 or 5.8 causes no freeze.
 The same recovery key signed twice on different branches. This means the paper seed is in two sets of hands, or the person rotated on two devices without syncing.
 
 For a frozen identity, a verifier MUST:
@@ -747,7 +747,7 @@ For each tombstone D with target T:
 5. Otherwise D is a valid tombstone for T. T is purged.
 
 A purged target is not valid data. A reader MUST NOT show it.
-A verifier reports every purged target that is hidden in this replica as `hidden pending gc: <id>` (a warning), from the moment it is hidden (7.6 step 6), unless its author or subject is too new (8.2). `bean gc` erases it (7.6).
+A purged target that is hidden in this replica gets the warning `hidden pending gc: <id>`, unless its author or subject is too new (7.6 step 6). `bean gc` erases it (7.6).
 
 ### 6.8 Trust is reader policy
 
@@ -775,7 +775,7 @@ A reader decides how much to trust a claim from another author: a device, an age
 
 Directories use mode 0700. Writers MUST write each file to a temporary name in the same directory and then rename it.
 A sync tool MUST NOT copy `local/`.
-Names that start with `.` under `objects/` and `blobs/` are not part of the log: temporary files (7.2) and what operating systems and sync tools leave (`.DS_Store`, iCloud `.icloud` stubs, `.stversions`). A verifier ignores them. Every other entry under `objects/` and `blobs/` is part of the log: a plain file one directory down is checked (3.8; a wrong name is `bad path`), and anything else (a file directly in `objects/`, a symlink, a directory one level down, a device) is `bad path` and is not read. Paths outside `objects/` and `blobs/` are not part of the log.
+Names that start with `.` under `objects/` and `blobs/` are not part of the log: temporary files (7.2) and what operating systems and sync tools leave (`.DS_Store`, iCloud `.icloud` stubs, `.stversions`). A verifier ignores them. Every other entry under `objects/` and `blobs/` is part of the log. A plain file one directory down is checked (3.8), and a wrong name is `bad path`. Anything else (a file directly in `objects/`, a symlink, a directory one level down, a device) is `bad path` and is not read. Paths outside `objects/` and `blobs/` are not part of the log.
 
 ### 7.2 Write a record
 
@@ -812,7 +812,7 @@ Sync from replica A (source) to replica B (destination) is a set union with one 
 5. Compute the valid set of B again. Apply 7.6 to new tombstones.
 
 Sync MUST copy files with an unknown `v`. Newer verifiers need them.
-Sync copies a file that passes steps 1 to 15 also when section 6 finds the record invalid. Validity is a verifier result, not a sync rule. A file that fails steps 1 to 15 is not copied, and a stored copy that fails them is replaced. Thus a reformatted copy of a record (other whitespace or key order, with the same id and signature) cannot spread, and a replica that got one heals at the next sync from a good copy.
+Sync copies a file that passes steps 1 to 15 also when section 6 finds the record invalid. Validity is a verifier result, not a sync rule. A file that fails steps 1 to 15 is not copied, and a stored copy that fails them is replaced. Thus a reformatted copy of a record (same id and signature, other whitespace or key order) cannot spread. A replica that got one heals at the next sync from a good copy.
 Sync only from copies that you or the people you trust control (15).
 A succession and a tombstone that it invalidates can arrive in the same sync. The target then comes back on the next sync (step 5). Two passes are sufficient.
 Sync with rsync, git, Syncthing or a USB drive is allowed if the person then runs `bean verify` on each replica. Such tools do not apply the tombstone exception. `bean verify` then hides or erases the target (7.6).
@@ -830,13 +830,13 @@ Thus a tombstone from a stranger cannot block a record of another subject.
 
 ### 7.6 Delete hold
 
-When a replica first finds a valid tombstone T for a target that it stores:
+When a replica first finds a valid tombstone T for a target that it stores, also a hidden one:
 
 1. If this replica wrote T (`bean purge`), erase the target at once.
-2. Otherwise hide the target at once: move it to `local/hidden/`. Hidden records are still input to the local verifier (6.2) and never sync.
+2. Otherwise hide the target at once, if it is not hidden yet: move it to `local/hidden/`. Hidden records are still input to the local verifier (6.2) and never sync.
 3. Record the receipt time in `local/holds.json` as `{"<T id>": {"target": "<target id>", "received": "<UTC time>"}}`.
 4. A replica MUST NOT erase a hidden target on a timer.
-5. `bean gc` erases every target hidden for at least 7 days under a still-valid tombstone. It then erases each blob that an erased target names, when no remaining record file names it. It never erases a blob that no erased record named. If the local identity is too new (8.2) or frozen (5.7), or any seal set is incomplete (5.4), `gc` erases nothing. Error: `too new: <id>`, `compromised: <id>` or `incomplete seals: <ids>`. Validity can change after an update or a fork, and erasure cannot be undone. Another too-new identity does not stop `gc`: `gc` erases only targets of valid tombstones, a record of a too-new identity is never valid (8.2), and a tombstone whose target has a too-new author or subject is held (6.7), so a too-new identity can only hold a tombstone of another identity, never make one erase.
+5. `bean gc` erases a hidden target when a still-valid tombstone for it has a hold at least 7 days old, and drops every hold of that target. It then erases each blob that an erased target names, when no remaining record file names it. It never erases a blob that no erased record named. If the local identity is too new (8.2) or frozen (5.7), or any seal set is incomplete (5.4), `gc` erases nothing. Error: `too new: <id>`, `compromised: <id>` or `incomplete seals: <ids>`. Validity can change after an update or a fork, and erasure cannot be undone. Another too-new identity does not stop `gc`. Its records are never valid (8.2), and a tombstone whose target it wrote or is about is held (6.7). So it can only hold a tombstone of another identity, never make one erase.
 6. `bean verify` reports each hidden target as `hidden pending gc: <id>` (a warning), unless its author or subject is too new (8.2).
 
 A lost `local/holds.json` starts each hold again. Erasure is then later, never earlier.
@@ -866,7 +866,7 @@ A program MUST NOT tombstone a genesis, a succession or a tombstone.
 
 `local/purged-refs.jsonl` has one line per purged target.
 Each line is the canonical bytes of `["<subject>", "<source.system>", "<source.ref>"]`.
-A replica writes a line when it erases or does not copy a purged target that has a non-null `source.ref`.
+A replica writes a line when it hides, erases or does not copy a purged target that has a non-null `source.ref`.
 `bean append` MUST skip a record whose (`subject`, `source.system`, `source.ref`) is in this file.
 Thus a new import after a purge adds nothing on this replica.
 A replica that never had the target, or that lost this file, does not know the ref, and a new import of the same source data adds it again (17).
@@ -895,7 +895,7 @@ Every command that writes to the folder, and `verify`, holds an exclusive lock o
 
 ### 7.12 Write checks
 
-A write MUST NOT return an id for a record that the verifier of the same folder rejects. A copy that has `local/` but no genesis yet can write; its records are `unresolved author` until the genesis arrives, and `verify` says `own identity missing`. While the own identity has no chain, `gc` refuses and no hidden target is restored. `append`, `add`, `purge` and the agent writes refuse when the author identity is too new (`too new: <id>`), frozen (`compromised: <id>`), has an invalid genesis in this folder, or when the local signing key is not the chain head key (`retired key: ...`). `append` refuses identity records (`bad type`). `SignRecord` refuses strings that are not UTF-8 and numbers that are not finite (`bad string`, `bad number`).
+A write MUST NOT return an id for a record that the verifier of the same folder rejects. A copy that has `local/` but no genesis yet can write. Its records are `unresolved author` until the genesis arrives, and `verify` says `own identity missing`. While the own identity has no chain, `gc` refuses and no hidden target is restored. `append`, `add`, `purge` and the agent writes refuse when the author identity is too new (`too new: <id>`), frozen (`compromised: <id>`), has an invalid genesis in this folder, or when the local signing key is not the chain head key (`retired key: ...`). `append` refuses identity records (`bad type`). `SignRecord` refuses strings that are not UTF-8 and numbers that are not finite (`bad string`, `bad number`).
 
 ## 8. Versioning
 
@@ -1006,7 +1006,7 @@ Each adapter document MUST say which source field is the native id, or that the 
 
 ### 9.9 Vocabulary and uncertainty
 
-The type vocabulary is one document (`cmd/bean/vocabulary.md`): each `type`, its `value`, its unit and the suggested `context` keys. The verifier does not check it. A new term is added to the document before an adapter uses it. A term is never redefined: a changed meaning is a new term. An app MAY add a person's own terms from a file in the folder (the reference MCP server reads `vocabulary.md`); such a file is not part of the log (7.1) and does not redefine a document term.
+The type vocabulary is one document (`cmd/bean/vocabulary.md`): each `type`, its `value`, its unit and the suggested `context` keys. The verifier does not check it. A new term is added to the document before an adapter uses it. A term is never redefined: a changed meaning is a new term. An app MAY add a person's own terms from a file in the folder (the reference MCP server reads `vocabulary.md`). Such a file is not part of the log (7.1) and does not redefine a document term.
 
 Measurement uncertainty travels with the data. `context.uncertainty` is optional. Its form is `{"kind": "cv" | "sd", "value": <number>, "unit": <string>, "source": <string>}`; `unit` and `source` are optional. `"cv"` is the coefficient of variation as a fraction. `"sd"` is the standard deviation in `unit`, or in the unit of the value when `unit` is absent. `source` names the calibration or the document that gives the value. Two kinds cover the calibration data that device makers publish. An adapter writes it only from a published or measured number.
 
@@ -1040,7 +1040,7 @@ The reference CLI is `bean`. It uses Go `flag` syntax.
 Every command takes `-dir <path>`. The default is `$BEAN_DIR`, then the current directory.
 Commands write results to standard output and errors to standard error.
 An error line is `bean: <error string>`.
-Text output writes control characters, line and paragraph separators and bidirectional controls from records and file names as `\xNN` or `\uNNNN`, so a record cannot fake an output line or control the terminal. JSON output (`ls -json`, `bean mcp`) uses JSON escapes.
+Text output writes control characters, line and paragraph separators and bidirectional controls from records and file names as `\xNN` or `\uNNNN`. So a record cannot fake an output line or control the terminal. JSON output (`ls -json`, `bean mcp`) uses JSON escapes.
 Every command that loads the log applies the hold rules (7.6) first. A hidden target is restored only when every tombstone that hid it is invalid; a tombstone that is unresolved, held, too new or missing keeps it hidden.
 
 Exit codes:
@@ -1149,7 +1149,7 @@ Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <
 
 `bean sync <source dir>`
 
-- Action: section 7.4 into the `-dir` log. Refuse a source with more than `<n>` MiB of record files (default 2048). Error: `too large: ...`.
+- Action: section 7.4 into the `-dir` log.
 - Output: `copied <r> records, <b> blobs, refused <p> purged`, then `replaced <n> bad copies` when n > 0.
 
 `bean export <dir>`
@@ -1395,7 +1395,7 @@ Hand-built AES-SIV code MUST also pass the RFC 4493 and RFC 5297 Appendix A vect
 - No trusted time. Validity never uses a clock. Only the delete hold uses the local clock, and it never changes validity.
 - Stranger tombstones. A tombstone is checked against its target before sync refuses the target (7.5).
 - Signature malleability. P-256 requires low-S. A replica keeps the first file it gets for an id (4.5).
-- Denial of service. A replica MUST limit record size (3.1). Every file of a source is input to every later command, and sync is a union, so a source can fill the disk and the memory of a replica: one identity can write any number of records and 1,000 seal parts of 16 MiB. Sync only from copies that you or the people you trust control. The reference CLI refuses a source above a size limit (7.4).
+- Denial of service. A replica MUST limit record size (3.1). Sync is a union, and every file of a source is input to every later command. So a source can fill the disk and the memory of a replica. One identity can write any number of records and 1,000 seal parts of 16 MiB. Sync only from copies that you or the people you trust control.
 - Parser safety. JSON parsing MUST reject duplicate keys and bad numbers before any check uses the value.
 - Equal blobs. Deterministic encryption shows when two blobs of one identity hold the same plaintext (16).
 - Local files. `local/` holds the identity secret and the signing key. File mode MUST be 0600. Backups of `local/` are as sensitive as the keys.

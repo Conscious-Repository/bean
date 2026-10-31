@@ -203,5 +203,6 @@ Reads a CSV file with a header row. Column `value` is required. Column `time` (R
 | `local/identity-secret` | The key for stored files and dedupe. | No. |
 | `local/signing-key` | Your signing key. | No. |
 | `local/agent-key` | The agent key of this machine. | No. |
-| `local/hidden/`, `local/holds.json`, `local/purged-refs.jsonl` | Deletion state of this copy. A lost `holds.json` starts each wait again. | No. |
+| `local/hidden/`, `local/holds.json` | Deletion state of this copy. A lost `holds.json` starts each wait again. | No. |
+| `local/purged-refs.jsonl` | The import refs of purged records. Without it, a new import of the same data brings them back. | Back it up; do not sync it. |
 | `local/cache/` | Caches. Safe to delete. | No. |

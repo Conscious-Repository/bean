@@ -36,7 +36,7 @@ This page says what bean protects, what it does not protect, and where each key 
 | Identity secret | `local/identity-secret`, mode 0600 | Decrypt stored files; make dedupe refs. |
 | Agent key | `local/agent-key`, one per machine | Add records about you, as the agent. |
 
-`local/` never syncs. A backup of `local/` is as sensitive as the keys in it. You do not need one: the 24 words rebuild `local/` (`bean restore`). A purge writes the import ref of the deleted record into its tombstone, so a re-import on any copy skips it. Purges made with an older build are the exception ([UPGRADING.md](UPGRADING.md)).
+`local/` never syncs. A backup of `local/` is as sensitive as the keys in it. The 24 words rebuild the keys (`bean restore`). They do not rebuild `local/purged-refs.jsonl`, so back up that file (above).
 
 ## Report a problem
 

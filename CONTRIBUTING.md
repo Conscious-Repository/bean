@@ -62,7 +62,7 @@ vectors/                  published test vectors (SPEC.md 14); conformance/ has
 - Ordinary commands trust `local/cache/objects` for files whose size and modification time have not changed (DECISIONS 76). An edit that keeps both is seen only by `bean verify`.
 - `bean rotate` and `bean restore` need every copy synced first. A deletion that was not synced becomes `not sealed`, and a restore from a stale copy can fork the identity, which freezes it.
 - A sync that carries a rotation and a deletion that it invalidates needs two passes. Run sync twice if something looks hidden that should not be.
-- `local/` never syncs. If you copy a log with `cp -r`, delete `local/cache`, `local/holds.json` and `local/purged-refs.jsonl` in the copy.
+- `local/` never syncs. If you copy a log with `cp -r`, delete `local/cache` and `local/holds.json` in the copy. Keep `local/purged-refs.jsonl`: it is the only record of what was purged.
 - `$BEAN_NOW` overrides the clock for every command. Unset it outside tests.
 - Change `SPEC.md` only with a change note, and with new vectors where a result changes. Add the change to [UPGRADING.md](UPGRADING.md) when it alters a result for an existing log.
 
