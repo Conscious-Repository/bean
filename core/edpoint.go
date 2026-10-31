@@ -64,30 +64,18 @@ func edDecode(b []byte) (x, y *big.Int, ok bool) {
 	return x, y, true
 }
 
-// edSmallOrder reports whether [8]P is the neutral point (0, 1).
-func edSmallOrder(x, y *big.Int) bool {
-	for range 3 {
-		// Doubling on -x^2 + y^2 = 1 + d x^2 y^2 (complete formula).
-		xy := edMul(x, y)
-		t := edMul(edD, edMul(xy, xy))
-		x2 := edMul(edMod(new(big.Int).Add(xy, xy)), edInv(edMod(new(big.Int).Add(big.NewInt(1), t))))
-		y2 := edMul(edMod(new(big.Int).Add(edMul(y, y), edMul(x, x))), edInv(edMod(new(big.Int).Sub(big.NewInt(1), t))))
-		x, y = x2, y2
-	}
-	return x.Sign() == 0 && y.Cmp(big.NewInt(1)) == 0
-}
-
 // edKeys remembers edStrictKey by key: a log has few keys and many records.
 var edKeys sync.Map
 
 // edStrictKey reports whether b is a canonical point encoding that is not
-// of small order.
+// of small order. A point has small order exactly when its y is one of
+// edSmallY (TestEdSmallYMatchesArithmetic checks this against [8]P).
 func edStrictKey(b []byte) bool {
 	if ok, seen := edKeys.Load(string(b)); seen {
 		return ok.(bool)
 	}
-	x, y, ok := edDecode(b)
-	ok = ok && !edSmallOrder(x, y)
+	_, y, ok := edDecode(b)
+	ok = ok && !edSmallY[y.String()]
 	edKeys.Store(string(b), ok)
 	return ok
 }
