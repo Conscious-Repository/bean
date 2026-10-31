@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// C29 (Benjamin decision, 2026-10-30: fix now). A thief with the current
+// C29. A thief with the current
 // signing key halts the identity with one record of an unknown version.
 // The 24 words go past that halt: the succession retires the key, so the
 // record is ungated everywhere (8.2) and the halt ends.

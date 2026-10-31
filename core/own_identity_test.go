@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// Audit 4, M4: verify fails closed when this copy's own identity has no
+// Verify fails closed when this copy's own identity has no
 // genesis, and a load never moves a deleted record back into objects/
 // while the tombstone that hid it is only unresolved.
 func TestOwnIdentityMissing(t *testing.T) {

@@ -2,6 +2,8 @@ module github.com/Conscious-Repository/bean
 
 go 1.24
 
+toolchain go1.27.3
+
 require github.com/btcsuite/btcd/btcec/v2 v2.3.4
 
 require (

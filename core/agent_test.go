@@ -88,7 +88,7 @@ func TestAgentOnPersonsMachine(t *testing.T) {
 	}
 }
 
-// Hermes on a cloud machine: a synced copy with an agent key and no
+// An agent on a cloud machine: a synced copy with an agent key and no
 // personal key. It writes; the person pairs it from their own machine.
 func TestAgentOnlyReplica(t *testing.T) {
 	a, ident := initStore(t)

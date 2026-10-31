@@ -9,7 +9,7 @@ import (
 	"github.com/Conscious-Repository/bean/core"
 )
 
-// Invalid UTF-8 in a text report is refused (audit MINOR).
+// Invalid UTF-8 in a text report is refused.
 func TestReadTextInvalidUTF8(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "r.txt")
 	os.WriteFile(p, []byte("Labcorp\n\xff\n"), 0o600)

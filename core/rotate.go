@@ -162,7 +162,7 @@ func (l *Loaded) rotatable(id string) (*Loaded, []string, error) {
 }
 
 // sealSet is what the succession from key outgoing of identity id seals
-// (C26, Benjamin decision 2026-10-30): every record of the outgoing key in
+// (C26): every record of the outgoing key in
 // this folder, valid now or not, plus every target that a tombstone, a
 // supersede or a hold in this folder names, plus the halting records.
 // A record that is invalid now for another reason, for example a purged

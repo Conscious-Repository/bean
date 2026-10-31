@@ -284,7 +284,7 @@ func TestChain(t *testing.T) {
 	if !rp.Valid[c0] {
 		t.Error("unsealed tombstone purged its target")
 	}
-	// C26 (Benjamin decision 2026-10-30): a claim by the retired key that
+	// C26: a claim by the retired key that
 	// the succession does not seal is invalid.
 	i.signer = oldKey
 	old := l.claim(i, "hrv.rmssd", 42, "")

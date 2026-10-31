@@ -38,7 +38,7 @@ func ParseWhen(s string, loc *time.Location) (string, string, error) {
 		return t.Format(time.RFC3339Nano), "second", nil
 	}
 	// A local time in a clock change gap does not exist; Go would move it
-	// by an hour. Refuse it (audit 4, m3).
+	// by an hour. Refuse it.
 	for _, layout := range []string{"2006-01-02 15:04", "2006-01-02T15:04", "2006-01-02"} {
 		t, err := time.ParseInLocation(layout, s, loc)
 		if err != nil {

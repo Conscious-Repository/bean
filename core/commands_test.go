@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-// Regression tests for the audit of b7a1626 (bean-audit-report/AUDIT.md).
-// Each one failed on b7a1626.
+// Tests of command behavior: dedupe per author, retired keys, purge and gc
+// limits, restore, write refusals, the folder lock and crash recovery.
 
 // M1, C27: another key's record with the same ref is not a duplicate of
 // the person's record and cannot hide it.
@@ -322,7 +322,7 @@ func TestRotateCrashBeforeSuccession(t *testing.T) {
 	}
 }
 
-// MINOR 1: a bad blob id is an error, not a panic.
+// A bad blob id is an error, not a panic.
 func TestGetBlobBadID(t *testing.T) {
 	s, _ := initStore(t)
 	for _, id := range []string{"", "x", "sha256:", "sha256:../../etc/passwd", "sha256:" + strings.Repeat("A", 64)} {
@@ -332,7 +332,7 @@ func TestGetBlobBadID(t *testing.T) {
 	}
 }
 
-// MINOR: a core record from before the rename says so.
+// A core record from before the rename says so.
 func TestOldFormatRecord(t *testing.T) {
 	obj := map[string]any{"v": 0.0, "nonce": NewNonce(), "type": "hlog.genesis", "subject": nil}
 	sg := NewEd25519Signer([]byte(strings.Repeat("o", 32)))
@@ -356,7 +356,7 @@ func TestStaleTempsRemoved(t *testing.T) {
 	}
 }
 
-// MINOR: a bad id never panics in PathOf or BlobPathOf.
+// A bad id never panics in PathOf or BlobPathOf.
 func TestPathOfBadID(t *testing.T) {
 	for _, id := range []string{"", "sha256:", "sha256:ab", "x"} {
 		if p := PathOf(id); !strings.HasSuffix(p, badIDPath) {
@@ -368,7 +368,7 @@ func TestPathOfBadID(t *testing.T) {
 	}
 }
 
-// MINOR: SignRecord refuses invalid UTF-8, NaN and Inf instead of storing
+// SignRecord refuses invalid UTF-8, NaN and Inf instead of storing
 // a different record than the caller gave.
 func TestSignRecordRefusesBadValues(t *testing.T) {
 	sg := NewEd25519Signer([]byte(strings.Repeat("s", 32)))
@@ -380,7 +380,7 @@ func TestSignRecordRefusesBadValues(t *testing.T) {
 	}
 }
 
-// Round 1 re-audit: a thief's tombstone that the person excludes with
+// A thief's tombstone that the person excludes with
 // -no-seal must give the target back valid, not "not sealed" (C26 with
 // SPEC 7.6). The target was purged at rotation time, so a seal set of
 // only valid records missed it.

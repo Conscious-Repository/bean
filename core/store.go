@@ -372,7 +372,7 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 	}
 	// Restores: a hidden target comes back only when every tombstone that
 	// hid it is judged invalid. A tombstone that is unresolved, held, too
-	// new or missing keeps it hidden (fail closed, audit 4 M4).
+	// new or missing keeps it hidden (fail closed).
 	for target := range hidden {
 		if _, still := rp.Purged[target]; still {
 			continue

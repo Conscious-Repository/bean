@@ -27,7 +27,7 @@ func convertValues(t *testing.T, in string) []string {
 	return vals
 }
 
-// NaN, Inf, hex floats, underscores and huge integers stay text (audit MINOR).
+// NaN, Inf, hex floats, underscores and huge integers stay text.
 func TestConvertStrictNumbers(t *testing.T) {
 	in := "value\nNaN\nInf\n-infinity\n0x1p4\n1_0\n9007199254740993\n1e400\n42\n-1.5e3\n.5\n+7\n"
 	got := convertValues(t, in)
@@ -78,7 +78,7 @@ func FuzzConvert(f *testing.F) {
 	})
 }
 
-// Round 2 fuzz finding: 1e17 parses, but SPEC 4.1 cannot carry an integer
+// A fuzz finding: 1e17 parses, but SPEC 4.1 cannot carry an integer
 // value above 2^53, so append failed on the whole file. It stays text.
 func TestConvertOutOfRangeNumber(t *testing.T) {
 	got := convertValues(t, "value\n1e17\n1.5e17\n9007199254740991\n")

@@ -20,7 +20,7 @@ func futureRecord(t *testing.T, s *Store, id string, signer Signer) string {
 	return rid
 }
 
-// Audit 2: rotate and restore on a too-new identity said "input missing".
+// Rotate and restore on a too-new identity say "too new", not "input missing".
 // They must say "too new" so the person knows to update bean.
 func TestRotateRestoreTooNewError(t *testing.T) {
 	a, id, words := initWithWords(t)

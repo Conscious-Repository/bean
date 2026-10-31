@@ -9,7 +9,7 @@ import (
 // safe returns s with every character that can end a line, move the
 // cursor, start a terminal escape or reorder text written as \xNN or
 // \uNNNN, so text from a record cannot fake output lines or control the
-// terminal (audit 4, M3). Other characters are unchanged.
+// terminal. Other characters are unchanged.
 func safe(s string) string {
 	var b strings.Builder
 	for i := 0; i < len(s); {

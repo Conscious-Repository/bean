@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// Round 2 probes: C26 with corrections, pairings and two rotations.
+// C26 with corrections, pairings and two rotations.
 
 // A correction excluded with -no-seal dies; its target is shown again and
 // stays valid.

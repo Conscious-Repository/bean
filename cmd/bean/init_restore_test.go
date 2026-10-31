@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// init refuses inside a git work tree unless -force (audit MINOR).
+// init refuses inside a git work tree unless -force.
 func TestCLIInitInGitTree(t *testing.T) {
 	top := t.TempDir()
 	os.Mkdir(filepath.Join(top, ".git"), 0o700)
@@ -24,7 +24,7 @@ func TestCLIInitInGitTree(t *testing.T) {
 	}
 }
 
-// -photo refuses devices and anything that is not a regular file (audit MINOR).
+// -photo refuses devices and anything that is not a regular file.
 func TestReadImageNotRegular(t *testing.T) {
 	if _, _, err := readImage("/dev/zero"); err == nil || !strings.Contains(err.Error(), "not a regular file") {
 		t.Errorf("/dev/zero: %v", err)

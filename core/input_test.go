@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Audit 4, m2 to m4: input that would be stored wrong is refused, and the
+// Input that would be stored wrong is refused, and the
 // error says what to type.
 func TestAddInputRefused(t *testing.T) {
 	chicago, err := time.LoadLocation("America/Chicago")
@@ -22,7 +22,7 @@ func TestAddInputRefused(t *testing.T) {
 	if start, _, err := ParseWhen("2026-03-08 03:30", chicago); err != nil || start != "2026-03-08T03:30:00-05:00" {
 		t.Errorf("03:30: %s %v", start, err)
 	}
-	// Go accepts one hour digit; that is not a clock change (re-audit 1).
+	// Go accepts one hour digit; that is not a clock change.
 	if start, _, err := ParseWhen("2026-03-09 9:30", chicago); err != nil || start != "2026-03-09T09:30:00-05:00" {
 		t.Errorf("9:30: %s %v", start, err)
 	}
