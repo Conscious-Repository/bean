@@ -10,8 +10,8 @@ import (
 // the canonical encoding of a curve point that is not of small order, and
 // the R half of a signature must not be of small order. crypto/ed25519
 // checks none of this, so the point arithmetic is done here with big
-// integers. It runs once per key and once per signature, so speed does
-// not matter.
+// integers. A key is checked once and remembered; the R check only
+// compares y with five values.
 
 var (
 	edP    = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 255), big.NewInt(19))
