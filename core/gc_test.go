@@ -126,3 +126,29 @@ func TestSyncLimit(t *testing.T) {
 		t.Errorf("sync: %v", err)
 	}
 }
+
+// On an agent-only replica, local/identity names the person. When that
+// identity is too new, verify exits 3 and gc refuses, as on the person's
+// own copy (SPEC.md 12.1).
+func TestAgentReplicaTooNewPerson(t *testing.T) {
+	s := newStore(t)
+	sk := NewEd25519Signer(make([]byte, 32))
+	g := NewGenesis(sk.Public(), Commitment(sk.Public()), "x@1", "2026-10-28T12:00:00Z")
+	g["v"] = 99.0
+	id, b, err := SignRecord(g, sk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFileAtomic(s.path(PathOf(id)), b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.AgentInit(id, "t"); err != nil {
+		t.Fatal(err)
+	}
+	if _, code, err := s.VerifyLines(); err != nil || code != 3 {
+		t.Errorf("exit %d, %v", code, err)
+	}
+	if _, _, err := s.GC(); err == nil || !strings.Contains(err.Error(), "too new") {
+		t.Errorf("gc: %v", err)
+	}
+}
