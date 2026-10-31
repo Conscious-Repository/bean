@@ -78,17 +78,24 @@ func takenTerm(t string) bool {
 	return builtin.allows(t) || core.IsCoreType(t) || slices.Contains(setup, t)
 }
 
-// takenPrefix is takenTerm for a personal prefix such as "cgm.".
+// takenPrefix is takenTerm for a personal prefix such as "cgm.": true
+// when the prefix can name a built-in, core or setup type. Two prefixes
+// can name the same type when one is the other plus a part with no dot.
 func takenPrefix(p string) bool {
-	if slices.Contains(builtin.prefixes, p) || strings.HasPrefix(p, "bean.") || strings.HasPrefix("bean.", p) {
-		return true
-	}
+	mine := vocab{prefixes: []string{p}}
 	for t := range builtin.exact {
-		if strings.HasPrefix(t, p) {
+		if mine.allows(t) {
 			return true
 		}
 	}
-	return slices.ContainsFunc(setup, func(t string) bool { return strings.HasPrefix(t, p) })
+	return slices.ContainsFunc(builtin.prefixes, func(q string) bool { return extends(p, q) || extends(q, p) }) ||
+		slices.ContainsFunc(setup, mine.allows) || strings.HasPrefix(p, "bean.") || strings.HasPrefix("bean.", p)
+}
+
+// extends reports whether a is b plus a part with no dot.
+func extends(a, b string) bool {
+	rest, ok := strings.CutPrefix(a, b)
+	return ok && !strings.Contains(rest, ".")
 }
 
 // loadVocabulary returns the vocabulary of the folder dir and its text:

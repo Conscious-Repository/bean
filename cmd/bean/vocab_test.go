@@ -51,7 +51,7 @@ func TestVocabularyPersonal(t *testing.T) {
 
 	// A personal term never redefines a built-in one or opens a setup or
 	// core type. The file is refused as a whole, loudly.
-	for _, row := range []string{"`food`", "`heart.resting`", "`lab.<test>`", "`exercise.swim`", "`drink.<kind>`", "`bean.note`", "`agent.pair`", "`device.<x>`"} {
+	for _, row := range []string{"`food`", "`heart.resting`", "`lab.<test>`", "`exercise.swim`", "`drink.<kind>`", "`bean.note`", "`agent.pair`", "`device.<x>`", "`exercise.r<x>`", "`symptom.head<x>`"} {
 		bad := personal + "| " + row + " | text | |\n"
 		if err := os.WriteFile(filepath.Join(s.Dir, "vocabulary.md"), []byte(bad), 0o600); err != nil {
 			t.Fatal(err)
