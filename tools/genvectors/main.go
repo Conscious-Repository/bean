@@ -136,11 +136,12 @@ func main() {
 	write("v5-ed25519.json", map[string]any{"spec": "SPEC.md 4.5", "private_seed": hex.EncodeToString(signSeed), "kid": kid, "id": claimID, "sig": claim["sig"]})
 
 	// V6: P-256 low-S accept, high-S reject.
-	ps, err := core.NewP256Signer(p256D)
+	ps, err := newP256(p256D)
 	if err != nil {
 		panic(err)
 	}
-	low, _ := ps.Sign(claimID)
+	pkid := p256Public(ps)
+	low := p256Sign(ps, claimID)
 	raw := hexb(low[5:])
 	// n - s
 	n := hexb("ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551")
@@ -157,10 +158,10 @@ func main() {
 		hs[i] = byte(d)
 	}
 	high := "p256:" + hex.EncodeToString(append(append([]byte{}, raw[:32]...), hs...))
-	if core.Verify(ps.Public(), claimID, low) != nil || core.Verify(ps.Public(), claimID, high) == nil {
+	if core.Verify(pkid, claimID, low) != nil || core.Verify(pkid, claimID, high) == nil {
 		panic("p256 vector self-check failed")
 	}
-	write("v6-p256.json", map[string]any{"spec": "SPEC.md 4.5", "private_scalar": hex.EncodeToString(p256D), "kid": ps.Public(), "id": claimID, "ecdsa_hash_input": "sha256 of the 32 id bytes", "low_s_sig": low, "low_s_result": "accept", "high_s_sig": high, "high_s_result": "bad signature"})
+	write("v6-p256.json", map[string]any{"spec": "SPEC.md 4.5", "private_scalar": hex.EncodeToString(p256D), "kid": pkid, "id": claimID, "ecdsa_hash_input": "sha256 of the 32 id bytes", "low_s_sig": low, "low_s_result": "accept", "high_s_sig": high, "high_s_result": "bad signature"})
 
 	// V7: commitment.
 	write("v7-commitment.json", map[string]any{"spec": "SPEC.md 4.6", "tagged_key": rec0, "commitment": commit0})
