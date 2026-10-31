@@ -27,8 +27,8 @@ Conventions for what goes in the log, so that a month of entries lines up for `s
 | `symptom.<name>` (`headache`, `nausea`, `soreness`) | number 0 to 10, `{score}` | `location`, `trigger` |
 | `mood`, `energy`, `stress` | number 0 to 10, `{score}` | |
 | `weight` | number, `kg` | |
-| `heart.resting` | number, `/min`: resting heart rate, beats per minute | `device` |
-| `lab.<test>` (`glucose`, `tsh`, `wbc`) | number with the unit the lab printed (`mg/dL`, `uIU/mL`), or text (`Negative`, `<0.5`) | `test` (the name as printed), `panel`, `flag` (High, Low), `reference_interval`, `performing_lab`, `fasting` |
+| `heart.resting` | number, `/min`: resting heart rate, beats per minute | |
+| `lab.<test>` (`glucose`, `tsh`, `wbc`) | number with the unit the lab printed (`mg/dL`, `uIU/mL`), or text (`Negative`, `<0.5`) | `test` (the name as printed), `panel`, `flag` (as printed, for example High), `reference_interval`, `performing_lab`, `fasting` |
 | `bp` | text `120/80` | `systolic`, `diastolic` as numbers, `pulse` |
 | `note` | text | Anything else. Use `about` to attach it to an entry. |
 
