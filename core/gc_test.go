@@ -9,7 +9,7 @@ import (
 )
 
 // A stranger's own too-new genesis is a line, not a halt: the owner's
-// verify exits 0 and gc runs (L1). gc reads only the targets of the local
+// verify exits 0 and gc runs (DECISIONS 155). gc reads only the targets of the local
 // identity's tombstones, which a too-new stranger cannot change.
 func TestStrangerTooNewDoesNotHaltOwner(t *testing.T) {
 	a, _ := initStore(t)
@@ -36,7 +36,7 @@ func TestStrangerTooNewDoesNotHaltOwner(t *testing.T) {
 }
 
 // Two valid tombstones for one target, the higher id seen first: gc still
-// erases the target after the hold (L2).
+// erases the target after the hold (SPEC 7.6 step 5).
 func TestGCTwoTombstonesOneTarget(t *testing.T) {
 	a, me := initStore(t)
 	c := cloneLocal(t, a)

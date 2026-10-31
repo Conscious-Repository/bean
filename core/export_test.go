@@ -8,7 +8,7 @@ import (
 )
 
 // A blob whose content does not match its name is refused before any
-// file is written (Linus NIT 6).
+// file is written (SPEC 7.9).
 func TestImportExportBadBlobWritesNothing(t *testing.T) {
 	a, _ := initStore(t)
 	x := t.TempDir()

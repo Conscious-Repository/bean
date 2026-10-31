@@ -257,7 +257,7 @@ func (s *Store) rotationRecords(id string, rec Signer, parent, newKey, next stri
 }
 
 // Restore rebuilds local/ on a new host from the 24 words and a synced
-// copy of the log (docs/ROADMAP.md, before M8). The signing key stayed on the
+// copy of the log (DECISIONS 52 and 53). The signing key stayed on the
 // lost host, so Restore always rotates: it finds the identity whose genesis
 // commits to recovery generation 0 of these words, writes the identity
 // secret, and writes a succession to a new signing key exactly as Rotate

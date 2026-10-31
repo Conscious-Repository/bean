@@ -225,7 +225,7 @@ A time is a string that matches `^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[
 
 - Year 0001 to 9999, month 01 to 12, a day that exists in that month (February 29 only in a leap year of the Gregorian calendar).
 - Hour 00 to 23, minute 00 to 59, second 00 to 59. There is no leap second.
-- Offset hour 00 to 23, offset minute 00 to 59.
+- Offset hour 00 to 23, offset minute 00 to 59. `-00:00` and `+00:00` mean the same as `Z`.
 
 This is a strict subset of RFC 3339: uppercase `T` and `Z` only, a dot before the fraction, at most 9 fraction digits.
 Any other string is invalid with `bad field: <name>`.
@@ -681,7 +681,7 @@ Step 6. Resolve the signing key of each other record.
 For each record D in R that is not an identity record:
 
 1. If `D.author` is a tagged key, `D.kid` MUST equal `D.author`. Otherwise `D` is invalid. Error: `bad signature`. A bare key has no chain. Treat it as always the head key.
-2. If `D.author` is an identity id with no genesis in R, D is unresolved. Report `unresolved author: <id>` as a warning. Do not treat D as valid.
+2. If `D.author` names no identity (no genesis in R, or one that starts no identity, 6.3), D is unresolved. Report `unresolved author: <id>` as a warning. Do not treat D as valid.
 3. If `D.kid` is the `value.key` of a chain node at position p, record p for D.
 4. Else if `D.kid` is the `value.key` of a node below a fork point, D is invalid. Error: `frozen`.
 5. Else D is invalid. Error: `key not in chain`.
@@ -705,7 +705,7 @@ Step 10. Check tombstones (6.7).
 Compute step 10 before step 9: a purged supersede record does not supersede, and a purged target is not valid. A tombstone that names a supersede record is checked like any other tombstone.
 
 Step 11. Check subjects.
-For each valid claim D whose `subject` has no genesis in R, report `unresolved subject: <id>` as a warning.
+For each valid claim D whose `subject` names no identity (6.3), report `unresolved subject: <id>` as a warning.
 D stays valid. The subject check is a warning because a lab can write about a person whose genesis the replica does not hold.
 
 Step 12. Find duplicates.
@@ -742,7 +742,7 @@ A supersede record can name more than one target. All targets MUST pass.
 For each tombstone D with target T:
 
 1. `D.author` equals `D.subject`. Step 15 of 3.8 already checks this (`bad field: author`, 3.3).
-2. If T is not in R, D is held. D is valid. Section 7.5 tells how sync uses a held tombstone.
+2. If T is not in R, or the author or subject of T is too new (8.2), D is held. D is valid. Section 7.5 tells how sync uses a held tombstone.
 3. If T is a `bean.genesis`, `bean.succession`, `bean.seal` or `bean.tombstone`, D is invalid. Error: `bad target`.
 4. If `T.subject` is not equal to `D.subject`, D is invalid. Error: `not subject`.
 5. Otherwise D is a valid tombstone for T. T is purged.
@@ -837,7 +837,7 @@ When a replica first finds a valid tombstone T for a target that it stores:
 2. Otherwise hide the target at once: move it to `local/hidden/`. Hidden records are still input to the local verifier (6.2) and never sync.
 3. Record the receipt time in `local/holds.json` as `{"<T id>": {"target": "<target id>", "received": "<UTC time>"}}`.
 4. A replica MUST NOT erase a hidden target on a timer.
-5. `bean gc` erases every target hidden for at least 7 days under a still-valid tombstone. It then erases each blob that an erased target names, when no remaining record file names it. It never erases a blob that no erased record named. If the local identity is too new (8.2) or frozen (5.7), or any seal set is incomplete (5.4), `gc` erases nothing. Error: `too new: <id>`, `compromised: <id>` or `incomplete seals: <ids>`. Validity can change after an update or a fork, and erasure cannot be undone. Another too-new identity does not stop `gc`: `gc` erases only targets of valid tombstones, a record of a too-new identity is never valid (8.2), and only the keys of an identity can make it too new, so a too-new identity cannot change which tombstones of another identity are valid.
+5. `bean gc` erases every target hidden for at least 7 days under a still-valid tombstone. It then erases each blob that an erased target names, when no remaining record file names it. It never erases a blob that no erased record named. If the local identity is too new (8.2) or frozen (5.7), or any seal set is incomplete (5.4), `gc` erases nothing. Error: `too new: <id>`, `compromised: <id>` or `incomplete seals: <ids>`. Validity can change after an update or a fork, and erasure cannot be undone. Another too-new identity does not stop `gc`: `gc` erases only targets of valid tombstones, a record of a too-new identity is never valid (8.2), and a tombstone whose target has a too-new author or subject is held (6.7), so a too-new identity can only hold a tombstone of another identity, never make one erase.
 6. `bean verify` reports each hidden target as `hidden pending gc: <id>` (a warning), unless its author or subject is too new (8.2).
 
 A lost `local/holds.json` starts each hold again. Erasure is then later, never earlier.
@@ -878,7 +878,7 @@ A replica that never had the target, or that lost this file, does not know the r
 
 1. Write each record file that is not purged or hidden to `<dir>/records/<64 hex>.json`. Use the stored bytes.
 2. Decrypt each blob that an exported record names. Write the plaintext to `<dir>/blobs/<64 hex of the blob id>`.
-3. Write `<dir>/manifest.json` with the canonical bytes of `{"spec": "bean-core-v0.5", "identity": <id>, "records": <count>, "blobs": [{"id": <blob id>, "plaintext_sha256": <hex>, "media_type": <string>}]}`. Sort `blobs` by `id`. The `spec` string names the export format. It does not change with the software version.
+3. Write `<dir>/manifest.json` with the canonical bytes of `{"spec": "bean-v0", "identity": <id>, "records": <count>, "blobs": [{"id": <blob id>, "plaintext_sha256": <hex>, "media_type": <string>}]}`. Sort `blobs` by `id`. The `spec` string names the export format. It does not change with the software version.
 
 The export is not encrypted. The CLI MUST say this before it writes.
 `bean import-export <dir>` reverses the export for a log with the same identity secret.
@@ -1421,8 +1421,8 @@ Hand-built AES-SIV code MUST also pass the RFC 4493 and RFC 5297 Appendix A vect
 7. Tuple dedupe refs merge two real readings with the same type, observed time and value in two different exports when the occurrence counts match.
 8. After erasure, a replica cannot restore a target from its own disk.
 9. A frozen identity cannot recover.
-10. Records that a device signs and does not sync before a rotation become invalid.
-11. The folder lock does not work across hosts on a network or synced folder, and the reference implementation has none on Windows (7.11). Give each host its own folder.
+10. A record of the head key that the rotating copy does not hold is not sealed, so the rotation makes it invalid (5.4).
+11. The folder lock is local (7.11).
 12. Every command reads and checks the whole log. Time and memory grow with the number of records: about 1 s and 0.2 GB of live heap at 50,000 records on a laptop-class machine. Batch dense series (9.4).
 13. A thief with the head signing key can halt the identity with one `bean.*` record of an unknown `v` (8.2) until the person rotates with the paper seed (5.5 step 4a). Until then every copy that has the record refuses writes for the identity. When the fork point of a frozen identity signs the halt, `verify` reports `too new`, not `compromised`; `rotate` reports `compromised`.
 

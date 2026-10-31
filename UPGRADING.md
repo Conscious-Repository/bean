@@ -4,13 +4,13 @@ Read this before you run a new build of `bean` on a log that you already have. I
 
 ## Check a new build on copies of your log
 
-This is the one way to see what a new build changes in your log. `verify` and the other commands hide and restore files (SPEC.md 7.6), so each build gets its own copy. Set `log` to your folder and `repo` to your checkout of the bean source:
+This is the one way to see what a new build changes in your log. `verify` and the other commands hide and restore files (SPEC.md 7.6), so each build gets its own copy. Set `log` to your folder, `repo` to your checkout of the bean source, and `ref` to the build you want to try (`origin/main`, or a pull request branch such as `origin/round3`):
 
 ```
-log=~/health; repo=~/src/bean
+log=~/health; repo=~/src/bean; ref=origin/main
 d=$(mktemp -d "$HOME/bean-check.XXXXXX")     # new and empty each run, mode 0700
 git -C "$repo" fetch -q origin
-mkdir "$d/src" && git -C "$repo" archive origin/main | tar -x -C "$d/src"
+mkdir "$d/src" && git -C "$repo" archive "$ref" | tar -x -C "$d/src"
 (cd "$d/src" && go build -o "$d/bean-new" ./cmd/bean)
 cp "$(command -v bean)" "$d/bean-old"         # the build you use today
 cp -R "$log" "$d/old" && cp -R "$log" "$d/new"
@@ -32,7 +32,8 @@ Only `purge` and `gc` erase anything, so do not run them on the copies to test.
 
 - `purge` no longer writes the import ref of the deleted record into the tombstone. The ref was a fingerprint of the deleted reading: anyone with your identity secret could test guesses against it. The ref is kept only in `local/purged-refs.jsonl` of the copy that purged. Back that file up; without it, a new import of the same source data brings the reading back. Tombstones written by the build of 2026-10-30 that carry `context.purged_ref` stay as they are; nothing reads that field now.
 - `bean sync -max-mb` is gone. `bean sync` has no size limit; sync only from your own copies.
-- A rotation can no longer name a current or earlier signing key, or a recovery key already committed on the chain, as its next recovery key (`key reuse` or `recovery not advanced`, SPEC 5.8). bean never writes such a rotation.
+- A rotation can no longer name a current or earlier signing key, or a recovery key already committed on the chain, as its next recovery key (`key reuse` or `recovery not advanced`, SPEC 5.8). bean never writes such a rotation. Where an older tool did, the rotation and the rotations after it stop counting, so the key it would have retired stays the head key and its later records become valid.
+- `bean version` says 0.6.0, and `export` writes `"spec": "bean-v0"` in `manifest.json`. Nothing reads that string.
 - On an agent-only replica, `verify` fails with `own identity missing` when the person's genesis is gone, as on the person's own copy.
 - `gc` erases a target whose hold's tombstone became invalid while another valid tombstone still deletes it.
 - A record of a too-new identity no longer gets a `hidden pending gc` warning.

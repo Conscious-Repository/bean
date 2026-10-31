@@ -215,7 +215,7 @@ func (l *Loaded) AgentLabels() map[string]string {
 		if r.Type != "agent.pair" || r.Author != r.Subject || !l.Current(id) || r.ValueKey() == "" {
 			continue
 		}
-		// Only the local person's pairings label keys (NIT 5): another
+		// Only the local person's pairings label keys: another
 		// identity in the folder cannot name an agent for this person.
 		if self != "" && r.Author != self {
 			continue

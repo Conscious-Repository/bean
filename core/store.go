@@ -14,9 +14,9 @@ import (
 	"time"
 )
 
-// Version is the version of this implementation. It follows the spec
-// version until the format freezes at v1.
-const Version = "0.5.0"
+// Version is the version of this implementation, not of the record format
+// (records are v 0, SPEC 8.1).
+const Version = "0.6.0"
 
 // Adapter is the source.adapter string the core writes on its own records.
 const Adapter = "bean@" + Version

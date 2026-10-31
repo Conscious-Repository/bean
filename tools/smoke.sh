@@ -58,7 +58,7 @@ want "loose blob kept after gc" 0 "" env BEAN_NOW=2026-12-30T12:00:00Z bean -dir
 BEAN_NOW=2026-12-30T12:00:00Z bean -dir "$L" gc >/dev/null 2>&1
 want "loose blob kept after a late gc" 0 "" bean -dir "$L" blob get "$LOOSE"
 
-echo "== fork freezes; gc and writes refuse (B2, M4)"
+echo "== fork freezes; gc and writes refuse (DECISIONS 107, 108)"
 A=$W/fa; newlog "$A"; B=$W/fb; mkdir -p "$B"; cp -r "$A/local" "$B/"; bean -dir "$B" sync "$A" >/dev/null
 PB=$(bean -dir "$A" blob put "$W/loose.pdf")
 bean -dir "$A" rotate <"$A.words" >/dev/null 2>&1; bean -dir "$B" rotate <"$A.words" >/dev/null 2>&1
@@ -68,7 +68,7 @@ want "append on a frozen identity refuses" 4 "compromised: " sh -c "$(declare -f
 want "gc on a frozen identity refuses" 4 "compromised: " env BEAN_NOW=2026-12-30T12:00:00Z bean -dir "$A" gc
 want "blob kept on the frozen log" 0 "" bean -dir "$A" blob get "$PB"
 
-echo "== retired key (M2, C26)"
+echo "== retired key (DECISIONS 112)"
 A=$W/ra; newlog "$A"; claim 1 | bean -dir "$A" append >/dev/null
 OLD=$W/rold; mkdir -p "$OLD"; cp -r "$A/local" "$OLD/"
 bean -dir "$A" rotate <"$A.words" >/dev/null 2>&1
@@ -91,7 +91,7 @@ want "append works again" 0 "" sh -c "$(declare -f claim); claim 3 | bean -dir '
 H2=$(adversary halt "$A" "$STOLEN")
 want "a second halt by the stolen key is ungated" 0 "ungated: $H2" bean -dir "$A" verify
 
-echo "== foreign genesis on restore (M3)"
+echo "== foreign genesis on restore (DECISIONS 109)"
 A=$W/ga; newlog "$A"; claim 1 | bean -dir "$A" append >/dev/null
 ID=$(awk 'NR==1{print $2}' "$A.init")
 adversary stranger-genesis "$A" >/dev/null
@@ -101,7 +101,7 @@ want "restore with two matching genesis records is ambiguous" 1 "ambiguous: " be
 want "restore -identity picks the person" 0 "identity $ID" bean -dir "$N" restore -identity "$ID" <"$A.words"
 want "restored log verifies" 0 "" bean -dir "$N" verify
 
-echo "== crash during append and rotate (M5)"
+echo "== crash during append and rotate (DECISIONS 110)"
 A=$W/ca; newlog "$A"
 for i in $(seq 1 3000); do claim "$i"; done >"$W/big.jsonl"
 CR=${SMOKE_CRASH:-30}; cbad=0

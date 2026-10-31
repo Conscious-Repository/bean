@@ -6,7 +6,7 @@ import (
 )
 
 // Nothing of a too-new identity is evaluated, also not step 3: no held
-// or bad succession lines for it (L6, 8.2 item 2).
+// or bad succession lines for it (DECISIONS 159, SPEC 8.2 item 2).
 func TestTooNewIdentityHasNoLines(t *testing.T) {
 	l := newTestLog()
 	i := l.newIdentity(1)
@@ -27,7 +27,7 @@ func TestTooNewIdentityHasNoLines(t *testing.T) {
 
 // Steps 6 to 8 in order: a tombstone of a retired trunk key that no
 // succession sealed is "not sealed" (step 7) also when the identity is
-// frozen (step 8). Satoshi m1, case 14.
+// frozen (step 8). DECISIONS 159, conformance case 14.
 func TestNotSealedBeforeFrozen(t *testing.T) {
 	l := newTestLog()
 	i := l.newIdentity(1)
@@ -44,7 +44,7 @@ func TestNotSealedBeforeFrozen(t *testing.T) {
 }
 
 // A supersede record with missing targets has one held line, and none
-// when another target makes it invalid. Satoshi m1, cases 13 and 13b.
+// when another target makes it invalid. DECISIONS 159, conformance cases 13 and 13b.
 func TestHeldOncePerRecord(t *testing.T) {
 	l := newTestLog()
 	i, j := l.newIdentity(1), l.newIdentity(2)
