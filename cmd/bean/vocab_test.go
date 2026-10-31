@@ -45,7 +45,7 @@ func TestVocabularyPersonal(t *testing.T) {
 		t.Error("prefix term allowed two levels")
 	}
 	init := rpc(t, s, `{"jsonrpc":"2.0","id":0,"method":"initialize","params":{}}`)
-	if text := init[0]["result"].(map[string]any)["instructions"].(string); !strings.Contains(text, "`kombucha`") || !strings.Contains(text, "# Type vocabulary") {
+	if text := init[0]["result"].(map[string]any)["instructions"].(string); !strings.Contains(text, "`kombucha`") || !strings.Contains(text, "# Type vocabulary") || strings.Contains(text, s.Dir) {
 		t.Error("instructions lack the personal or the built-in vocabulary")
 	}
 
@@ -57,7 +57,7 @@ func TestVocabularyPersonal(t *testing.T) {
 			t.Fatal(err)
 		}
 		m, isErr := write("kombucha")
-		if !isErr || !strings.Contains(m["error"].(string), "vocabulary.md") {
+		if !isErr || !strings.Contains(m["error"].(string), "vocabulary.md") || strings.Contains(m["error"].(string), s.Dir) {
 			t.Errorf("personal %s: %v", row, m)
 		}
 		if r := rpc(t, s, `{"jsonrpc":"2.0","id":0,"method":"initialize","params":{}}`); r[0]["error"] == nil {
