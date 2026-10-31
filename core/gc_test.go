@@ -174,3 +174,78 @@ func TestAgentReplicaTooNewPerson(t *testing.T) {
 		t.Errorf("gc: %v", err)
 	}
 }
+
+// A target hidden under T1 stays hidden when one sync brings a rotation
+// that drops T1 and a new tombstone T2. T2 gets its own hold, so gc waits
+// 7 days from T2's arrival, and the erase drops every hold of the target
+// (SPEC 7.6 steps 3 and 5, DECISIONS 179).
+func TestGCNewTombstoneGetsOwnHold(t *testing.T) {
+	a := newStore(t)
+	_, words, err := a.Init(NewKey{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	xid := writeRaw(t, a, `{"type":"weight","value":{"n":1,"unit":"kg"},"times":{"observed":null},"source":{"system":"self","adapter":"x@1"}}`)
+	bdir := t.TempDir()
+	if err := os.CopyFS(bdir, os.DirFS(a.Dir)); err != nil {
+		t.Fatal(err)
+	}
+	b := Open(bdir)
+	b.Now = a.Now
+	// T1 on B, hidden under a hold at day 0.
+	t1, err := b.Purge(xid, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = t1
+	// B's own purge erases at once; to get a hold, copy T1 into A and let
+	// A hide it, then use A as "B" from here on. Simpler: swap roles.
+	if _, err := a.Sync(b); err != nil {
+		t.Fatal(err)
+	}
+	la, _ := a.Load()
+	if !la.Hidden[xid] {
+		t.Fatalf("setup: X not hidden on A")
+	}
+	h, _ := a.readHolds()
+	t.Logf("A holds after T1: %v", h)
+	// Day 30 on B: rotate with -no-seal T1, then purge X again with the new
+	// key (B no longer holds X, so write T2 by hand).
+	day30 := func() time.Time { return testClock.Add(30 * 24 * time.Hour) }
+	b.Now = day30
+	// B erased X; give it back so Purge finds it.
+	ax, _ := os.ReadFile(hiddenPath(a.Dir, xid))
+	if err := writeFileAtomic(b.path(PathOf(xid)), ax, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.Rotate(words, []string{t1}, NewKey{}); err != nil {
+		t.Fatal(err)
+	}
+	t2, err := b.Purge(xid, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// One sync brings the rotation and T2 to A together.
+	a.Now = day30
+	if _, err := a.Sync(b); err != nil {
+		t.Fatal(err)
+	}
+	la, _ = a.Load()
+	h, _ = a.readHolds()
+	_, hasT2Hold := h[t2]
+	t.Logf("A after sync: T1 valid=%v T2 valid=%v X hidden=%v T2 hold=%v holds=%v", la.Report.Valid[t1], la.Report.Valid[t2], la.Hidden[xid], hasT2Hold, h)
+	n, _, err := a.GC()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 || !hasT2Hold {
+		t.Errorf("gc erased %d at once; T2 hold %v: T2 arrived now and gets its own 7 days", n, hasT2Hold)
+	}
+	a.Now = func() time.Time { return day30().Add(8 * 24 * time.Hour) }
+	if n, _, err := a.GC(); err != nil || n != 1 {
+		t.Errorf("gc after T2's hold erased %d, %v", n, err)
+	}
+	if h, _ := a.readHolds(); len(h) != 0 {
+		t.Errorf("holds left after the erase: %v", h)
+	}
+}

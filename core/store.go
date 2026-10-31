@@ -344,17 +344,18 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 		}
 	}
 	changed := false
-	// New valid purges: hide the target.
+	// New valid purges: hide the target. The tombstone that purges it
+	// gets its own hold, also when an earlier tombstone hid the target.
 	for target, tid := range rp.Purged {
-		if hidden[target] {
-			continue
-		}
 		if _, ok := files[PathOf(target)]; !ok {
 			continue
 		}
 		if _, held := holds[tid]; !held {
 			holds[tid] = Hold{Target: target, Received: s.nowString()}
 			changed = true
+		}
+		if hidden[target] {
+			continue
 		}
 		if err := os.MkdirAll(s.path(dirHidden), 0o700); err != nil {
 			return nil, err
@@ -465,7 +466,7 @@ func (s *Store) GC() (records, blobs int, err error) {
 		if perr != nil || recv.After(cutoff) {
 			continue
 		}
-		if _, purged := l.Report.Purged[h.Target]; !purged || !l.Hidden[h.Target] {
+		if _, purged := l.Report.Purged[h.Target]; !purged || !l.Report.Valid[tid] || !l.Hidden[h.Target] {
 			continue
 		}
 		if r := l.Report.Records[h.Target]; r != nil {
@@ -476,7 +477,11 @@ func (s *Store) GC() (records, blobs int, err error) {
 		if err := os.Remove(hiddenPath(s.Dir, h.Target)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return 0, 0, err
 		}
-		delete(l.Holds, tid)
+		for t, o := range l.Holds {
+			if o.Target == h.Target {
+				delete(l.Holds, t)
+			}
+		}
 		delete(l.Files, PathOf(h.Target))
 		delete(l.Hidden, h.Target)
 		records++
