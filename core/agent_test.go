@@ -97,7 +97,7 @@ func TestAgentOnlyReplica(t *testing.T) {
 	if _, err := cloud.Sync(a); err != nil {
 		t.Fatal(err)
 	}
-	pub, pairID, err := cloud.AgentInit("", "cloud")
+	pub, pairID, err := cloud.AgentInit(ownerID, "cloud")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestAgentOnlyReplica(t *testing.T) {
 }
 
 func TestAgentOnlyReplicaIgnoresForeignPairLabels(t *testing.T) {
-	owner, _ := initStore(t)
+	owner, ownerID := initStore(t)
 	foreign, _ := initStore(t)
 	pub, _, err := foreign.AgentInit("", "trusted")
 	if err != nil { t.Fatal(err) }
