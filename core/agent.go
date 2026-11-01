@@ -207,17 +207,14 @@ func (s *Store) pair(key, label string) (string, error) {
 // agent.pair claim to its label ("agent" when it has none).
 func (l *Loaded) AgentLabels() map[string]string {
 	out := map[string]string{}
-	self := ""
-	if l.Local != nil {
-		self = l.Local.Identity
-	}
+	self := l.ID
 	for id, r := range l.Report.Records {
 		if r.Type != "agent.pair" || r.Author != r.Subject || !l.Current(id) || r.ValueKey() == "" {
 			continue
 		}
 		// Only the local person's pairings label keys: another
 		// identity in the folder cannot name an agent for this person.
-		if self != "" && r.Author != self {
+		if self == "" || r.Author != self {
 			continue
 		}
 		if st, _ := r.Value["status"].(string); st == "unpaired" {

@@ -564,7 +564,7 @@ func toolStats(s *core.Store, f core.Filter, bucket, self string) (any, error) {
 	// One group per author, subject and unit: numbers from different
 	// writers, people or units are never averaged together.
 	name := names(l, self)
-	type key struct{ author, subject, unit string }
+	type key struct{ authorID, subjectID, unit string }
 	groups := map[key][]reading{}
 	var keys []key
 	units := map[string]bool{}
@@ -579,7 +579,7 @@ func toolStats(s *core.Store, f core.Filter, bucket, self string) (any, error) {
 		if u != "" {
 			units[u] = true
 		}
-		k := key{name(r.Author), name(r.Subject), u}
+		k := key{r.Author, r.Subject, u}
 		if groups[k] == nil {
 			keys = append(keys, k)
 		}
@@ -588,12 +588,12 @@ func toolStats(s *core.Store, f core.Filter, bucket, self string) (any, error) {
 	out := map[string]any{"type": f.Type, "units": sortedStrings(units), "non_numeric": skipped}
 	sort.Slice(keys, func(i, j int) bool {
 		a, b := keys[i], keys[j]
-		return a.author+"\x00"+a.subject+"\x00"+a.unit < b.author+"\x00"+b.subject+"\x00"+b.unit
+		return a.authorID+"\x00"+a.subjectID+"\x00"+a.unit < b.authorID+"\x00"+b.subjectID+"\x00"+b.unit
 	})
 	var list []any
 	for _, k := range keys {
 		g := summarizeGroup(groups[k], bucket)
-		g["author"], g["subject"], g["unit"] = k.author, k.subject, k.unit
+		g["author"], g["subject"], g["unit"] = name(k.authorID), name(k.subjectID), k.unit
 		list = append(list, g)
 	}
 	switch len(list) {
@@ -686,7 +686,7 @@ func toolReadBlob(s *core.Store, f core.Filter, id string, max int) (any, error)
 	}
 	mediaType, named := "", false
 	for rid, r := range l.Report.Records {
-		if !l.Visible(rid) || !inScope(r, f) {
+		if !l.Current(rid) || !inScope(r, f) {
 			continue
 		}
 		for _, b := range r.Blobs {
