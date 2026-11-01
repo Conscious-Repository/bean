@@ -28,8 +28,8 @@ vet:
 
 test:
 	# Do not time the scale test under race instrumentation.
-	go test -race -failfast -skip '^TestVerifyScales$' ./...
-	go test -failfast ./core -run '^TestVerifyScales$'
+	go test -race -failfast -skip TestVerifyScales ./...
+	go test -failfast ./core -run TestVerifyScales
 
 lint:
 	staticcheck ./...
