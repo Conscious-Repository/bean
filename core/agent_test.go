@@ -147,3 +147,19 @@ func TestAgentOnlyReplica(t *testing.T) {
 		t.Errorf("empty folder: %v", err)
 	}
 }
+
+func TestAgentOnlyReplicaIgnoresForeignPairLabels(t *testing.T) {
+	owner, _ := initStore(t)
+	foreign, _ := initStore(t)
+	pub, _, err := foreign.AgentInit("", "trusted")
+	if err != nil { t.Fatal(err) }
+	cloud := newStore(t)
+	if _, err := cloud.Sync(owner); err != nil { t.Fatal(err) }
+	if _, err := cloud.Sync(foreign); err != nil { t.Fatal(err) }
+	if _, _, err := cloud.AgentInit("", "cloud"); err != nil { t.Fatal(err) }
+	l, err := cloud.Load()
+	if err != nil { t.Fatal(err) }
+	if _, ok := l.AgentLabels()[pub]; ok {
+		t.Fatalf("foreign identity supplied an agent label: %v", l.AgentLabels())
+	}
+}
