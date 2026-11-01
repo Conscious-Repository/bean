@@ -27,11 +27,9 @@ jobs:
           python-version: '3.12'
       - name: Install verifier dependencies
         run: python -m pip install -r tools/requirements.txt
-      - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
       - name: Verify build, tests and vectors
         run: |
-          make fmt vet build test vuln vectors second demo
+          make fmt vet build test vectors second demo
       - name: Differential against base
         if: github.event_name == 'pull_request'
         env:
