@@ -167,7 +167,13 @@ func TestMCPStatsSeparateSameLabelAgents(t *testing.T) {
 	if isErr { t.Fatal(st) }
 	groups, ok := st["groups"].([]any)
 	if !ok || len(groups) != 2 { t.Fatalf("same-label agents were combined: %v", st) }
+	seen := map[string]bool{}
 	for _, group := range groups {
-		if group.(map[string]any)["count"] != float64(1) { t.Fatalf("merged statistics: %v", st) }
+		g := group.(map[string]any)
+		if g["count"] != float64(1) { t.Fatalf("merged statistics: %v", st) }
+		id, ok := g["author_id"].(string)
+		if !ok || (id != agents[0] && id != agents[1]) || seen[id] { t.Fatalf("author IDs are not distinct: %v", st) }
+		seen[id] = true
+		if g["subject_id"] == "" { t.Fatalf("subject ID absent: %v", st) }
 	}
 }
