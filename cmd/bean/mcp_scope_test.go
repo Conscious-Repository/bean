@@ -154,20 +154,45 @@ func TestMCPStatsSeparateSameLabelAgents(t *testing.T) {
 	s, _ := mcpStore(t)
 	agents := make([]string, 0, 2)
 	for _, value := range []string{"70", "90"} {
-		if _, _, err := s.AgentInit("", "shared"); err != nil { t.Fatal(err) }
+		if _, _, err := s.AgentInit("", "shared"); err != nil {
+			t.Fatal(err)
+		}
 		a, err := s.ReadAgent()
-		if err != nil { t.Fatal(err) }
+		if err != nil {
+			t.Fatal(err)
+		}
 		agents = append(agents, a.Signer.Public())
-		if _, err := s.Add("weight", value, core.AddOptions{Agent: true, Unit: "kg"}); err != nil { t.Fatal(err) }
-		// Remove only this replica's agent key; the prior signed records remain.
-		if err := os.Remove(filepath.Join(s.Dir, "local", "agent-key")); err != nil { t.Fatal(err) }
+		if _, err := s.Add("weight", value, core.AddOptions{Agent: true, Unit: "kg"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Remove(filepath.Join(s.Dir, "local", "agent-key")); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if agents[0] == agents[1] { t.Fatal("agent keys identical") }
-	st, isErr := call(t, s, "stats", map[string]any{"type":"weight"})
-	if isErr { t.Fatal(st) }
+	if agents[0] == agents[1] {
+		t.Fatal("agent keys identical")
+	}
+	st, isErr := call(t, s, "stats", map[string]any{"type": "weight"})
+	if isErr {
+		t.Fatal(st)
+	}
 	groups, ok := st["groups"].([]any)
-	if !ok || len(groups) != 2 { t.Fatalf("same-label agents were combined: %v", st) }
+	if !ok || len(groups) != 2 {
+		t.Fatalf("same-label agents were combined: %v", st)
+	}
+	seen := map[string]bool{}
 	for _, group := range groups {
-		if group.(map[string]any)["count"] != float64(1) { t.Fatalf("merged statistics: %v", st) }
+		g := group.(map[string]any)
+		if g["count"] != float64(1) {
+			t.Fatalf("merged statistics: %v", st)
+		}
+		id, ok := g["author_id"].(string)
+		if !ok || (id != agents[0] && id != agents[1]) || seen[id] {
+			t.Fatalf("author IDs are not distinct: %v", st)
+		}
+		seen[id] = true
+		if g["subject_id"] == "" {
+			t.Fatalf("subject ID absent: %v", st)
+		}
 	}
 }

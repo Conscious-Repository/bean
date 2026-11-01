@@ -314,13 +314,19 @@ func TestMCPWrite(t *testing.T) {
 func TestMCPReadBlobRejectsSupersededRecord(t *testing.T) {
 	s, _ := mcpStore(t)
 	blob, err := s.PutBlob([]byte("superseded source"))
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	line := fmt.Sprintf(`{"type":"heart.resting","value":{"n":50,"unit":"/min"},"times":{"observed":null},"source":{"system":"csv","adapter":"test@1","ref":null},"blobs":[{"hash":%q,"role":"raw-export","media_type":"text/plain"}]}`, blob)
-	first, err := s.Append(strings.NewReader(line+"\n"))
-	if err != nil { t.Fatal(err) }
+	first, err := s.Append(strings.NewReader(line + "\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	replacement := fmt.Sprintf(`{"type":"heart.resting","value":{"n":55,"unit":"/min"},"times":{"observed":null},"source":{"system":"csv","adapter":"test@1","ref":null},"refs":[{"rel":"supersedes","id":%q}]}`, first.IDs[0])
-	if _, err := s.Append(strings.NewReader(replacement+"\n")); err != nil { t.Fatal(err) }
-	if data, isErr := call(t,s,"read_blob",map[string]any{"id":blob}); !isErr {
+	if _, err := s.Append(strings.NewReader(replacement + "\n")); err != nil {
+		t.Fatal(err)
+	}
+	if data, isErr := call(t, s, "read_blob", map[string]any{"id": blob}); !isErr {
 		t.Fatalf("superseded-only blob exposed: %v", data)
 	}
 }
