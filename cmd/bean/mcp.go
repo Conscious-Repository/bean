@@ -594,6 +594,7 @@ func toolStats(s *core.Store, f core.Filter, bucket, self string) (any, error) {
 	for _, k := range keys {
 		g := summarizeGroup(groups[k], bucket)
 		g["author"], g["subject"], g["unit"] = name(k.authorID), name(k.subjectID), k.unit
+		g["author_id"], g["subject_id"] = k.authorID, k.subjectID
 		list = append(list, g)
 	}
 	switch len(list) {
