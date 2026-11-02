@@ -15,11 +15,11 @@ func TestSyncRepairsCorruptBlob(t *testing.T) {
 		t.Fatal(err)
 	}
 	rec := map[string]any{
-		"type": "lab.source",
-		"value": map[string]any{"blob": blob},
-		"times": map[string]any{"observed": nil},
+		"type":   "lab.source",
+		"value":  map[string]any{"blob": blob},
+		"times":  map[string]any{"observed": nil},
 		"source": map[string]any{"system": "test", "adapter": "test@1", "ref": nil},
-		"blobs": []any{map[string]any{"hash": blob, "role": "raw-export", "media_type": "text/plain"}},
+		"blobs":  []any{map[string]any{"hash": blob, "role": "raw-export", "media_type": "text/plain"}},
 	}
 	appendLines(t, source, string(Canonical(rec)))
 	target := cloneLocal(t, source)
