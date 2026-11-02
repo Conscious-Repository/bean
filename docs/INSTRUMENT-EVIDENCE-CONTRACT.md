@@ -107,8 +107,8 @@ Proposed payload fields (shown in JSON notation for readability; actual wire byt
     }
   ],
   "calibration": {
-    "status": "provided | not-applicable | unavailable",
-    "artifact_indices": [2]
+    "status": "unavailable",
+    "artifact_indices": []
   }
 }
 ~~~
@@ -123,8 +123,9 @@ Required interpretation:
 4. Each artifact uses exact bytes. No reserialization, whitespace normalization, endianness conversion, or content-specific parsing may precede digest verification.
 5. Calibration status is explicit. "provided" requires every listed calibration artifact to be present and verified; "unavailable" must not be interpreted as quantitative readiness. For quantitative MRI endpoints, require specific calibrations in a separate profile.
 6. Firmware digest is a declaration unless accompanied by independently appraisable measured-boot evidence. The device model string is never proof of manufacturer identity.
-7. The receipt contains no person's name, global subject ID, account number, or health reading by default. A stable device public key may still correlate captures; unlinkable device credentials are a future privacy profile.
-8. A clock reading does not make the capture fresh or prove ordering. Counter-based replay checks may be added by device profile if nonvolatile monotonic state exists.
+7. For high-volume streams, the device may emit fixed-size, explicitly ordered raw chunks, each with its own index, exact length and digest. The acquisition-config artifact MUST state the byte framing, chunk size, reconstruction order, sample count, sample rate and endianness needed to reassemble and parse the stream. The final receipt commits to *all* chunks; no implicit continuation or optional last chunk is allowed. Start with modest chunks (such as 4 MiB) that existing Bean blobs can store without a new streaming encryption algorithm. There is no need for a Merkle tree until partial random-access verification has a demonstrated use case.
+8. The receipt contains no person's name, global subject ID, account number, or health reading by default. A stable device public key may still correlate captures; unlinkable device credentials are a future privacy profile.
+9. A clock reading does not make the capture fresh or prove ordering. Counter-based replay checks may be added by device profile if nonvolatile monotonic state exists.
 
 The signed receipt MAY include a versioned extension object, but a verifier MUST report it unsupported rather than interpret an unknown security-critical field. The initial schema should define which fields affect verification and refuse ambiguity. Binding to an acquisition software hash or calibration reference belongs inside the signed payload or inside a digest-committed artifact, never in unsigned host metadata.
 
