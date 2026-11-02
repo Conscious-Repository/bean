@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Experimental Bean adoption through existing CLI; no Bean key/crypto implementation."""
 import hashlib
+import fcntl
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
@@ -29,7 +31,48 @@ def require_verified(directory):
     return report
 
 
+@contextmanager
+def ingestion_lock(log):
+    # Separate adapter lock: taking Bean's lock here would deadlock its subprocesses.
+    # This coordinates this adapter locally, not other Bean writers or replicas.
+    fd = os.open(Path(log) / 'local' / 'evidence-ingest.lock',
+                 os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise ValueError('unsafe ingestion lock')
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)
+
+
+def check_retained(log, native_id, digest, required=False, files=None, blobs=None):
+    found = False
+    for line in bean(log, 'ls', '-all', '-type', 'instrument.ingest', '-author', 'me', '-json').splitlines():
+        claim = json.loads(line)
+        context = claim.get('context', {})
+        if not isinstance(context, dict):
+            continue
+        if context.get('capture_key_nonce') == native_id:
+            if context.get('receipt_sha256') != digest:
+                raise ValueError('conflicting receipt for signer/capture nonce')
+            if files is not None:
+                retained_blobs = claim.get('blobs')
+                if (context.get('files') != files or not isinstance(retained_blobs, list)
+                        or sorted(json.dumps(b, sort_keys=True) for b in retained_blobs)
+                        != sorted(json.dumps(b, sort_keys=True) for b in blobs)):
+                    raise ValueError('retained adoption artifact references do not match capture')
+            found = True
+    if required and not found:
+        raise ValueError('adoption not retained (possibly purged or concurrently removed)')
+
+
 def ingest(capture, log):
+    with ingestion_lock(log):
+        return ingest_locked(capture, log)
+
+
+def ingest_locked(capture, log):
     require_verified(capture)
     # Copy bounded bytes through an anchored descriptor, then verify the snapshot.
     # No subsequent reads of the mutable source are used for storage or the claim.
@@ -48,12 +91,7 @@ def ingest(capture, log):
         header, payload = parse(decode(parts[0])), parse(decode(parts[1]))
         native_id = header['jwk']['x'] + ':' + payload['capture']
         digest = 'sha256:' + hashlib.sha256(receipt).hexdigest()
-        # A signer reusing a nonce must not turn different bytes into another measurement.
-        for line in bean(log, 'ls', '-type', 'instrument.ingest', '-author', 'me', '-json').splitlines():
-            old = json.loads(line)
-            context = old.get('context', {})
-            if context.get('capture_key_nonce') == native_id and context.get('receipt_sha256') != digest:
-                raise ValueError('conflicting receipt for signer/capture nonce')
+        check_retained(log, native_id, digest)
         blobs = []
         files = {}
         for name, role, media in zip(NAMES, ROLES, MEDIA):
@@ -70,7 +108,11 @@ def ingest(capture, log):
                             'ref_input': ['bean/v0/ref', 'id', 'instrument-evidence-experiment', native_id, 0]},
                  'context': {'receipt_sha256': digest, 'capture_key_nonce': native_id,
                              'files': files, 'verification': report}, 'blobs': blobs}
-        return bean(log, 'append', data=json.dumps(claim).encode() + b'\n').decode().strip()
+        outcome = bean(log, 'append', data=json.dumps(claim).encode() + b'\n').decode().strip()
+        # Other writers do not take our lock. Even a successful duplicate skip
+        # must preserve the same receipt and exportable artifact references.
+        check_retained(log, native_id, digest, required=True, files=files, blobs=blobs)
+        return outcome
 
 
 def bounded(fd, name, limit):
@@ -122,6 +164,7 @@ def recover(export, record_id, output):
                 if digest != claim['context']['receipt_sha256']:
                     raise ValueError('receipt digest mismatch')
                 report = require_verified(stage)
+                report.update(verification_scope='capture_evidence_only', owner_authority='not_checked')
                 # Export metadata locates files; the original JWS independently authenticates
                 # evidence. This command does not certify Bean owner authority (bean verify does).
                 stage.rename(destination)

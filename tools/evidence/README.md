@@ -60,9 +60,10 @@ sign them. Re-signing arbitrary host data cannot demonstrate device origin.
 `adopt.py` stores a verified private snapshot as ordinary owner-encrypted Bean
 blobs and asks `bean append` to sign the adoption. It checks stored blob readback.
 No instrument author is impersonated. Dedupe uses signer key + nonce; the original
-receipt digest and blob addresses are separately recorded. Sequential conflicting
-reuse of a nonce is rejected; simultaneous conflicting imports are subject to
-Bean's ordinary dedupe (one primary, not another measurement). Orphan encrypted
+receipt digest and blob addresses are separately recorded. Concurrent local adapters serialize check/append using a separate local lock.
+A post-append check rejects conflicting nonce reuse or malformed retained artifact
+references even when another writer bypasses that lock. This is local
+coordination, not distributed consensus. Orphan encrypted
 blobs can remain after a crash before append. Retry is safe. Do not delete blobs
 manually from a real log. Existing purge/dedupe semantics still apply.
 
@@ -74,11 +75,36 @@ or AION account is needed to verify a plaintext export.
 
 Tests cover exact fixture regeneration, both signers/verifiers, tampering, bounds,
 symlinks/FIFOs/traversal, duplicate/reordered entries, missing method, unknown
-issuer, fabricated host evidence, repeat adoption, conflicting nonce, missing
-artifact, corrupt stored/exported blob, failed signing and crash/retry. The exit
-drill deletes the source log/capture and verifies byte-identical recovery in a
-fresh directory. That simulates a fresh machine; a physical second machine and
-an actual AION acquisition remain untested. CI repeats this with networking disabled.
+issuer, fabricated host evidence, concurrent adoption/conflicting nonce, missing
+artifact, corrupt stored/exported blob, failed signing and crash/retry.
+The exit drill deletes the original capture/log and runs a copied kit in a fresh
+Python environment with network access disabled and the checkout inaccessible.
+macOS uses sandbox-exec; root Linux CI uses mount/network namespaces. Unsupported
+local isolation environments skip that one drill. A physical second machine and
+an actual AION acquisition remain untested.
+
+Build a platform-specific kit outside the repository (preparation can download
+wheels; set EVIDENCE_WHEELS to reuse a prepared wheelhouse):
+
+```
+make evidence-kit PY=/tmp/bean-proof-env/bin/python OUT=/absolute/new/kit
+/tmp/bean-proof-env/bin/python tools/evidence/acquisition.py simulate /absolute/new/capture
+```
+
+The kit includes both verifier implementations, method/profile, public fixture,
+licenses and offline wheels. Building checks both verifiers against the fixture
+using a fresh Python environment installed only from those wheels. Failed builds
+may leave an incomplete output; discard it and choose a new destination. Its
+inventory hashes are not release authentication. Compatible OS/CPU and Python
+must already be available; it does not ship a runtime.
+
+The simulator exercises applied settings, completion, abort/reset, nonce rotation,
+immutable completion retries and fragmented/interrupted/corrupt transfer. It is
+host software with a public key, not a secure device. Transfer verification fails
+before publication on read faults; a publication failure can leave an incomplete
+directory without a receipt. Use a new destination for retry. See
+[the pipeline plan](../../docs/EVIDENCE-PIPELINES.md) for hardware acceptance gates
+and the Apple Health importer handoff.
 
 Review lenses: minimality (two files, no new dependency, no core change), adversary
 (host can lie before signing, cannot change committed bytes undetected; source
@@ -86,11 +112,8 @@ trust/freshness/accuracy remain unestablished), and exit (plaintext export + off
 verification + documented computation, with no account or licence gate). No
 independent human/security audit or physical accuracy validation is claimed.
 
-Validation on macOS (Go 1.27.3, cryptography 50.0.2): `make evidence` ran 37 tests
-with only the two Linux network-namespace assertions skipped. `make fmt vet build
-test vectors second demo differential` passed: independent Bean conformance
-45/45, scenario agreement 15/15 and independently crafted cases 14/14, differential 331 same / 0 different (274 with
-rotation). `make lint vuln` passed; govulncheck found no vulnerabilities. Both
-verifiers reject small-order/noncanonical key and R encodings, including the
-identity-key forgery accepted by the underlying libraries alone. Hosted CI is
-the authoritative Linux/offline run; see the implementation PR checks.
+Run `make check` for the complete local checks. CI runs all `test_*.py` evidence
+suites offline, plus Bean tests, independent conformance and differential checks.
+See the implementation PR for results at the current revision. Both verifiers
+reject small-order/noncanonical key and R encodings, including the identity-key
+forgery accepted by the underlying libraries alone.

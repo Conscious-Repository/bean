@@ -21,7 +21,7 @@ BEAN = os.environ.get('BEAN_BIN')
 HERE = Path(__file__).resolve().parent
 
 
-class Evidence(unittest.TestCase):
+class CaptureCase(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -50,6 +50,8 @@ class Evidence(unittest.TestCase):
         self.assertEqual(got['freshness'], 'unknown')
         return got
 
+
+class Evidence(CaptureCase):
     def test_positive_and_replay(self):
         self.assertEqual(self.agree(0, True, True, True)['mean_square_iq'], 3317.25)
         self.agree(0, True, True, True)
@@ -184,8 +186,8 @@ class Evidence(unittest.TestCase):
 
 
 @unittest.skipUnless(BEAN, 'BEAN_BIN required for adoption tests')
-class Adoption(Evidence):
-    # Inherit the same evidence tests, and exercise the existing Bean CLI boundary.
+class Adoption(CaptureCase):
+    # Shared setup only: do not count the verifier corpus twice.
     def setUp(self):
         super().setUp()
         self.log = self.root / 'log'
@@ -219,6 +221,8 @@ class Adoption(Evidence):
         recovered = fresh / 'capture'
         report = recover(fresh / 'exit', claim['id'], recovered)
         self.assertEqual(report['mean_square_iq'], 3317.25)
+        self.assertEqual(report['verification_scope'], 'capture_evidence_only')
+        self.assertEqual(report['owner_authority'], 'not_checked')
         self.agree(0, True, True, True, recovered)
         for name, content in original.items():
             self.assertEqual((recovered / name).read_bytes(), content)
@@ -265,6 +269,89 @@ class Adoption(Evidence):
         blob = self.log / 'blobs' / bid[:2] / bid[2:]
         blob.write_bytes(b'corrupt')
         with self.assertRaises(subprocess.CalledProcessError): self.run_bean('export', str(self.root / 'corrupt-exit'))
+
+    def test_conflict_inserted_after_preflight(self):
+        # Models a writer that does not take the adapter's own lock. Bean's
+        # ordinary dedupe must not make the requested receipt look retained.
+        from adopt import ingest
+        from unittest.mock import patch
+        import adopt
+        other = self.root / 'other'
+        shutil.copytree(self.capture, other)
+        original = copy.deepcopy(self.p)
+        original['artifacts'][0]['sha256'] = hashlib.sha256(bytes(16)).hexdigest()
+        (other / 'raw.bin').write_bytes(bytes(16))
+        (other / 'receipt.jws').write_bytes(sign(self.h, original))
+        real = adopt.bean
+        injected = False
+        def interleave(log, *args, **kwargs):
+            nonlocal injected
+            if args[0] == 'append' and not injected:
+                injected = True
+                claim = json.loads(kwargs['data'])
+                receipt = (other / 'receipt.jws').read_bytes()
+                claim['context']['receipt_sha256'] = 'sha256:' + hashlib.sha256(receipt).hexdigest()
+                # Sufficient to model a competing owner claim with the same ref.
+                real(log, 'append', data=json.dumps(claim).encode() + b'\n')
+            return real(log, *args, **kwargs)
+        with patch.object(adopt, 'bean', interleave), self.assertRaisesRegex(ValueError, 'conflicting'):
+            ingest(self.capture, self.log)
+
+    def test_matching_receipt_with_bad_retained_artifact_references(self):
+        from adopt import ingest
+        from unittest.mock import patch
+        import adopt
+        # Another adapter can preserve the digest metadata while losing the
+        # actual export references. A duplicate skip must not report success.
+        for fault in ('files', 'blobs', 'descriptor'):
+            with self.subTest(fault=fault):
+                self.log = self.root / ('malformed-' + fault)
+                self.log.mkdir(); self.run_bean('init')
+                real = adopt.bean
+                injected = False
+                def interleave(log, *args, **kwargs):
+                    nonlocal injected
+                    if args[0] == 'append' and not injected:
+                        injected = True
+                        claim = json.loads(kwargs['data'])
+                        if fault == 'files': claim['context']['files'] = {}
+                        if fault == 'blobs': claim['blobs'] = []
+                        if fault == 'descriptor': claim['blobs'][0]['role'] = 'wrong-role'
+                        real(log, 'append', data=json.dumps(claim).encode() + b'\n')
+                    return real(log, *args, **kwargs)
+                with patch.object(adopt, 'bean', interleave), self.assertRaisesRegex(ValueError, 'artifact references'):
+                    ingest(self.capture, self.log)
+                self.assertEqual(len(self.claims()), 1)
+                # A later retry must also reject the already-retained bad claim.
+                with self.assertRaisesRegex(ValueError, 'artifact references'):
+                    ingest(self.capture, self.log)
+
+    def test_concurrent_identical_and_conflicting_cli(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+        other = self.root / 'other'
+        shutil.copytree(self.capture, other)
+        def pair():
+            gate = Barrier(2)
+            def run(path):
+                gate.wait(timeout=10)
+                return subprocess.run([sys.executable, str(HERE / 'adopt.py'), 'ingest', str(path), str(self.log)],
+                                      capture_output=True, text=True, timeout=20)
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                return list(pool.map(run, [self.capture, other]))
+        runs = pair()
+        self.assertEqual(sorted(p.returncode for p in runs), [0, 0])
+        self.assertEqual(sorted(p.stdout.strip() for p in runs), ['added 0, skipped 1', 'added 1, skipped 0'])
+        self.assertEqual(len(self.claims()), 1)
+        # Fresh identity, then two different valid receipts for one capture nonce.
+        self.log = self.root / 'conflict-log'; self.log.mkdir(); self.run_bean('init')
+        self.p['artifacts'][0]['sha256'] = hashlib.sha256(bytes(16)).hexdigest()
+        (other / 'raw.bin').write_bytes(bytes(16))
+        (other / 'receipt.jws').write_bytes(sign(self.h, self.p))
+        runs = pair()
+        self.assertEqual(sorted(p.returncode for p in runs), [0, 1])
+        self.assertIn('conflicting', next(p.stderr for p in runs if p.returncode))
+        self.assertEqual(len(self.claims()), 1)
 
     def test_conflicting_nonce(self):
         from adopt import ingest

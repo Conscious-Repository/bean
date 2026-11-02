@@ -10,7 +10,7 @@ What comes next. Work that is done is in the git history, and the reasons are in
 ## Next
 
 1. Importers from real export files, never from memory.
-   - `bean-import-apple-health export.xml`. Low-frequency types (weight, blood pressure, VO2 max, labs): one record per reading, with the native id from the XML. High-frequency types (heart rate, steps, energy): one record per type and day, with a series blob. This settles the batch interval for Apple Health (SPEC appendix item 15).
+   - `bean-import-apple-health export.xml`. Low-frequency types (weight, blood pressure, VO2 max, labs): one record per reading, with identity/dedupe rules established from the actual export (do not assume an XML native id exists). High-frequency types (heart rate, steps, energy): evaluate one record per type and day with a series blob against a real export before settling the batch interval (SPEC appendix item 15).
    - `bean-import-csv -map "<column>=<type>[:<unit>]"`, repeatable, so that one row can make several records. Today the importer reads one `value` column.
 2. Freeze at `v` 0 (CORE.md section 6). After two weeks of real use (lab results, Apple Health, chat and agent logging) with no change to CORE.md, every DEFAULT in SPEC.md is final.
 3. Release: a `go install` path and a neutral home ([GOVERNANCE-PROPOSAL.md](GOVERNANCE-PROPOSAL.md)).
@@ -36,3 +36,9 @@ settings and necessary calibration, and a physical second-machine offline replay
 See INSTRUMENT-EVIDENCE-ADR.md. Do not freeze the provisional receipt or claim
 device-origin attestation from this experiment. Sharing and general device trust
 remain deferred.
+
+The acquisition simulator and offline kit now let software progress while hardware
+specifications remain unsettled. Apple Health is selected for the first external
+importer; a real export is still required. See [EVIDENCE-PIPELINES.md](EVIDENCE-PIPELINES.md)
+for independent work and merge gates. General attestation/sharing and homomorphic
+encryption remain deferred until acquisition and importer behavior are proven.

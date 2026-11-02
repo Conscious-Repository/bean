@@ -76,3 +76,7 @@ smoke:
 .PHONY: evidence
 evidence:
 	PY=$(PY) bash tools/evidence/run.sh
+
+.PHONY: evidence-kit
+evidence-kit:
+	PY=$(PY) bash tools/evidence/run.sh --kit "$(OUT)"

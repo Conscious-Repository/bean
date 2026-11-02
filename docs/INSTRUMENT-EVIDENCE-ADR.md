@@ -78,10 +78,16 @@ first; encrypt those same bytes; only then append instrument.ingest. Native id
 is embedded public key + capture nonce (not file hash), occurrence 0. Receipt
 SHA-256 in context is over original envelope bytes. Retry uses Bean dedupe;
 crash before append may leave harmless encrypted orphan blobs; no measurement
-claim exists until append succeeds. Concurrent local adapters rely on Bean's
-existing locks/dedupe. A reused signer nonce is a conflicting capture, not a new
+claim exists until append succeeds. Concurrent local adapters serialize
+check/append with a separate local lock;
+a post-append digest/artifact check detects conflicting or malformed retained
+claims from writers bypassing that lock. This is not cross-device coordination.
+A reused signer nonce is a conflicting capture, not a new
 measurement; operators must inspect the original preserved receipt. The adapter
-records adoption, not a biological measurement. Export is plaintext: protect it.
+records adoption, not a biological measurement. Export recovery reports
+verification_scope=capture_evidence_only and owner_authority=not_checked;
+verify the Bean log separately to establish owner authority.
+Export is plaintext: protect it.
 
 ## Hardware gate and deferred work
 
