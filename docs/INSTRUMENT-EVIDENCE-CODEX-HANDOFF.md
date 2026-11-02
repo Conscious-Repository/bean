@@ -1,146 +1,144 @@
-# Instrument evidence: implementation plan and Codex handoff
+# Codex handoff — Bean instrument evidence proof
 
-Status: PROPOSAL. Companion to [INSTRUMENT-EVIDENCE-CONTRACT.md](INSTRUMENT-EVIDENCE-CONTRACT.md). No implementation or core protocol changes are authorized by this document alone.
+Status: ready for an executable spike. Proposal only; do not freeze a wire standard or merge a protocol-format change on this handoff's authority.
 
-## The product goal
+Repository: Conscious-Repository/bean
+Branch to review: proposal/instrument-evidence-contract (draft PR #15)
+Base for implementation: the latest main, with a new feature branch. Keep the proposal review separate from implementation.
+Primary design: [INSTRUMENT-EVIDENCE-CONTRACT.md](INSTRUMENT-EVIDENCE-CONTRACT.md).
 
-Prove this end-to-end flow with the smallest real AION acquisition:
+## Your assignment
 
-Instrument captures exact bytes → instrument commits to those bytes in a public-key signed receipt → person receives receipt and bytes without an AION account → person imports them to Bean without changing the original receipt → independent offline verifier confirms source key and raw evidence and reproduces one agreed quantity → person discloses only selected material to one recipient.
+Build the smallest independently verifiable evidence path for **one** instrument acquisition, without modifying Bean's core format.
 
-This is NOT a generic medical-record standard, a global trust system, or a clinical-quality certification.
+Target demonstration:
 
-## Non-negotiable design boundaries
+    exact acquisition bytes + machine-readable settings
+        ↓ captured/hashes at a declared trust boundary
+    original instrument/host-signed receipt
+        ↓ transfer offline
+    independent verifier validates the signer + raw bytes
+        ↓ ordinary owner-side Bean ingestion
+    same original receipt/evidence recovered from a new machine
 
-- Do not change CORE.md, SPEC.md, object IDs, existing signatures, identity rotation, or the Blob encryption definition.
-- Do not force a subject Bean identity into an instrument before capture. The original receipt is subject-independent.
-- Do not derive device identity from a self-reported model string or equate valid signatures with accuracy.
-- Use vetted COSE_Sign1 and deterministic CBOR libraries, not new home-grown signing, encryption or encoding.
-- Put source-specific acquisition fields in a source-specific profile and immutable acquisition-config artifacts, not in Bean core.
-- The device/acquisition process hashes the bytes being emitted. It must not sign a hash reported by an untrusted host without an authenticated data path.
-- All paths and files are untrusted. Reject path traversal, special files, missing/duplicate entries and unbounded reads.
-- No AION-only endpoint, licence server, account or internet is required for verification.
-- Default privacy: no public relay publishing, no plaintext log on untrusted cloud storage, no covert sharing of all records.
-- Every report separates signature validity, completeness, trust, reproducibility and measurement accuracy.
-- Preserve the original COSE receipt and raw evidence byte-for-byte throughout storage, export and disclosure.
+The goal is verifiable measurement **provenance and integrity**, not proof of biological accuracy. A software signer whose bytes are controlled by the host must be reported as software-controlled. Do not assert hardware signing unless the data path and key isolation genuinely establish it.
 
-## Dependency graph and milestones
+## Operating rules
 
-### M0: Wire-contract review and golden fixture
+1. Read CORE.md and SPEC.md, then docs/INSTRUMENT-EVIDENCE-CONTRACT.md, docs/EXTENSIONS.md, SECURITY.md, CONTRIBUTING.md and tools/second/README.md.
+2. Do not change CORE.md, SPEC.md, current record validity, key rotation, record serialization, AES-SIV, or existing vectors merely to implement capture.
+3. Start with a **small executable proof**, not a broad SDK or a polished universal schema.
+4. Reuse existing standards and maintained implementations. Prefer a single provisional COSE_Sign1 profile if it fits the chosen signer; check whether an existing attestation format is already available on the real device. No proprietary signing algorithm or invented key registry.
+5. Bind *exact* raw bytes, settings, and any calibration necessary for the test calculation. Hash bytes before transformations. Device trust and processing trust remain distinct.
+6. Build test fixtures before writing integration code. Write one independent verifier from the written profile; do not translate the Go implementation line for line.
+7. Keep every capability CLI-callable, offline, no API or manufacturer account. Do not publish health evidence to public relays.
+8. Use clear outcome categories: signature_valid, evidence_complete, source_trusted, replay_available, accuracy_validated. Never collapse them into one "verified" boolean.
+9. For each PR, summarize what changed, what was actually tested, what remains an assumption, and what hardware inputs are missing. Do not auto-merge failed checks.
+10. Let the real device constrain the final receipt format; document why any field or cryptographic dependency is essential.
 
-Produce:
+## First work package — perform now without AION firmware
 
-- A single typed, deterministic CBOR payload definition and COSE protected-header profile, with exact public-key encoding, key IDs, allowed algorithms, signed-message construction and rejection rules.
-- A minimal synthetic raw-signal artifact and acquisition-config artifact, plus one completed COSE receipt.
-- Byte-for-byte golden fixture files and expected typed verification outcomes (positive and negative).
-- A standalone implementation-neutral conformance document; implementation decisions never silently override it.
+### Task 0: map constraints, choose one provisional profile
 
-Accept when two engineers can independently encode the same payload bytes and identify what the signature authenticates. Do not freeze this format on review alone: exercise it against a real instrument acquisition.
+Before implementing, write a short ADR (under docs/) with:
 
-### M1: Verify without Bean or the manufacturer
+- The exact cryptographic trust boundary being simulated.
+- Whether the provisional receipt uses COSE_Sign1 and why. If not, which existing standard is used and why.
+- Signing algorithm and key encoding provided by the tested library. Use test-only keys; make no hardware-attestation claims.
+- Required minimum fields: profile discriminator, capture nonce, complete ordered artifact table (role, byte length, SHA-256), signing public key/locator, and completion status.
+- File semantics: original bytes, mandatory settings file, stable raw format, exact length, streaming hash checks; calibration is committed when needed for numerical interpretation.
+- Which requirements are deferred and what real-hardware evidence could overturn this choice.
 
-Suggested new paths (names are negotiable):
+Do not write a final v1 protocol specification before a working independent cross-language proof.
 
-- instrument/receipt.go — COSE/CBOR parse, strict profile checks, public-key extraction and signature verification
-- instrument/evidence.go — streaming file hashing, declared sizes, roles and order checks
-- instrument/report.go — structured outcomes with separate cryptographic and trust statuses
-- cmd/bean-instrument-verify/main.go — headless offline CLI over a receipt folder
-- vectors/instrument/ — golden positive and negative fixtures
-- tools/instrument/second_verify.py — independent Python verifier built from the written profile, not translated from the Go code
+### Task 1: minimal fixture and signer
 
-Required tests: tampered sample, truncated/reordered/missing chunk, wrong key, non-deterministic CBOR, unknown critical field, invalid signature, changed config/calibration, duplicate or replayed capture ID with local state, and no network.
+Create a tiny synthetic acquisition representing the structure of a real NMR signal, with an explicitly documented sample format (signed integer or complex, sample rate, byte order, frame count). Add a small machine-readable acquisition-settings file. If the selected demo calculation requires calibration, include a frozen calibration file.
 
-Definition of done: a clean checkout independently verifies fixture bytes with two implementations. Unknown issuer trust is reported truthfully, not a hard-coded AION endorsement.
+Produce a test receipt with a test-only signer. Hash the exact emitted raw and settings bytes, not a parsed/reformatted equivalent. Preserve the original signed envelope as bytes.
 
-### M2: Preserve under the person's control
+Implement the proof with a provisional profile that can be rejected on unsupported changes. Make sure a complete capture cannot be declared if a required artifact was not finalized.
 
-Add a separate ingest adapter, suggested cmd/bean-instrument-ingest/.
+### Task 2: offline independent verification
 
-- Input: receipt folder from M1, not an AION API response.
-- Verify M1 evidence before ingesting. Ingest failure must not result in a claim labeled successfully verified.
-- Store the original receipt and bounded raw chunks in encrypted Bean blobs.
-- Create an owner-signed instrument.ingest claim with receipt hash, exact artifact indices, plaintext hashes, and Blob IDs. Do not forge a device-authored Bean claim.
-- Verify round-trip: owner export, new independent machine, same original receipt bytes, same raw bytes and same verdict.
-- Test crash between blob writes and claim creation, duplicate ingest, partial bundle, corrupted local blob, and non-owner author. Make idempotent retry possible.
+Implement:
 
-Use bounded raw chunks (initially approximately 4 MiB); avoid a large unbounded PutBlob call or rewriting the Bean core's AES-SIV implementation for the first release.
+- A minimal CLI: "verify <capture-directory>", consuming receipt + declared artifacts, with machine-readable result and distinct exit codes.
+- Parsing, signature verification, strict digest/length checks, file-path safety, duplicate/missing/reordered artifact checks, memory limits and explicit failure outcomes.
+- A second verifier in a different language built from the receipt contract and test fixtures.
 
-### M3: Produce one independently reproducible measurement
+Adversarial test matrix:
 
-- Identify one actual AION raw acquisition and its documented sample/sequence format.
-- Preserve capture configuration, necessary calibration snapshots, environmental/noise channels when available, and any filters.
-- Add one independently implemented processing method with versioned code/build digest, explicit input digests, params, output, units and uncertainty.
-- Store result as a separate signed claim, attributed to the actual processing author.
-- Verify against the raw artifact with tolerances justified by the algorithm; do not imply metrological or clinical validation.
+| Mutation | Must report |
+|---|---|
+| One bit in raw signal or settings | evidence mismatch |
+| Missing/extra/truncated sample bytes | incomplete or mismatch |
+| Swapped artifact or duplicate artifact index | invalid bundle/receipt |
+| Invalid or mismatched signature/key | signature invalid |
+| Unknown algorithm/unsupported receipt profile | unsupported, not valid |
+| Valid signature with unknown issuer | signature valid; source trust unestablished |
+| Malicious symlink/path traversal/large file | refused safely, bounded memory |
+| No internet, AION services unavailable | same evidence/signature outcome |
+| Same proof checked by the independent verifier | equivalent outcome |
 
-The first output can be a modest signal feature rather than quantitative tissue-state inference. Do not select an endpoint only because it looks compelling in a demo.
+Tests must show a host cannot replace raw bytes after the signer has committed to their hashes without detection. They cannot prove the actual physical acquisition was honest.
 
-### M4: Recipient-selected disclosure
+### Task 3: minimal Bean adoption
 
-Create a separate sharing bundle specification/CLI only after M1–M3 pass.
+Implement this only after Task 2 passes:
 
-- Person chooses explicit receipt(s), outputs, claims and raw artifacts.
-- Encrypt to a recipient-specific encryption key using a precisely named RFC 9180 HPKE suite and conventional authenticated bulk encryption as required by the envelope design.
-- Receiver decrypts and runs the M1 independent verification offline.
-- Include tests for wrong recipient, missing artifact, corruption, unknown key, omission of other private records, and attempted share of signing/recovery keys.
-- Do not promise revocation of plaintext already disclosed; document linkability via device key and signed metadata.
+- A simple CLI or adapter that verifies a capture directory first, stores the unchanged receipt and evidence as owner-encrypted Bean blobs, and writes a normal owner-signed adoption claim referencing the original receipt digest and encrypted blob IDs.
+- No new Bean core record type or device-identity authority rule is required. Use an ordinary app-level type (for example instrument.ingest) and existing "about" semantics as appropriate.
+- Repeat ingest safely without introducing false duplicate measurements.
+- Export the person's data, reconstruct the original receipt/evidence on a fresh machine, verify the original signature and byte hashes with the independent verifier, and reproduce one trivial signal statistic.
+- Negative tests: missing artifact, corrupt blob, failed adoption and crash/retry. A failed verification must never be described as a successful instrument measurement.
 
-FHIR/VC adapters are exchange projections only. They must not become a dependency of original physical evidence verification.
+Deliver one PR, not several speculative extensions, containing executable code, fixture data, tests, ADR and a short README showing commands to run the proof end-to-end.
 
-### M5: Device provenance, secure hardware and measurement validation
+## Work that must wait for hardware context
 
-When the selected hardware is known:
+Do **not** guess AION's firmware signing capability or MRI raw format.
 
-- Determine whether the measurement data can be hashed inside the ADC/FPGA/MCU acquisition boundary and where the signing key is protected.
-- Add hardware-backed key generation and signing when practical. Software-signed prototypes must report their lower assurance accurately.
-- Carry offline manufacturer endorsement/firmware measurement evidence separately, using established mechanisms where supported; support owner-trusted keys without a vendor account.
-- Specify key rotation/revocation and what can be proven without trusted timestamps.
-- Independently test accuracy, longitudinal repeatability, drift, motion, calibration, instrument substitution and reproducibility. These are empirical measurements, not consequences of signatures.
+A real capture requires:
 
-## Three parallel reviewer roles
+1. One exact file or stream of unmodified acquisition data, plus byte layout, sample type, endianness and sample rate.
+2. The acquisition settings actually used, and any calibration/noise/field artifacts required for the selected numerical output.
+3. A diagram or explanation of the path from sensor/ADC → FPGA/MCU → host, including which component can hash bytes and which can access the signing key.
+4. Any actual signing key constraints (secure element, MCU crypto accelerator, software signer only); do not fabricate manufacturer attestations.
 
-Use three independent review passes after each milestone. They cannot override failing tests with philosophy.
+At this gate, state precisely what is missing. If all signing currently occurs after an untrusted host can alter data, label the proof **host-signed** and identify what hardware/firmware change is needed to achieve device-origin evidence.
 
-**Linus reviewer:** Is there an unnecessary new format, dependency, special-case path, schema duplication or premature abstraction? Can another engineer implement from the spec without seeing Go source? Do conformance vectors cover exact bytes and failures? Is the interface small and headless? Does it change Bean core unnecessarily?
+The test output should include one simple reproducible number calculated from the authentic raw sample and settings. It need not be T2, a diagnostic endpoint, or a clinical claim. Metrological accuracy is a separate experiment.
 
-**Satoshi reviewer:** Can an adversarial host fabricate, swap, truncate, omit, replay or reorder artifacts and still get a successful verdict? Can an attacker impersonate a real instrument with a self-signed key? Are signature, key endorsement, firmware state, clock freshness and scientific truth kept separate? Is verification independent of AION's infrastructure?
+## Later work — explicitly out of current PR
 
-**BuildTall reviewer:** Can the user copy the original evidence, signature and calibration, move to another computer, verify offline and choose a recipient without manufacturer permission? Does the workflow work as CLI/API with no AION service? Do files and keys remain individually controlled? Are user-specific source and trust decisions independent of any central registry?
+After one real device acquisition succeeds and two independent verifiers agree:
 
-## Codex implementation instruction
+- Decide and freeze the smallest wire format based on the deployed hardware, with byte-exact vectors and a versioning rule.
+- Build a separate user-selected, recipient-encrypted sharing envelope using established recipient encryption (e.g., an explicit HPKE profile and authenticated bulk encryption). The recipient independently verifies the original proof offline.
+- Consider optional owner pairing, offline manufacturer endorsement, revocation policy and measured-boot attestation. Treat all of these as policy/assurance layers, not core Bean validity rules.
+- Build FHIR/VC projections only when there is a concrete integration partner. Do not make them necessary for evidence verification.
 
-Repository: Conscious-Repository/bean, default branch main.
+No blockchain, global ordering, blanket web-of-trust score, database-as-truth, new health ontology, mandatory cloud service or manufacturer-controlled permission to leave.
 
-Read, in order:
+## Three review lenses — run independently after Task 3
 
-1. CORE.md and SPEC.md to understand what cannot change;
-2. docs/EXTENSIONS.md (device draft and computed-results draft);
-3. docs/INSTRUMENT-EVIDENCE-CONTRACT.md (this design proposal's companion);
-4. this document;
-5. SECURITY.md, CONTRIBUTING.md, Makefile, tools/second/README.md.
+**Linus:** Could any type, file, dependency or field be deleted without losing the working proof? Are the bytes and error behavior specified enough for another author to implement independently? Is the implementation small, idiomatic and test-driven? Was core left unchanged?
 
-Work on a dedicated branch. Begin with M0 and M1, not M4 or M5. Use existing project conventions: tests before implementation, short named functions, standard library where practical, stable errors, synthetic fixtures, and an independent cross-language verifier. Inspect dependencies for current support and licence suitability before adding them. Do not write proprietary crypto.
+**Satoshi:** Can the host replace evidence, fake a key, replay a capture, withhold files, reassign authorship or assert false firmware state? Does the verifier distinguish key ownership from physical provenance and physical accuracy? Is verification possible with no AION infrastructure?
 
-Deliver for each milestone:
+**BuildTall:** Can the person leave with the original proof, raw files and calculation method; restore and verify them offline; operate via CLI without accounts; and later disclose to a chosen peer without disclosing the rest of the log? Does any new dependency create enclosure?
 
-- an explicit change list with files and design decisions;
-- a fixture/test that fails before the fix;
-- passing CI, relevant adversarial tests and independent verifier agreement;
-- a short reviewer report for Linus, Satoshi and BuildTall;
-- a PR that describes any limitation and does not claim hardware attestation if the signer is only software.
+The acceptance criterion is an executable artifact with a reproducible result and independently verified provenance, not how complete the design document appears.
 
-Do not automatically merge security-critical wire-format changes before the independent verifier passes. Do not change Bean core validity rules without a separately justified protocol-version decision and two-implementation proof.
+## Stop conditions and reporting
 
-## Context needed to connect actual AION hardware
+Stop and report rather than invent a solution if:
 
-The generic receipt format, test vectors, synthetic signer/verifier and Bean ingestion can advance without hardware context.
+- no device-side trusted acquisition/signing boundary is available (report a host-signed prototype honestly);
+- the actual raw evidence or required configuration is impossible to export;
+- an external verifier needs a private AION API or licence to validate the evidence;
+- the chosen crypto library or profile is insufficiently specified for cross-language verification;
+- a proposed convenience requires a Bean core validity change.
 
-The real-device stage requires a representative capture with its exact original bytes and encoding, a description of where hashing/signing can execute in the measurement chain, and the available configuration/calibration/reconstruction artifacts. Determine these from real firmware and hardware, not a presumed spec.
-
-## Stop conditions
-
-- Device cannot commit to the authentic acquisition bytes: stop and describe the untrusted boundary; do not call a host signature a device attestation.
-- The raw evidence or necessary configuration cannot be exported: stop; the sovereignty/reproducibility goal is not met.
-- An external verifier must contact AION to succeed: stop; the design has introduced vendor dependency.
-- A valid cryptographic proof is reported as clinical or physical accuracy: stop; separate assurance categories.
-- A design requires altering Bean core for convenience: stop and justify why a separate adoption claim and receipt are insufficient.
+When ready, the Codex completion report should be at most: changed files, exact commands/tests passed, proof status, limitations, hardware inputs required, PR URL. Keep all code and detailed tests in the repository.
