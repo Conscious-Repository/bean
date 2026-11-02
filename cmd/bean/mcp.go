@@ -118,12 +118,12 @@ var mcpTools = []mcpTool{
 	},
 	{
 		Name:        "get_record",
-		Description: "Return one record in full with its status, the blobs it names and the records that reply to it (notes, corrections, attestations). Accepts a full id or a unique prefix of 6 or more hex digits.",
+		Description: "Return a valid, non-deleted record in full, including historical superseded records, its status and replies. Named blobs are metadata; read_blob returns content only when a current record names the blob. Accepts a full id or a unique prefix of 6 or more hex digits.",
 		InputSchema: schema(map[string]any{"id": strProp("Record id (sha256:...) or hex prefix."), "include_others": othersProp}, "id"),
 	},
 	{
 		Name:        "read_blob",
-		Description: "Return the decrypted text of a raw source file (blob) that a current record names, for example the CSV a reading came from. Binary blobs return only their size.",
+		Description: "Return decrypted text only for a blob named by a current (non-superseded, non-duplicate) record. Historical get_record may show blob IDs without granting this tool access to their content. Binary blobs return only their size.",
 		InputSchema: schema(map[string]any{
 			"id":             strProp("Blob id (sha256:...)."),
 			"include_others": othersProp,
