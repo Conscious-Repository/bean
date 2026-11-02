@@ -329,4 +329,12 @@ func TestMCPReadBlobRejectsSupersededRecord(t *testing.T) {
 	if data, isErr := call(t, s, "read_blob", map[string]any{"id": blob}); !isErr {
 		t.Fatalf("superseded-only blob exposed: %v", data)
 	}
+	// Historical claims remain inspectable, but their blobs are not exposed.
+	old, isErr := call(t, s, "get_record", map[string]any{"id": first.IDs[0]})
+	if isErr || !strings.HasPrefix(old["status"].(string), "superseded by ") {
+		t.Fatalf("historical record not inspectable: %v, error %v", old, isErr)
+	}
+	if len(old["blobs"].([]any)) != 1 {
+		t.Fatalf("historical blob metadata missing: %v", old)
+	}
 }
