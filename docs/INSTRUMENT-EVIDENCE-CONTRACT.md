@@ -71,7 +71,7 @@ The verifier must not confuse a valid self-signed key with an AION-manufactured 
 ### Preserve in Bean
 
 1. Preserve original receipt bytes, raw data and settings in the person's controlled store, encrypting with current Bean blob semantics.
-2. Write an ordinary owner-signed record such as \`instrument.ingest\`, referring to the original receipt SHA-256 and encrypted blob IDs. The receipt hash is over its *original* bytes, not over ciphertext; the Blob IDs are storage addresses, not evidence hashes.
+2. Write an ordinary owner-signed record such as `instrument.ingest`, referring to the original receipt SHA-256 and encrypted blob IDs. The receipt hash is over its *original* bytes, not over ciphertext; the Blob IDs are storage addresses, not evidence hashes.
 3. Re-export to a different machine and verify that the receipt and evidence remain byte-for-byte identical.
 4. Do not modify Bean core identity, record validity, key rotation, or encrypted-blob formats.
 
