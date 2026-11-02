@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"hash"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -287,7 +288,7 @@ func (s *Store) Purge(id, reason string) (string, error) {
 
 // SyncResult is the output of Sync.
 type SyncResult struct {
-	Records, Blobs, Refused, Replaced int
+	Records, Blobs, Refused, Replaced int // Replaced counts repaired record files and blobs.
 }
 
 // Sync copies from src into this store (SPEC.md 7.4 with change set C13:
@@ -395,22 +396,55 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 		if id == "" || !named[id] {
 			continue
 		}
-		if _, err := os.Stat(s.path(p)); err == nil {
-			continue
+		// A present file is not necessarily the blob named by its path.
+		// Check it before skipping, just as record sync checks signatures.
+		dest := s.path(p)
+		repair := false
+		if info, err := os.Lstat(dest); err == nil {
+			if info.Mode().IsRegular() {
+				got, err := fileHashID(dest)
+				if err != nil {
+					return res, err
+				}
+				if got == id {
+					continue
+				}
+			}
+			repair = true
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return res, err
 		}
 		data, err := os.ReadFile(src.path(p))
 		if err != nil {
 			return res, err
 		}
 		if HashID(data) != id {
-			continue
+			continue // Never replace a damaged copy with a damaged source.
 		}
-		if err := writeFileAtomic(s.path(p), data, 0o600); err != nil {
+		if err := writeFileAtomic(dest, data, 0o600); err != nil {
 			return res, err
 		}
-		res.Blobs++
+		if repair {
+			res.Replaced++
+		} else {
+			res.Blobs++
+		}
 	}
 	return res, nil
+}
+
+// fileHashID checks a stored blob without reading its entire content into memory.
+func fileHashID(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	var h hash.Hash = sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return "sha256:" + hex.EncodeToString(h.Sum(nil)), nil
 }
 
 func sortedKeys[V any](m map[string]V) []string {
