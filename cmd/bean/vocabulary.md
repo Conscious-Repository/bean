@@ -62,3 +62,12 @@ Leave it out when nobody published a number. Never guess one.
 ## Units
 
 `kg`, `g`, `mg`, `L`, `mL`, `km`, `min`, `h`, `kcal`, `/min` (beats per minute), `{score}` (0 to 10), `{drink}`. Write the unit the person used; do not convert.
+
+## Apple Health imports
+
+`apple-health.export` adopts an original XML/ZIP as `value.blob`, with byte length,
+plaintext digest and type counts in context. It is an archive, not a measurement.
+Optional `apple-health.steps`, `apple-health.distance-walking-running` and other
+source-specific reading types retain original units/intervals; no source-priority
+aggregation is implied. `assurance=unsigned-export` does not establish device
+origin. See `cmd/bean-import-apple-health/README.md` for identity/retention limits.

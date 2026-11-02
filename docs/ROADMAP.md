@@ -10,7 +10,7 @@ What comes next. Work that is done is in the git history, and the reasons are in
 ## Next
 
 1. Importers from real export files, never from memory.
-   - `bean-import-apple-health export.xml`. Low-frequency types (weight, blood pressure, VO2 max, labs): one record per reading, with the native id from the XML. High-frequency types (heart rate, steps, energy): one record per type and day, with a series blob. This settles the batch interval for Apple Health (SPEC appendix item 15).
+   - Apple Health raw XML/ZIP ingestion is implemented, with optional individual readings. The observed XML has no native IDs; cross-export identity remains approximate. Daily series and aggregates await explicit reconciliation rules; no batch interval is frozen. See `cmd/bean-import-apple-health/README.md`.
    - `bean-import-csv -map "<column>=<type>[:<unit>]"`, repeatable, so that one row can make several records. Today the importer reads one `value` column.
 2. Freeze at `v` 0 (CORE.md section 6). After two weeks of real use (lab results, Apple Health, chat and agent logging) with no change to CORE.md, every DEFAULT in SPEC.md is final.
 3. Release: a `go install` path and a neutral home ([GOVERNANCE-PROPOSAL.md](GOVERNANCE-PROPOSAL.md)).
@@ -27,3 +27,11 @@ What comes next. Work that is done is in the git history, and the reasons are in
 ## Not planned
 
 Hosted or custodial accounts, a UI, relay publishing of records, encryption of record files at rest (use an encrypted volume), Whoop and Oura importers until there is a real export, Extension 1 and Extension 2.
+
+## Direct provider adapters
+
+No bridge or iPhone app is planned for the current file-ingestion slice. Next choose
+an already-owned eligible provider account, preserve one authorized API response,
+and implement its source-specific adapter. See [PROVIDER-INGESTION.md](PROVIDER-INGESTION.md)
+for Oura, WHOOP and Withings access gates. Credentials, real responses and personal
+exports stay outside the repository. General sharing/attestation remains separate.
