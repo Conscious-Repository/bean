@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"os"
 	"path/filepath"
@@ -287,7 +288,7 @@ func (s *Store) Purge(id, reason string) (string, error) {
 
 // SyncResult is the output of Sync.
 type SyncResult struct {
-	Records, Blobs, Refused, Replaced int
+	Records, Blobs, Refused, Replaced int // Replaced counts repaired record files and blobs.
 }
 
 // Sync copies from src into this store (SPEC.md 7.4 with change set C13:
@@ -395,22 +396,55 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 		if id == "" || !named[id] {
 			continue
 		}
-		if _, err := os.Stat(s.path(p)); err == nil {
-			continue
+		// A present file is not necessarily the blob named by its path.
+		// Check it before skipping, just as record sync checks signatures.
+		dest := s.path(p)
+		repair := false
+		if info, err := os.Lstat(dest); err == nil {
+			if info.Mode().IsRegular() {
+				got, err := fileHashID(dest)
+				if err != nil {
+					return res, err
+				}
+				if got == id {
+					continue
+				}
+			}
+			repair = true
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return res, err
 		}
 		data, err := os.ReadFile(src.path(p))
 		if err != nil {
 			return res, err
 		}
 		if HashID(data) != id {
-			continue
+			continue // Never replace a damaged copy with a damaged source.
 		}
-		if err := writeFileAtomic(s.path(p), data, 0o600); err != nil {
+		if err := writeFileAtomic(dest, data, 0o600); err != nil {
 			return res, err
 		}
-		res.Blobs++
+		if repair {
+			res.Replaced++
+		} else {
+			res.Blobs++
+		}
 	}
 	return res, nil
+}
+
+// fileHashID checks a stored blob without reading its entire content into memory.
+func fileHashID(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	var h hash.Hash = sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return "sha256:" + hex.EncodeToString(h.Sum(nil)), nil
 }
 
 func sortedKeys[V any](m map[string]V) []string {
@@ -482,6 +516,8 @@ func (s *Store) Export(dir string) (records, blobs int, err error) {
 }
 
 // ImportExport reverses Export into a log with the same identity secret.
+// Export directories are untrusted input. Read them through os.Root so a
+// changed symlink cannot escape the selected folder.
 func (s *Store) ImportExport(dir string) (records, blobs int, err error) {
 	unlock, err := s.lock()
 	if err != nil {
@@ -491,60 +527,138 @@ func (s *Store) ImportExport(dir string) (records, blobs int, err error) {
 	if _, err := s.ReadLocal(); err != nil {
 		return 0, 0, err
 	}
-	entries, err := os.ReadDir(filepath.Join(dir, "blobs"))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer root.Close()
+	blobEntries, err := exportEntries(dir, "blobs", true)
+	if err != nil {
+		return 0, 0, err
+	}
+	recordEntries, err := exportEntries(dir, "records", false)
+	if err != nil {
 		return 0, 0, err
 	}
 	secret, err := s.identitySecret()
 	if err != nil {
 		return 0, 0, err
 	}
-	for _, e := range entries {
-		pt, err := os.ReadFile(filepath.Join(dir, "blobs", e.Name()))
+	for _, e := range blobEntries {
+		pt, err := readExportFile(root, "blobs/"+e.Name(), maxImportBlobBytes)
 		if err != nil {
-			return 0, 0, err
+			return records, blobs, err
 		}
-		// Check the name before anything is written, so a bad export leaves
-		// no blob behind.
 		out, err := EncryptBlob(BlobKey(secret), pt)
 		if err != nil {
-			return 0, 0, err
+			return records, blobs, err
 		}
 		id := HashID(out)
 		if id != "sha256:"+e.Name() {
-			return 0, 0, errors.New("blob corrupt: sha256:" + e.Name())
+			return records, blobs, errors.New("blob corrupt: sha256:" + e.Name())
 		}
-		if _, err := writeIfAbsent(s.path(BlobPathOf(id)), out, 0o600); err != nil {
-			return 0, 0, err
-		}
-		blobs++
-	}
-	entries, err = os.ReadDir(filepath.Join(dir, "records"))
-	if err != nil {
-		return 0, 0, err
-	}
-	for _, e := range entries {
-		data, err := os.ReadFile(filepath.Join(dir, "records", e.Name()))
+		wrote, err := writeIfAbsent(s.path(BlobPathOf(id)), out, 0o600)
 		if err != nil {
-			return 0, 0, err
+			return records, blobs, err
+		}
+		if wrote {
+			blobs++
+		}
+	}
+	for _, e := range recordEntries {
+		data, err := readExportFile(root, "records/"+e.Name(), MaxSuccessionSize)
+		if err != nil {
+			return records, blobs, err
 		}
 		rid := "sha256:" + strings.TrimSuffix(e.Name(), ".json")
-		if !IsID(rid) || !strings.HasSuffix(e.Name(), ".json") {
-			return 0, 0, errors.New("bad path: records/" + e.Name())
-		}
 		p := PathOf(rid)
 		if fr := CheckFile(p, data); fr.Err != nil {
-			return 0, 0, fmt.Errorf("%s: %s", e.Name(), fr.Err)
+			return records, blobs, fmt.Errorf("%s: %s", e.Name(), fr.Err)
 		}
 		wrote, err := writeIfAbsent(s.path(p), data, 0o600)
 		if err != nil {
-			return 0, 0, err
+			return records, blobs, err
 		}
 		if wrote {
 			records++
 		}
 	}
 	return records, blobs, nil
+}
+
+// The reference import command supports 256 MiB raw blobs. The core
+// format does not impose an upper bound on blobs (SPEC 4.9).
+const maxImportBlobBytes int64 = 256 << 20
+
+// exportEntries rejects anything except regular files in ordinary
+// directories, including symbolic links and special files.
+func exportEntries(root, sub string, optional bool) ([]os.DirEntry, error) {
+	p := filepath.Join(root, sub)
+	info, err := os.Lstat(p)
+	if errors.Is(err, os.ErrNotExist) && optional {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return nil, errors.New("bad path: " + sub)
+	}
+	entries, err := os.ReadDir(p)
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range entries {
+		if !e.Type().IsRegular() {
+			return nil, errors.New("bad path: " + sub + "/" + e.Name())
+		}
+		if sub == "blobs" && !IsID("sha256:"+e.Name()) {
+			return nil, errors.New("bad path: " + sub + "/" + e.Name())
+		}
+		if sub == "records" && (!strings.HasSuffix(e.Name(), ".json") || !IsID("sha256:"+strings.TrimSuffix(e.Name(), ".json"))) {
+			return nil, errors.New("bad path: " + sub + "/" + e.Name())
+		}
+		info, err := e.Info()
+		if err != nil {
+			return nil, err
+		}
+		max := maxImportBlobBytes
+		if sub == "records" {
+			max = MaxSuccessionSize
+		}
+		if info.Size() > max {
+			return nil, errors.New("too large: " + sub + "/" + e.Name())
+		}
+	}
+	return entries, nil
+}
+
+// readExportFile performs the size and regular-file checks again on the
+// opened handle; a directory listing's size is not a trusted bound.
+func readExportFile(root *os.Root, name string, max int64) ([]byte, error) {
+	f, err := root.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, errors.New("bad path: " + name)
+	}
+	if info.Size() > max {
+		return nil, errors.New("too large: " + name)
+	}
+	data, err := io.ReadAll(io.LimitReader(f, max+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > max {
+		return nil, errors.New("too large: " + name)
+	}
+	return data, nil
 }
 
 // isSealPath reports whether p holds a bean.seal record of l.

@@ -124,7 +124,7 @@ More rules:
 ### 4.1 Sync
 
 1. `objects/` and `blobs/` sync. `local/` holds keys, deletion state and caches. It does not sync.
-2. To sync from copy A to copy B, copy each file that B does not have, if it passes the checks of 1.4. A file of an unknown version passes after check 4. Replace a stored copy that fails the checks.
+2. To sync from copy A to copy B, copy each file that B does not have, if it passes the checks of 1.4. A file of an unknown version passes after check 4. Replace a stored record copy that fails the checks. Check existing blobs against their path hashes and repair a corrupt blob only from a verified source.
 3. Do not copy a record that a valid tombstone names.
 4. The copy that wrote the tombstone erases the target at once. Any other copy that has the target hides it. It erases the target only when the person runs `gc`, 7 days or more later.
 5. If a tombstone becomes invalid, for example after a rotation that does not seal it, restore the target.

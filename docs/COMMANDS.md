@@ -122,8 +122,8 @@ Runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdin
 | `list_types` | Every type, with its count, units and date range. |
 | `query_records` | Records by type and time. |
 | `stats` | Count, minimum, maximum, mean, median and spread of one type, by day, week or month if asked. Readings by different authors or in different units are in separate `groups`. |
-| `get_record` | One record, its status and its replies. |
-| `read_blob` | A stored text file. For other files, only the size. |
+| `get_record` | One non-deleted, valid record, including superseded history, its status and replies. Blob IDs are metadata. |
+| `read_blob` | Only blobs of current records; superseded-only history does not grant content access. Text is returned; for binary files only size. |
 | `log_entry` | With `-write` only. Adds a record signed by the agent key, of a type from the vocabulary only: the built-in one plus `vocabulary.md` in the bean folder, if it exists (cmd/bean/vocabulary.md, "Your own types"). It can also comment on a record (`about`) or replace one of the agent's own records (`corrects`). |
 
 With `-write`, the first start makes the agent key of this machine and, on your own machine, trusts it. `-label` names that agent (default: `agent@<computer name>`).
