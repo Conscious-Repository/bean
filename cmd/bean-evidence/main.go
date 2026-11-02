@@ -93,7 +93,8 @@ func safePoint(b []byte) bool {
 func numeric(v any) bool {
 	switch x := v.(type) {
 	case json.Number:
-		return integer.MatchString(string(x))
+		n, err := x.Int64()
+		return err == nil && n >= -9007199254740991 && n <= 9007199254740991 && string(x) != "-0" && integer.MatchString(string(x))
 	case map[string]any:
 		for _, v := range x {
 			if !numeric(v) {

@@ -45,7 +45,7 @@ Artifacts is exactly two entries in order: role `raw`, name `raw.bin`; then role
 (positive integer within its limit), sha256 (64 lowercase hex). No arbitrary
 paths or optional hidden artifacts. Every digest commits to original bytes.
 Receipt JSON is compact, keys sorted lexically, ASCII with no escapes, nesting
-at most 8, integers only; decode/re-encode must match. This narrow restriction
+at most 8, integers only within ±(2^53−1), no negative zero; decode/re-encode must match. This narrow restriction
 removes parser ambiguity in the experiment; it does not define general JCS.
 Check supported header/profile, signature, manifest structure, then file bytes.
 Hash files in bounded chunks before numerical interpretation.

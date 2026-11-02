@@ -89,7 +89,7 @@ independent human/security audit or physical accuracy validation is claimed.
 Validation on macOS (Go 1.27.3, cryptography 50.0.2): `make evidence` ran 37 tests
 with only the two Linux network-namespace assertions skipped. `make fmt vet build
 test vectors second demo differential` passed: independent Bean conformance
-45/45, scenario agreement 14/14, differential 331 same / 0 different (274 with
+45/45, scenario agreement 15/15 and independently crafted cases 14/14, differential 331 same / 0 different (274 with
 rotation). `make lint vuln` passed; govulncheck found no vulnerabilities. Both
 verifiers reject small-order/noncanonical key and R encodings, including the
 identity-key forgery accepted by the underlying libraries alone. Hosted CI is

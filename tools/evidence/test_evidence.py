@@ -116,7 +116,7 @@ class Evidence(unittest.TestCase):
                    lambda p: p['artifacts'][0].update(name='/etc/passwd'),
                    lambda p: p['artifacts'][0].update(length=True),
                    lambda p: p['artifacts'][0].update(length=0),
-                   lambda p: p['artifacts'][0].update(length=2**60),
+                   lambda p: p['artifacts'][0].update(length=2**40),
                    lambda p: p.update(complete=False),
                    lambda p: p.pop('complete'),
                    lambda p: p.update(assurance='device-hardware'),
@@ -170,7 +170,7 @@ class Evidence(unittest.TestCase):
         for data in (b'x' * 16385, b'a.b.c\n', b'a.b.c.d', b'...'):
             (self.capture / 'receipt.jws').write_bytes(data); self.agree(2)
         for payload in (b'{"profile":"a","profile":"b"}', b'[' * 20 + b']' * 20,
-                        b'{"profile":"\\ud800"}', b'null', b'{"a":1.0}'):
+                        b'{"profile":"\\ud800"}', b'null', b'{"a":1.0}', b'{"a":-0}', b'{"a":9007199254740992}'):
             receipt = b64(canonical(self.h)) + '.' + b64(payload) + '.' + b64(bytes(64))
             (self.capture / 'receipt.jws').write_text(receipt); self.agree(2)
 

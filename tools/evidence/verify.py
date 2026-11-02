@@ -19,6 +19,12 @@ def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=True).encode()
 
 
+def parse_integer(text):
+    if len(text) > 17 or text == '-0' or abs(int(text)) > 9007199254740991:
+        raise ValueError('integer range')
+    return int(text)
+
+
 def parse(data):
     # The small profile needs no escaped/non-ASCII strings, floats or deep trees.
     if any(c > 127 for c in data) or b'\\' in data:
@@ -32,7 +38,7 @@ def parse(data):
             depth += (c in (91, 123)) - (c in (93, 125))
             if depth > 8:
                 raise ValueError('depth')
-    value = json.loads(data, parse_float=lambda _: (_ for _ in ()).throw(ValueError('integer only')),
+    value = json.loads(data, parse_int=parse_integer, parse_float=lambda _: (_ for _ in ()).throw(ValueError('integer only')),
                        parse_constant=lambda _: (_ for _ in ()).throw(ValueError('finite only')))
     if canonical(value) != data:
         raise ValueError('noncanonical or duplicate JSON')
