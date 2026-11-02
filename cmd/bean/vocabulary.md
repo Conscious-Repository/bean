@@ -62,3 +62,13 @@ Leave it out when nobody published a number. Never guess one.
 ## Units
 
 `kg`, `g`, `mg`, `L`, `mL`, `km`, `min`, `h`, `kcal`, `/min` (beats per minute), `{score}` (0 to 10), `{drink}`. Write the unit the person used; do not convert.
+
+### Experimental instrument evidence
+
+`instrument.ingest` records owner adoption of an original signed capture, not a
+biological measurement. `value.s` labels the synthetic host-software experiment.
+`context.receipt_sha256` hashes the original receipt; `context.files` maps its
+fixed filenames to encrypted blob IDs. `context.capture_key_nonce` is the
+source public key plus capture nonce used for dedupe. `context.verification`
+keeps signature, completeness, source trust, replay and accuracy separate.
+See `docs/INSTRUMENT-EVIDENCE-ADR.md`; no device-origin assurance is established.

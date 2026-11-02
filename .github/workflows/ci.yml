@@ -30,6 +30,8 @@ jobs:
       - name: Verify build, tests and vectors
         run: |
           make fmt vet build test vectors second demo
+      - name: Independent evidence proof with network disabled
+        run: EVIDENCE_OFFLINE=1 make evidence
       - name: Differential against base
         if: github.event_name == 'pull_request'
         env:

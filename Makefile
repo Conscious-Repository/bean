@@ -15,7 +15,7 @@ help:
 	@echo "make fuzz          run each fuzz target for FUZZTIME (default 2m)"
 	@echo "make smoke         build a large log and time the commands"
 
-check: fmt vet build test lint vuln vectors second differential demo
+check: fmt vet build test lint vuln vectors second differential demo evidence
 
 build:
 	go build ./...
@@ -72,3 +72,7 @@ fuzz:
 
 smoke:
 	tools/smoke.sh
+
+.PHONY: evidence
+evidence:
+	PY=$(PY) bash tools/evidence/run.sh

@@ -27,3 +27,12 @@ What comes next. Work that is done is in the git history, and the reasons are in
 ## Not planned
 
 Hosted or custodial accounts, a UI, relay publishing of records, encryption of record files at rest (use an encrypted volume), Whoop and Oura importers until there is a real export, Extension 1 and Extension 2.
+
+## Instrument evidence experiment
+
+The synthetic host-software loop is executable in `tools/evidence/`. Next gate:
+one actual AION acquisition, documented ADC-to-signing boundary, exact applied
+settings and necessary calibration, and a physical second-machine offline replay.
+See INSTRUMENT-EVIDENCE-ADR.md. Do not freeze the provisional receipt or claim
+device-origin attestation from this experiment. Sharing and general device trust
+remain deferred.
