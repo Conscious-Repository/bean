@@ -805,10 +805,10 @@ Sync from replica A (source) to replica B (destination) is a set union with one 
    3. If B hides it under a hold, do not copy it.
    4. Otherwise copy it.
    5. If B holds a file for that id that fails a step from 1 to 15 of 3.8 and the file in A passes, replace B's file.
-4. For each blob in A that B does not have:
-   1. If the SHA-256 of the bytes does not match the path, do not copy it.
+4. For each blob in A that B does not have, or that B has with a stored hash that does not match its path:
+   1. If the SHA-256 of A's bytes does not match the path, do not copy it.
    2. If only purged or hidden record files name it, do not copy it. A record file names a blob in `blobs[].hash` or `value.blob`, valid or not.
-   3. Otherwise copy it.
+   3. Otherwise copy it. If B has a corrupt copy, replace it atomically with A's verified bytes.
 5. Compute the valid set of B again. Apply 7.6 to new tombstones.
 
 Sync MUST copy files with an unknown `v`. Newer verifiers need them.
@@ -881,7 +881,7 @@ A replica that never had the target, or that lost this file, does not know the r
 
 The export is not encrypted. The CLI MUST say this before it writes.
 `bean import-export <dir>` reverses the export for a log with the same identity secret.
-It encrypts each blob again. The deterministic encryption gives the same blob ids.
+It encrypts each blob again. The deterministic encryption gives the same blob ids. The reference CLI refuses symbolic links, special file entries, record exports over 16 MiB, and plaintext blob exports over 256 MiB. It confines file reads to the selected export directory. These are CLI resource limits, not core validity rules.
 
 ### 7.10 Caches
 
