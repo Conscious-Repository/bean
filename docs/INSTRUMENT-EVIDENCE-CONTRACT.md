@@ -70,6 +70,7 @@ This is a proposed single-signer, single-capture profile. The formal CBOR key ma
 - The device MUST compute hashes of the bytes emitted by its acquisition path and sign a complete receipt only after the declared capture ends. A host-provided digest is not adequate if the device cannot authenticate it as the captured byte stream.
 - A finished receipt MUST be no more than 1 MiB in this profile; all evidence files are streamed and hashed with bounded memory. The maximum accepted artifact count is 4096.
 - The receipt hash is SHA-256 of its exact COSE_Sign1 bytes. The signed payload has a profile discriminator that prevents reuse as another kind of statement.
+- For optional Bean device.pair interoperability, a public Ed25519 COSE_Key maps to the Bean tag ed25519:<32 lowercase hex of the COSE public x bytes>. A public P-256 COSE_Key maps to p256:<02 or 03 parity prefix followed by the 32-byte x coordinate as lowercase hex>; derive parity from the CBOR y coordinate. A verifier MUST validate the curve point and exact conversion, never trust an unsigned display name or model string. Pairing is a reader trust decision; COSE verification itself does not require pairing.
 - The ES256 signing path SHOULD produce low-S signatures; the final conformance profile must explicitly fix acceptance and normalization before implementation freeze. No implementation may silently rewrite an already archived receipt.
 
 Proposed payload fields (shown in JSON notation for readability; actual wire bytes are deterministic CBOR):
