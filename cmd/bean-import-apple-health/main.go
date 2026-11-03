@@ -22,15 +22,17 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/Conscious-Repository/bean/core"
 )
 
-const version = "bean-import-apple-health@0.1.0"
+const version = "bean-import-apple-health@0.1.1"
 const system = "apple-health-xml"
 const maxInput int64 = 256 << 20
 const maxXML int64 = 256 << 20
+const maxReadingOutput int64 = 1 << 30
 const maxRecords = 2000000
 
 type options struct {
@@ -83,6 +85,10 @@ func main() {
 }
 
 func convertFile(input string, out io.Writer, o options) error {
+	return convertFileBounded(input, out, o, maxReadingOutput)
+}
+
+func convertFileBounded(input string, out io.Writer, o options, outputLimit int64) error {
 	if !blobPattern.MatchString(o.blob) {
 		return errors.New("invalid blob reference")
 	}
@@ -106,7 +112,7 @@ func convertFile(input string, out io.Writer, o options) error {
 		}
 	}
 	// Take one private snapshot: parsing and hashing must see the same input bytes.
-	f, err := os.Open(input)
+	f, err := os.OpenFile(input, os.O_RDONLY|syscall.O_NONBLOCK|syscall.O_NOFOLLOW, 0)
 	if err != nil {
 		return errors.New("cannot open input")
 	}
@@ -181,7 +187,7 @@ func convertFile(input string, out io.Writer, o options) error {
 	}
 	defer os.Remove(rows.Name())
 	defer rows.Close()
-	writer := bufio.NewWriter(rows)
+	writer := bufio.NewWriter(&limitedOutput{writer: rows, remaining: outputLimit})
 	limited := &io.LimitedReader{R: reader, N: maxXML + 1}
 	summary, err := parseExport(limited, writer, o, selected)
 	if err != nil {
@@ -209,6 +215,25 @@ func convertFile(input string, out io.Writer, o options) error {
 	}
 	_, err = io.Copy(out, rows)
 	return err
+}
+
+// Reject before writing beyond the private spool limit. convertFile publishes
+// no JSONL until parsing and buffered output have both completed successfully.
+type limitedOutput struct {
+	writer    io.Writer
+	remaining int64
+}
+
+func (w *limitedOutput) Write(p []byte) (int, error) {
+	if int64(len(p)) > w.remaining {
+		return 0, errors.New("reading output exceeds limit; use archive-only or select fewer types")
+	}
+	n, err := w.writer.Write(p)
+	w.remaining -= int64(n)
+	if err == nil && n != len(p) {
+		err = io.ErrShortWrite
+	}
+	return n, err
 }
 
 func parseExport(in io.Reader, out io.Writer, o options, selected map[string]bool) (map[string]any, error) {
@@ -324,7 +349,12 @@ func reading(a map[string]string, m metric, index int, blob string, occ map[[32]
 		value["s"] = raw
 	} else {
 		n, err := strconv.ParseFloat(raw, 64)
-		if !decimal.MatchString(raw) || err != nil || !core.ExactNumber(n) || (!strings.ContainsAny(raw, ".eE") && math.Abs(n) >= 1<<53) {
+		mantissa := raw
+		if exponent := strings.IndexAny(raw, "eE"); exponent >= 0 {
+			mantissa = raw[:exponent]
+		}
+		underflow := n == 0 && strings.Trim(mantissa, "+-.0") != ""
+		if !decimal.MatchString(raw) || err != nil || !core.ExactNumber(n) || underflow || (!strings.ContainsAny(raw, ".eE") && math.Abs(n) >= 1<<53) {
 			return nil, errors.New("invalid or inexact numeric value")
 		}
 		value["n"] = n

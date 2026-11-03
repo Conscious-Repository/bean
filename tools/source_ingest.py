@@ -88,7 +88,8 @@ def _ingest(source, log, importer, args, limit, archive_type, assurance, progres
         retained = False
         for line in rows.splitlines():
             claim = json.loads(line)
-            if (claim.get('value', {}).get('blob') == bid
+            if (claim.get('subject') == claim.get('author')
+                    and claim.get('value', {}).get('blob') == bid
                     and claim.get('context', {}).get('sha256') == expected
                     and claim.get('context', {}).get('bytes') == count
                     and any(b.get('hash') == bid for b in claim.get('blobs', []))):
@@ -97,4 +98,3 @@ def _ingest(source, log, importer, args, limit, archive_type, assurance, progres
             raise ValueError('archive not retained; it may have been purged or removed concurrently')
         return {'append': result.stdout.decode().strip(), 'blob': bid,
                 'sha256': expected, 'bytes': count, 'assurance': assurance}
-

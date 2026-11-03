@@ -3,15 +3,19 @@ package main
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/Conscious-Repository/bean/core"
 )
@@ -184,6 +188,30 @@ func TestRequiredBlobAndOptions(t *testing.T) {
 		}
 		if out.Len() != 0 {
 			t.Fatal("partial output")
+		}
+	}
+}
+
+func TestNonzeroUnderflowCannotBecomeZeroReading(t *testing.T) {
+	for _, value := range []string{"1e-400", "-1e-400", "0." + strings.Repeat("0", 400) + "1"} {
+		t.Run(value[:min(len(value), 20)], func(t *testing.T) {
+			p := writeXML(t, healthXML(sampleRecord("HKQuantityTypeIdentifierBodyMass", value, "kg")))
+			var out bytes.Buffer
+			if err := convertFile(p, &out, options{blob: testBlob, records: true}); err == nil {
+				t.Fatal("nonzero source was silently converted into a zero measurement")
+			}
+			if out.Len() != 0 {
+				t.Fatal("invalid measurement must not leave a partial import")
+			}
+			if err := convertFile(p, &out, options{blob: testBlob}); err != nil {
+				t.Fatal("raw archive must remain preservable:", err)
+			}
+		})
+	}
+	for _, value := range []string{"0e-400", "-0.000", "5e-324", "0.0001"} {
+		var out bytes.Buffer
+		if err := convertFile(writeXML(t, healthXML(sampleRecord("HKQuantityTypeIdentifierBodyMass", value, "kg"))), &out, options{blob: testBlob, records: true}); err != nil {
+			t.Fatalf("valid zero/representable number %s: %v", value, err)
 		}
 	}
 }
@@ -363,5 +391,55 @@ func TestArchiveIndependentOfReadingSelection(t *testing.T) {
 	}
 	if !reflect.DeepEqual(decodeRows(t, archive.Bytes())[0], decodeRows(t, readings.Bytes())[0]) {
 		t.Fatal("archive metadata depends on reading selection")
+	}
+}
+
+func TestReadingSpoolLimitHasZeroOutput(t *testing.T) {
+	// A compact synthetic source expands substantially when each reading carries
+	// provenance, a blob reference and a tuple dedupe input.
+	record := `<Record type="HKQuantityTypeIdentifierStepCount" startDate="2026-10-01 10:00:00 -0500" endDate="2026-10-01 10:01:00 -0500" value="12" unit="count"/>`
+	text := healthXML(strings.Repeat(record, 1000))
+	p := writeXML(t, text)
+	var full bytes.Buffer
+	if err := convertFile(p, &full, options{blob: testBlob, records: true}); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("synthetic XML %d bytes, JSONL %d bytes (%.1fx)", len(text), full.Len(), float64(full.Len())/float64(len(text)))
+	if full.Len() < 3*len(text) {
+		t.Fatal("fixture must exercise material output amplification")
+	}
+	var limited bytes.Buffer
+	if err := convertFileBounded(p, &limited, options{blob: testBlob, records: true}, 4096); err == nil {
+		t.Fatal("accepted reading spool above its limit")
+	}
+	if limited.Len() != 0 {
+		t.Fatal("spool overflow emitted a partial import")
+	}
+	if err := convertFileBounded(p, &limited, options{blob: testBlob}, 4096); err != nil {
+		t.Fatal("raw archive must remain available:", err)
+	}
+}
+
+func TestRejectSpecialInputPromptly(t *testing.T) {
+	if p := os.Getenv("BEAN_APPLE_TEST_FIFO"); p != "" {
+		if err := convertFile(p, &bytes.Buffer{}, options{blob: testBlob}); err == nil {
+			t.Fatal("accepted FIFO")
+		}
+		return
+	}
+	p := filepath.Join(t.TempDir(), "source.fifo")
+	if err := syscall.Mkfifo(p, 0600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestRejectSpecialInputPromptly$")
+	cmd.Env = append(os.Environ(), "BEAN_APPLE_TEST_FIFO="+p)
+	output, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Fatal("opening a FIFO blocked instead of rejecting it")
+	}
+	if err != nil {
+		t.Fatalf("child failed: %v: %s", err, output)
 	}
 }

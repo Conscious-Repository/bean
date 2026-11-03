@@ -43,7 +43,7 @@ import (
 )
 
 const (
-	version = "bean-import-labcorp@0.1.2"
+	version = "bean-import-labcorp@0.1.3"
 	system  = "labcorp"
 )
 
@@ -88,6 +88,11 @@ func main() {
 			fmt.Fprintln(os.Stderr, "bean-import-labcorp: invalid blob reference")
 			os.Exit(2)
 		}
+		for _, rec := range records {
+			for _, attachment := range rec["blobs"].([]any) {
+				attachment.(map[string]any)["media_type"] = reportMedia(raw)
+			}
+		}
 		records = append([]map[string]any{archiveRecord(raw, *blob)}, records...)
 	}
 	if err := writeRecords(os.Stdout, records); err != nil {
@@ -99,6 +104,11 @@ func main() {
 
 const maxReportBytes = 32 << 20
 const maxReportText = 32 << 20
+
+// Adapter resource limits, deliberately above ordinary lab reports. Bound line
+// splitting and result maps independently of source bytes and serialized output.
+const maxReportLines = 100000
+const maxReportResults = 10000
 
 func writeRecords(out io.Writer, records []map[string]any) error {
 	// Stage before output so local validation never creates an importable prefix.
@@ -168,6 +178,8 @@ func readSource(name string) (string, []byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, bin, "-layout", "-enc", "UTF-8", snapshot, "-")
+	// A converter descendant may inherit the pipes after the direct child exits.
+	cmd.WaitDelay = time.Second
 	out := &boundedText{limit: maxReportText}
 	cmd.Stdout = out
 	cmd.Stderr = io.Discard
@@ -285,7 +297,9 @@ func (r *Result) fill(toks []token, c columns) bool {
 
 func (r *Result) fillTokens(toks []token, c columns) bool {
 	for _, t := range toks {
-		if len(t.text) > 25 {
+		// Comments start left of the result column. Text length cannot distinguish
+		// a comment from a legitimate long categorical result or reference range.
+		if t.start < c.current-4 {
 			return false
 		}
 	}
@@ -306,11 +320,10 @@ func (r *Result) fillTokens(toks []token, c columns) bool {
 			right = append(right, t)
 		}
 	}
-	// In real reports units start 18 to 25 columns left of the "Reference
-	// Interval" header and intervals 3 to 8 columns right of it.
+	// Use the observed header spacing: pdftotext can compress the layout.
 	var units, ref []string
 	for _, t := range right {
-		if t.start >= c.ref-8 {
+		if t.start >= (c.units+c.ref)/2 {
 			ref = append(ref, t.text)
 		} else {
 			units = append(units, t.text)
@@ -321,6 +334,9 @@ func (r *Result) fillTokens(toks []token, c columns) bool {
 }
 
 func parseReport(text string) (*Report, error) {
+	if strings.Count(text, "\n") >= maxReportLines {
+		return nil, errors.New("report exceeds line limit")
+	}
 	rep := &Report{Labs: map[string]string{}}
 	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
 	for _, l := range lines {
@@ -409,9 +425,12 @@ lines:
 		}
 		toks := tokens(l)
 		if wantValue && indent(l) >= 20 {
-			wantValue = false
 			if cur.fill(toks, cols) {
+				wantValue = false
 				continue
+			}
+			if len(toks) > 0 && toks[0].start >= cols.current-4 {
+				return nil, errors.New("ambiguous wrapped result columns")
 			}
 		}
 		if indent(l) < 20 {
@@ -434,9 +453,15 @@ lines:
 				continue
 			}
 			note = nil
+			if len(rep.Results) >= maxReportResults {
+				return nil, errors.New("report exceeds result limit")
+			}
 			cur = &Result{Name: name, Panel: panel, LabCode: code}
 			rep.Results = append(rep.Results, cur)
-			wantValue = len(rest) == 0 || !cur.fill(rest, cols)
+			wantValue = len(rest) == 0
+			if !wantValue && !cur.fill(rest, cols) {
+				return nil, errors.New("ambiguous result columns")
+			}
 			continue
 		}
 		addComment(l)
@@ -466,15 +491,48 @@ func slug(s string) string {
 // report gives a time and loc is known, else the day in UTC.
 func (rep *Report) observed(loc *time.Location) (map[string]any, string) {
 	if loc != nil {
-		if t, err := time.ParseInLocation("01/02/2006 1504", rep.Collected, loc); err == nil {
-			return map[string]any{"start": t.Format(time.RFC3339), "precision": "minute"}, ""
+		if t, err := time.ParseInLocation("01/02/2006 1504", rep.Collected, loc); err == nil && uniqueLocalTime(t, rep.Collected) {
+			start := t.Format(time.RFC3339)
+			if _, ok := core.ParseTime(start); ok {
+				return map[string]any{"start": start, "precision": "minute"}, ""
+			}
 		}
 	}
 	t, err := time.Parse("01/02/2006", rep.Collected[:10])
 	if err != nil {
 		return nil, rep.Collected
 	}
-	return map[string]any{"start": t.Format("2006-01-02") + "T00:00:00Z", "precision": "day"}, rep.Collected
+	start := t.Format("2006-01-02") + "T00:00:00Z"
+	if _, ok := core.ParseTime(start); !ok {
+		return nil, rep.Collected
+	}
+	return map[string]any{"start": start, "precision": "day"}, rep.Collected
+}
+
+// A zone alone cannot identify a nonexistent or repeated DST wall-clock minute.
+// Retain day precision and the printed local time in those cases.
+func uniqueLocalTime(t time.Time, printed string) bool {
+	const layout = "01/02/2006 1504"
+	if t.Format(layout) != printed {
+		return false
+	}
+	_, offset := t.Zone()
+	start, end := t.ZoneBounds()
+	var neighbors []time.Time
+	if !start.IsZero() {
+		neighbors = append(neighbors, start.Add(-time.Second))
+	}
+	if !end.IsZero() {
+		neighbors = append(neighbors, end)
+	}
+	for _, adjacent := range neighbors {
+		_, other := adjacent.In(t.Location()).Zone()
+		candidate := t.Add(time.Duration(offset-other) * time.Second)
+		if !candidate.Equal(t) && candidate.Format(layout) == printed {
+			return false
+		}
+	}
+	return true
 }
 
 func (rep *Report) records(blob string, loc *time.Location) []map[string]any {
@@ -534,5 +592,5 @@ func (rep *Report) records(blob string, loc *time.Location) []map[string]any {
 // A larger one stays text, so the import never fails on it.
 func exact(v string) bool {
 	n, err := strconv.ParseFloat(v, 64)
-	return err == nil && core.ExactNumber(n)
+	return err == nil && core.ExactNumber(n) && (n != 0 || !strings.ContainsAny(v, "123456789"))
 }

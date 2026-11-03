@@ -43,3 +43,9 @@ dedupe, rejects mixed specimen/date headers, and bounds PDF extraction. Explicit
 review and application of amended readings remains future work; a newly retained
 report does not mean old numeric results were replaced. The Labcorp and Apple
 helpers verify source readback and report potentially partial append failures.
+
+A second importer audit adds conservative DST handling, nonzero-underflow
+protection, compressed-column parsing, explicit ambiguity failures, parser/output
+resource limits, and self-subject archive-retention checks. Apple XML now has a
+fuzz target. Actual Labcorp PDF layout validation remains necessary before
+claiming support for a user's report; synthetic Poppler coverage is not that proof.

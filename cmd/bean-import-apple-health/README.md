@@ -25,7 +25,8 @@ anything to Bean, stores the exact input as an encrypted blob, checks plaintext
 readback, then appends one `apple-health.export` claim. Its value references that
 blob; context records original-file SHA-256, byte length, per-type record counts,
 activity-summary count and `assurance=unsigned-export`. It checks that the archive
-claim survived append/dedupe. Identical bytes retry as `added 0, skipped 1`.
+claim about the owner survived append/dedupe; an owner-authored claim about
+another subject cannot satisfy this check. Identical bytes retry as `added 0, skipped 1`.
 A changed export is a separate snapshot, not a replacement or extra measurement.
 No numerical values are summed. Archive entries cannot be mistaken for steps.
 
@@ -72,7 +73,8 @@ and creation time separately. The adapter performs no clinical interpretation,
 unit conversion, sleep-stage inference or source-priority aggregation. Category
 values remain opaque text. Invalid numeric/time fields in selected readings fail
 the entire conversion before any stdout; archive-only can preserve those source
-anomalies without making reading claims.
+anomalies without making reading claims. A nonzero source quantity that would
+underflow to zero is rejected instead of creating a zero-valued reading.
 
 The supplied XML has no sample UUID/native ID. Standard Bean tuple dedupe uses
 type, interval, value/unit and occurrence. It preserves equal-reading multiplicity
@@ -93,14 +95,18 @@ signature authenticates adoption, not Apple or device origin, accuracy or subjec
 
 ## Limits, failure and exit
 
-Inputs must be regular files up to 256 MiB; decompressed export.xml is limited to
+Inputs must be regular files up to 256 MiB; symlinks and special files are rejected
+without waiting for FIFO writers. Decompressed export.xml is limited to
 256 MiB, ZIP declared contents to 512 MiB, members to 4096, Record elements to
 2 million, XML depth to 32 and attributes per element to 64 KiB. ZIP member paths,
 symlinks and ambiguous export.xml members are rejected. No files are extracted;
 DTD entities are not fetched or expanded. Complete XML EOF and the selected export.xml member CRC are
 checked. Other ZIP members are preserved without interpreting their contents. Temporary snapshots/output are private and removed on ordinary exit;
-process death can leave local temporary files. Optional readings can require
-substantial temporary disk space.
+process death can leave local temporary files. Optional reading JSONL is limited
+to 1 GiB in its private spool, in addition to source snapshot space. An overflow
+fails before stdout; use archive-only mode or select fewer types with `--types`
+in the helper (`-types` in the converter). The helper validates before any Bean
+writes, so this failure does not partially import readings.
 
 A crash after blob storage can leave an encrypted orphan blob. Retry is safe.
 Purged archive refs are not resurrected; the helper reports failure if append

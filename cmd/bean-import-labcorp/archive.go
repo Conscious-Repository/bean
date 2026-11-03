@@ -16,10 +16,6 @@ func archiveRecord(raw []byte, blob string) map[string]any {
 		return nil
 	}
 	digest := sha256.Sum256(raw)
-	media := "text/plain"
-	if bytes.HasPrefix(raw, []byte("%PDF")) {
-		media = "application/pdf"
-	}
 	value := map[string]any{"blob": blob}
 	return map[string]any{
 		"type":  "lab.report",
@@ -33,6 +29,13 @@ func archiveRecord(raw []byte, blob string) map[string]any {
 			"sha256": hex.EncodeToString(digest[:]), "bytes": len(raw),
 			"assurance": "unsigned-report",
 		},
-		"blobs": []any{map[string]any{"hash": blob, "role": "raw-export", "media_type": media}},
+		"blobs": []any{map[string]any{"hash": blob, "role": "raw-export", "media_type": reportMedia(raw)}},
 	}
+}
+
+func reportMedia(raw []byte) string {
+	if bytes.HasPrefix(raw, []byte("%PDF")) {
+		return "application/pdf"
+	}
+	return "text/plain"
 }

@@ -69,6 +69,17 @@ class Ingestion(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'not retained'):
             ingest(self.source, self.log)
 
+    def test_other_subject_archive_does_not_mask_purged_self_archive(self):
+        ingest(self.source, self.log)
+        record = json.loads(subprocess.check_output(self.bean + ['ls', '-type', 'apple-health.export', '-json']))
+        bid = record['value']['blob']
+        other = json.loads(subprocess.check_output([os.environ['APPLE_HEALTH_BIN'], '-blob', bid, str(self.source)]))
+        other['subject'] = 'sha256:' + '7' * 64
+        subprocess.run(self.bean + ['append'], input=json.dumps(other).encode(), capture_output=True, check=True)
+        subprocess.run(self.bean + ['purge', record['id']], capture_output=True, check=True)
+        with self.assertRaisesRegex(IngestError, 'not retained'):
+            ingest(self.source, self.log)
+
     def test_malformed_competing_archive_dedupe_is_detected(self):
         bid = subprocess.check_output(self.bean + ['blob', 'put', str(self.source)]).decode().strip()
         record = json.loads(subprocess.check_output([os.environ['APPLE_HEALTH_BIN'], '-blob', bid, str(self.source)]))
