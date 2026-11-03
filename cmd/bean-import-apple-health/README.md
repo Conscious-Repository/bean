@@ -71,7 +71,10 @@ promised to cover every Apple Health export type.
 Readings retain the original quantity/unit or category constant, start/end offset
 and creation time separately. The adapter performs no clinical interpretation,
 unit conversion, sleep-stage inference or source-priority aggregation. Category
-values remain opaque text. Invalid numeric/time fields in selected readings fail
+values remain opaque text. Numbers must retain the same decimal value when serialized canonically (up to
+256 source characters and exponent magnitude 1000); rounding away extra decimal
+digits is rejected. Ordinary decimals such as 0.1 and trailing zeros remain
+valid. Invalid numeric/time fields in selected readings fail
 the entire conversion before any stdout; archive-only can preserve those source
 anomalies without making reading claims. A nonzero source quantity that would
 underflow to zero is rejected instead of creating a zero-valued reading.
@@ -100,7 +103,8 @@ without waiting for FIFO writers. Decompressed export.xml is limited to
 256 MiB, ZIP declared contents to 512 MiB, members to 4096, Record elements to
 2 million, XML depth to 32 and attributes per element to 64 KiB. ZIP member paths,
 symlinks and ambiguous export.xml members are rejected. No files are extracted;
-DTD entities are not fetched or expanded. Complete XML EOF and the selected export.xml member CRC are
+DTD entities are not fetched or expanded; this is not full DTD validation.
+Repeated DOCTYPE and misplaced/repeated XML declarations are rejected. Complete XML EOF and the selected export.xml member CRC are
 checked. Other ZIP members are preserved without interpreting their contents. Temporary snapshots/output are private and removed on ordinary exit;
 process death can leave local temporary files. Optional reading JSONL is limited
 to 1 GiB in its private spool, in addition to source snapshot space. An overflow
@@ -108,9 +112,18 @@ fails before stdout; use archive-only mode or select fewer types with `--types`
 in the helper (`-types` in the converter). The helper validates before any Bean
 writes, so this failure does not partially import readings.
 
+The helper verifies actual log bytes before source writes, appends the archive
+first, verifies it is retained, then appends optional readings and verifies again.
+Cached size/mtime matches alone cannot establish successful ingestion. Verification
+scans the whole log and conservatively refuses ingestion if unrelated records or
+blobs are invalid; repair the log before retrying. These separate commands are not
+a transaction against concurrent writers or later external mutation.
+
 A crash after blob storage can leave an encrypted orphan blob. Retry is safe.
 Purged archive refs are not resurrected; the helper reports failure if append
-cannot retain the archive. A multi-record append is not a transaction: a Bean
+cannot retain the archive, before adding readings. Re-storing a purged source
+can still leave an encrypted orphan blob; the helper never deletes shared blobs
+on its own. A multi-record append is not a transaction: a Bean
 signing/storage failure may retain a prefix, and retry dedupes that prefix.
 
 `bean export` recovers the original file bytes without this importer. Verify their
@@ -123,7 +136,8 @@ Run `make apple-health` for synthetic encrypted adoption/retry/exit tests, and
 input tests. The real export is only inspected locally and never used in CI.
 
 Failures from the helper identify the phase without echoing source data.
-Validation failure means no Bean writes were attempted; storage failure can leave
+Validation failure means no Bean writes were attempted; log-verification failure
+means no source blobs or claims were written; storage failure can leave
 encrypted orphan blobs; append/retention failure can mean a partial import. Retry
 is safe under Bean dedupe, but cannot resurrect a deliberately purged archive.
 The byte-preservation steps are shared with the Labcorp helper in

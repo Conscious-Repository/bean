@@ -41,7 +41,11 @@ Short text in the comment column stays a comment; long aligned categorical
 results and reference ranges are preserved. Ambiguous populated result columns
 fail validation instead of becoming missing values. Column separation follows
 the header spacing, including compressed Poppler output. Nonzero numbers that
-underflow the record number representation remain text. Unsupported report
+underflow or change decimal value when converted to the record number
+representation remain text. Numeric tokens longer than 256 characters also
+remain text. Reordered table headers, including repeated headers, and malformed
+collection-date labels fail explicitly. Specimen IDs containing a slash are
+rejected to keep the existing specimen/test identity unambiguous. Unsupported report
 layouts can still need a new fixture and adapter update.
 
 ## Privacy, limits and failure
@@ -56,13 +60,23 @@ Inputs and extracted text are each limited to 32 MiB. PDF extraction runs agains
 a private copy of the input, has a 30-second timeout, a one-second pipe-close wait bound and bounded output.
 Extracted reports allow at most 100,000 lines and 10,000 result rows. Reports
 are staged before stdout; an invalid result or oversize output emits no prefix.
+Each partial record reserves 4 KiB within the 1 MiB record limit for Bean to
+add its identity, signature, import time and dedupe fields.
 A failed stdout write exits nonzero; failures during delivery may leave a prefix.
 The helper stages JSONL before append, but Bean append is not a transaction:
 append failure can retain a prefix, and retry dedupes it.
 
-Helper errors distinguish validation (no Bean writes), storage (possible encrypted
-orphan blob), and append/retention (possible partial ingestion). A deliberately
-purged archive is not resurrected. A temporary snapshot can survive process death.
+The helper verifies actual log bytes before source writes and confirms archive
+retention before appending readings. It verifies again after readings. Full-log
+verification adds cost and refuses ingestion if unrelated records or blobs are
+invalid. A concurrent writer or later external mutation can still change state.
+
+Helper errors distinguish validation (no Bean writes), existing-log verification
+(no source blobs or claims written), storage (possible encrypted orphan blob),
+and append/retention (possible partial ingestion). A deliberately purged archive
+is not resurrected, and its readings are not newly appended. Re-storing that
+source before detecting purge can leave an encrypted orphan blob; the helper
+does not delete shared blobs on its own. A temporary snapshot can survive process death.
 
 Export via `bean export` yields the original plaintext bytes. Verify their digest
 against `lab.report`; verify owner authority separately with `bean verify`.

@@ -18,6 +18,7 @@ class IngestError(ValueError):
     """Safe phase information; the underlying error remains available as __cause__."""
     MESSAGES = {
         'validation': 'validation failed; no Bean writes attempted',
+        'log': 'existing log verification failed; no source blobs or claims written; repair the log before retrying',
         'storage': 'storage or readback failed; encrypted blobs may remain; no claims appended; retry is safe',
         'append': 'append failed; partial ingestion is possible; retry is safe',
         'retention': 'archive not retained or retention check failed; ingestion may be partial; retry is safe',
@@ -67,6 +68,8 @@ def _ingest(source, log, importer, args, limit, archive_type, assurance, progres
         with output.open('wb') as stream:
             subprocess.run([importer, '-blob', 'sha256:' + '0' * 64, *args, str(snapshot)],
                            stdout=stream, stderr=subprocess.PIPE, check=True)
+        progress['phase'] = 'log'
+        subprocess.run(bean + ['verify'], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
         progress['phase'] = 'storage'
         bid = subprocess.check_output(bean + ['blob', 'put', str(snapshot)], stderr=subprocess.PIPE).decode().strip()
         if not re.fullmatch(r'sha256:[0-9a-f]{64}', bid):
@@ -79,22 +82,50 @@ def _ingest(source, log, importer, args, limit, archive_type, assurance, progres
         with output.open('wb') as stream:
             subprocess.run([importer, '-blob', bid, *args, str(snapshot)],
                            stdout=stream, stderr=subprocess.PIPE, check=True)
-        with output.open('rb') as stream:
+        # Unbuffered: the remaining bytes are later read by a subprocess through
+        # this file descriptor, so Python must not read ahead past the first line.
+        with output.open('rb', buffering=0) as stream, tempfile.TemporaryFile() as archive:
+            # Both converters emit the raw archive first. Refuse to append readings
+            # when that archive was skipped by purge/dedupe or was not retained.
+            first = stream.readline((1 << 20) + 1)
+            if len(first) > 1 << 20 or json.loads(first).get('type') != archive_type:
+                raise ValueError('missing or oversized first archive claim')
+            archive.write(first)
+            archive.seek(0)
             progress['phase'] = 'append'
-            result = subprocess.run(bean + ['append'], stdin=stream, capture_output=True, check=True)
-        # Confirm that the archive reference actually survived dedupe/purge rules.
-        progress['phase'] = 'retention'
-        rows = subprocess.check_output(bean + ['ls', '-type', archive_type, '-author', 'me', '-json'], stderr=subprocess.PIPE)
-        retained = False
-        for line in rows.splitlines():
-            claim = json.loads(line)
-            if (claim.get('subject') == claim.get('author')
-                    and claim.get('value', {}).get('blob') == bid
-                    and claim.get('context', {}).get('sha256') == expected
-                    and claim.get('context', {}).get('bytes') == count
-                    and any(b.get('hash') == bid for b in claim.get('blobs', []))):
-                retained = True
-        if not retained:
-            raise ValueError('archive not retained; it may have been purged or removed concurrently')
-        return {'append': result.stdout.decode().strip(), 'blob': bid,
+            added, skipped = append_counts(bean, archive)
+            progress['phase'] = 'retention'
+            check_retained(bean, archive_type, bid, expected, count)
+            if stream.tell() < output.stat().st_size:
+                progress['phase'] = 'append'
+                more_added, more_skipped = append_counts(bean, stream)
+                added += more_added
+                skipped += more_skipped
+                progress['phase'] = 'retention'
+                check_retained(bean, archive_type, bid, expected, count)
+        return {'append': f'added {added}, skipped {skipped}', 'blob': bid,
                 'sha256': expected, 'bytes': count, 'assurance': assurance}
+
+
+def append_counts(bean, stream):
+    result = subprocess.run(bean + ['append'], stdin=stream, capture_output=True, check=True)
+    match = re.fullmatch(rb'added ([0-9]+), skipped ([0-9]+)\n?', result.stdout)
+    if not match:
+        raise ValueError('unexpected append result')
+    return int(match[1]), int(match[2])
+
+
+def check_retained(bean, archive_type, bid, expected, count):
+    # Ordinary ls can trust cached objects with unchanged size/mtime. Verify
+    # actual bytes before interpreting its view as a retained, valid adoption.
+    subprocess.run(bean + ['verify'], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+    rows = subprocess.check_output(bean + ['ls', '-type', archive_type, '-author', 'me', '-json'], stderr=subprocess.PIPE)
+    for line in rows.splitlines():
+        claim = json.loads(line)
+        if (claim.get('subject') == claim.get('author')
+                and claim.get('value', {}).get('blob') == bid
+                and claim.get('context', {}).get('sha256') == expected
+                and claim.get('context', {}).get('bytes') == count
+                and any(b.get('hash') == bid for b in claim.get('blobs', []))):
+            return
+    raise ValueError('archive not retained; it may have been purged or removed concurrently')

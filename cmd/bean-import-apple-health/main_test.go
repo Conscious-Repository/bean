@@ -216,6 +216,62 @@ func TestNonzeroUnderflowCannotBecomeZeroReading(t *testing.T) {
 	}
 }
 
+func TestDecimalPrecisionCannotSilentlyChangeReading(t *testing.T) {
+	for _, raw := range []string{"9007199254740990.5", "0.10000000000000001", "1.0000000000000001", "9007199254740991.1", "0e999999999999", "0e-1001", "0." + strings.Repeat("0", 255)} {
+		t.Run(raw, func(t *testing.T) {
+			p := writeXML(t, healthXML(sampleRecord("HKQuantityTypeIdentifierBodyMass", raw, "kg")))
+			var out bytes.Buffer
+			if err := convertFile(p, &out, options{blob: testBlob, records: true}); err == nil {
+				t.Fatal("source decimal silently changed in the normalized reading")
+			}
+			if out.Len() != 0 {
+				t.Fatal("partial output on precision failure")
+			}
+			if err := convertFile(p, &out, options{blob: testBlob}); err != nil {
+				t.Fatal("source must still be archivable:", err)
+			}
+		})
+	}
+	for _, raw := range []string{"0.1", "1.000", "+12.0", "1.2e1", "-0e1000", "9007199254740991"} {
+		var out bytes.Buffer
+		if err := convertFile(writeXML(t, healthXML(sampleRecord("HKQuantityTypeIdentifierBodyMass", raw, "kg"))), &out, options{blob: testBlob, records: true}); err != nil {
+			t.Fatalf("equivalent decimal %s rejected: %v", raw, err)
+		}
+	}
+}
+
+func TestXMLDeclarationMustBeAtDocumentStart(t *testing.T) {
+	valid := sampleRecord("HKQuantityTypeIdentifierStepCount", "12", "count")
+	declaration := `<?xml version="1.0" encoding="UTF-8"?>`
+	for _, text := range []string{
+		declaration + healthXML(valid),
+		`<HealthData>` + valid + declaration + `</HealthData>`,
+		healthXML(valid) + declaration,
+		" \n" + declaration + `<HealthData/>`,
+		`<?XML version="1.0"?><HealthData/>`,
+	} {
+		var out bytes.Buffer
+		if err := convertFile(writeXML(t, text), &out, options{blob: testBlob, records: true}); err == nil {
+			t.Fatal("accepted misplaced or reserved XML declaration")
+		}
+		if out.Len() != 0 {
+			t.Fatal("malformed document emitted claims")
+		}
+	}
+}
+
+func TestDuplicateDOCTYPEHasZeroOutput(t *testing.T) {
+	text := `<!DOCTYPE HealthData [<!ELEMENT HealthData ANY>]>` +
+		`<!DOCTYPE HealthData [<!ELEMENT HealthData ANY>]><HealthData/>`
+	var out bytes.Buffer
+	if err := convertFile(writeXML(t, text), &out, options{blob: testBlob, records: true}); err == nil {
+		t.Fatal("accepted multiple document type declarations")
+	}
+	if out.Len() != 0 {
+		t.Fatal("malformed document emitted an archive claim")
+	}
+}
+
 func TestArchiveRetainsSourceAnomaliesWithoutMeasurementClaims(t *testing.T) {
 	text := healthXML(sampleRecord("HKQuantityTypeIdentifierStepCount", "not-a-number", "count"))
 	var out bytes.Buffer

@@ -69,6 +69,14 @@ class Ingestion(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'not retained'):
             ingest(self.source, self.log)
 
+    def test_purged_archive_retry_does_not_append_new_readings(self):
+        ingest(self.source, self.log)
+        record = json.loads(subprocess.check_output(self.bean + ['ls', '-type', 'apple-health.export', '-json']))
+        subprocess.run(self.bean + ['purge', record['id']], capture_output=True, check=True)
+        with self.assertRaises(IngestError):
+            ingest(self.source, self.log, records=True)
+        self.assertFalse(subprocess.check_output(self.bean + ['ls', '-type', 'apple-health.steps', '-json']))
+
     def test_other_subject_archive_does_not_mask_purged_self_archive(self):
         ingest(self.source, self.log)
         record = json.loads(subprocess.check_output(self.bean + ['ls', '-type', 'apple-health.export', '-json']))
@@ -88,20 +96,59 @@ class Ingestion(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'not retained'):
             ingest(self.source, self.log)
 
+    def test_cached_invalid_archive_is_not_reported_as_retained(self):
+        ingest(self.source, self.log)
+        record = json.loads(subprocess.check_output(self.bean + ['ls', '-type', 'apple-health.export', '-json']))
+        path = self.log / 'objects' / (record['id'][7:9]) / (record['id'][9:] + '.json')
+        before = path.stat()
+        data = path.read_bytes()
+        signature = record['sig'].encode()
+        replacement = signature[:-1] + (b'0' if signature[-1:] != b'0' else b'1')
+        path.write_bytes(data.replace(signature, replacement))
+        os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
+        stored = {p.relative_to(self.log) for p in (self.log / 'blobs').rglob('*') if p.is_file()}
+        with zipfile.ZipFile(self.source, 'w') as archive:
+            archive.writestr('apple_health_export/export.xml', XML.replace(b'en_US', b'en_GB'))
+        with self.assertRaises(IngestError) as caught:
+            ingest(self.source, self.log)
+        self.assertEqual(caught.exception.phase, 'log')
+        self.assertEqual({p.relative_to(self.log) for p in (self.log / 'blobs').rglob('*') if p.is_file()}, stored)
+
+    def test_blob_corruption_after_readback_is_not_reported_as_success(self):
+        original_run = subprocess.run
+        def corrupt_before_append(command, **kwargs):
+            if command == self.bean + ['append']:
+                blobs = [p for p in (self.log / 'blobs').rglob('*') if p.is_file()]
+                self.assertEqual(len(blobs), 1)
+                blobs[0].write_bytes(b'SYNTHETIC-CORRUPTION')
+            return original_run(command, **kwargs)
+        with patch('ingest.subprocess.run', side_effect=corrupt_before_append):
+            with self.assertRaises(IngestError):
+                ingest(self.source, self.log)
+
     def test_corrupt_stored_blob_cannot_be_adopted(self):
         bid = subprocess.check_output(self.bean + ['blob', 'put', str(self.source)]).decode().strip()[7:]
         (self.log / 'blobs' / bid[:2] / bid[2:]).write_bytes(b'corrupt')
         with self.assertRaises(IngestError) as caught:
             ingest(self.source, self.log)
-        self.assertEqual(caught.exception.phase, 'storage')
-        self.assertIn('no claims appended', str(caught.exception))
+        self.assertEqual(caught.exception.phase, 'log')
+        self.assertIn('no source blobs or claims written', str(caught.exception))
         self.assertFalse(subprocess.check_output(self.bean + ['ls', '-type', 'apple-health.export', '-json']))
 
     def test_append_failure_reports_partial_and_retry_recovers(self):
+        first_record = XML[XML.index(b'<Record'):XML.index(b'</HealthData>')]
+        with zipfile.ZipFile(self.source, 'w') as archive:
+            archive.writestr('apple_health_export/export.xml', XML.replace(
+                b'</HealthData>', first_record.replace(b'value="25"', b'value="26"') + b'</HealthData>'))
         original_run = subprocess.run
+        append_calls = 0
         def partial_append(command, **kwargs):
+            nonlocal append_calls
             if command == self.bean + ['append']:
-                # Actually retain the archive, then simulate failure before the reading.
+                append_calls += 1
+                if append_calls == 1:
+                    return original_run(command, **kwargs)
+                # Retain one reading after the archive, then fail before the next.
                 first = kwargs['stdin'].readline()
                 original_run(command, input=first, capture_output=True, check=True)
                 raise subprocess.CalledProcessError(1, command, stderr=b'SYNTHETIC-PRIVATE-DETAIL')
@@ -115,8 +162,9 @@ class Ingestion(unittest.TestCase):
         self.assertNotIn('SYNTHETIC-PRIVATE-DETAIL', str(error))
         self.assertIsInstance(error.__cause__, subprocess.CalledProcessError)
         self.assertTrue(subprocess.check_output(self.bean + ['ls', '-type', 'apple-health.export', '-json']))
-        self.assertFalse(subprocess.check_output(self.bean + ['ls', '-type', 'apple-health.steps', '-json']))
-        self.assertEqual(ingest(self.source, self.log, records=True)['append'], 'added 1, skipped 1')
+        readings = subprocess.check_output(self.bean + ['ls', '-type', 'apple-health.steps', '-json'])
+        self.assertEqual(len(readings.splitlines()), 1)
+        self.assertEqual(ingest(self.source, self.log, records=True)['append'], 'added 1, skipped 2')
 
     def test_cli_validation_message_is_phase_specific_and_private(self):
         source = self.root / 'SYNTHETIC-PRIVATE-FILENAME'

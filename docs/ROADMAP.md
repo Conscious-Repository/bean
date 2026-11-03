@@ -47,5 +47,11 @@ helpers verify source readback and report potentially partial append failures.
 A second importer audit adds conservative DST handling, nonzero-underflow
 protection, compressed-column parsing, explicit ambiguity failures, parser/output
 resource limits, and self-subject archive-retention checks. Apple XML now has a
-fuzz target. Actual Labcorp PDF layout validation remains necessary before
-claiming support for a user's report; synthetic Poppler coverage is not that proof.
+fuzz target. A supplied real Labcorp PDF has passed local parsing, adoption, retry, independent
+verification and byte-identical export. Other layouts still need real examples.
+
+Archive-first ingestion now verifies actual log bytes before source writes and
+before reporting retention. A refused archive blocks derived readings. Full-log
+verification cost and unrelated-invalid-record refusal are deliberate conservative
+tradeoffs; atomic multi-command ingestion remains out of scope. Exact decimal
+preservation and signed-record validity are covered by bounded synthetic tests.

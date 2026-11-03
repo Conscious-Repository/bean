@@ -30,6 +30,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math/big"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -43,7 +44,7 @@ import (
 )
 
 const (
-	version = "bean-import-labcorp@0.1.3"
+	version = "bean-import-labcorp@0.1.4"
 	system  = "labcorp"
 )
 
@@ -110,6 +111,10 @@ const maxReportText = 32 << 20
 const maxReportLines = 100000
 const maxReportResults = 10000
 
+// Bean adds identity, signature, imported time and dedupe fields after import.
+// Leave a conservative allowance within its 1 MiB ordinary-record limit.
+const maxPartialRecordBytes = (1 << 20) - (4 << 10)
+
 func writeRecords(out io.Writer, records []map[string]any) error {
 	// Stage before output so local validation never creates an importable prefix.
 	var staged bytes.Buffer
@@ -119,7 +124,7 @@ func writeRecords(out io.Writer, records []map[string]any) error {
 			return errors.New("invalid lab result name")
 		}
 		b := append(core.Canonical(r), '\n')
-		if len(b) > 1<<20 {
+		if len(b) > maxPartialRecordBytes {
 			return errors.New("lab result exceeds record limit")
 		}
 		if staged.Len()+len(b) > maxReportText*4 {
@@ -225,7 +230,7 @@ type Report struct {
 
 var (
 	reSpecimen    = regexp.MustCompile(`Specimen ID:\s*(\S+)`)
-	reCollected   = regexp.MustCompile(`Date Collected:\s*(\d\d/\d\d/\d{4})(?:\s+(\d{4})\s+Local)?`)
+	reCollected   = regexp.MustCompile(`Date Collected:\s*(\d\d/\d\d/\d{4})(?:\s+(\d{4})\s+Local)?(?:\s|$)`)
 	reReported    = regexp.MustCompile(`Date Reported:\s*(\d\d/\d\d/\d{4})`)
 	reFasting     = regexp.MustCompile(`Fasting:\s*(\S.*?)\s*$`)
 	reLab         = regexp.MustCompile(`^(\d\d):\s*\S+\s*-\s*([^,]+),`)
@@ -278,7 +283,7 @@ func headerColumns(line string) (columns, bool) {
 	p := strings.Index(line, "Previous Result")
 	u := strings.Index(line, "Units")
 	r := strings.Index(line, "Reference Interval")
-	if c < 0 || p < 0 || u < 0 || r < 0 {
+	if c < 0 || p <= c || u <= p || r <= u {
 		return columns{}, false
 	}
 	return columns{current: c, previous: p, units: u, ref: r}, true
@@ -340,13 +345,26 @@ func parseReport(text string) (*Report, error) {
 	rep := &Report{Labs: map[string]string{}}
 	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
 	for _, l := range lines {
-		if m := reSpecimen.FindStringSubmatch(l); m != nil {
+		specimenMatches := reSpecimen.FindAllStringSubmatch(l, -1)
+		if len(specimenMatches) != strings.Count(l, "Specimen ID:") {
+			return nil, errors.New("malformed specimen identifier label")
+		}
+		for _, m := range specimenMatches {
+			// The established native ID joins specimen and test with '/'. Test
+			// names may contain that character; specimen IDs must not.
+			if strings.Contains(m[1], "/") {
+				return nil, errors.New("ambiguous specimen identifier")
+			}
 			if rep.Specimen != "" && rep.Specimen != m[1] {
 				return nil, errors.New("conflicting specimen identifiers")
 			}
 			rep.Specimen = m[1]
 		}
-		if m := reCollected.FindStringSubmatch(l); m != nil {
+		collectedMatches := reCollected.FindAllStringSubmatch(l, -1)
+		if len(collectedMatches) != strings.Count(l, "Date Collected:") {
+			return nil, errors.New("malformed collection date label")
+		}
+		for _, m := range collectedMatches {
 			collected := strings.TrimSpace(m[1] + " " + m[2])
 			if rep.Collected != "" && (rep.Collected[:10] != m[1] ||
 				(len(rep.Collected) > 10 && m[2] != "" && rep.Collected != collected)) {
@@ -396,6 +414,10 @@ lines:
 		if c, ok := headerColumns(l); ok {
 			cols, inResults = c, true
 			continue
+		}
+		if strings.Contains(l, "Current Result") && strings.Contains(l, "Previous Result") &&
+			strings.Contains(l, "Units") && strings.Contains(l, "Reference Interval") {
+			return nil, errors.New("unsupported result column order")
 		}
 		if !inResults {
 			if strings.TrimSpace(l) != "" && indent(l) == 0 {
@@ -591,6 +613,19 @@ func (rep *Report) records(blob string, loc *time.Location) []map[string]any {
 // exact reports whether a printed number fits a record number (SPEC 4.1).
 // A larger one stays text, so the import never fails on it.
 func exact(v string) bool {
+	// Keep unusually long numeric tokens as source text without costly big-int
+	// parsing. Normal values must survive conversion to canonical decimal intact.
+	if len(v) > 256 {
+		return false
+	}
 	n, err := strconv.ParseFloat(v, 64)
-	return err == nil && core.ExactNumber(n) && (n != 0 || !strings.ContainsAny(v, "123456789"))
+	if err != nil || !core.ExactNumber(n) {
+		return false
+	}
+	original, ok := new(big.Rat).SetString(v)
+	if !ok {
+		return false
+	}
+	canonical, ok := new(big.Rat).SetString(string(core.Canonical(n)))
+	return ok && original.Cmp(canonical) == 0
 }

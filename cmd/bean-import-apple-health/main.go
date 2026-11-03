@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/big"
 	"os"
 	"path"
 	"regexp"
@@ -28,7 +29,7 @@ import (
 	"github.com/Conscious-Repository/bean/core"
 )
 
-const version = "bean-import-apple-health@0.1.1"
+const version = "bean-import-apple-health@0.1.2"
 const system = "apple-health-xml"
 const maxInput int64 = 256 << 20
 const maxXML int64 = 256 << 20
@@ -242,10 +243,12 @@ func parseExport(in io.Reader, out io.Writer, o options, selected map[string]boo
 	occurrences := map[[32]byte]int{}
 	depth := 0
 	roots := 0
+	doctype := false
 	records := 0
 	activities := 0
 	unmapped := 0
 	for {
+		offset := d.InputOffset()
 		token, err := d.Token()
 		if err == io.EOF {
 			break
@@ -324,8 +327,15 @@ func parseExport(in io.Reader, out io.Writer, o options, selected map[string]boo
 		case xml.Directive:
 			// Apple's export embeds a DTD. encoding/xml never fetches external entities;
 			// only the five predefined XML entities and character references are accepted.
-			if depth != 0 || roots != 0 || len(t) > 65536 || !strings.HasPrefix(strings.TrimSpace(string(t)), "DOCTYPE HealthData") {
+			if doctype || depth != 0 || roots != 0 || len(t) > 65536 || !strings.HasPrefix(strings.TrimSpace(string(t)), "DOCTYPE HealthData") {
 				return nil, errors.New("unsupported XML directive")
+			}
+			doctype = true
+		case xml.ProcInst:
+			// encoding/xml accepts repeated or misplaced XML declarations. They
+			// are not well-formed documents and must not yield reading claims.
+			if strings.EqualFold(t.Target, "xml") && (t.Target != "xml" || offset != 0) {
+				return nil, errors.New("misplaced or reserved XML declaration")
 			}
 		}
 	}
@@ -354,7 +364,7 @@ func reading(a map[string]string, m metric, index int, blob string, occ map[[32]
 			mantissa = raw[:exponent]
 		}
 		underflow := n == 0 && strings.Trim(mantissa, "+-.0") != ""
-		if !decimal.MatchString(raw) || err != nil || !core.ExactNumber(n) || underflow || (!strings.ContainsAny(raw, ".eE") && math.Abs(n) >= 1<<53) {
+		if !decimal.MatchString(raw) || err != nil || !core.ExactNumber(n) || underflow || (!strings.ContainsAny(raw, ".eE") && math.Abs(n) >= 1<<53) || !sameDecimal(raw, n) {
 			return nil, errors.New("invalid or inexact numeric value")
 		}
 		value["n"] = n
@@ -392,6 +402,27 @@ func reading(a map[string]string, m metric, index int, blob string, occ map[[32]
 	return map[string]any{"type": typ, "value": value, "times": map[string]any{"observed": observed}, "context": context,
 		"source": map[string]any{"system": system, "adapter": version, "ref_input": core.RefInputTuple(system, typ, observed, value, count)},
 		"blobs":  []any{map[string]any{"hash": blob, "role": "raw-export", "media_type": "application/octet-stream"}}}, nil
+}
+
+// Compare source and emitted decimal values, not the binary fraction behind a
+// float (ordinary 0.1 must remain usable). Bound rational parsing explicitly:
+// even a short zero with a huge exponent could otherwise allocate excessively.
+func sameDecimal(raw string, n float64) bool {
+	if len(raw) > 256 {
+		return false
+	}
+	if i := strings.IndexAny(raw, "eE"); i >= 0 {
+		exponent, err := strconv.ParseInt(raw[i+1:], 10, 32)
+		if err != nil || exponent < -1000 || exponent > 1000 {
+			return false
+		}
+	}
+	source, ok := new(big.Rat).SetString(raw)
+	if !ok {
+		return false
+	}
+	emitted, ok := new(big.Rat).SetString(string(core.Canonical(n)))
+	return ok && source.Cmp(emitted) == 0
 }
 
 func appleTime(s string) (time.Time, error) {
