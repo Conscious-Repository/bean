@@ -71,3 +71,8 @@ Optional `apple-health.steps`, `apple-health.distance-walking-running` and other
 source-specific reading types retain original units/intervals; no source-priority
 aggregation is implied. `assurance=unsigned-export` does not establish device
 origin. See `cmd/bean-import-apple-health/README.md` for identity/retention limits.
+
+`lab.report` is an original Labcorp PDF/text archive (`value.blob`), with plaintext
+digest/length and `unsigned-report` assurance. It is not a numerical lab result.
+An amended report is retained independently of specimen/test reading dedupe;
+applying amended values requires explicit corrections.

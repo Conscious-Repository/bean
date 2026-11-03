@@ -118,15 +118,27 @@ bean purge 1b59a1                                 # deletes record 1b59a1 from e
 
 ### Blood work (Labcorp, Superpower)
 
-Superpower and Labcorp give you a Labcorp patient report as a PDF. Store the PDF, then import it:
+The Labcorp importer supports the patient-report layout used by Labcorp and
+some Superpower reports. Preserve the original report and verify storage readback
+using an existing private Bean log:
 
 ```
-BLOB=$(bean blob put lab-result.pdf)
-bean-import-labcorp -tz America/Chicago -blob $BLOB lab-result.pdf | bean append
-bean ls -type 'lab.*'
+go build -o /tmp/bean ./cmd/bean
+go build -o /tmp/bean-import-labcorp ./cmd/bean-import-labcorp
+BEAN_BIN=/tmp/bean LABCORP_BIN=/tmp/bean-import-labcorp \
+  python3 tools/labcorp/ingest.py lab-result.pdf /private/bean-log --timezone America/Chicago
 ```
 
-You get one record for each result, with the value, unit, flag, reference interval, panel and lab comments. Your name, birth date and patient ids are not copied. `-tz` is the time zone where the sample was taken; without it, only the day is recorded. Import the same file again and nothing is added.
+This adds one `lab.report` archive plus individual results. Identical input retries
+without duplicates. An amended report is kept as a new archive, but readings with
+an existing specimen/test identity dedupe: **amendments require explicit correction**,
+not an assumption that import replaced prior values. See the
+[Labcorp importer notes](cmd/bean-import-labcorp/README.md).
+
+Results retain values, units, flags, reference intervals, panels and comments.
+Recognized name, birth-date and patient-ID headers are excluded; preserved medical
+comments can still contain identifiers. `--timezone` is where the sample was taken;
+without it, only the collection day is recorded. PDF extraction requires Poppler.
 
 ### A CSV file
 

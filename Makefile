@@ -15,7 +15,7 @@ help:
 	@echo "make fuzz          run each fuzz target for FUZZTIME (default 2m)"
 	@echo "make smoke         build a large log and time the commands"
 
-check: fmt vet build test lint vuln vectors second differential demo apple-health
+check: fmt vet build test lint vuln vectors second differential demo apple-health labcorp
 
 build:
 	go build ./...
@@ -76,3 +76,7 @@ smoke:
 .PHONY: apple-health
 apple-health:
 	PY=$(PY) bash tools/apple-health/run.sh
+
+.PHONY: labcorp
+labcorp:
+	PY=$(PY) bash tools/labcorp/run.sh

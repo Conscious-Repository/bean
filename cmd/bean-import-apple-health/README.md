@@ -115,3 +115,10 @@ content from a retained raw archive; original-file retention is a separate choic
 Run `make apple-health` for synthetic encrypted adoption/retry/exit tests, and
 `go test ./cmd/bean-import-apple-health` for parser, bounds, privacy and malformed
 input tests. The real export is only inspected locally and never used in CI.
+
+Failures from the helper identify the phase without echoing source data.
+Validation failure means no Bean writes were attempted; storage failure can leave
+encrypted orphan blobs; append/retention failure can mean a partial import. Retry
+is safe under Bean dedupe, but cannot resurrect a deliberately purged archive.
+The byte-preservation steps are shared with the Labcorp helper in
+`tools/source_ingest.py`; parsing and source identity rules stay separate.

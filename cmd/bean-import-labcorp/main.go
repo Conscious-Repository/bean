@@ -19,17 +19,20 @@
 //     says "Local" without a zone, so the day is all that is known unless
 //     -tz names the zone; then the minute is used.
 //
-// Patient name, birth date and patient ids are never copied.
+// Recognized patient header fields are excluded. Comments and other free text
+// may contain names or identifiers; medical text is preserved without redaction.
 package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -40,7 +43,7 @@ import (
 )
 
 const (
-	version = "bean-import-labcorp@0.1.1"
+	version = "bean-import-labcorp@0.1.2"
 	system  = "labcorp"
 )
 
@@ -56,9 +59,9 @@ func main() {
 	if *blob == "" {
 		fmt.Fprintln(os.Stderr, "bean-import-labcorp: warning: no -blob: the report is not kept; run bean blob put <report.pdf> first and pass -blob <id>")
 	}
-	text, err := readText(fs.Arg(0))
+	text, raw, err := readSource(fs.Arg(0))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "bean-import-labcorp: %s\n", err)
+		fmt.Fprintln(os.Stderr, "bean-import-labcorp: input or report validation failed")
 		os.Exit(1)
 	}
 	var loc *time.Location
@@ -73,41 +76,120 @@ func main() {
 		fmt.Fprintf(os.Stderr, "bean-import-labcorp: %s\n", err)
 		os.Exit(1)
 	}
+	records := rep.records(*blob, loc)
 	missing := 0
-	for _, rec := range rep.records(*blob, loc) {
+	for _, rec := range records {
 		if v := rec["value"].(map[string]any); v["n"] == nil && v["s"] == nil {
 			missing++
 		}
-		os.Stdout.Write(append(core.Canonical(rec), '\n'))
 	}
-	fmt.Fprintf(os.Stderr, "bean-import-labcorp: %d results, %d without a value, collected %s\n", len(rep.Results), missing, rep.Collected)
+	if *blob != "" {
+		if !regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(*blob) {
+			fmt.Fprintln(os.Stderr, "bean-import-labcorp: invalid blob reference")
+			os.Exit(2)
+		}
+		records = append([]map[string]any{archiveRecord(raw, *blob)}, records...)
+	}
+	if err := writeRecords(os.Stdout, records); err != nil {
+		fmt.Fprintln(os.Stderr, "bean-import-labcorp: output failed; partial output possible")
+		os.Exit(1)
+	}
+	fmt.Fprintf(os.Stderr, "bean-import-labcorp: %d results, %d without a value; existing specimen/test identities dedupe, amendments require explicit correction\n", len(rep.Results), missing)
+}
+
+const maxReportBytes = 32 << 20
+const maxReportText = 32 << 20
+
+func writeRecords(out io.Writer, records []map[string]any) error {
+	// Stage before output so local validation never creates an importable prefix.
+	var staged bytes.Buffer
+	for _, r := range records {
+		typ, _ := r["type"].(string)
+		if len(typ) > 128 || typ == "lab." {
+			return errors.New("invalid lab result name")
+		}
+		b := append(core.Canonical(r), '\n')
+		if len(b) > 1<<20 {
+			return errors.New("lab result exceeds record limit")
+		}
+		if staged.Len()+len(b) > maxReportText*4 {
+			return errors.New("report output exceeds limit")
+		}
+		staged.Write(b)
+	}
+	_, err := io.Copy(out, &staged)
+	return err
 }
 
 func readText(path string) (string, error) {
-	data, err := os.ReadFile(path)
+	text, _, err := readSource(path)
+	return text, err
+}
+
+// readSource binds extraction to the same bytes used for the source digest.
+// Temporary PDF and extracted text are bounded; diagnostics contain no source text.
+func readSource(name string) (string, []byte, error) {
+	info, err := os.Lstat(name)
+	if err != nil || !info.Mode().IsRegular() || info.Size() > maxReportBytes {
+		return "", nil, errors.New("input must be a regular report no larger than 32 MiB")
+	}
+	f, err := os.Open(name)
 	if err != nil {
-		return "", err
+		return "", nil, errors.New("cannot open report")
+	}
+	defer f.Close()
+	opened, err := f.Stat()
+	if err != nil || !opened.Mode().IsRegular() || !os.SameFile(info, opened) {
+		return "", nil, errors.New("report changed while opening")
+	}
+	data, err := io.ReadAll(io.LimitReader(f, maxReportBytes+1))
+	if err != nil || len(data) > maxReportBytes {
+		return "", nil, errors.New("report read failed or exceeds limit")
 	}
 	if !bytes.HasPrefix(data, []byte("%PDF")) {
 		if !utf8.Valid(data) {
-			return "", errors.New("bad string: the text is not UTF-8")
+			return "", nil, errors.New("bad string: report is not UTF-8")
 		}
-		return string(data), nil
+		return string(data), data, nil
 	}
 	bin, err := exec.LookPath("pdftotext")
 	if err != nil {
-		return "", fmt.Errorf("pdftotext not found; install poppler (brew install poppler) or pass the text from pdftotext -layout")
+		return "", nil, errors.New("pdftotext not found; install poppler or supply extracted layout text")
 	}
-	var out, errb bytes.Buffer
-	cmd := exec.Command(bin, "-layout", "-enc", "UTF-8", path, "-")
-	cmd.Stdout, cmd.Stderr = &out, &errb
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("pdftotext: %v: %s", err, strings.TrimSpace(errb.String()))
+	dir, err := os.MkdirTemp("", "bean-lab-report-*")
+	if err != nil {
+		return "", nil, errors.New("cannot stage report")
+	}
+	defer os.RemoveAll(dir)
+	snapshot := filepath.Join(dir, "source.pdf")
+	if err = os.WriteFile(snapshot, data, 0600); err != nil {
+		return "", nil, errors.New("cannot stage report")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, bin, "-layout", "-enc", "UTF-8", snapshot, "-")
+	out := &boundedText{limit: maxReportText}
+	cmd.Stdout = out
+	cmd.Stderr = io.Discard
+	if err = cmd.Run(); err != nil {
+		return "", nil, errors.New("PDF extraction failed, timed out or exceeded output limit")
 	}
 	if !utf8.Valid(out.Bytes()) {
-		return "", errors.New("bad string: pdftotext output is not UTF-8")
+		return "", nil, errors.New("bad string: pdftotext output is not UTF-8")
 	}
-	return out.String(), nil
+	return out.String(), data, nil
+}
+
+type boundedText struct {
+	bytes.Buffer
+	limit int
+}
+
+func (b *boundedText) Write(p []byte) (int, error) {
+	if len(p) > b.limit-b.Len() {
+		return 0, errors.New("extracted text exceeds limit")
+	}
+	return b.Buffer.Write(p)
 }
 
 // Result is one row of the report.
@@ -193,6 +275,15 @@ func headerColumns(line string) (columns, bool) {
 // fill assigns value tokens to the result. It reports false when the
 // tokens do not look like a result row (a comment line).
 func (r *Result) fill(toks []token, c columns) bool {
+	next := *r
+	if !next.fillTokens(toks, c) {
+		return false
+	}
+	*r = next
+	return true
+}
+
+func (r *Result) fillTokens(toks []token, c columns) bool {
 	for _, t := range toks {
 		if len(t.text) > 25 {
 			return false
@@ -233,11 +324,21 @@ func parseReport(text string) (*Report, error) {
 	rep := &Report{Labs: map[string]string{}}
 	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
 	for _, l := range lines {
-		if m := reSpecimen.FindStringSubmatch(l); m != nil && rep.Specimen == "" {
+		if m := reSpecimen.FindStringSubmatch(l); m != nil {
+			if rep.Specimen != "" && rep.Specimen != m[1] {
+				return nil, errors.New("conflicting specimen identifiers")
+			}
 			rep.Specimen = m[1]
 		}
-		if m := reCollected.FindStringSubmatch(l); m != nil && (rep.Collected == "" || m[2] != "") {
-			rep.Collected = strings.TrimSpace(m[1] + " " + m[2]) // the specimen details line has the time
+		if m := reCollected.FindStringSubmatch(l); m != nil {
+			collected := strings.TrimSpace(m[1] + " " + m[2])
+			if rep.Collected != "" && (rep.Collected[:10] != m[1] ||
+				(len(rep.Collected) > 10 && m[2] != "" && rep.Collected != collected)) {
+				return nil, errors.New("conflicting collection dates or times")
+			}
+			if rep.Collected == "" || m[2] != "" {
+				rep.Collected = collected // the specimen details line has the time
+			}
 		}
 		if m := reReported.FindStringSubmatch(l); m != nil {
 			rep.Reported = m[1]
@@ -278,7 +379,6 @@ lines:
 		l = strings.TrimRight(l, " \t\f")
 		if c, ok := headerColumns(l); ok {
 			cols, inResults = c, true
-			wantValue = false
 			continue
 		}
 		if !inResults {
@@ -302,8 +402,9 @@ lines:
 			p := strings.TrimSuffix(l, " (Cont.)")
 			if p != panel {
 				note = nil
+				wantValue = false
 			}
-			panel, wantValue = p, false
+			panel = p
 			continue
 		}
 		toks := tokens(l)
@@ -378,6 +479,7 @@ func (rep *Report) observed(loc *time.Location) (map[string]any, string) {
 
 func (rep *Report) records(blob string, loc *time.Location) []map[string]any {
 	observed, rawTime := rep.observed(loc)
+	reportNote := strings.Join(rep.Notes, " ")
 	occurrence := map[string]int{}
 	var out []map[string]any
 	for _, r := range rep.Results {
@@ -402,7 +504,7 @@ func (rep *Report) records(blob string, loc *time.Location) []map[string]any {
 			"flag": r.Flag, "reference_interval": r.Ref, "previous_result": r.Previous,
 			"performing_lab": rep.Labs[r.LabCode], "reported": rep.Reported, "fasting": rep.Fasting,
 			"raw_time": rawTime, "lab_comment": strings.Join(r.Comment, " "),
-			"report_note": strings.Join(rep.Notes, " "),
+			"report_note": reportNote,
 		} {
 			if v != "" {
 				ctx[k] = v

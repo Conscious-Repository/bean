@@ -5,9 +5,10 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
-from ingest import ingest
+from ingest import IngestError, ingest
 
 XML = b'''<?xml version="1.0"?><HealthData locale="en_US"><Me HKCharacteristicTypeIdentifierDateOfBirth="1900-01-01"/><Record type="HKQuantityTypeIdentifierStepCount" sourceName="Private Name" device="Private Device" unit="count" creationDate="2026-01-01 10:00:00 -0600" startDate="2026-01-01 09:00:00 -0600" endDate="2026-01-01 09:05:00 -0600" value="25"/></HealthData>'''
 
@@ -54,8 +55,10 @@ class Ingestion(unittest.TestCase):
 
     def test_malformed_input_writes_no_claim_or_blob(self):
         self.source.write_bytes(b'<HealthData><Record')
-        with self.assertRaises((ValueError, subprocess.CalledProcessError)):
+        with self.assertRaises(IngestError) as caught:
             ingest(self.source, self.log)
+        self.assertEqual(caught.exception.phase, 'validation')
+        self.assertIn('no Bean writes attempted', str(caught.exception))
         self.assertFalse(subprocess.check_output(self.bean + ['ls', '-type', 'apple-health.export', '-json']))
         self.assertFalse([p for p in (self.log / 'blobs').rglob('*') if p.is_file()])
 
@@ -77,9 +80,42 @@ class Ingestion(unittest.TestCase):
     def test_corrupt_stored_blob_cannot_be_adopted(self):
         bid = subprocess.check_output(self.bean + ['blob', 'put', str(self.source)]).decode().strip()[7:]
         (self.log / 'blobs' / bid[:2] / bid[2:]).write_bytes(b'corrupt')
-        with self.assertRaises((ValueError, subprocess.CalledProcessError)):
+        with self.assertRaises(IngestError) as caught:
             ingest(self.source, self.log)
+        self.assertEqual(caught.exception.phase, 'storage')
+        self.assertIn('no claims appended', str(caught.exception))
         self.assertFalse(subprocess.check_output(self.bean + ['ls', '-type', 'apple-health.export', '-json']))
+
+    def test_append_failure_reports_partial_and_retry_recovers(self):
+        original_run = subprocess.run
+        def partial_append(command, **kwargs):
+            if command == self.bean + ['append']:
+                # Actually retain the archive, then simulate failure before the reading.
+                first = kwargs['stdin'].readline()
+                original_run(command, input=first, capture_output=True, check=True)
+                raise subprocess.CalledProcessError(1, command, stderr=b'SYNTHETIC-PRIVATE-DETAIL')
+            return original_run(command, **kwargs)
+        with patch('ingest.subprocess.run', side_effect=partial_append):
+            with self.assertRaises(IngestError) as caught:
+                ingest(self.source, self.log, records=True)
+        error = caught.exception
+        self.assertEqual(error.phase, 'append')
+        self.assertIn('partial ingestion is possible', str(error))
+        self.assertNotIn('SYNTHETIC-PRIVATE-DETAIL', str(error))
+        self.assertIsInstance(error.__cause__, subprocess.CalledProcessError)
+        self.assertTrue(subprocess.check_output(self.bean + ['ls', '-type', 'apple-health.export', '-json']))
+        self.assertFalse(subprocess.check_output(self.bean + ['ls', '-type', 'apple-health.steps', '-json']))
+        self.assertEqual(ingest(self.source, self.log, records=True)['append'], 'added 1, skipped 1')
+
+    def test_cli_validation_message_is_phase_specific_and_private(self):
+        source = self.root / 'SYNTHETIC-PRIVATE-FILENAME'
+        source.write_bytes(b'<HealthData>SYNTHETIC-PRIVATE-CONTENT</HealthData>')
+        import sys
+        result = subprocess.run([sys.executable, str(Path(__file__).with_name('ingest.py')),
+                                 str(source), str(self.log)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, '')
+        self.assertEqual(result.stderr, 'ingestion failed: validation failed; no Bean writes attempted\n')
 
 if __name__ == '__main__':
     unittest.main()

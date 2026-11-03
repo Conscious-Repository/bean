@@ -35,3 +35,11 @@ an already-owned eligible provider account, preserve one authorized API response
 and implement its source-specific adapter. See [PROVIDER-INGESTION.md](PROVIDER-INGESTION.md)
 for Oura, WHOOP and Withings access gates. Credentials, real responses and personal
 exports stay outside the repository. General sharing/attestation remains separate.
+
+## Importer hardening
+
+Labcorp now preserves each original/amended report independently of reading
+dedupe, rejects mixed specimen/date headers, and bounds PDF extraction. Explicit
+review and application of amended readings remains future work; a newly retained
+report does not mean old numeric results were replaced. The Labcorp and Apple
+helpers verify source readback and report potentially partial append failures.
