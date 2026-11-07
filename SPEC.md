@@ -814,8 +814,8 @@ Names that start with `.` under `objects/` and `blobs/` are not part of the log:
 
 Sync from replica A (source) to replica B (destination) is a set union with one exception.
 
-1. Compute the valid set of A and of B (section 6).
-2. Collect the valid tombstones of A and of B.
+1. Compute the valid set of the union of A's and B's record files (section 6). Judge B's files by their bytes on disk, not a cache.
+2. Collect the valid tombstones of that union. A tombstone that only A's own view finds valid does not count.
 3. For each record file in A that B does not have, `bean.seal` files first:
    1. If the file fails a step from 1 to 15 of 3.8, do not copy it. A file with an unknown `v` stops at step 14 and passes.
    2. If a valid tombstone of A or B names it, apply 7.5. Do not copy it.
@@ -893,12 +893,13 @@ A replica that never had the target, or that lost this file, does not know the r
 `bean export <dir>` writes a plaintext copy of the log for exit.
 
 1. Write each record file that is not purged or hidden to `<dir>/records/<64 hex>.json`. Use the stored bytes. This includes records of an unknown version and records of a too-new identity: an export needs no judgment of them.
-2. Decrypt each blob that an exported record names. Write the plaintext to `<dir>/blobs/<64 hex of the blob id>`. If a blob is not available, continue, and add its id to `missing_blobs` in the manifest (sorted). One file MUST NOT stop an exit.
-3. Write `<dir>/manifest.json` with the canonical bytes of `{"spec": "bean-v0", "identity": <id>, "records": <count>, "blobs": [{"id": <blob id>, "plaintext_sha256": <hex>, "media_type": <string>}]}`. Sort `blobs` by `id`. The `spec` string names the export format. It does not change with the software version.
+2. Decrypt each blob that an exported record of the local identity or of an agent it paired names, and each blob that no record file names. Write the plaintext to `<dir>/blobs/<64 hex of the blob id>`. A blob that only another author's records name is not decrypted. If a blob is not available, continue, and add its id to `missing_blobs` in the manifest (sorted). One file MUST NOT stop an exit.
+3. Write the stored bytes of each record file that fails a step from 1 to 15 of 3.8 to `<dir>/invalid/<its path>`, and list them in `invalid_records` as `{"path", "error"}`. List blobs that no record names in `unreferenced_blobs`, and blobs not decrypted in `not_exported_blobs` as `{"id", "reason"}`.
+4. Write `<dir>/manifest.json` with the canonical bytes of `{"spec": "bean-v0", "identity": <id>, "records": <count>, "blobs": [{"id": <blob id>, "plaintext_sha256": <hex>, "media_type": <string>}]}`, plus the lists above when they are not empty. Sort `blobs` by `id`. The `spec` string names the export format. It does not change with the software version.
 
 After it writes, the command fails with `too new: <id>` if the local identity is too new, or with `blob missing: <id>` if a blob is missing that the local identity or an agent it paired names. A blob that another author names does not fail it: anyone can name an absent blob.
 The export is not encrypted. The CLI MUST say this before it writes.
-`bean import-export <dir>` reverses the export for a log with the same identity secret.
+`bean import-export <dir>` reverses the export for a log with the same identity secret. It reads `manifest.json` first and refuses an export of another identity. It applies 7.4 steps 2 and 3.2 to the union of the log and the export, so a record the person deleted does not come back.
 It encrypts each blob again. The deterministic encryption gives the same blob ids. The reference CLI refuses symbolic links, special file entries, record exports over 16 MiB, and plaintext blob exports over 256 MiB. It confines file reads to the selected export directory. These are CLI resource limits, not core validity rules.
 
 ### 7.10 Caches

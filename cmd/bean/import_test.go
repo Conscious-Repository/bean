@@ -472,14 +472,15 @@ func TestImporterOutputCapped(t *testing.T) {
 	}
 }
 
-// After -corrections, a reading still reported changed has another type or
-// no value; the message does not send the person back to -corrections.
-func TestChangedMessageAfterCorrections(t *testing.T) {
-	if msg := changedError(2, "csv", false).Error(); !strings.Contains(msg, "bean import csv -corrections") {
-		t.Errorf("without -corrections: %s", msg)
+// A reading that -corrections cannot write either says why, and does not
+// send the person back to -corrections.
+func TestImportChangedSaysWhy(t *testing.T) {
+	c := core.Changed{ID: "sha256:" + strings.Repeat("a", 64), Type: "lab.glucose", Old: "90", New: "120"}
+	if msg := reportChanged([]core.Changed{c}, "run bean import csv -corrections").Error(); !strings.Contains(msg, "bean import csv -corrections") {
+		t.Errorf("without a reason: %s", msg)
 	}
-	msg := changedError(2, "csv", true).Error()
-	if strings.Contains(msg, "-corrections") || !strings.Contains(msg, "different type or no value") || !strings.Contains(msg, "own -system") {
-		t.Errorf("with -corrections: %s", msg)
+	c.NewType, c.Reason = "lab.ldl", "the type differs"
+	if msg := reportChanged([]core.Changed{c}, "run bean import csv -corrections").Error(); strings.Contains(msg, "then run") || !strings.Contains(msg, "cannot write either") {
+		t.Errorf("with a reason: %s", msg)
 	}
 }

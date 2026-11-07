@@ -72,22 +72,9 @@ func cmdImport(s *core.Store, args []string) {
 	if err != nil {
 		fail(err)
 	}
-	if len(out.changed) > 0 {
-		for _, c := range out.changed {
-			fmt.Fprintf(os.Stderr, "changed: %s %s: the log has %s, this file says %s\n", c.ID[7:19], safe(c.Type), safe(c.Old), safe(c.New))
-		}
-		fail(changedError(len(out.changed), source, corrections))
+	if err := reportChanged(out.changed, "run bean import "+source+" -corrections"); err != nil {
+		fail(fmt.Errorf("the file is kept. %w", err))
 	}
-}
-
-// changedError says what to do about readings that were not written. After
-// -corrections, what is left is a reading of another type under the same
-// ref, or one with no value: -corrections again would change nothing.
-func changedError(n int, source string, corrections bool) error {
-	if corrections {
-		return fmt.Errorf("%d readings were not written: each has a different type or no value under a ref the log already has. The file is kept. Give each source its own -system", n)
-	}
-	return fmt.Errorf("%d readings have a new value, and nothing was written for them. The file is kept. Check that it is newer and right, then run bean import %s -corrections", n, source)
 }
 
 // importerPath finds bean-import-<source> next to this binary, else on PATH.

@@ -68,6 +68,21 @@ Four rules changed. bean never wrote a record that the new rules reject. Most ef
   - a tombstone with blobs names `blobs`;
   - a record of an `hlog.*` core type says only `old format`.
 
+### Seventh audit (2026-11-07)
+
+Reads change only on frozen logs and for a reading whose correction is hidden; no record changes between valid and invalid (DECISIONS 203 to 210).
+
+- On a frozen log, a deletion signed by a key below the fork no longer hides a record that no freeze rule puts in doubt, such as an agent's reading.
+- A reading whose only correction is hidden shows again, with a status that says why.
+- `sync` fails with `no log in <src>` when the source holds no log, and exits 1 with `skipped N bad record files, M bad blobs` when the source is damaged. It judges deletions on both copies together, and it repairs a damaged file even when its size and time are unchanged.
+- `export` writes record files that fail their checks to `invalid/`, and files no record names to `blobs/` (`unreferenced_blobs`). It decrypts a file only for a record of yours or of a paired agent; a file only a stranger's record names is listed in `not_exported_blobs`.
+- `import-export` needs `manifest.json`, refuses an export of another identity, and refuses records you purged (`refused N purged`). Hand-made export folders need a manifest.
+- A `changed:` line names the input's type, and says why when `-corrections` cannot write it either.
+- One agent key per machine has one label. `mcp -write -label B` or `agent pair -label B` on a key paired as A is refused; use the same label or none. `mcp -write` without `-label` keeps the key's name.
+- `blob put` refuses a file over 256 MiB. A bad time in `ls -since`, `ls -until` or `add -at` exits 2. `ls` shows a kept file as `file <media type> <hex>`, not `series`.
+- Importers: Labcorp 0.2.0, Apple Health 0.2.0 and CSV 0.6.0 name the kept file by digest (`report_sha256`, `export_sha256`, `file_sha256`), not in `blobs`, so purging the file record erases the file. Readings from older versions still name the file in `blobs`, so the file stays until they are purged too. Labcorp refuses a name that runs into the result column, rows before the header, and a duplicate test that differs in comment or lab. Apple Health keeps exports with correlations, and stores percentages as fractions with unit `1`. `bean import csv` works.
+- `bean import` checks the importer's first record and your deletions before it stores the file, so a file you purged is not stored again.
+
 ### Re-audit fixes (2026-11-07)
 
 No validity rule changes: `bean verify` prints the same lines for the same files. Commands change:
