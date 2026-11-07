@@ -22,21 +22,21 @@ printf '{"type":"note","value":{"s":"about"},"refs":[{"rel":"about","id":"%s"}],
 L=$OUT/rotate; newlog $L
 for i in 1 2 3; do claim $i $i | bean -dir $L append >/dev/null; done
 X=$(bean -dir $L add hr 70 -unit bpm)
-bean -dir $L rotate -no-seal "$X" <$L.words >/dev/null 2>&1
+bean -dir $L rotate -seal-all -no-seal "$X" <$L.words >/dev/null 2>&1
 claim 4 4 | bean -dir $L append >/dev/null
-bean -dir $L rotate <$L.words >/dev/null 2>&1
-R=$OUT/restore; mkdir -p $R; cp -r $L/objects $R/; bean -dir $R restore <$L.words >/dev/null 2>&1
+bean -dir $L rotate -seal-all <$L.words >/dev/null 2>&1
+R=$OUT/restore; mkdir -p $R; cp -r $L/objects $R/; bean -dir $R restore -seal-all <$L.words >/dev/null 2>&1
 claim 5 5 | bean -dir $R append >/dev/null
 # 3. retired key claim
 L=$OUT/retired; newlog $L; claim 1 1 | bean -dir $L append >/dev/null
 O=$OUT/retired-old; mkdir -p $O; cp -r $L/local $O/
-bean -dir $L rotate <$L.words >/dev/null 2>&1
+bean -dir $L rotate -seal-all <$L.words >/dev/null 2>&1
 adversary old-key-claim $L $O >/dev/null
 # 4. fork
 A1=$OUT/fork; newlog $A1; claim 1 1 | bean -dir $A1 append >/dev/null
 B1=$OUT/fork-b; mkdir -p $B1; cp -r $A1/local $B1/; bean -dir $B1 sync $A1 >/dev/null
 T=$(bean -dir $A1 add hr 5 -unit bpm); bean -dir $A1 sync $B1 >/dev/null
-bean -dir $A1 rotate <$A1.words >/dev/null 2>&1; bean -dir $B1 rotate <$A1.words >/dev/null 2>&1
+bean -dir $A1 rotate -seal-all <$A1.words >/dev/null 2>&1; bean -dir $B1 rotate -seal-all <$A1.words >/dev/null 2>&1
 bean -dir $A1 sync $B1 >/dev/null
 # 5. duplicates: two hosts import the same csv before they sync, plus an agent
 L=$OUT/dups; newlog $L; M=$OUT/dups-b; mkdir -p $M; cp -r $L/local $M/; bean -dir $M sync $L >/dev/null
@@ -63,5 +63,5 @@ printf 'x' > $L/objects/zz.json
 L=$OUT/halt-open; newlog $L; claim 1 1 | bean -dir $L append >/dev/null; adversary halt $L $L >/dev/null
 L=$OUT/halt-passed; newlog $L; claim 1 1 | bean -dir $L append >/dev/null
 S=$OUT/halt-stolen; mkdir -p $S; cp -r $L/local $S/; adversary halt $L $S >/dev/null
-bean -dir $L rotate <$L.words >/dev/null 2>&1; claim 2 2 | bean -dir $L append >/dev/null; adversary halt $L $S >/dev/null
+bean -dir $L rotate -seal-all <$L.words >/dev/null 2>&1; claim 2 2 | bean -dir $L append >/dev/null; adversary halt $L $S >/dev/null
 ls -d $OUT/*/ | grep -v bin

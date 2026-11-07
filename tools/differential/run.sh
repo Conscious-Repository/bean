@@ -11,6 +11,10 @@
 # their 24 words, rotate followed by verify (ids and keys masked).
 # ALLOW is an optional regex: lines that match it are dropped from both
 # outputs (use it only for a difference that a commit means to make).
+# A commit that means to change what the reads and rotate print, and must not
+# change what verify prints, names its base commit in reads-change-from. Only
+# for that base, only the verify output is compared. Once main moves on, the
+# file has no effect.
 set -u
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 OLD=${1:-origin/main}
@@ -31,14 +35,20 @@ bash "$REPO/tools/second/scenarios.sh" "$T/sc" >/dev/null 2>&1 && for d in "$T/s
 done
 "$PY" "$REPO/tools/second/craft.py" "$T/craft" >/dev/null 2>&1 && for d in "$T/craft"/*/; do cp -r "$d" "$C/craft-$(basename "$d")"; done
 export BEAN_NOW=2026-10-30T12:00:00Z
+SCOPE=all
+[ "$(git -C "$REPO" rev-parse "$OLD")" = "$(cat "$REPO/tools/differential/reads-change-from" 2>/dev/null)" ] && SCOPE=verify
 mask() { sed -E 's/(sha256|ed25519|p256|secp256k1):[0-9a-f]+/\1:X/g; s/npub1[0-9a-z]+/npub1X/g' | grep -aEv "$ALLOW"; }
 run() { # run <bin> <log copy> <out file>
   local b=$1 d=$2 o=$3
   { for c in "verify" "ls -all -json" "ls -all" "ls"; do
+      if [ "$SCOPE" = verify ] && [ "$c" != verify ]; then "$b" -dir "$d" $c >/dev/null 2>&1; continue; fi
       echo "## $c"; "$b" -dir "$d" $c 2>&1 | grep -aEv "$ALLOW"; echo "exit ${PIPESTATUS[0]}"
     done
     if [ -f "$d.words" ]; then
-      echo "## rotate"; "$b" -dir "$d" rotate <"$d.words" 2>&1 | mask | sort; echo "exit ${PIPESTATUS[0]}"
+      # A build from after DECISIONS 186 needs the decision on seals.
+      seal=""; "$b" help | grep -q -- -seal-all && seal="-seal-all"
+      if [ "$SCOPE" = verify ]; then "$b" -dir "$d" rotate $seal <"$d.words" >/dev/null 2>&1; else
+      echo "## rotate"; "$b" -dir "$d" rotate $seal <"$d.words" 2>&1 | mask | sort; echo "exit ${PIPESTATUS[0]}"; fi
       echo "## verify after rotate"; "$b" -dir "$d" verify 2>&1 | mask | sort; echo "exit ${PIPESTATUS[0]}"
     fi; } >"$o"
 }

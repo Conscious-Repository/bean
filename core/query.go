@@ -36,7 +36,12 @@ func When(r *Record) time.Time {
 			}
 		}
 	}
-	t, _ := time.Parse("2006-01-02T15:04:05Z", r.Imported)
+	// A migrated record keeps the time of the record it came from.
+	imported := r.Imported
+	if s, ok := r.Context["migrated_imported"].(string); ok {
+		imported = s
+	}
+	t, _ := time.Parse("2006-01-02T15:04:05Z", imported)
 	return t
 }
 
@@ -71,11 +76,13 @@ func (l *Loaded) Current(id string) bool {
 	if r == nil || !l.Visible(id) || IsCoreType(r.Type) {
 		return false
 	}
-	if len(l.Report.Superseded[id]) > 0 {
+	if len(l.Report.Superseded[id]) > 0 || l.Report.KeptSuperseded[id] {
 		return false
 	}
-	_, dup := l.Report.Duplicates[id]
-	return !dup
+	// A duplicate shows when its primary cannot: a reading must not vanish
+	// behind a record that a freeze put in doubt.
+	primary, dup := l.Report.Duplicates[id]
+	return !dup || !l.Visible(primary)
 }
 
 // isSetup reports pairing claims: configuration, not things that happened.
@@ -87,9 +94,17 @@ func (s *Store) List(f Filter) ([]*Record, *Loaded, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	if l.IsTooNew() {
+		return nil, l, l.TooNewError() // an empty list would look like lost data
+	}
+	if l.ID == "" && len(l.Report.Chains) == 0 && len(l.Report.TooNew) > 0 {
+		return nil, l, errors.New("too new: " + strings.Join(l.Report.TooNew, ", ") + ": this folder has records from a newer bean; update bean")
+	}
 	var out []*Record
 	for id, r := range l.Report.Records {
-		if !l.Visible(id) || (!f.All && (!l.Current(id) || isSetup(r.Type))) || !f.match(r) {
+		// -all also shows what a freeze keeps out of the default reads.
+		shown := l.Visible(id) || (f.All && l.Report.InDoubt(id))
+		if !shown || (!f.All && (!l.Current(id) || isSetup(r.Type))) || !f.match(r) {
 			continue
 		}
 		out = append(out, r)
@@ -136,7 +151,7 @@ func (l *Loaded) Replies(id string) []*Record {
 	var out []*Record
 	for _, rid := range sortedKeys(l.Report.Records) {
 		r := l.Report.Records[rid]
-		if !l.Report.Valid[rid] {
+		if !l.Visible(rid) {
 			continue
 		}
 		for _, ref := range r.Refs {
@@ -152,7 +167,24 @@ func (l *Loaded) Replies(id string) []*Record {
 // Status is a short reader-facing state of one record.
 func (l *Loaded) Status(id string) string {
 	rp := l.Report
+	if r := rp.Records[id]; r != nil && rp.OffTree(r) {
+		return "held: not on the identity's chain, so no key vouches for it"
+	}
 	switch {
+	case rp.BranchClaims[id]:
+		return "in doubt: a key below the fork of a frozen identity signed it"
+	case rp.Doubted[id]:
+		return "in doubt: the key at the fork of a frozen identity signed it, and not every branch kept it"
+	case rp.DeletedInDoubt[id]:
+		return "hidden: a deletion that a freeze put in doubt names it"
+	case rp.Kept[id]:
+		return "frozen, but every branch kept it, so readers show it"
+	case rp.DoubtedFix[id]:
+		return "in doubt: a correction that not every branch of a frozen identity kept"
+	case rp.KeptSuperseded[id]:
+		return "superseded by a correction that every branch of a frozen identity kept"
+	case len(rp.DisputedBy[id]) > 0:
+		return "in doubt: one branch of a frozen identity corrected it with " + rp.DisputedBy[id][0]
 	case l.Hidden[id]:
 		return "hidden, purged by " + rp.Purged[id]
 	case rp.Errors[id] != "":

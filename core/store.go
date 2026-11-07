@@ -266,6 +266,43 @@ func (s *Store) addPurgedRef(r *Record) error {
 	return appendLineSync(s.path(filePurgedRef), line)
 }
 
+// removePurgedRef forgets the ref of a target whose tombstone became invalid,
+// unless another deletion may need the line. A line names only a ref, and one
+// ref can belong to several records. A record that is hidden can be checked.
+// One that is erased cannot, so a tombstone with an absent target keeps the line:
+// a re-import that is skipped says nothing wrong, and a deleted reading that
+// comes back cannot be unseen.
+func (s *Store) removePurgedRef(r *Record, rp *Report, hidden map[string]bool) error {
+	if r == nil || r.Source.Ref == "" {
+		return nil
+	}
+	have, err := s.readPurgedRefs()
+	if err != nil {
+		return err
+	}
+	line := refLine(r.Subject, r.Source.System, r.Source.Ref)
+	if !have[line] {
+		return nil
+	}
+	for id, o := range rp.Records {
+		if o.Subject != r.Subject {
+			continue
+		}
+		if o.Type == "bean.tombstone" && rp.Records[o.Targets("purges")[0]] == nil {
+			return nil
+		}
+		if id != r.ID && hidden[id] && refLine(o.Subject, o.Source.System, o.Source.Ref) == line {
+			return nil
+		}
+	}
+	delete(have, line)
+	var b strings.Builder
+	for _, x := range sortedKeys(have) {
+		b.WriteString(x + "\n")
+	}
+	return writeFileAtomic(s.path(filePurgedRef), []byte(b.String()), 0o600)
+}
+
 // Loaded is a replica after the hold rules ran.
 type Loaded struct {
 	Files  map[string][]byte // objects/ plus hidden records, by objects/ path
@@ -386,6 +423,10 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 			return nil, err
 		}
 		delete(hidden, target)
+		// The deletion was undone, so a new import must not skip this reading.
+		if err := s.removePurgedRef(rp.Records[target], rp, hidden); err != nil {
+			return nil, err
+		}
 		for tid, h := range holds {
 			if h.Target == target {
 				delete(holds, tid)
@@ -428,8 +469,35 @@ func (s *Store) localID() string {
 	return id
 }
 
-// Visible reports whether a record is valid and not hidden.
-func (l *Loaded) Visible(id string) bool { return l.Report.Valid[id] && !l.Hidden[id] }
+// Visible reports whether a reader may show a record: valid or kept by every
+// branch of a fork, not hidden, not put in doubt by a freeze, and not an
+// identity record that no key vouches for.
+func (l *Loaded) Visible(id string) bool {
+	rp := l.Report
+	if (!rp.Valid[id] && !rp.Kept[id]) || l.Hidden[id] || rp.Doubted[id] || rp.DeletedInDoubt[id] {
+		return false
+	}
+	r := rp.Records[id]
+	return r == nil || !rp.OffTree(r)
+}
+
+// IsTooNew reports that this build cannot evaluate the person's identity.
+func (l *Loaded) IsTooNew() bool { return l.ID != "" && contains(l.Report.TooNew, l.ID) }
+
+// IsFrozen reports that the person's identity forked.
+func (l *Loaded) IsFrozen() bool { return l.ID != "" && contains(l.Report.Compromised, l.ID) }
+
+// TooNewError says why a read has nothing to show. A halt by the head key
+// alone can be a thief, so it names the way out.
+func (l *Loaded) TooNewError() error {
+	if len(l.Report.HeadHalt[l.ID]) > 0 && contains(l.past(l.ID).Report.Compromised, l.ID) {
+		return errors.New("too new: " + l.ID + ": a key of this frozen identity signed a record in a newer format, so this bean cannot read the log. Update bean. bean export and bean migrate <empty folder> still work")
+	}
+	if len(l.Report.HeadHalt[l.ID]) > 0 {
+		return errors.New("too new: " + l.ID + ": your current key signed a record in a newer format, so this bean cannot read the log. Update bean. If you did not write it, the key may be stolen: run bean rotate")
+	}
+	return errors.New("too new: " + l.ID + ": this log has records from a newer bean; update bean")
+}
 
 // GC erases hidden targets whose tombstone is still valid and at least
 // HoldDays old, and blobs that no valid unpurged record names. It returns
@@ -583,6 +651,17 @@ func (s *Store) GetBlob(id string) ([]byte, error) {
 	secret, err := s.identitySecret()
 	if err != nil {
 		return nil, err
+	}
+	// rsync can bring a pipe here, and a read of one never ends.
+	info, err := os.Lstat(s.path(BlobPathOf(id)))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, errors.New("blob missing: " + id)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, errors.New("blob corrupt: " + id)
 	}
 	b, err := os.ReadFile(s.path(BlobPathOf(id)))
 	if errors.Is(err, os.ErrNotExist) {

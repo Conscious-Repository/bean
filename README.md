@@ -126,7 +126,7 @@ bean-import-labcorp -tz America/Chicago -blob $BLOB lab-result.pdf | bean append
 bean ls -type 'lab.*'
 ```
 
-You get one record for each result, with the value, unit, flag, reference interval, panel and lab comments. Your name, birth date and patient ids are not copied. `-tz` is the time zone where the sample was taken; without it, only the day is recorded. Import the same file again and nothing is added.
+You get one record for each result, with the value, unit, flag, reference interval, panel and lab comments. Your name, birth date and patient ids are not copied. `-tz` is the time zone where the sample was taken; without it, only the day is recorded. Import the same file again and nothing is added. If a later report changes a value, for example a final result replaces `Pending`, `bean append` names the reading, writes nothing for it, and exits 1. If the report is newer and right, run it again with `bean append -corrections`.
 
 ### A CSV file
 
@@ -227,7 +227,7 @@ If you lose the laptop:
    bean -dir ~/health restore -nostr new
    ```
 
-   Type or paste the 24 words, then press Ctrl-D.
+   It shows what the old key signed and stops. Read the list. **If nobody else had the old key,** run it again with `-seal-all`, then type or paste the 24 words and press Ctrl-D. **If the key may be stolen,** add `-no-seal <id>` for each record that is not yours, or `-no-seal-file <file>` for many. `-list` shows every record. A record you keep stays valid for good, and you cannot undo a deletion you keep.
 
 4. Put back your backup of the deleted-imports file:
 
@@ -235,11 +235,11 @@ If you lose the laptop:
    cp /Volumes/Backup/health/local/purged-refs.jsonl ~/health/local/
    ```
 
-Your identity and records stay the same. The lost key can no longer add, correct or delete anything: a record it signs after the rotation is not valid. Records of the old key that are in this folder when you restore stay valid, because the rotation seals them. Use `bean rotate` the same way on a machine that you still have, for example when a key is old.
+Your identity and records stay the same. The lost key can no longer add, correct or delete anything: a record it signs after the rotation is not valid. Records of the old key that you keep stay valid, because the rotation seals them. Use `bean rotate` the same way on a machine that you still have, for example when a key is old.
 
 If `restore` says `ambiguous`, the folder holds more than one identity made from these words' public commitment (someone can copy it). Pass your identity id: `bean -dir ~/health restore -identity sha256:...`. Your identity id is on the first line that `init` printed, in any export's `manifest.json`, and in `bean whoami` on an old machine.
 
-Sync every copy before you rotate or restore. Records that a copy made with the old key and did not sync before the rotation stop being valid. A log of more than 200,000 records per key rotates into a succession plus `seal part` records; copy all of them. Until every part is in a copy, `bean verify` there says `incomplete seals` and the old key's records do not count, but nothing is deleted. Never rotate or restore on two machines from the same point: that freezes the identity, and you must make a new one.
+Sync every copy before you rotate or restore, then check what the sync brought in. `bean rotate` works the same way as `restore`: without `-seal-all` it only shows the list. Never rotate or restore on two machines from the same point: that freezes the identity for good, and `bean migrate <empty folder>` then starts a new identity with your own records. Records that a copy made with the old key and did not sync before the rotation stop being valid. A log of more than 200,000 records per key rotates into a succession plus `seal part` records; copy all of them. Until every part is in a copy, `bean verify` there says `incomplete seals` and the old key's records do not count, but nothing is deleted. Never rotate or restore on two machines from the same point: that freezes the identity, and you must make a new one.
 
 ### Upgrading
 

@@ -90,15 +90,35 @@ func cmdList(s *core.Store, args []string) {
 		for _, r := range recs {
 			os.Stdout.Write(append(r.Bytes, '\n'))
 		}
+		if warnFrozen(l) {
+			os.Exit(4)
+		}
 		return
 	}
 	me, _ := s.Identity()
 	labels := l.AgentLabels()
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	for _, r := range recs {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", whenText(r), r.Type, safe(valueText(r)), safe(byText(r, me, labels)), r.ID[7:19])
+		by := byText(r, me, labels)
+		if l.Report.InDoubt(r.ID) {
+			by = strings.TrimSpace(by + " [in doubt]")
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", whenText(r), r.Type, safe(valueText(r)), safe(by), r.ID[7:19])
 	}
 	tw.Flush()
+	if warnFrozen(l) {
+		os.Exit(4)
+	}
+}
+
+// warnFrozen tells the person that the log they just read is not in its usual
+// state. It reports whether the identity is frozen.
+func warnFrozen(l *core.Loaded) bool {
+	if !l.IsFrozen() {
+		return false
+	}
+	fmt.Fprintf(os.Stderr, "bean: compromised: %s\nbean: two rotations split this identity, and it is frozen for good. Where the two sides differ, this list can leave a record out or show an old value: bean ls -all marks what is in doubt, and bean verify has the details. To go on writing, run bean migrate <empty folder>.\n", l.ID)
+	return true
 }
 
 func cmdShow(s *core.Store, args []string) {
@@ -108,6 +128,9 @@ func cmdShow(s *core.Store, args []string) {
 	l, err := s.Load()
 	if err != nil {
 		fail(err)
+	}
+	if l.IsTooNew() {
+		fail(l.TooNewError())
 	}
 	r, err := l.Resolve(args[0])
 	if err != nil {
@@ -134,6 +157,9 @@ func cmdShow(s *core.Store, args []string) {
 			}
 		}
 		fmt.Printf("reply %s %s %s %s\n", x.ID, rel, x.Type, safe(valueText(x)))
+	}
+	if warnFrozen(l) {
+		os.Exit(4)
 	}
 }
 

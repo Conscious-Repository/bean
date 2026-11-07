@@ -58,7 +58,7 @@ func TestRetiredKeyClaimInvalid(t *testing.T) {
 	s, ident, words := initWithWords(t)
 	old := s.mustLocal(t).Signer
 	before := appendLines(t, s, partial("hrv.rmssd", 1, nil)).IDs[0]
-	if _, err := s.Rotate(words, nil, NewKey{}); err != nil {
+	if _, err := s.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
 	obj := map[string]any{"v": 0.0, "nonce": NewNonce(), "type": "weight", "subject": ident,
@@ -139,12 +139,12 @@ func TestGCRefusesTooNew(t *testing.T) {
 func TestGCRefusesCompromised(t *testing.T) {
 	s, _, words := initWithWords(t)
 	b := cloneLocal(t, s)
-	if _, err := s.Rotate(words, nil, NewKey{}); err != nil {
+	if _, err := s.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
 	bid, _ := s.PutBlob([]byte("photo after rotation"))
 	appendLines(t, s, blobLine(bid))
-	if _, err := b.Rotate(words, nil, NewKey{}); err != nil {
+	if _, err := b.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Sync(b); err != nil {
@@ -178,16 +178,16 @@ func TestRestoreAmbiguous(t *testing.T) {
 	n := newStore(t)
 	os.CopyFS(n.Dir, os.DirFS(s.Dir))
 	os.RemoveAll(n.path(dirLocal))
-	if _, _, err := n.Restore(words, nil, NewKey{}, ""); err == nil || !strings.HasPrefix(err.Error(), "ambiguous: ") {
+	if _, _, err := n.Restore(words, Seals{All: true}, NewKey{}, ""); err == nil || !strings.HasPrefix(err.Error(), "ambiguous: ") {
 		t.Fatalf("restore with two matches: %v", err)
 	}
 	if _, err := n.ReadLocal(); err == nil {
 		t.Fatal("ambiguous restore wrote local files")
 	}
-	if _, _, err := n.Restore(words, nil, NewKey{}, "sha256:"+strings.Repeat("0", 64)); err == nil {
+	if _, _, err := n.Restore(words, Seals{All: true}, NewKey{}, "sha256:"+strings.Repeat("0", 64)); err == nil {
 		t.Error("restore to an identity that does not match")
 	}
-	_, got, err := n.Restore(words, nil, NewKey{}, ident)
+	_, got, err := n.Restore(words, Seals{All: true}, NewKey{}, ident)
 	if err != nil || got != ident {
 		t.Fatalf("restore -identity: %s %v", got, err)
 	}
@@ -234,7 +234,7 @@ func TestConcurrentRotateNoFork(t *testing.T) {
 			defer wg.Done()
 			h := Open(s.Dir) // separate handles share only the file lock
 			h.Now = s.Now
-			_, errs[i] = h.Rotate(words, nil, NewKey{})
+			_, errs[i] = h.Rotate(words, Seals{All: true}, NewKey{})
 		}(i)
 	}
 	wg.Wait()
@@ -287,7 +287,7 @@ func TestRotateCrashAfterSuccession(t *testing.T) {
 		}
 	}
 	defer func() { hookAfterSuccession = nil }()
-	res, err := s.Rotate(words, nil, NewKey{})
+	res, err := s.Rotate(words, Seals{All: true}, NewKey{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -400,7 +400,7 @@ func TestNoSealTombstoneRestoresTarget(t *testing.T) {
 	if !la.Hidden[tgt] {
 		t.Fatal("A did not hide the target")
 	}
-	res, err := a.Rotate(words, []string{d}, NewKey{})
+	res, err := a.Rotate(words, Seals{All: true, NoSeal: []string{d}}, NewKey{})
 	if err != nil {
 		t.Fatal(err)
 	}

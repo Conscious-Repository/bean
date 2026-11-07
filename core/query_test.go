@@ -240,7 +240,7 @@ func TestShortIDsEverywhere(t *testing.T) {
 		t.Error("purge by prefix did not purge the full id")
 	}
 	c, _ := s.Add("weight", "82", AddOptions{Unit: "kg", Corrects: b})
-	res, err := s.Rotate(words, []string{c[7:13]}, NewKey{})
+	res, err := s.Rotate(words, Seals{All: true, NoSeal: []string{c[7:13]}}, NewKey{})
 	if err != nil {
 		t.Fatal(err)
 	}
