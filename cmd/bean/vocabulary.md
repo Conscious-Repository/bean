@@ -34,7 +34,9 @@ Conventions for what goes in the log, so that a month of entries lines up for `s
 
 `<test>` in `lab.<test>` is the test name as the lab prints it, in lowercase with `-` for spaces and punctuation: "BUN/Creatinine Ratio" is `lab.bun-creatinine-ratio`. `bean-import-labcorp` writes these types.
 
-`lab.report` is not a result. Its `value.blob` is the report as the lab gave it, PDF or text, and `context` has the file's `sha256`, its `bytes`, and `assurance: unsigned-report`: you kept this file, which does not prove the lab wrote it. An amended report is a new `lab.report`; its changed values need `-corrections`. Importers may write other types of their own, for example `hrv.rmssd` for a CSV of HRV.
+`lab.report` is not a result. Its `value.blob` is the report as the lab gave it, PDF or text, and `context` has the file's `sha256`, its `bytes`, and `assurance: unsigned-report`: you kept this file, which does not prove the lab wrote it. An amended report is a new `lab.report`; its changed values need `-corrections`.
+
+`apple-health.export` is not a measurement either. Its `value.blob` is an Apple Health `export.zip` or `export.xml` as Apple wrote it, and `context` has the file's `sha256`, `bytes`, the count of each record type, and `assurance: unsigned-export`. With `-records`, `bean-import-apple-health` also writes `apple-health.<type>` readings (`apple-health.steps`, `apple-health.body-mass`) in Apple's own units and intervals. Nothing is summed per day or merged across sources. The export has no sample ids, so a changed export can add a reading again; see `cmd/bean-import-apple-health/README.md`. Importers may write other types of their own, for example `hrv.rmssd` for a CSV of HRV.
 
 ## Your own types
 

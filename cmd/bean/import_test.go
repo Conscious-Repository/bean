@@ -21,16 +21,18 @@ var (
 	labcorpErr  error
 )
 
-// importerOnPath builds the real Labcorp importer once and returns a PATH
+// importerOnPath builds the real importers once and returns a PATH
 // that finds it.
 func importerOnPath(t *testing.T) string {
 	t.Helper()
 	labcorpOnce.Do(func() {
 		labcorpDir, labcorpErr = os.MkdirTemp("", "bean-import-bin-*")
 		if labcorpErr == nil {
-			out, err := exec.Command("go", "build", "-o", filepath.Join(labcorpDir, "bean-import-labcorp"), "../bean-import-labcorp").CombinedOutput()
-			if err != nil {
-				labcorpErr = &buildError{string(out)}
+			for _, name := range []string{"bean-import-labcorp", "bean-import-apple-health"} {
+				out, err := exec.Command("go", "build", "-o", filepath.Join(labcorpDir, name), "../"+name).CombinedOutput()
+				if err != nil {
+					labcorpErr = &buildError{string(out)}
+				}
 			}
 		}
 	})
@@ -42,7 +44,7 @@ func importerOnPath(t *testing.T) string {
 
 type buildError struct{ out string }
 
-func (e *buildError) Error() string { return "build bean-import-labcorp: " + e.out }
+func (e *buildError) Error() string { return "build an importer: " + e.out }
 
 func lcPad(s string, col int) string {
 	if len(s) >= col {

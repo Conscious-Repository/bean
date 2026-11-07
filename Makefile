@@ -69,6 +69,7 @@ fuzz:
 	go test ./core -run '^$$' -fuzz '^FuzzTooNewGate$$' -fuzztime $(FUZZTIME) -fuzzminimizetime 5s
 	go test ./cmd/bean-import-csv -run '^$$' -fuzz '^FuzzConvert$$' -fuzztime $(FUZZTIME) -fuzzminimizetime 5s
 	go test ./cmd/bean-import-labcorp -run '^$$' -fuzz '^FuzzLabcorp$$' -fuzztime $(FUZZTIME) -fuzzminimizetime 5s
+	go test ./cmd/bean-import-apple-health -run '^$$' -fuzz '^FuzzAppleExport$$' -fuzztime $(FUZZTIME) -fuzzminimizetime 5s
 
 smoke:
 	tools/smoke.sh
