@@ -71,13 +71,14 @@ func TestSyncRepairsCorruptBlob(t *testing.T) {
 func TestImportExportRejectsUnsafeEntries(t *testing.T) {
 	for _, sub := range []string{"blobs", "records"} {
 		t.Run(sub, func(t *testing.T) {
-			s, _ := initStore(t)
+			s, id := initStore(t)
 			dir := t.TempDir()
 			for _, d := range []string{"blobs", "records"} {
 				if err := os.Mkdir(filepath.Join(dir, d), 0o700); err != nil {
 					t.Fatal(err)
 				}
 			}
+			writeManifest(t, dir, id)
 			outside := filepath.Join(t.TempDir(), "outside")
 			if err := os.WriteFile(outside, []byte("private"), 0o600); err != nil {
 				t.Fatal(err)
@@ -105,13 +106,14 @@ func TestImportExportRejectsOversizedFilesBeforeRead(t *testing.T) {
 		{"records", MaxSuccessionSize + 1},
 	} {
 		t.Run(tc.sub, func(t *testing.T) {
-			s, _ := initStore(t)
+			s, id := initStore(t)
 			dir := t.TempDir()
 			for _, sub := range []string{"blobs", "records"} {
 				if err := os.Mkdir(filepath.Join(dir, sub), 0o700); err != nil {
 					t.Fatal(err)
 				}
 			}
+			writeManifest(t, dir, id)
 			name := strings.Repeat("a", 64)
 			if tc.sub == "records" {
 				name += ".json"

@@ -230,9 +230,10 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 // person who restored from a stale backup and kept everything would see old
 // values come back, deleted records return, and new claims of a key that a
 // thief may hold. So readers follow what every branch at the fork agreed on,
-// and a deletion stays in effect on doubt only if a branch seals it or an older
-// key signed it: otherwise one signature with the key at the fork or a key below
-// it, which a thief may hold, could hide the whole log. A hidden record is not lost. The
+// and a deletion stays in effect on doubt only if an older key signed it, or the
+// key at the fork signed it and a branch seals it: otherwise one signature with
+// the key at the fork or a key below it, which a thief may hold, could hide the
+// whole log. A hidden record is not lost. The
 // verify output still says what the rule says.
 func (rp *Report) frozenView(ids []string, trees map[string]*tree, position map[string]map[string]int) {
 	forked := false
@@ -291,7 +292,10 @@ func (rp *Report) frozenView(ids []string, trees map[string]*tree, position map[
 		frozen := rp.Errors[id] == "frozen"
 		switch {
 		case r.Type == "bean.tombstone":
-			if t := rp.Records[r.Targets("purges")[0]]; frozen && t != nil && !t.IsIdentity() && t.Type != "bean.tombstone" && t.Subject == r.Subject && (p < head || count(r.Author, id) > 0) {
+			// A branch seals the records of the key at the fork, which it retires.
+			// Its seal says nothing of a record of a key below the fork: anyone with
+			// the words can list their own tombstones there (DECISIONS 196, 206).
+			if t := rp.Records[r.Targets("purges")[0]]; frozen && t != nil && !t.IsIdentity() && t.Type != "bean.tombstone" && t.Subject == r.Subject && (p < head || (p == head && count(r.Author, id) > 0)) {
 				rp.DeletedInDoubt[t.ID] = true
 			}
 		case r.IsDestructive():
