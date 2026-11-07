@@ -29,7 +29,7 @@ import (
 	"github.com/Conscious-Repository/bean/core"
 )
 
-const version = "bean-import-apple-health@0.1.2"
+const version = "bean-import-apple-health@0.2.0"
 const system = "apple-health-xml"
 const maxInput int64 = 256 << 20
 const maxXML int64 = 256 << 20
@@ -40,6 +40,7 @@ type options struct {
 	blob    string
 	records bool
 	types   string
+	digest  string // plaintext SHA-256 of the input, set by convertFile
 }
 type metric struct {
 	slug     string
@@ -190,6 +191,7 @@ func convertFileBounded(input string, out io.Writer, o options, outputLimit int6
 	defer rows.Close()
 	writer := bufio.NewWriter(&limitedOutput{writer: rows, remaining: outputLimit})
 	limited := &io.LimitedReader{R: reader, N: maxXML + 1}
+	o.digest = hex.EncodeToString(hash.Sum(nil))
 	summary, err := parseExport(limited, writer, o, selected)
 	if err != nil {
 		return err
@@ -200,7 +202,7 @@ func convertFileBounded(input string, out io.Writer, o options, outputLimit int6
 	if err = writer.Flush(); err != nil {
 		return err
 	}
-	summary["sha256"] = hex.EncodeToString(hash.Sum(nil))
+	summary["sha256"] = o.digest
 	summary["bytes"] = int(n)
 	summary["assurance"] = "unsigned-export"
 	summary["sample_identity"] = "not-provided"
@@ -247,6 +249,11 @@ func parseExport(in io.Reader, out io.Writer, o options, selected map[string]boo
 	records := 0
 	activities := 0
 	unmapped := 0
+	// Apple writes blood pressure and food as a Correlation that holds its
+	// Records. They are counted, kept in the file, and never read as readings.
+	inCorrelation := false
+	correlations := 0
+	correlated := 0
 	for {
 		offset := d.InputOffset()
 		token, err := d.Token()
@@ -283,9 +290,14 @@ func parseExport(in io.Reader, out io.Writer, o options, selected map[string]boo
 				}
 				attrs[a.Name.Local] = a.Value
 			}
+			if depth == 2 && t.Name.Local == "Correlation" {
+				inCorrelation = true
+				correlations++
+			}
 			if t.Name.Local == "Record" {
-				if depth != 2 {
-					return nil, errors.New("record must be a HealthData child")
+				nested := depth == 3 && inCorrelation
+				if depth != 2 && !nested {
+					return nil, errors.New("record must be a HealthData or Correlation child")
 				}
 				records++
 				if records > maxRecords {
@@ -301,12 +313,19 @@ func parseExport(in io.Reader, out io.Writer, o options, selected map[string]boo
 					return nil, errors.New("too many record types")
 				}
 				m, known := metrics[typ]
+				want := known && o.records && (len(selected) == 0 || selected[m.slug])
+				if nested {
+					correlated++
+					if want {
+						return nil, fmt.Errorf("record %d: a selected reading sits inside a Correlation, which this importer does not read", records)
+					}
+				}
 				if !known {
 					unmapped++
 					continue
 				}
-				if o.records && (len(selected) == 0 || selected[m.slug]) {
-					rec, e := reading(attrs, m, records, o.blob, occurrences)
+				if want {
+					rec, e := reading(attrs, m, records, o.digest, occurrences)
 					if e != nil {
 						return nil, fmt.Errorf("record %d: %w", records, e)
 					}
@@ -320,6 +339,9 @@ func parseExport(in io.Reader, out io.Writer, o options, selected map[string]boo
 			}
 		case xml.EndElement:
 			depth--
+			if depth == 1 {
+				inCorrelation = false
+			}
 		case xml.CharData:
 			if strings.TrimSpace(string(t)) != "" {
 				return nil, errors.New("unexpected XML text")
@@ -342,10 +364,14 @@ func parseExport(in io.Reader, out io.Writer, o options, selected map[string]boo
 	if roots != 1 || depth != 0 {
 		return nil, errors.New("incomplete HealthData document")
 	}
-	return map[string]any{"record_count": records, "record_types": counts, "activity_summary_count": activities, "unmapped_record_count": unmapped}, nil
+	return map[string]any{"record_count": records, "record_types": counts, "activity_summary_count": activities, "unmapped_record_count": unmapped,
+		"correlation_count": correlations, "correlation_record_count": correlated}, nil
 }
 
-func reading(a map[string]string, m metric, index int, blob string, occ map[[32]byte]int) (map[string]any, error) {
+// reading is one record. digest is the plaintext SHA-256 of the export: a
+// reading names the export by it, not in blobs, so purging the
+// apple-health.export erases the file.
+func reading(a map[string]string, m metric, index int, digest string, occ map[[32]byte]int) (map[string]any, error) {
 	value := map[string]any{}
 	raw, exists := a["value"]
 	if !exists || raw == "" {
@@ -375,6 +401,18 @@ func reading(a map[string]string, m metric, index int, blob string, occ map[[32]
 		}
 		value["unit"] = u
 	}
+	// The ref keeps the value as Apple wrote it, so a reading that an older
+	// version stored with unit "%" is reported as changed, not added again.
+	source := value
+	if strings.HasSuffix(a["type"], "Percentage") && !m.category {
+		// Apple writes a percentage as a fraction with unit "%": 0.272 is 27.2%.
+		// Store unit "1", which says what the number is. Anything else is refused.
+		n, _ := value["n"].(float64)
+		if value["unit"] != "%" || n < 0 || n > 1 {
+			return nil, errors.New("percentage is not a fraction with unit %")
+		}
+		value = map[string]any{"n": n, "unit": "1"}
+	}
 	start, err := appleTime(a["startDate"])
 	if err != nil {
 		return nil, errors.New("invalid startDate")
@@ -388,10 +426,16 @@ func reading(a map[string]string, m metric, index int, blob string, occ map[[32]
 	}
 	observed := map[string]any{"start": start.Format(time.RFC3339), "end": end.Format(time.RFC3339), "precision": "second"}
 	typ := "apple-health." + m.slug
-	key := sha256.Sum256(core.Canonical([]any{typ, observed, value}))
+	key := sha256.Sum256(core.Canonical([]any{typ, observed, source}))
 	count := occ[key]
 	occ[key] = count + 1
 	context := map[string]any{"apple_type": a["type"], "source_record_index": index, "assurance": "unsigned-export", "identity_basis": "tuple-occurrence"}
+	if digest != "" {
+		context["export_sha256"] = digest
+	}
+	if source["unit"] != value["unit"] {
+		context["source_unit"] = source["unit"]
+	}
 	if a["creationDate"] != "" {
 		created, e := appleTime(a["creationDate"])
 		if e != nil {
@@ -400,8 +444,7 @@ func reading(a map[string]string, m metric, index int, blob string, occ map[[32]
 		context["source_created"] = created.Format(time.RFC3339)
 	}
 	return map[string]any{"type": typ, "value": value, "times": map[string]any{"observed": observed}, "context": context,
-		"source": map[string]any{"system": system, "adapter": version, "ref_input": core.RefInputTuple(system, typ, observed, value, count)},
-		"blobs":  []any{map[string]any{"hash": blob, "role": "raw-export", "media_type": "application/octet-stream"}}}, nil
+		"source": map[string]any{"system": system, "adapter": version, "ref_input": core.RefInputTuple(system, typ, observed, source, count)}}, nil
 }
 
 // Compare source and emitted decimal values, not the binary fraction behind a

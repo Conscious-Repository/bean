@@ -28,7 +28,7 @@ func importerOnPath(t *testing.T) string {
 	labcorpOnce.Do(func() {
 		labcorpDir, labcorpErr = os.MkdirTemp("", "bean-import-bin-*")
 		if labcorpErr == nil {
-			for _, name := range []string{"bean-import-labcorp", "bean-import-apple-health"} {
+			for _, name := range []string{"bean-import-labcorp", "bean-import-apple-health", "bean-import-csv"} {
 				out, err := exec.Command("go", "build", "-o", filepath.Join(labcorpDir, name), "../"+name).CombinedOutput()
 				if err != nil {
 					labcorpErr = &buildError{string(out)}
@@ -137,7 +137,7 @@ func TestCLIImportKeepsFileFirst(t *testing.T) {
 	}
 
 	// After the person purges the kept report, a reimport does not quietly
-	// add readings without it.
+	// add readings without it, and does not store the file again.
 	js, _, _ := run(t, dir, "", "ls", "-type", "lab.report", "-json")
 	for _, id := range recordIDs(js) {
 		if _, errs, code := run(t, dir, "", "purge", id); code != 0 {
@@ -147,8 +147,11 @@ func TestCLIImportKeepsFileFirst(t *testing.T) {
 	other := filepath.Join(t.TempDir(), "other.txt")
 	os.WriteFile(other, []byte(labReport("99")), 0o600)
 	_, errs, code = runPath(t, dir, path, "import", "labcorp", other)
-	if code != 1 || !strings.Contains(errs, "does not keep the file") {
+	if code != 1 || !strings.Contains(errs, "you deleted this file before") || !strings.Contains(errs, "nothing was written") {
 		t.Errorf("after purge: %d %s", code, errs)
+	}
+	if n := countFiles(t, filepath.Join(dir, "blobs")); n != 0 {
+		t.Errorf("%d blobs left after purging every report", n)
 	}
 }
 
@@ -199,8 +202,11 @@ func TestCLIImportNeedsArchiveFirst(t *testing.T) {
 	f := filepath.Join(t.TempDir(), "f.txt")
 	os.WriteFile(f, []byte("x"), 0o600)
 	_, errs, code := runPath(t, dir, bin+string(os.PathListSeparator)+os.Getenv("PATH"), "import", "fake", f)
-	if code != 1 || !strings.Contains(errs, "did not start with a record of the file") || !strings.Contains(errs, "no reading was written") {
+	if code != 1 || !strings.Contains(errs, "did not start with a record of the file") || !strings.Contains(errs, "nothing was written") {
 		t.Errorf("fake: %d %s", code, errs)
+	}
+	if n := countFiles(t, filepath.Join(dir, "blobs")); n != 0 {
+		t.Errorf("%d blobs stored for an importer that keeps no file", n)
 	}
 	if ls, _, _ := run(t, dir, "", "ls"); strings.Contains(ls, "lab.x") {
 		t.Errorf("reading written:\n%s", ls)
@@ -260,7 +266,7 @@ func TestCLIImportOtherSubjectDoesNotCount(t *testing.T) {
 		t.Fatalf("append: %d %s", code, errs)
 	}
 	run(t, dir, "", "purge", rec["id"].(string))
-	if _, errs, code := runPath(t, dir, path, "import", "labcorp", report); code != 1 || !strings.Contains(errs, "does not keep the file") {
+	if _, errs, code := runPath(t, dir, path, "import", "labcorp", report); code != 1 || !strings.Contains(errs, "you deleted this file before") {
 		t.Errorf("reimport: %d %s", code, errs)
 	}
 }

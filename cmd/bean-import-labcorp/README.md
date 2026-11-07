@@ -5,14 +5,18 @@ PDFs or image-only scans. PDF input requires `pdftotext` (Poppler); equivalent
 `pdftotext -layout` text is accepted. Tests contain only synthetic reports.
 
 Run it with `bean import labcorp [-tz <zone>] [-corrections] <report>`. bean
-copies the input privately, runs this importer to validate it before any write,
-stores the copy as an encrypted blob, reads it back, adds the `lab.report`
-record, and checks that the log keeps it before it adds a reading. See
-`bean help` and docs/COMMANDS.md.
+copies the input privately, works out the blob id, runs this importer, checks
+that its first record keeps this file and was not purged, then stores the copy
+as an encrypted blob, reads it back, adds the `lab.report` record, and checks
+that the log keeps it before it adds a reading. See `bean help` and
+docs/COMMANDS.md.
 
 With `-blob`, the standalone importer emits a `lab.report` archive first, then
 individual `lab.<test-name>` results. The archive's plaintext SHA-256 and length
-cover the exact PDF or text input. The caller-supplied blob reference is trusted
+cover the exact PDF or text input. Only the archive lists the blob. Each result
+names the report by `context.report_sha256`, so purging the `lab.report` erases
+the file. Results from 0.1.x list the blob too; the file stays until they are
+purged as well. The caller-supplied blob reference is trusted
 by the standalone converter; `bean import` checks that it names the stored copy.
 Without `-blob`, the converter remains an extraction-only compatibility path and
 warns that the source is not preserved.
@@ -50,13 +54,18 @@ layouts can still need a new fixture and adapter update.
 
 A report that cannot be read for sure is refused, never guessed:
 
-- Two results that map to one `lab.<test>` type. The same test listed twice
-  with the same reading, as when two panels share it, is one result.
-- A result with no value and no comment whose name ends in a number: the
-  value may have run into the name.
-- A two-digit number at the end of a name, or in the code column, is a lab
-  code only when the report's Performing Labs list names it, or when the
-  report has no such list. `Interleukin 10` keeps its number.
+- Two results that map to one `lab.<test>` type. The same test listed twice,
+  as when two panels share it, is one result only when its value, flag, unit,
+  range, previous result, lab code and comment all match.
+- A test name that ends within 4 columns of the header's "Current Result":
+  the value, a flag or a categorical result may have run into the name. Where
+  the name ends decides, so a comment under the row changes nothing.
+- An indented line before the first column header: a row there has no
+  columns to be read by.
+- A two-digit number at the end of a name is a lab code only when the
+  report's Performing Labs list names it. Without a list, or with a list line
+  it cannot read, only a two-digit token in the code column is a lab code.
+  `Interleukin 10` keeps its number.
 
 Not settled without a real report: a note line in the result column can still
 read as a result. Test with your own report before you rely on it.
@@ -81,13 +90,14 @@ again. This is not a transaction: a failure while readings are written can
 leave some of them, and the same command again adds only what is missing.
 Errors say which step failed: validation (nothing written), storage (an
 encrypted copy may remain, no record), archive or retention (no reading), or
-readings (some may be written). A purged archive is not brought back, and its
-readings are not added; the encrypted copy stored before that check stays,
-named by no record. A concurrent writer can still change the log between checks.
+readings (some may be written). A purged archive is checked before the file is
+stored: nothing is written, not even the encrypted copy. A concurrent writer can
+still change the log between checks.
 
 Export via `bean export` yields the original plaintext bytes. Verify their digest
 against `lab.report`; verify owner authority separately with `bean verify`.
 Purging one reading does not erase its content from a retained report archive.
+Purging the `lab.report` erases the file, unless another record still names it.
 
 Run `go test ./cmd/bean-import-labcorp ./cmd/bean`. Tests exercise mixed
 metadata, page breaks, bounded/private extraction, output failures, storage,

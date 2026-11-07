@@ -14,7 +14,9 @@
 //   - native id: the specimen id and the test name. The specimen id never
 //     leaves the adapter except inside the HMAC input.
 //   - context: test, panel, flag, reference_interval, performing_lab,
-//     lab_comment, report_note, reported, fasting.
+//     lab_comment, report_note, reported, fasting, and with -blob the
+//     report_sha256 of the kept file. A reading does not list the file in
+//     blobs, so purging the lab.report erases the file (C25).
 //   - times.observed: "Date Collected" from the specimen details. The report
 //     says "Local" without a zone, so the day is all that is known unless
 //     -tz names the zone; then the minute is used.
@@ -26,6 +28,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -44,7 +48,7 @@ import (
 )
 
 const (
-	version = "bean-import-labcorp@0.1.4"
+	version = "bean-import-labcorp@0.2.0"
 	system  = "labcorp"
 )
 
@@ -77,7 +81,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "bean-import-labcorp: %s\n", err)
 		os.Exit(1)
 	}
-	records := rep.records(*blob, loc)
+	digest := ""
+	if *blob != "" {
+		sum := sha256.Sum256(raw)
+		digest = hex.EncodeToString(sum[:])
+	}
+	records := rep.records(digest, loc)
 	missing := 0
 	for _, rec := range records {
 		if v := rec["value"].(map[string]any); v["n"] == nil && v["s"] == nil {
@@ -88,11 +97,6 @@ func main() {
 		if !regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(*blob) {
 			fmt.Fprintln(os.Stderr, "bean-import-labcorp: invalid blob reference")
 			os.Exit(2)
-		}
-		for _, rec := range records {
-			for _, attachment := range rec["blobs"].([]any) {
-				attachment.(map[string]any)["media_type"] = reportMedia(raw)
-			}
 		}
 		records = append([]map[string]any{archiveRecord(raw, *blob)}, records...)
 	}
@@ -224,6 +228,7 @@ type Report struct {
 	Reported  string // "MM/DD/YYYY"
 	Fasting   string
 	Labs      map[string]string // "01" -> "Labcorp San Diego"
+	LabsTorn  bool              // a Performing Labs line that reLab cannot read
 	Notes     []string          // report-level notes ("Please note" sections)
 	Results   []*Result
 }
@@ -234,6 +239,7 @@ var (
 	reReported    = regexp.MustCompile(`Date Reported:\s*(\d\d/\d\d/\d{4})`)
 	reFasting     = regexp.MustCompile(`Fasting:\s*(\S.*?)\s*$`)
 	reLab         = regexp.MustCompile(`^(\d\d):\s*\S+\s*-\s*([^,]+),`)
+	reLabLike     = regexp.MustCompile(`^\d\d:\s`)
 	reCode        = regexp.MustCompile(`\s+(\d\d)$`)
 	reNumber      = regexp.MustCompile(`^-?\d+(\.\d+)?$`)
 	reBoilerplate = []*regexp.Regexp{
@@ -382,6 +388,8 @@ func parseReport(text string) (*Report, error) {
 		}
 		if m := reLab.FindStringSubmatch(strings.TrimSpace(l)); m != nil {
 			rep.Labs[m[1]] = strings.TrimSpace(m[2])
+		} else if reLabLike.MatchString(strings.TrimSpace(l)) {
+			rep.LabsTorn = true
 		}
 	}
 	if rep.Specimen == "" || rep.Collected == "" {
@@ -419,16 +427,20 @@ lines:
 			strings.Contains(l, "Units") && strings.Contains(l, "Reference Interval") {
 			return nil, errors.New("unsupported result column order")
 		}
-		if !inResults {
-			if strings.TrimSpace(l) != "" && indent(l) == 0 {
-				panel = l // the first panel heading comes before the first header
-			}
-			continue
-		}
 		for _, re := range reBoilerplate {
 			if re.MatchString(l) {
 				continue lines
 			}
+		}
+		if !inResults {
+			if strings.TrimSpace(l) != "" && indent(l) == 0 {
+				panel = l // the first panel heading comes before the first header
+			}
+			// A row needs the header's columns. Without them it would be lost.
+			if n := indent(l); strings.TrimSpace(l) != "" && n > 0 && n < 20 {
+				return nil, errors.New("a result row comes before the column header")
+			}
+			continue
 		}
 		if strings.TrimSpace(l) == "" {
 			continue
@@ -457,14 +469,20 @@ lines:
 		}
 		if indent(l) < 20 {
 			// A row: name, optional lab code, then the value or nothing.
+			// A name that runs into the result column may hold the value
+			// ("... Overrun 90", "... HCV Ab Non Reactive"): refuse it, with
+			// or without a comment under it.
+			if toks[0].start+len(toks[0].text) > cols.current-4 {
+				return nil, errors.New("a test name runs into the result column, so its value cannot be read for sure")
+			}
 			name, code := toks[0].text, ""
-			if m := reCode.FindStringSubmatch(name); m != nil && rep.labCode(m[1]) {
+			if m := reCode.FindStringSubmatch(name); m != nil && rep.labCode(m[1], false) {
 				name, code = strings.TrimSpace(name[:len(name)-len(m[0])]), m[1]
 			}
 			rest := toks[1:]
 			// A lab code sits left of the result column; a two-digit value
 			// ("eGFR  90") sits under it.
-			if len(rest) > 0 && code == "" && len(rest[0].text) == 2 && rest[0].start < cols.current-6 && strings.Trim(rest[0].text, "0123456789") == "" && rep.labCode(rest[0].text) {
+			if len(rest) > 0 && code == "" && len(rest[0].text) == 2 && rest[0].start < cols.current-6 && strings.Trim(rest[0].text, "0123456789") == "" && rep.labCode(rest[0].text, true) {
 				code, rest = rest[0].text, rest[1:]
 			}
 			if strings.EqualFold(strings.TrimSuffix(name, ":"), "please note") {
@@ -500,27 +518,31 @@ lines:
 	for _, r := range rep.Results {
 		t := slug(r.Name)
 		if prev, ok := types[t]; ok {
-			if prev.Name == r.Name && prev.Value == r.Value && prev.Flag == r.Flag && prev.Units == r.Units && prev.Ref == r.Ref {
+			// Everything the reading keeps must match, or the second is lost.
+			if prev.Name == r.Name && prev.Value == r.Value && prev.Flag == r.Flag && prev.Units == r.Units && prev.Ref == r.Ref &&
+				prev.Previous == r.Previous && prev.LabCode == r.LabCode && strings.Join(prev.Comment, "\n") == strings.Join(r.Comment, "\n") {
 				continue
 			}
 			return nil, fmt.Errorf("two results, %q and %q, map to one type lab.%s", prev.Name, r.Name, t)
 		}
 		types[t] = r
 		kept = append(kept, r)
-		if r.Value == "" && len(r.Comment) == 0 && reTrailingNumber.MatchString(r.Name) {
-			return nil, fmt.Errorf("result %q has no value, and its name ends in a number that may be the value", r.Name)
-		}
 	}
 	rep.Results = kept
 	return rep, nil
 }
 
-var reTrailingNumber = regexp.MustCompile(`\s[<>]?-?\d+(\.\d+)?$`)
-
-// labCode reports whether a two-digit token can be a lab code: one that the
-// report's list of performing labs names. Without that list, any two digits.
-// "Interleukin 10" keeps its number when no lab 10 performed a test.
-func (rep *Report) labCode(c string) bool { return len(rep.Labs) == 0 || rep.Labs[c] != "" }
+// labCode reports whether a two-digit token can be a lab code. With a list of
+// performing labs that reads whole, it is a code the list names. Without one,
+// only a token in the code column is a code, and two digits at the end of a
+// name stay in the name. So "Interleukin 10" keeps its number unless the list
+// names a lab 10.
+func (rep *Report) labCode(c string, inColumn bool) bool {
+	if len(rep.Labs) == 0 || rep.LabsTorn {
+		return inColumn
+	}
+	return rep.Labs[c] != ""
+}
 
 func slug(s string) string {
 	var b strings.Builder
@@ -585,7 +607,10 @@ func uniqueLocalTime(t time.Time, printed string) bool {
 	return true
 }
 
-func (rep *Report) records(blob string, loc *time.Location) []map[string]any {
+// records are the readings. reportSHA is the plaintext SHA-256 of the kept
+// report, or empty when it is not kept. A reading names the report by that
+// digest, not in blobs: then purging the lab.report erases the file.
+func (rep *Report) records(reportSHA string, loc *time.Location) []map[string]any {
 	observed, rawTime := rep.observed(loc)
 	reportNote := strings.Join(rep.Notes, " ")
 	occurrence := map[string]int{}
@@ -612,7 +637,7 @@ func (rep *Report) records(blob string, loc *time.Location) []map[string]any {
 			"flag": r.Flag, "reference_interval": r.Ref, "previous_result": r.Previous,
 			"performing_lab": rep.Labs[r.LabCode], "reported": rep.Reported, "fasting": rep.Fasting,
 			"raw_time": rawTime, "lab_comment": strings.Join(r.Comment, " "),
-			"report_note": reportNote,
+			"report_note": reportNote, "report_sha256": reportSHA,
 		} {
 			if v != "" {
 				ctx[k] = v
@@ -629,9 +654,6 @@ func (rep *Report) records(blob string, loc *time.Location) []map[string]any {
 		occurrence[native]++
 		if observed == nil {
 			rec["times"] = map[string]any{"observed": nil}
-		}
-		if blob != "" {
-			rec["blobs"] = []any{map[string]any{"hash": blob, "role": "raw-export", "media_type": "application/pdf"}}
 		}
 		out = append(out, rec)
 	}

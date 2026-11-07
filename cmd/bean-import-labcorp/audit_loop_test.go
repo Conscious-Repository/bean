@@ -107,7 +107,12 @@ func TestCLITextSourceBlobMedia(t *testing.T) {
 		if err := json.Unmarshal(line, &row); err != nil {
 			t.Fatal(err)
 		}
-		for _, blob := range row["blobs"].([]any) {
+		blobs, _ := row["blobs"].([]any)
+		// Only the lab.report lists the file, so purging it erases the file.
+		if (row["type"] == "lab.report") != (len(blobs) == 1) {
+			t.Fatalf("%s lists blobs %v", row["type"], blobs)
+		}
+		for _, blob := range blobs {
 			if blob.(map[string]any)["media_type"] != "text/plain" {
 				t.Fatalf("text mislabeled in %s", row["type"])
 			}

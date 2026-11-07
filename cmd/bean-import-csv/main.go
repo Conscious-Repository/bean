@@ -4,11 +4,19 @@
 // The CSV has a header row. Column "value" is required. Optional columns:
 // "time" (RFC 3339, the observed start), "id" (a native id). Any other
 // column is copied into context as a string.
+//
+// With -blob it first writes a csv.file record that keeps the file, as
+// lab.report keeps a lab report, so bean import csv works. Readings name the
+// file by its SHA-256 in context.file_sha256, not in blobs: then purging the
+// csv.file erases the file.
 package main
 
 import (
 	"bufio"
+	"bytes"
+	"crypto/sha256"
 	"encoding/csv"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -23,10 +31,16 @@ import (
 	"github.com/Conscious-Repository/bean/core"
 )
 
-const version = "bean-import-csv@0.5.1"
+const version = "bean-import-csv@0.6.0"
+
+// maxFile bounds a file kept with -blob, as bean import does.
+const maxFile = 256 << 20
+
+var blobPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
 type options struct {
 	typ, system, blob, unit, precision string
+	digest                             string // plaintext SHA-256 of the kept file
 }
 
 func main() {
@@ -51,9 +65,56 @@ func main() {
 		os.Exit(1)
 	}
 	defer f.Close()
-	if err := convert(f, os.Stdout, o); err != nil {
+	var in io.Reader = f
+	if o.blob != "" {
+		raw, err := keep(f, os.Stdout, &o)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "bean-import-csv: %s\n", err)
+			os.Exit(1)
+		}
+		in = bytes.NewReader(raw)
+	}
+	if err := convert(in, os.Stdout, o); err != nil {
 		fmt.Fprintf(os.Stderr, "bean-import-csv: %s\n", err)
 		os.Exit(1)
+	}
+}
+
+// keep reads the whole file, checks that every row converts, and writes the
+// csv.file record. A file that does not convert writes nothing.
+func keep(f io.Reader, out io.Writer, o *options) ([]byte, error) {
+	if !blobPattern.MatchString(o.blob) {
+		return nil, errors.New("invalid blob reference")
+	}
+	raw, err := io.ReadAll(io.LimitReader(f, maxFile+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) > maxFile {
+		return nil, fmt.Errorf("the file is larger than %d MiB", maxFile>>20)
+	}
+	sum := sha256.Sum256(raw)
+	o.digest = hex.EncodeToString(sum[:])
+	if err := convert(bytes.NewReader(raw), io.Discard, *o); err != nil {
+		return nil, err
+	}
+	_, err = out.Write(append(core.Canonical(archive(raw, *o)), '\n'))
+	return raw, err
+}
+
+// archive is the record that keeps the file.
+func archive(raw []byte, o options) map[string]any {
+	value := map[string]any{"blob": o.blob}
+	return map[string]any{
+		"type":  "csv.file",
+		"value": value,
+		"times": map[string]any{"observed": nil},
+		"source": map[string]any{
+			"system": o.system, "adapter": version,
+			"ref_input": core.RefInputTuple(o.system, "csv.file", nil, value, 0),
+		},
+		"context": map[string]any{"sha256": o.digest, "bytes": len(raw), "assurance": "unsigned-file"},
+		"blobs":   []any{map[string]any{"hash": o.blob, "role": "raw-export", "media_type": "text/csv"}},
 	}
 }
 
@@ -90,6 +151,9 @@ func convert(in io.Reader, out io.Writer, o options) error {
 	}
 	ti, hasTime := col["time"]
 	ii, hasID := col["id"]
+	if _, has := col["file_sha256"]; has && o.digest != "" {
+		return errors.New("a column is named file_sha256, which names the kept file")
+	}
 	occurrence := map[string]int{} // for identical readings without a native id
 	for line := 2; ; line++ {
 		row, err := r.Read()
@@ -154,11 +218,11 @@ func convert(in io.Reader, out io.Writer, o options) error {
 			"times":  map[string]any{"observed": observed},
 			"source": src,
 		}
+		if o.digest != "" {
+			context["file_sha256"] = o.digest
+		}
 		if len(context) > 0 {
 			rec["context"] = context
-		}
-		if o.blob != "" {
-			rec["blobs"] = []any{map[string]any{"hash": o.blob, "role": "raw-export", "media_type": "text/csv"}}
 		}
 		if _, err := out.Write(append(core.Canonical(rec), '\n')); err != nil {
 			return err
