@@ -64,8 +64,21 @@ A report that cannot be read for sure is refused, never guessed:
   columns to be read by.
 - A two-digit number at the end of a name is a lab code only when the
   report's Performing Labs list names it. Without a list, or with a list line
-  it cannot read, only a two-digit token in the code column is a lab code.
-  `Interleukin 10` keeps its number.
+  it cannot read, only a two-digit token in the code column is a lab code,
+  and only when a value follows it on the row. With nothing after it, it may
+  be the value of a compressed row (`eGFR  90`): refused. `Interleukin 10`
+  keeps its number.
+- A line with a tab, form feed, vertical tab or no-break space. Columns are
+  read from spaces only, and these hide where a column starts. The form feed
+  that `pdftotext` puts at the start of each page has no width and is read.
+- A result with no value whose name ends in a number (`Glucose 101`,
+  `Vitamin D <5.0`) or a result word (`Negative`, `Reactive`, `Detected` and
+  a few more). The value may sit in the name, one space after it or under a
+  header whose columns are further right. A lab code the list names was taken
+  off the name before this check.
+- A column header, or an indented line with text in the result column, after
+  `Disclaimer`, `Icon Legend` or `Performing Labs`. The results end there, so
+  a result after them would be lost.
 
 Not settled without a real report: a note line in the result column can still
 read as a result. Test with your own report before you rely on it.

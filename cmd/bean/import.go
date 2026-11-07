@@ -137,9 +137,6 @@ func runImport(s *core.Store, bin, file string, args []string, corrections bool)
 		return res, phaseError("validation", err)
 	}
 	defer out.Close()
-	if note != "" {
-		res.lines = append(res.lines, note)
-	}
 	// Check the record that keeps the file before anything is written: an
 	// importer that keeps no file, or a file the person deleted, leaves
 	// nothing behind.
@@ -149,9 +146,10 @@ func runImport(s *core.Store, bin, file string, args []string, corrections bool)
 		return res, phaseError("validation", err)
 	}
 	var archive struct {
-		Type  string         `json:"type"`
-		Value map[string]any `json:"value"`
-		Blobs []struct {
+		Type   string         `json:"type"`
+		Value  map[string]any `json:"value"`
+		Source map[string]any `json:"source"`
+		Blobs  []struct {
 			Hash string `json:"hash"`
 		} `json:"blobs"`
 	}
@@ -163,6 +161,14 @@ func runImport(s *core.Store, bin, file string, args []string, corrections bool)
 	}
 	if !listed || archive.Type == "" || archive.Value["blob"] != bid {
 		return res, phaseError("validation", errors.New("the importer did not start with a record of the file"))
+	}
+	// The purge check computes the ref from ref_input. A ready-made ref
+	// cannot be checked under another system, so refuse it.
+	if _, ok := archive.Source["ref_input"].([]any); !ok {
+		return res, phaseError("validation", errors.New("the record of the file has no source.ref_input"))
+	}
+	if _, has := archive.Source["ref"]; has {
+		return res, phaseError("validation", errors.New("the record of the file carries a ready-made source.ref"))
 	}
 	purged, err := s.InputPurged(first)
 	if err != nil {
@@ -208,6 +214,15 @@ func runImport(s *core.Store, bin, file string, args []string, corrections bool)
 	if err := kept(s, archive.Type, bid, digest); err != nil {
 		return res, phaseError("retention", err)
 	}
+	// The importer's own last line comes only now, made safe and named, so
+	// it can neither fake a line of bean's nor speak for a failed import.
+	if note != "" {
+		name := filepath.Base(bin)
+		if note = safe(note); !strings.HasPrefix(note, name+": ") {
+			note = name + ": " + note
+		}
+		res.lines = append(res.lines, note)
+	}
 	return res, nil
 }
 
@@ -236,23 +251,32 @@ var running struct {
 	p *os.Process
 }
 
+// importSignals stop bean import: Ctrl-C, kill, a closed terminal or ssh
+// session, and Ctrl-\.
+var importSignals = []os.Signal{syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT}
+
 // removeOnSignal removes the private folder, which holds a plaintext copy of
-// the file, when bean import is interrupted or terminated. A deferred
-// RemoveAll does not run then. The returned function stops the trap.
+// the file, when bean import gets one of importSignals. A deferred RemoveAll
+// does not run then. It exits 128 plus the signal number, as a shell does.
+// The returned function stops the trap.
 func removeOnSignal(dir string) func() {
 	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(sig, importSignals...)
 	done := make(chan struct{})
 	go func() {
 		select {
-		case <-sig:
+		case got := <-sig:
 			running.Lock()
 			if running.p != nil {
 				running.p.Kill()
 			}
 			os.RemoveAll(dir)
-			fmt.Fprintln(os.Stderr, "bean: interrupted; the private copy of the file is removed. Run the same command again: it adds only what is missing")
-			os.Exit(130)
+			fmt.Fprintf(os.Stderr, "bean: stopped by %s; the private copy of the file is removed. Run the same command again: it adds only what is missing\n", got)
+			code := 1
+			if n, ok := got.(syscall.Signal); ok {
+				code = 128 + int(n)
+			}
+			os.Exit(code)
 		case <-done:
 		}
 	}()

@@ -404,9 +404,11 @@ func reading(a map[string]string, m metric, index int, digest string, occ map[[3
 	// The ref keeps the value as Apple wrote it, so a reading that an older
 	// version stored with unit "%" is reported as changed, not added again.
 	source := value
-	if strings.HasSuffix(a["type"], "Percentage") && !m.category {
+	if !m.category && (value["unit"] == "%" || strings.HasSuffix(a["type"], "Percentage")) {
 		// Apple writes a percentage as a fraction with unit "%": 0.272 is 27.2%.
-		// Store unit "1", which says what the number is. Anything else is refused.
+		// That holds for every type with unit "%" (walking steadiness too), not
+		// only the *Percentage ones. Store unit "1", which says what the number
+		// is. Anything else is refused.
 		n, _ := value["n"].(float64)
 		if value["unit"] != "%" || n < 0 || n > 1 {
 			return nil, errors.New("percentage is not a fraction with unit %")

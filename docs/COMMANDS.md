@@ -21,6 +21,7 @@ bean [-dir <folder>] <command> [arguments]
 | 2 | Usage error: unknown command, bad flag or bad argument, for example a time that `ls -since`, `ls -until` or `add -at` cannot read. |
 | 3 | Your identity has a record of a newer format version than this `bean` knows. Reads stop, and `export` writes every file first. Update `bean`, or if you did not write that record, run `bean rotate`. Another identity that is too new only gets its `too new` line. |
 | 4 | Your identity is frozen: two rotations were made from the same point. Reads still print, and warn you. Writes stop. Run `bean migrate`. |
+| 128 + n | `import` was stopped by signal n and removed its private copy of the file: 129 for SIGHUP, 130 for SIGINT (Ctrl-C), 131 for SIGQUIT, 143 for SIGTERM (`kill`). |
 
 | Environment variable | Meaning |
 |---|---|
@@ -76,12 +77,12 @@ Encrypts and stores a file, for example the PDF an import came from. Prints the 
 Keeps a provider file, then adds its readings. Runs `bean-import-<source>`, found next to `bean` or on `PATH`, for example `bean import labcorp -tz America/Chicago report.pdf`. In order, and it stops at the first failure:
 
 1. It copies the file privately, at most 256 MiB, works out the id the encrypted copy will have, and runs the importer on the copy. The importer's output goes to a private file, at most 1 GiB of readings plus 1 MiB. If the importer refuses the file, nothing is written.
-2. It checks the importer's first record: it must keep this file (`lab.report`, `apple-health.export`, `csv.file`). If it does not, or you deleted that record before with `purge`, nothing is written, not even the file.
+2. It checks the importer's first record: it must keep this file (`lab.report`, `apple-health.export`, `csv.file`) and carry `source.ref_input`, not a ready-made `source.ref`. If it does not, or you deleted that record before with `purge`, nothing is written, not even the file. A file you deleted stays deleted under any `-system`.
 3. It stores the copy, encrypted, and reads it back. The bytes must match.
 4. It adds the first record and checks that the log keeps it: a current record of yours, about you, that names the blob and the file's SHA-256, and a blob that still reads back as the file. This check proves every record file, as `verify` does, because the object cache vouches for a file by its size and time.
 5. It adds the readings, then checks the file record again.
 
-The error says what was written. A failure in step 5 can leave some readings; run the same command again, it adds only what is missing. Ctrl-C or `kill` stops the importer and removes the private copy. A changed reading works as in `append`: nothing is written for it, the command exits 1, and `-corrections` writes it. A reading that `-corrections` still does not write has another type or no value under a ref the log has: give each source its own `-system`.
+The error says what was written. A failure in step 5 can leave some readings; run the same command again, it adds only what is missing. Ctrl-C, `kill`, a closed terminal (SIGHUP) or SIGQUIT stops the importer and removes the private copy; the exit code is 128 plus the signal number. When the import worked, the importer's last message comes last, after its name, with control characters shown as `\xNN`. When it failed, only the error is printed. A changed reading works as in `append`: nothing is written for it, the command exits 1, and `-corrections` writes it. A reading that `-corrections` still does not write has another type or no value under a ref the log has: give each source its own `-system`.
 
 Readings name the file by its SHA-256 (`context.report_sha256`, `export_sha256`, `file_sha256`), not as a blob. So `purge` of the record that keeps the file erases the file. Readings from importers before `bean-import-labcorp@0.2.0`, `bean-import-apple-health@0.2.0` and `bean-import-csv@0.6.0` still name the blob, and the file stays until you purge them too.
 
@@ -242,14 +243,14 @@ Importers read one source format and write records to stdout. They never sign an
 
 Reads a Labcorp patient report, which is also what Superpower gives you. Needs `pdftotext` (`brew install poppler`), or the text it makes. One record per result: type `lab.<test name>`, value and unit, and the flag, reference interval, panel, lab and comments. Your name, birth date and patient ids are not copied.
 
-It refuses a report it cannot read for sure: two specimens, two results that map to one type, a test name that runs into the result column, or a result row before the column header. A two-digit number at the end of a name is a lab code only if the report's list of performing labs names it, so `Interleukin 10` stays `lab.interleukin-10`. Without a list it can read whole, only a number in the code column is a lab code. The same reading listed in two panels is one result only when its value, flag, unit, range, lab and comment all match.
+It refuses a report it cannot read for sure: two specimens, two results that map to one type, a test name that runs into the result column, or a result row before the column header. Columns are read from spaces only, so a line with a tab, form feed, vertical tab or no-break space is refused; the form feed that `pdftotext` puts at the start of a page is read. A result with no value whose name ends in a number or a result word (`Glucose 101`, `HCV Ab Non Reactive`) is refused: the value may be in the name. The results end at `Disclaimer`, `Icon Legend` or `Performing Labs`; a column header or a result row after that is refused, not dropped. A two-digit number at the end of a name is a lab code only if the report's list of performing labs names it, so `Interleukin 10` stays `lab.interleukin-10`. Without a list it can read whole, only a number in the code column is a lab code, and only when a value follows it on the row: else it may be the value, and the report is refused. The same reading listed in two panels is one result only when its value, flag, unit, range, lab and comment all match.
 
 - `-blob`: the blob id of the PDF, from `bean blob put`. With it, the first record is a `lab.report` that keeps the PDF, and each reading has its SHA-256 in `context.report_sha256`. `bean import` passes it.
 - `-tz`: the time zone where the sample was taken, for example `America/Chicago`. Without it, only the day is recorded, because the report does not say the zone.
 
 ### `bean-import-apple-health -blob <id> [-records [-types <t>,...]] <export.zip | export.xml>`
 
-Reads an Apple Health export. By default it writes one `apple-health.export` record that keeps the file, with counts per type. With `-records` it also writes one record per reading of 16 supported types, or of the `-types` you name. Apple writes a percentage as a fraction with unit `%`; the reading says unit `1` (0.272 is 27.2%). Blood pressure and food are Correlations: they are counted and kept in the file, and a selected reading inside one is refused. Your name, birth date, source and device names are not copied; the file keeps them. Run it as `bean import apple-health [-records] export.zip`.
+Reads an Apple Health export. By default it writes one `apple-health.export` record that keeps the file, with counts per type. With `-records` it also writes one record per reading of 16 supported types, or of the `-types` you name. Apple writes a percentage as a fraction with unit `%`, for the `*Percentage` types and walking steadiness alike. Any reading with unit `%` says unit `1` (0.272 is 27.2%) and keeps `context.source_unit: "%"`; a value outside 0..1 is refused. Blood pressure and food are Correlations: they are counted and kept in the file, and a selected reading inside one is refused. Your name, birth date, source and device names are not copied; the file keeps them. Run it as `bean import apple-health [-records] export.zip`.
 
 ### `bean-import-csv -type <type> [-unit <unit>] [-system <name>] [-blob <id>] [-precision <p>] <file.csv>`
 

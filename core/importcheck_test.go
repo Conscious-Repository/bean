@@ -53,3 +53,45 @@ func TestInputPurgedFollowsAppend(t *testing.T) {
 		t.Error("bad json accepted")
 	}
 }
+
+// A file deleted under one system is deleted under every one, and a line that
+// carries a ready-made source.ref is checked too.
+func TestInputPurgedAnySystemAndReadyRef(t *testing.T) {
+	s, _ := initStore(t)
+	value := map[string]any{"blob": "sha256:" + strings.Repeat("b", 64)}
+	lineFor := func(system string) string {
+		return string(Canonical(map[string]any{"type": "csv.file", "value": value, "times": map[string]any{"observed": nil},
+			"blobs":  []any{map[string]any{"hash": value["blob"], "role": "raw-export", "media_type": "text/csv"}},
+			"source": map[string]any{"system": system, "adapter": "t@1", "ref_input": RefInputTuple(system, "csv.file", nil, value, 0)}}))
+	}
+	r, err := s.Append(strings.NewReader(lineFor("csv") + "\n"))
+	if err != nil || r.Added != 1 {
+		t.Fatalf("append: %+v %v", r, err)
+	}
+	ref := DedupeRef(DedupeKey(mustSecret(t, s)), RefInputTuple("csv", "csv.file", nil, value, 0))
+	if _, err := s.Purge(r.IDs[0], ""); err != nil {
+		t.Fatal(err)
+	}
+	for _, sys := range []string{"csv", "csv-2"} {
+		if p, err := s.InputPurged([]byte(lineFor(sys))); err != nil || !p {
+			t.Errorf("system %s: %v %v", sys, p, err)
+		}
+	}
+	ready := `{"type":"csv.file","value":{"blob":"x"},"source":{"system":"other","adapter":"t@1","ref":"` + ref + `"}}`
+	if p, err := s.InputPurged([]byte(ready)); err != nil || !p {
+		t.Errorf("ready-made ref: %v %v", p, err)
+	}
+	fresh := `{"type":"csv.file","value":{"blob":"x"},"source":{"system":"csv","adapter":"t@1","ref":"hmac-sha256:` + strings.Repeat("0", 64) + `"}}`
+	if p, err := s.InputPurged([]byte(fresh)); err != nil || p {
+		t.Errorf("unpurged ref: %v %v", p, err)
+	}
+}
+
+func mustSecret(t *testing.T, s *Store) []byte {
+	t.Helper()
+	secret, err := s.identitySecret()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return secret
+}

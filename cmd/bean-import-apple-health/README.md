@@ -69,10 +69,11 @@ in `record_count` and `record_types`) and kept in the blob. No reading is made
 of them. With `-records`, a selected type inside a Correlation is refused
 rather than dropped; none of the 16 supported types is expected there.
 
-Apple's `*Percentage` types (walking double support, walking asymmetry) carry a
-fraction in 0..1 with unit `%`: Apple's percent unit is a fraction. A reading
-stores unit `1`, so 0.272 means 27.2%, and keeps `context.source_unit: "%"`.
-A value outside 0..1 or another unit is refused. The ref is computed from the
+Apple's percent unit `%` is a fraction in 0..1. It is used by the `*Percentage`
+types (walking double support, walking asymmetry) and by walking steadiness.
+Any reading with unit `%` stores unit `1`, so 0.272 means 27.2%, and keeps
+`context.source_unit: "%"`. A value outside 0..1 is refused, and so is a
+`*Percentage` type with another unit. The ref is computed from the
 value as Apple wrote it, so a reading that 0.1.x stored with unit `%` is reported
 as changed on the next import; `-corrections` replaces it.
 

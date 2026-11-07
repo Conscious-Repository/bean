@@ -350,6 +350,20 @@ func parseReport(text string) (*Report, error) {
 	}
 	rep := &Report{Labs: map[string]string{}}
 	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	// Columns are read from spaces only. A tab, a form feed, a vertical tab or
+	// a no-break space hides where a column starts, so a value could become
+	// part of a name or a row a heading. pdftotext puts a form feed at the
+	// start of the first line of each page: that one has no width, and goes.
+	for i, l := range lines {
+		l = strings.TrimPrefix(l, "\f")
+		if i == len(lines)-1 && l == "\f" {
+			l = ""
+		}
+		if strings.ContainsAny(l, "\t\f\v ") {
+			return nil, fmt.Errorf("line %d holds a tab, form feed, vertical tab or no-break space, so its columns cannot be read for sure", i+1)
+		}
+		lines[i] = l
+	}
 	for _, l := range lines {
 		specimenMatches := reSpecimen.FindAllStringSubmatch(l, -1)
 		if len(specimenMatches) != strings.Count(l, "Specimen ID:") {
@@ -403,6 +417,7 @@ func parseReport(text string) (*Report, error) {
 		cur       *Result // the row whose value line or comment comes next
 		note      *Result // a "Please note" pseudo-row collecting text
 		wantValue bool
+		ended     string // the heading that ends the results, if one came
 	)
 	addComment := func(s string) {
 		s = strings.Join(strings.Fields(s), " ")
@@ -418,7 +433,26 @@ func parseReport(text string) (*Report, error) {
 	}
 lines:
 	for _, l := range lines {
-		l = strings.TrimRight(l, " \t\f")
+		l = strings.TrimRight(l, " ")
+		if ended != "" {
+			// After the end of the results, a column header, or a line indented
+			// like a row with text in the result column, is a result that would
+			// be lost: refuse the report. A wrapped lab address is indented too,
+			// but holds no second column.
+			if strings.Contains(l, "Current Result") && strings.Contains(l, "Units") {
+				return nil, fmt.Errorf("a result column header comes after %q, so results there would be lost", ended)
+			}
+			boiler := false
+			for _, re := range reBoilerplate {
+				boiler = boiler || re.MatchString(l)
+			}
+			if n := indent(l); !boiler && n > 0 && n < 20 && !reLabLike.MatchString(strings.TrimSpace(l)) {
+				if toks := tokens(l); len(toks) > 1 && toks[len(toks)-1].start >= cols.current-4 {
+					return nil, fmt.Errorf("a line like a result row comes after %q, so it would be lost", ended)
+				}
+			}
+			continue
+		}
 		if c, ok := headerColumns(l); ok {
 			cols, inResults = c, true
 			continue
@@ -447,7 +481,8 @@ lines:
 		}
 		if indent(l) == 0 {
 			if strings.HasPrefix(l, "Disclaimer") || strings.HasPrefix(l, "Icon Legend") || strings.HasPrefix(l, "Performing Labs") {
-				break
+				ended = l
+				continue
 			}
 			p := strings.TrimSuffix(l, " (Cont.)")
 			if p != panel {
@@ -484,6 +519,12 @@ lines:
 			// ("eGFR  90") sits under it.
 			if len(rest) > 0 && code == "" && len(rest[0].text) == 2 && rest[0].start < cols.current-6 && strings.Trim(rest[0].text, "0123456789") == "" && rep.labCode(rest[0].text, true) {
 				code, rest = rest[0].text, rest[1:]
+				// Without a list of performing labs, two digits in the code
+				// column with nothing after them may be the value of a
+				// compressed row ("eGFR  90"). Refuse rather than guess.
+				if len(rest) == 0 && (len(rep.Labs) == 0 || rep.LabsTorn) {
+					return nil, fmt.Errorf("result %q has %q in the lab code column and no value; without a list of performing labs it may be the value", name, code)
+				}
 			}
 			if strings.EqualFold(strings.TrimSuffix(name, ":"), "please note") {
 				note = &Result{Panel: panel}
@@ -527,9 +568,33 @@ lines:
 		}
 		types[t] = r
 		kept = append(kept, r)
+		// A value one space after the name, or under a header whose columns
+		// sit further right, stays in the name: "Glucose 101" with no value.
+		// A lab code the list names was taken off the name already.
+		if r.Value == "" && valueLike(r.Name) {
+			return nil, fmt.Errorf("result %q has no value, and its name ends in what may be the value", r.Name)
+		}
 	}
 	rep.Results = kept
 	return rep, nil
+}
+
+var reTrailingNumber = regexp.MustCompile(`\s[<>]?=?-?\d+(\.\d+)?%?$`)
+
+// resultWords are categorical results that can end a name with no value.
+var resultWords = map[string]bool{
+	"negative": true, "positive": true, "reactive": true, "nonreactive": true, "non-reactive": true,
+	"detected": true, "normal": true, "abnormal": true, "borderline": true, "equivocal": true,
+	"indeterminate": true, "pending": true,
+}
+
+// valueLike reports whether the last word of a name may be a value.
+func valueLike(name string) bool {
+	if reTrailingNumber.MatchString(name) {
+		return true
+	}
+	f := strings.Fields(name)
+	return len(f) > 1 && resultWords[strings.ToLower(f[len(f)-1])]
 }
 
 // labCode reports whether a two-digit token can be a lab code. With a list of
