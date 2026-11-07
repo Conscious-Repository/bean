@@ -10,7 +10,7 @@ What comes next. Work that is done is in the git history, and the reasons are in
 ## Next
 
 1. Importers from real export files, never from memory.
-   - `bean-import-apple-health export.xml`. Low-frequency types (weight, blood pressure, VO2 max, labs): one record per reading, with the native id from the XML. High-frequency types (heart rate, steps, energy): one record per type and day, with a series blob. This settles the batch interval for Apple Health (SPEC appendix item 15).
+   - Apple Health: `bean import apple-health` keeps the export and can write readings of 16 types (DECISIONS 202). The export has no sample ids, so identity across exports is approximate. Heart rate, daily series and a batch interval (SPEC appendix item 15) wait for rules that reconcile exports.
    - `bean-import-csv -map "<column>=<type>[:<unit>]"`, repeatable, so that one row can make several records. Today the importer reads one `value` column.
 2. Freeze at `v` 0 (CORE.md section 6). After two weeks of real use (lab results, Apple Health, chat and agent logging) with no change to CORE.md, every DEFAULT in SPEC.md is final.
 3. Release: a `go install` path and a neutral home ([GOVERNANCE-PROPOSAL.md](GOVERNANCE-PROPOSAL.md)).

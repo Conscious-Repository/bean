@@ -129,6 +129,17 @@ bean keeps the PDF first, encrypted, as a `lab.report` record, and checks that i
 
 The importer refuses a report it cannot read for sure, and then nothing is written: two results with one type, or a result whose value may have run into its name. It needs `pdftotext` (`brew install poppler`) and reads only the Labcorp patient-report layout. See [the importer notes](cmd/bean-import-labcorp/README.md).
 
+### Apple Health
+
+On the iPhone, Health, your picture, Export All Health Data. Then:
+
+```
+bean import apple-health export.zip              # keeps the export, encrypted
+bean import apple-health -records export.zip     # also one record per reading
+```
+
+The export has no sample ids, so bean cannot tell a changed reading in a later export from a new one. Nothing is summed per day. See [the importer notes](cmd/bean-import-apple-health/README.md).
+
 ### A CSV file
 
 ```

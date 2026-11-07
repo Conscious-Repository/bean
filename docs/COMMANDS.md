@@ -221,6 +221,10 @@ It refuses a report it cannot read for sure: two specimens, two results that map
 - `-blob`: the blob id of the PDF, from `bean blob put`. With it, the first record is a `lab.report` that keeps the PDF. `bean import` passes it.
 - `-tz`: the time zone where the sample was taken, for example `America/Chicago`. Without it, only the day is recorded, because the report does not say the zone.
 
+### `bean-import-apple-health -blob <id> [-records [-types <t>,...]] <export.zip | export.xml>`
+
+Reads an Apple Health export. By default it writes one `apple-health.export` record that keeps the file, with counts per type. With `-records` it also writes one record per reading of 16 supported types, or of the `-types` you name. Your name, birth date, source and device names are not copied; the file keeps them. Run it as `bean import apple-health [-records] export.zip`.
+
 ### `bean-import-csv -type <type> [-unit <unit>] [-system <name>] [-blob <id>] [-precision <p>] <file.csv>`
 
 Reads a CSV file with a header row. Column `value` is required. Column `time` (RFC 3339) and column `id` (the source's id for the row) are optional. Other columns go into `context`. One type per file.
