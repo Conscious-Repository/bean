@@ -239,7 +239,7 @@ func main() {
 		}
 		switch rest[0] {
 		case "put":
-			data, err := os.ReadFile(rest[1])
+			data, err := readBlobFile(rest[1])
 			if err != nil {
 				fail(err)
 			}

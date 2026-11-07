@@ -3,8 +3,11 @@ package core
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"os"
+	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -135,10 +138,29 @@ func (s *Store) AgentInit(identity, label string) (string, string, error) {
 		return "", "", err
 	}
 	pub := a.Signer.Public()
+	// One machine has one agent key, so every assistant that runs here
+	// signs as the same agent. A label names the key, not one assistant:
+	// a second name would show the first one's records under it. Refuse
+	// instead (DECISIONS 209).
+	l, err := s.load(false)
+	if err != nil {
+		return "", "", err
+	}
+	ps := l.agentPairings(pub)
+	live := livePairings(ps)
+	if len(live) == 0 && len(ps) > 0 {
+		return "", "", fmt.Errorf("you unpaired the agent key of this machine; bean does not trust it again by itself. To trust it again, run on your own machine: bean agent pair %s", Npub(pub))
+	}
+	if other := otherLabels(live, label); other != "" {
+		return "", "", fmt.Errorf("the agent key of this machine is paired as %s. Every assistant on this machine signs with that one key, so bean will not show its records as %q. Use -label %s, or no -label", other, label, strconv.Quote(shownLabel(live[0].label)))
+	}
+	if len(live) > 0 {
+		return pub, live[0].id, nil
+	}
 	if _, err := s.ReadLocal(); err != nil {
 		return pub, "", nil // agent-only: the person pairs it on their own machine
 	}
-	pairID, err := s.pair(pub, label)
+	pairID, err := s.pairWith(l, pub, label)
 	return pub, pairID, err
 }
 
@@ -156,17 +178,15 @@ func (s *Store) onlyGenesis() (string, error) {
 
 // Pair writes an agent.pair claim signed by the person: they trust this
 // key to write claims about them. A current pair claim for the same key is
-// returned instead of writing another.
+// returned instead of writing another. Pair refuses a label that differs
+// from the one the key has: every record the key wrote would show under
+// the new name. A key the person unpaired gets a new pair claim.
 func (s *Store) Pair(key, label string) (string, error) {
 	unlock, err := s.lock()
 	if err != nil {
 		return "", err
 	}
 	defer unlock()
-	return s.pair(key, label)
-}
-
-func (s *Store) pair(key, label string) (string, error) {
 	if _, err := ParseKey(key); err != nil {
 		return "", err
 	}
@@ -174,14 +194,20 @@ func (s *Store) pair(key, label string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	live := livePairings(l.agentPairings(key))
+	if other := otherLabels(live, label); other != "" {
+		return "", fmt.Errorf("this agent key is already paired as %s; bean does not rename it, because every record it wrote would then show as %q", other, label)
+	}
+	if len(live) > 0 {
+		return live[0].id, nil
+	}
+	return s.pairWith(l, key, label)
+}
+
+func (s *Store) pairWith(l *Loaded, key, label string) (string, error) {
 	w, err := s.writerFor(l, false)
 	if err != nil {
 		return "", err
-	}
-	for id, r := range l.Report.Records {
-		if r.Type == "agent.pair" && r.Author == w.author && l.Current(id) && r.ValueKey() == key {
-			return id, nil
-		}
 	}
 	value := map[string]any{"key": key}
 	if label != "" {
@@ -203,28 +229,88 @@ func (s *Store) pair(key, label string) (string, error) {
 	return res.IDs[0], nil
 }
 
-// AgentLabels maps each key that the subject paired with a current
-// agent.pair claim to its label ("agent" when it has none).
-func (l *Loaded) AgentLabels() map[string]string {
-	out := map[string]string{}
-	self := l.ID
+// pairing is one current agent.pair claim of the person.
+type pairing struct {
+	id, label string // label is "" when the claim has none
+	unpaired  bool
+}
+
+// pairClaims maps each key to the local person's current agent.pair
+// claims for it, in id order. Only the local person's pairings count:
+// another identity in the folder cannot name an agent for this person.
+func (l *Loaded) pairClaims() map[string][]pairing {
+	out := map[string][]pairing{}
+	if l.ID == "" {
+		return out
+	}
 	for id, r := range l.Report.Records {
-		if r.Type != "agent.pair" || r.Author != r.Subject || !l.Current(id) || r.ValueKey() == "" {
-			continue
-		}
-		// Only the local person's pairings label keys: another
-		// identity in the folder cannot name an agent for this person.
-		if self == "" || r.Author != self {
-			continue
-		}
-		if st, _ := r.Value["status"].(string); st == "unpaired" {
+		if r.Type != "agent.pair" || r.Author != l.ID || r.Subject != l.ID || !l.Current(id) || r.ValueKey() == "" {
 			continue
 		}
 		label, _ := r.Value["label"].(string)
-		if label == "" {
-			label = "agent"
+		st, _ := r.Value["status"].(string)
+		out[r.ValueKey()] = append(out[r.ValueKey()], pairing{id: id, label: label, unpaired: st == "unpaired"})
+	}
+	for _, ps := range out {
+		slices.SortFunc(ps, func(a, b pairing) int { return strings.Compare(a.id, b.id) })
+	}
+	return out
+}
+
+func (l *Loaded) agentPairings(key string) []pairing { return l.pairClaims()[key] }
+
+func livePairings(ps []pairing) []pairing {
+	var out []pairing
+	for _, p := range ps {
+		if !p.unpaired {
+			out = append(out, p)
 		}
-		out[r.ValueKey()] = label
+	}
+	return out
+}
+
+// otherLabels names the labels of live, quoted, when one of them differs
+// from label. It returns "" when label is "" or every claim has it.
+func otherLabels(live []pairing, label string) string {
+	if label == "" {
+		return ""
+	}
+	var names []string
+	differs := false
+	for _, p := range live {
+		differs = differs || p.label != label
+		names = append(names, strconv.Quote(shownLabel(p.label)))
+	}
+	if !differs {
+		return ""
+	}
+	return strings.Join(names, " and ")
+}
+
+// shownLabel is how readers name a paired key.
+func shownLabel(label string) string {
+	if label == "" {
+		return "agent"
+	}
+	return label
+}
+
+// AgentLabels maps each key that the subject paired with a current
+// agent.pair claim to its label ("agent" when it has none). A key the
+// person paired twice under different names, for example on two of their
+// machines, shows both names, in id order, never one picked at random.
+func (l *Loaded) AgentLabels() map[string]string {
+	out := map[string]string{}
+	for key, ps := range l.pairClaims() {
+		var names []string
+		for _, p := range livePairings(ps) {
+			if name := shownLabel(p.label); !slices.Contains(names, name) {
+				names = append(names, name)
+			}
+		}
+		if len(names) > 0 {
+			out[key] = strings.Join(names, ", ")
+		}
 	}
 	return out
 }

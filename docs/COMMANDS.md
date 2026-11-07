@@ -18,7 +18,7 @@ bean [-dir <folder>] <command> [arguments]
 |---|---|
 | 0 | Success. For `verify`: no errors. |
 | 1 | The command failed, or `verify` found errors. |
-| 2 | Usage error: unknown command, bad flag or bad argument. |
+| 2 | Usage error: unknown command, bad flag or bad argument, for example a time that `ls -since`, `ls -until` or `add -at` cannot read. |
 | 3 | Your identity has a record of a newer format version than this `bean` knows. Reads stop, and `export` writes every file first. Update `bean`, or if you did not write that record, run `bean rotate`. Another identity that is too new only gets its `too new` line. |
 | 4 | Your identity is frozen: two rotations were made from the same point. Reads still print, and warn you. Writes stop. Run `bean migrate`. |
 
@@ -56,7 +56,7 @@ Adds one record about you. Prints its id.
 | Flag | Meaning |
 |---|---|
 | `-unit <unit>` | Unit of a number, for example `kg`, `L`, `mg`, `{score}`. |
-| `-at <time>` | When it happened. Default: now, to the minute. |
+| `-at <time>` | When it happened. Default: now, to the minute. A time it cannot read exits 2 and writes nothing. |
 | `-note <text>` | Free text. Stored in `context.note`. |
 | `-about <id>` | The record that this one comments on. |
 | `-corrects <id>` | Your earlier record that this one replaces, for example a wrong value. `ls` then shows only the new one. You can correct only records that you wrote. |
@@ -69,7 +69,7 @@ Reads records from stdin, one JSON object per line, as an importer writes them. 
 
 ### `blob put <file>`
 
-Encrypts and stores a file, for example the PDF an import came from. Prints the blob id. Give that id to an importer with `-blob`.
+Encrypts and stores a file, for example the PDF an import came from. Prints the blob id. Give that id to an importer with `-blob`. The file can be up to 256 MiB, the most that `import-export` reads back, so every export of the log can be read again. A larger file is refused with exit 1.
 
 ### `import <source> [importer flags] [-corrections] <file>`
 
@@ -87,6 +87,8 @@ The error says what was written. A failure in step 4 can leave some readings; ru
 ### `ls [flags]`
 
 Lists current records in time order: when, type, value, who wrote it if not you, and the first 12 hex digits of the id. A corrected record shows only its newest version. Deleted records never show.
+
+A record that keeps a file, such as `lab.report` or `apple-health.export`, shows its value as `file <media type> <blob id start>`. A value in a blob with a unit shows as `series <blob id start> <unit>`. A time that `-since` or `-until` cannot read exits 2.
 
 | Flag | Meaning |
 |---|---|
@@ -141,7 +143,7 @@ Runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdin
 | `read_blob` | Only blobs of current records; superseded-only history does not grant content access. Text is returned; for binary files only size. |
 | `log_entry` | With `-write` only. Adds a record signed by the agent key, of a type from the vocabulary only: the built-in one plus `vocabulary.md` in the bean folder, if it exists (cmd/bean/vocabulary.md, "Your own types"). It can also comment on a record (`about`) or replace one of the agent's own records (`corrects`). |
 
-With `-write`, the first start makes the agent key of this machine and, on your own machine, trusts it. `-label` names that agent (default: `agent@<computer name>`).
+With `-write`, the first start makes the agent key of this machine and, on your own machine, trusts it. `-label` names that agent (default: `agent@<computer name>`). Without `-label`, a key that already exists keeps its name. A label that differs from the key's pairing is refused with exit 1, as in `agent init`.
 
 ### `agent init [-label <name>] [-identity <id>]`
 
@@ -150,10 +152,14 @@ Makes the agent key of this machine. Prints the agent key and its npub.
 - On your own machine it also trusts the key (writes an `agent.pair` record).
 - On a copy without your key, for example a cloud server, it prints the `bean agent pair` command to run on your own machine.
 - In a folder with copied records but no identity, it takes the only identity there. Use `-identity` if there are several.
+- If the key is already paired, it prints that pairing. A different `-label` is refused with exit 1, and the error names the label the key has. One machine has one agent key, and every assistant on it signs with it: a second name would show one assistant's records under another's name.
+- If you unpaired the key, it refuses. Run `agent pair` to trust it again.
 
 ### `agent pair <npub> [-label <name>]`
 
 Run on your own machine. Records that you trust this agent key to write about you. `bean ls` then shows its records with the label.
+
+If the key is already paired, the same label or no `-label` prints that pairing. A different label is refused with exit 1 and changes nothing: bean does not rename an agent, because every record it wrote would then show the new name. A key you unpaired gets a new pairing.
 
 ## Copies and keys
 
