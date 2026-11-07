@@ -189,7 +189,9 @@ echo "append $N: $(( (t1 - t0) / 1000000 )) ms"
 measure() { python3 - "$@" <<'PY'
 import resource, subprocess, sys, time
 t = time.time(); r = subprocess.run(sys.argv[1:], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-print(f"{time.time()-t:.2f} s, max RSS {resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss//1024} MiB, exit {r.returncode}")
+# ru_maxrss is in bytes on macOS and in KiB on Linux.
+rss = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss // (1 << 20 if sys.platform == "darwin" else 1 << 10)
+print(f"{time.time()-t:.2f} s, max RSS {rss} MiB, exit {r.returncode}")
 PY
 }
 echo "ls:     $(measure bean -dir "$P" ls)"
