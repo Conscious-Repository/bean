@@ -31,7 +31,7 @@ func sealLog(t *testing.T, n int) (s *Store, id string, words []string, claims [
 		lines = append(lines, partial("hr", float64(i), nil))
 	}
 	claims = appendLines(t, s, lines...).IDs
-	res, err := s.Rotate(words, nil, NewKey{})
+	res, err := s.Rotate(words, Seals{All: true}, NewKey{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestContinuationSeals(t *testing.T) {
 func TestNoPartsBelowLimit(t *testing.T) {
 	s, _, words := initWithWords(t)
 	appendLines(t, s, partial("hr", 1, nil))
-	res, err := s.Rotate(words, nil, NewKey{})
+	res, err := s.Rotate(words, Seals{All: true}, NewKey{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -260,7 +260,7 @@ func TestRotateCrashBetweenParts(t *testing.T) {
 		}
 	}
 	defer func() { hookAfterPart = nil }()
-	if _, err := s.Rotate(words, nil, NewKey{}); err != nil {
+	if _, err := s.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
 	hookAfterPart = nil
@@ -290,7 +290,7 @@ func TestRotateCrashBetweenParts(t *testing.T) {
 		}
 	}
 	appendLines(t, snap, partial("hr", 99, nil))
-	if _, err := snap.Rotate(words, nil, NewKey{}); err != nil {
+	if _, err := snap.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
 	verifyOK(t, snap)
@@ -455,11 +455,11 @@ func TestPartsOnForkedBranches(t *testing.T) {
 	}
 	claims := appendLines(t, a, lines...).IDs
 	b := cloneLocal(t, a)
-	ra, err := a.Rotate(words, nil, NewKey{})
+	ra, err := a.Rotate(words, Seals{All: true}, NewKey{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	rb, err := b.Rotate(words, nil, NewKey{})
+	rb, err := b.Rotate(words, Seals{All: true}, NewKey{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -490,7 +490,7 @@ func TestRotateCrashAfterSuccessionWithParts(t *testing.T) {
 	snap := newStore(t)
 	hookAfterSuccession = func() { os.CopyFS(snap.Dir, os.DirFS(s.Dir)) }
 	defer func() { hookAfterSuccession = nil }()
-	res, err := s.Rotate(words, nil, NewKey{})
+	res, err := s.Rotate(words, Seals{All: true}, NewKey{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -519,7 +519,7 @@ func TestRotateKillLoop(t *testing.T) {
 		sealChunk = 20
 		s := Open(dir)
 		words := strings.Fields(os.Getenv("BEAN_KILL_WORDS"))
-		if _, err := s.Rotate(words, nil, NewKey{}); err != nil {
+		if _, err := s.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 			os.Exit(3)
 		}
 		os.Exit(0)
@@ -569,7 +569,7 @@ func TestRotateKillLoop(t *testing.T) {
 			undone++
 		}
 		// The survivor can always rotate again.
-		if _, err := s.Rotate(words, nil, NewKey{}); err != nil {
+		if _, err := s.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 			t.Fatalf("run %d: rotate after kill: %v", i, err)
 		}
 		verifyOK(t, s)
@@ -622,7 +622,7 @@ func TestRestoreCrashBetweenParts(t *testing.T) {
 		}
 	}
 	defer func() { hookAfterPart = nil }()
-	if _, _, err := b.Restore(words, nil, NewKey{}, ""); err != nil {
+	if _, _, err := b.Restore(words, Seals{All: true}, NewKey{}, ""); err != nil {
 		t.Fatal(err)
 	}
 	hookAfterPart = nil
@@ -630,7 +630,7 @@ func TestRestoreCrashBetweenParts(t *testing.T) {
 	if _, err := snap.Load(); err != nil && !strings.Contains(err.Error(), "not initialized") {
 		t.Fatal(err)
 	}
-	res, got, err := snap.Restore(words, nil, NewKey{}, "")
+	res, got, err := snap.Restore(words, Seals{All: true}, NewKey{}, "")
 	if err != nil || got != id {
 		t.Fatalf("restore again: %v %s", err, got)
 	}

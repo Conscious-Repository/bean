@@ -117,7 +117,7 @@ More rules:
 2. If two or more valid records correct the same target, readers show the one with the lowest id.
 3. Valid records that have the same `subject`, `author`, `source.system` and `source.ref` are duplicates. Do not count corrected records. The record with the lowest id is the primary.
 4. A claim is not valid if the set has no genesis for its author.
-5. A rotation seals every record of the outgoing key by default. A retired key cannot add a valid record after the rotation. The sealed set of a succession is its own list plus the lists of its n parts. If any part number from 1 to n does not have exactly one valid part, the set is empty: every record of the outgoing key is not valid until the parts arrive, and `gc` erases nothing. Write the parts before the succession, and sync them first.
+5. The person decides what a rotation seals (a writer rule): a thief's records can be in the folder, and a seal cannot be undone. A retired key cannot add a valid record after the rotation. The sealed set of a succession is its own list plus the lists of its n parts. If any part number from 1 to n does not have exactly one valid part, the set is empty: every record of the outgoing key is not valid until the parts arrive, and `gc` erases nothing. Write the parts before the succession, and sync them first.
 
 ## 4. Folder and sync
 

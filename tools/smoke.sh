@@ -30,7 +30,7 @@ verify_code() { bean -dir "$1" verify >/dev/null 2>&1; echo $?; }
 
 echo "== concurrent rotations on one folder (B1)"
 L=$W/rot; newlog "$L"; claim 1 | bean -dir "$L" append >/dev/null
-for i in 1 2 3 4; do bean -dir "$L" rotate <"$L.words" >/dev/null 2>&1 & done; wait
+for i in 1 2 3 4; do bean -dir "$L" rotate -seal-all <"$L.words" >/dev/null 2>&1 & done; wait
 want "four concurrent rotations leave one valid chain" 0 "summary" bean -dir "$L" verify
 n=$(grep -rl '"bean.succession"' "$L/objects" | wc -l)
 [ "$n" = 4 ] && ok "four successions, no fork" || bad "successions: $n"
@@ -61,7 +61,7 @@ want "loose blob kept after a late gc" 0 "" bean -dir "$L" blob get "$LOOSE"
 echo "== fork freezes; gc and writes refuse (DECISIONS 107, 108)"
 A=$W/fa; newlog "$A"; B=$W/fb; mkdir -p "$B"; cp -r "$A/local" "$B/"; bean -dir "$B" sync "$A" >/dev/null
 PB=$(bean -dir "$A" blob put "$W/loose.pdf")
-bean -dir "$A" rotate <"$A.words" >/dev/null 2>&1; bean -dir "$B" rotate <"$A.words" >/dev/null 2>&1
+bean -dir "$A" rotate -seal-all <"$A.words" >/dev/null 2>&1; bean -dir "$B" rotate -seal-all <"$A.words" >/dev/null 2>&1
 bean -dir "$A" sync "$B" >/dev/null 2>&1
 want "verify reports the freeze" 4 "compromised: " bean -dir "$A" verify
 want "append on a frozen identity refuses" 4 "compromised: " sh -c "$(declare -f claim); claim 9 | bean -dir '$A' append"
@@ -71,7 +71,7 @@ want "blob kept on the frozen log" 0 "" bean -dir "$A" blob get "$PB"
 echo "== retired key (DECISIONS 112)"
 A=$W/ra; newlog "$A"; claim 1 | bean -dir "$A" append >/dev/null
 OLD=$W/rold; mkdir -p "$OLD"; cp -r "$A/local" "$OLD/"
-bean -dir "$A" rotate <"$A.words" >/dev/null 2>&1
+bean -dir "$A" rotate -seal-all <"$A.words" >/dev/null 2>&1
 want "log valid after rotation; old claim sealed" 0 "" bean -dir "$A" verify
 RID=$(adversary old-key-claim "$A" "$OLD")
 want "claim by the retired key is not sealed" 1 "$RID: not sealed" bean -dir "$A" verify
@@ -85,7 +85,7 @@ STOLEN=$W/hstolen; mkdir -p "$STOLEN"; cp -r "$A/local" "$STOLEN/"
 HID=$(adversary halt "$A" "$STOLEN")
 want "a halt by the current key: too new" 3 "too new: " bean -dir "$A" verify
 want "append refuses while halted" 3 "too new: " sh -c "$(declare -f claim); claim 2 | bean -dir '$A' append"
-want "rotate with the 24 words goes past the halt" 0 "past halt $HID" bean -dir "$A" rotate <"$A.words"
+want "rotate with the 24 words goes past the halt" 0 "past halt $HID" bean -dir "$A" rotate -seal-all <"$A.words"
 want "after the rotation the halt is ungated" 0 "ungated: $HID" bean -dir "$A" verify
 want "append works again" 0 "" sh -c "$(declare -f claim); claim 3 | bean -dir '$A' append"
 H2=$(adversary halt "$A" "$STOLEN")
@@ -96,9 +96,9 @@ A=$W/ga; newlog "$A"; claim 1 | bean -dir "$A" append >/dev/null
 ID=$(awk 'NR==1{print $2}' "$A.init")
 adversary stranger-genesis "$A" >/dev/null
 N=$W/gn; mkdir -p "$N"; cp -r "$A/objects" "$A/blobs" "$N/" 2>/dev/null; cp -r "$A/objects" "$N/"
-want "restore with two matching genesis records is ambiguous" 1 "ambiguous: " bean -dir "$N" restore <"$A.words"
+want "restore with two matching genesis records is ambiguous" 1 "ambiguous: " bean -dir "$N" restore -seal-all <"$A.words"
 [ ! -e "$N/local/identity" ] && ok "ambiguous restore wrote no identity" || bad "ambiguous restore wrote local/identity"
-want "restore -identity picks the person" 0 "identity $ID" bean -dir "$N" restore -identity "$ID" <"$A.words"
+want "restore -identity picks the person" 0 "identity $ID" bean -dir "$N" restore -seal-all -identity "$ID" <"$A.words"
 want "restored log verifies" 0 "" bean -dir "$N" verify
 
 echo "== crash during append and rotate (DECISIONS 110)"
@@ -113,7 +113,7 @@ done
 [ $cbad = 0 ] && ok "$CR killed appends leave a valid log" || bad "$cbad of $CR killed appends left errors"
 rbad=0
 for i in $(seq 1 "$CR"); do
-	bean -dir "$A" rotate <"$A.words" >/dev/null 2>&1 & p=$!
+	bean -dir "$A" rotate -seal-all <"$A.words" >/dev/null 2>&1 & p=$!
 	sleep "0.00$((RANDOM % 9 + 1))"; kill -9 $p 2>/dev/null; wait $p 2>/dev/null
 	c=$(verify_code "$A"); claim 1 | bean -dir "$A" append >/dev/null 2>&1; a=$?
 	[ "$c" = 0 ] && [ $a = 0 ] || { rbad=$((rbad + 1)); bean -dir "$A" verify | tail -3; }
@@ -199,7 +199,7 @@ echo "add:    $(measure bean -dir "$P" add hr 60 -unit bpm)"
 echo "== rotation of the perf log (C28 seal continuations)"
 before=$(bean -dir "$P" ls | wc -l)
 [ "$N" -gt 200000 ] && cp -r "$P" "$W/perfk"
-t0=$(date +%s%N); bean -dir "$P" rotate <"$P.words" >"$W/rot.out" 2>&1; rc=$?; t1=$(date +%s%N)
+t0=$(date +%s%N); bean -dir "$P" rotate -seal-all <"$P.words" >"$W/rot.out" 2>&1; rc=$?; t1=$(date +%s%N)
 RT=$(( (t1 - t0) / 1000000 ))
 parts=$(grep -c '^seal part ' "$W/rot.out")
 echo "rotate $before records: $RT ms, $parts seal parts"
@@ -212,7 +212,7 @@ after=$(bean -dir "$P" ls | wc -l)
 if [ "$N" -gt 200000 ]; then
 	for k in 1 2 3; do
 		K=$W/perfk$k; cp -r "$W/perfk" "$K"
-		bean -dir "$K" rotate <"$P.words" >/dev/null 2>&1 & pid=$!
+		bean -dir "$K" rotate -seal-all <"$P.words" >/dev/null 2>&1 & pid=$!
 		sleep "$(python3 -c "import random; print(random.uniform(0.2, $RT / 1000))")"; kill -9 $pid 2>/dev/null; wait $pid 2>/dev/null
 		c=$(verify_code "$K"); n=$(bean -dir "$K" ls | wc -l)
 		[ "$c" = 0 ] && [ "$n" = "$before" ] && ok "kill $k during a big rotation: verify 0, $n records" || bad "kill $k: verify $c, $n records"

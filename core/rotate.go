@@ -20,11 +20,34 @@ type RotateResult struct {
 	Past       []string // records of an unknown version by the outgoing key that halted the identity (C29)
 }
 
+// ErrCannotList says that a command cannot show what a rotation would decide on
+// before it has the words. The rotation itself still decides.
+var ErrCannotList = errors.New("cannot list")
+
+// UndecidedError says that a rotation has no decision on the records of the
+// outgoing key. It wrote nothing.
+type UndecidedError struct {
+	Records []*Record // records of the outgoing key, oldest import first
+	Halt    []string  // records of a newer format by that key (C29)
+}
+
+func (e *UndecidedError) Error() string {
+	return fmt.Sprintf("undecided: %d records of the key you are replacing: check them, then use -seal-all, with -no-seal <id> for each one that is not yours", len(e.Records)+len(e.Halt))
+}
+
+// Seals is the person's decision on the records of the outgoing key. A thief
+// with that key can write records that look like the person's, and the person
+// syncs before a rotation, so they can be in this folder. Only the person can
+// tell them apart, and a seal cannot be undone: the zero value keeps nothing
+// and a rotation with it stops unless there is nothing to decide.
+type Seals struct {
+	All    bool     // keep every record, except those in NoSeal
+	NoSeal []string // ids or 6+ hex prefixes of records not to keep
+}
+
 // Rotate writes a recovery-signed succession from the chain head to a new
 // random signing key (SPEC.md 5.3 to 5.5). words are the 24 paper words.
-// Every record of the outgoing key in this replica, valid or not, is sealed
-// unless its id is in noSeal (C26).
-func (s *Store) Rotate(words []string, noSeal []string, key NewKey) (RotateResult, error) {
+func (s *Store) Rotate(words []string, c Seals, key NewKey) (RotateResult, error) {
 	var res RotateResult
 	unlock, err := s.lock()
 	if err != nil {
@@ -50,7 +73,7 @@ func (s *Store) Rotate(words []string, noSeal []string, key NewKey) (RotateResul
 	if hex.EncodeToString(IdentitySecret(seed)) != hex.EncodeToString(l.Local.Secret) {
 		return res, ErrSeedMismatch
 	}
-	return s.rotateFrom(l, l.Local.Identity, seed, noSeal, key)
+	return s.rotateFrom(l, l.Local.Identity, seed, c, key)
 }
 
 // rotateFrom writes the succession from the head of identity id and stores
@@ -58,7 +81,7 @@ func (s *Store) Rotate(words []string, noSeal []string, key NewKey) (RotateResul
 // the identity (past a head-key halt, C29), choose the seal set (C26),
 // sign the records (C28), prove that they end a halt, and write them in
 // crash order.
-func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string, key NewKey) (RotateResult, error) {
+func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, c Seals, key NewKey) (RotateResult, error) {
 	var res RotateResult
 	l, halt, err := l.rotatable(id)
 	if err != nil {
@@ -73,7 +96,9 @@ func (s *Store) rotateFrom(l *Loaded, id string, seed []byte, noSeal []string, k
 	if Commitment(rec.Public()) != head.Recovery() {
 		return res, ErrSeedMismatch
 	}
-	res.Sealed, res.NotSealed = l.sealSet(id, head.ValueKey(), halt, noSeal)
+	if res.Sealed, res.NotSealed, err = l.decide(id, head.ValueKey(), halt, c); err != nil {
+		return res, err
+	}
 	res.Past = halt
 	newSigner, keyLine, err := key.signer()
 	if err != nil {
@@ -161,52 +186,177 @@ func (l *Loaded) rotatable(id string) (*Loaded, []string, error) {
 	return l, halt, nil
 }
 
-// sealSet is what the succession from key outgoing of identity id seals
-// (C26): every record of the outgoing key in
-// this folder, valid now or not, plus every target that a tombstone, a
-// supersede or a hold in this folder names, plus the halting records.
-// A record that is invalid now for another reason, for example a purged
-// target, must still be sealed: when its tombstone dies (-no-seal), the
-// target comes back and must not die of a missing seal. A sealed id that
-// names no record of the outgoing key has no effect (SPEC 5.4), so the
-// extra ids are harmless. Ids in noSeal (or 6+ hex prefixes) are left out.
-func (l *Loaded) sealSet(id, outgoing string, halt, noSeal []string) (sealed, notSealed []string) {
-	ours := func(t string) bool {
-		r, ok := l.Report.Records[t]
-		return !ok || (r.Kid == outgoing && r.Author == id)
-	}
-	seal := map[string]bool{}
-	for rid, r := range l.Report.Records {
-		if r.Kid == outgoing && r.Author == id && !r.IsIdentity() {
-			seal[rid] = true
+// decide applies the person's decision: the records of the outgoing key to
+// seal and not to seal, or an UndecidedError when there is no decision.
+func (l *Loaded) decide(id, outgoing string, halt []string, c Seals) (sealed, notSealed []string, err error) {
+	if !c.All {
+		recs := l.outgoingRecords(id, outgoing)
+		if len(recs) > 0 || len(halt) > 0 {
+			return nil, nil, &UndecidedError{recs, halt}
 		}
+	}
+	return l.sealSet(id, outgoing, halt, c.NoSeal)
+}
+
+// outgoingRecords lists the records of the outgoing key in this folder, valid
+// now or not, oldest import first. A hidden target is here too: if the person
+// refuses the tombstone that hid it, the record must still be sealed.
+func (l *Loaded) outgoingRecords(id, outgoing string) []*Record {
+	var out []*Record
+	for _, r := range l.Report.Records {
+		if r.Kid == outgoing && r.Author == id && !r.IsIdentity() {
+			out = append(out, r)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Imported != out[j].Imported {
+			return out[i].Imported < out[j].Imported
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
+
+// sealSet is what the succession from key outgoing of identity id seals
+// (C26): every record of the outgoing key in this folder, valid now or not,
+// and the halting records, except those in noSeal. A kept record of that key
+// also seals the targets it names that are not in this folder: a target that
+// purge erased here must not die of a missing seal if it comes back from
+// another copy. A target counts only through a kept record of the outgoing
+// key. If any record could name an absent id, a thief could deliver pre-signed
+// records after the rotation and have them count (DECISIONS 185).
+//
+// An id in noSeal that names no such record is an error, not a silent seal.
+func (l *Loaded) sealSet(id, outgoing string, halt, noSeal []string) (sealed, notSealed []string, err error) {
+	targets := func(r *Record) []string {
+		var out []string
 		for _, t := range append(r.Targets("purges"), r.Targets("supersedes")...) {
-			seal[t] = seal[t] || ours(t)
+			if _, here := l.Report.Records[t]; !here {
+				out = append(out, t)
+			}
+		}
+		return out
+	}
+	recs := l.outgoingRecords(id, outgoing)
+	candidates := map[string]bool{}
+	for _, r := range recs {
+		candidates[r.ID] = true
+		for _, t := range targets(r) {
+			candidates[t] = true
 		}
 	}
 	for _, h := range l.Holds {
-		seal[h.Target] = seal[h.Target] || ours(h.Target)
+		if r, here := l.Report.Records[h.Target]; !here || (r.Kid == outgoing && r.Author == id) {
+			candidates[h.Target] = true
+		}
+	}
+	for _, x := range halt {
+		candidates[x] = true
+	}
+	skip := map[string]bool{}
+	sorted := sortedKeys(candidates)
+	for _, x := range noSeal {
+		full, err := resolveAmong(candidates, sorted, x)
+		if err != nil {
+			return nil, nil, err
+		}
+		skip[full] = true
+	}
+	seal := map[string]bool{}
+	for _, r := range recs {
+		if skip[r.ID] {
+			continue
+		}
+		seal[r.ID] = true
+		for _, t := range targets(r) {
+			seal[t] = true
+		}
+	}
+	for _, h := range l.Holds {
+		if candidates[h.Target] {
+			seal[h.Target] = true
+		}
 	}
 	for _, x := range halt {
 		seal[x] = true
 	}
-	skip := map[string]bool{}
-	for _, x := range noSeal {
-		if r, err := l.Resolve(x); err == nil {
-			x = r.ID // a 6+ hex prefix works, as everywhere else
-		}
-		skip[x] = true
+	for x := range skip {
+		delete(seal, x)
 	}
-	for _, rid := range sortedKeys(seal) {
-		if !seal[rid] {
-			continue
-		} else if skip[rid] {
-			notSealed = append(notSealed, rid)
-		} else {
-			sealed = append(sealed, rid)
+	return sortedKeys(seal), sortedKeys(skip), nil
+}
+
+// resolveAmong finds id, or the one id that starts with a 6+ hex prefix, in a
+// set of full ids. sorted is the set in order.
+func resolveAmong(set map[string]bool, sorted []string, x string) (string, error) {
+	hexPart := strings.TrimPrefix(x, "sha256:")
+	if set["sha256:"+hexPart] {
+		return "sha256:" + hexPart, nil
+	}
+	if len(hexPart) >= 6 && isLowerHex(hexPart, len(hexPart)) {
+		i := sort.SearchStrings(sorted, "sha256:"+hexPart)
+		if i < len(sorted) && strings.HasPrefix(sorted[i][7:], hexPart) {
+			if i+1 < len(sorted) && strings.HasPrefix(sorted[i+1][7:], hexPart) {
+				return "", errors.New("ambiguous id: " + x)
+			}
+			return sorted[i], nil
 		}
 	}
-	return sealed, notSealed
+	return "", errors.New("input missing: " + x + " is not a record of the key you are replacing")
+}
+
+// Undecided returns what a rotation with this decision still needs an answer
+// on, so a command can show it before it asks for the 24 words. identity is
+// for a restore; "" means local/identity, or the only genesis in the folder.
+// It checks the ids in c too. When it cannot tell the identity without the
+// words, it returns nothing and the rotation itself decides.
+func (s *Store) Undecided(c Seals, identity string) (*UndecidedError, *Loaded, error) {
+	l, err := s.Load()
+	if err != nil {
+		return nil, nil, err
+	}
+	id := identity
+	if id == "" {
+		id = l.ID
+	}
+	if id == "" {
+		ids := map[string]bool{}
+		for gid := range l.Report.Chains {
+			ids[gid] = true
+		}
+		for gid := range l.Report.HeadHalt {
+			ids[gid] = true
+		}
+		if len(ids) > 1 {
+			return nil, l, fmt.Errorf("%w: this folder holds %d identities: pass -identity <id>", ErrCannotList, len(ids))
+		}
+		for only := range ids {
+			id = only
+		}
+	}
+	if id == "" {
+		return nil, l, nil
+	}
+	pl, halt, err := l.rotatable(id)
+	if err != nil {
+		if l.ID == "" && strings.HasPrefix(err.Error(), "compromised") {
+			return nil, l, fmt.Errorf("%w: this identity is frozen, so it cannot rotate. Give the words to restore, then run bean migrate", ErrCannotList)
+		}
+		return nil, l, err
+	}
+	chain := pl.Report.Chains[id]
+	if len(chain) == 0 {
+		return nil, l, nil
+	}
+	outgoing := chain[len(chain)-1].ValueKey()
+	if _, _, err := pl.decide(id, outgoing, halt, c); err != nil {
+		var ue *UndecidedError
+		if errors.As(err, &ue) {
+			return ue, pl, nil
+		}
+		return nil, l, err
+	}
+	return nil, pl, nil
 }
 
 // signedFile is a signed record and its id.
@@ -261,10 +411,10 @@ func (s *Store) rotationRecords(id string, rec Signer, parent, newKey, next stri
 // lost host, so Restore always rotates: it finds the identity whose genesis
 // commits to recovery generation 0 of these words, writes the identity
 // secret, and writes a succession to a new signing key exactly as Rotate
-// does, with the same default seals. It returns the identity id. identity
+// does, with the same decision on seals. It returns the identity id. identity
 // "" accepts only a single genesis that commits to these words; a folder
 // with more than one needs the id (DECISIONS 109).
-func (s *Store) Restore(words []string, noSeal []string, key NewKey, identity string) (RotateResult, string, error) {
+func (s *Store) Restore(words []string, c Seals, key NewKey, identity string) (RotateResult, string, error) {
 	unlock, err := s.lock()
 	if err != nil {
 		return RotateResult{}, "", err
@@ -328,11 +478,32 @@ func (s *Store) Restore(words []string, noSeal []string, key NewKey, identity st
 	default:
 		id = matches[0]
 	}
+	// Decide before the first write, so a restore with no decision leaves
+	// the folder as it was.
+	pl, halt, rerr := l.rotatable(id)
+	if rerr == nil {
+		if chain := pl.Report.Chains[id]; len(chain) > 0 {
+			if _, _, err := pl.decide(id, chain[len(chain)-1].ValueKey(), halt, c); err != nil {
+				return RotateResult{}, "", err
+			}
+		}
+	}
+	// A frozen identity cannot rotate, but the words still open its files:
+	// this copy gets what bean migrate and bean export need, and no signing key.
+	if rerr != nil && strings.HasPrefix(rerr.Error(), "compromised") {
+		if err := writeFileAtomic(s.path(fileSecret), []byte(hex.EncodeToString(IdentitySecret(seed))+"\n"), 0o600); err != nil {
+			return RotateResult{}, "", err
+		}
+		if err := writeFileAtomic(s.path(fileIdentity), []byte(id+"\n"), 0o600); err != nil {
+			return RotateResult{}, "", err
+		}
+		return RotateResult{}, id, errors.New("compromised: " + id + ": this identity is frozen, so it cannot rotate. This copy can read it now: run bean migrate <empty folder>")
+	}
 	secret := IdentitySecret(seed)
 	if err := writeFileAtomic(s.path(fileSecret), []byte(hex.EncodeToString(secret)+"\n"), 0o600); err != nil {
 		return RotateResult{}, "", err
 	}
-	res, err := s.rotateFrom(l, id, seed, noSeal, key)
+	res, err := s.rotateFrom(l, id, seed, c, key)
 	if err != nil {
 		return res, "", err
 	}

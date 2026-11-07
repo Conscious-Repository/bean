@@ -19,8 +19,8 @@ bean [-dir <folder>] <command> [arguments]
 | 0 | Success. For `verify`: no errors. |
 | 1 | The command failed, or `verify` found errors. |
 | 2 | Usage error: unknown command, bad flag or bad argument. |
-| 3 | Your identity has a record of a newer format version than this `bean` knows. Update `bean`. Another identity that is too new only gets its `too new` line. |
-| 4 | Your identity is frozen: two rotations were made from the same point. Make a new identity. |
+| 3 | Your identity has a record of a newer format version than this `bean` knows. Reads stop, and `export` writes every file first. Update `bean`, or if you did not write that record, run `bean rotate`. Another identity that is too new only gets its `too new` line. |
+| 4 | Your identity is frozen: two rotations were made from the same point. Reads still print, and warn you. Writes stop. Run `bean migrate`. |
 
 | Environment variable | Meaning |
 |---|---|
@@ -94,6 +94,10 @@ Prints one record in full, its status (`valid`, `superseded by ...`, `purged by 
 
 Writes the decrypted file to stdout: `bean blob get <id> > report.pdf`.
 
+### `append`, changed readings
+
+If an input gives a new value for a reading you already have, `append` writes nothing for it, prints a `changed:` line, and exits 1. bean cannot tell a lab's corrected report from an older report, a parser bug, or two sources that share an id. If the input is newer and right, run `append -corrections`: the new value replaces the old one as a correction, and the output says `1 of them new values`. It refuses a different type or an empty value: for two sources that share ids, give each its own `-system`. A value the reading has had is always skipped, so an old report cannot bring it back.
+
 ### `verify`
 
 Reads and checks every file and signature, and every stored file's hash. Run it after you copy a log with another tool, or restore from a backup. Exit code 0 means no errors. It prints one line for each problem, then a summary:
@@ -154,19 +158,34 @@ Writes a plaintext copy of every record and file into an empty or new folder, wi
 
 Reads an export into a log that has the same identity secret.
 
-### `rotate [-no-seal <id>]... [-nostr new|<file>]`
+### `rotate [-list] [-seal-all] [-no-seal <id>]... [-nostr new|<file>]`
 
-Changes your signing key. Reads the 24 words from stdin. Sync every copy first. Every record made with the old key that this folder has stays valid, because the new succession seals it; `-no-seal` excludes one (for example one that a thief made). Records the old key makes after the rotation are not valid. `-nostr` makes the new key a Nostr key, from a file because stdin carries the words. Above 200,000 records it also prints one `seal part <id>` line per extra seal record (C28); copy those with the rest of the log. It refuses above 200,200,000 records (`too large`). If a thief with your current key halted the log (`too new`), rotate goes past the halt and prints one `past halt <id>` line per halting record; the rotation retires that key, so the halt ends on every copy. A halt from a newer bean of your own (signed with the 24 words) is not passed: update bean.
+Changes your signing key. Reads the 24 words from stdin. Sync every copy first.
 
-### `restore [-no-seal <id>]... [-nostr new|<file>] [-identity <id>]`
+The sync can bring in records from a thief, and a seal cannot be undone, so `rotate` keeps nothing until you decide. Without `-seal-all` it shows what the old key signed and stops, before it asks for the words: every deletion, correction and pairing, every claim that takes the place of another record (`REPLACES`), with every record that they name, and a summary of the claims. A deletion or correction that names `A RECORD NOT IN THIS FOLDER` needs care: if you keep it, that record counts when it arrives. `-list` shows every claim too.
 
-Rebuilds `local/` on a new machine. Copy `objects/` and `blobs/` from your backup into the folder, then run it and give the 24 words on stdin. It finds your identity, writes the identity secret, and moves you to a new signing key. Your identity id and records do not change. The lost key can no longer add, delete or correct anything. Sync every copy you still have into the folder first. If more than one identity matches the words, it fails with `ambiguous` and writes nothing; pass `-identity <id>`.
+| Flag | Effect |
+|---|---|
+| `-seal-all` | Keep every record of the old key in this folder. Use it alone only if nobody else had the key. |
+| `-no-seal <id>` | With `-seal-all`: do not keep this record. A deletion or correction that you do not keep is undone. A claim that you do not keep stops being valid. A wrong id is an error. |
+| `-no-seal-file <file>` | The same, for a file with one id per line. |
+| `-list` | Show every record of the old key. Write nothing. |
+
+With nothing to decide on, for example on a new log, no flag is needed. Records the old key makes after the rotation are not valid. `-nostr` makes the new key a Nostr key, from a file because stdin carries the words. Above 200,000 records it also prints one `seal part <id>` line per extra seal record (C28); copy those with the rest of the log. It refuses above 200,200,000 records (`too large`). If a thief with your current key halted the log (`too new`), rotate goes past the halt and prints one `past halt <id>` line per halting record; the rotation retires that key, so the halt ends on every copy. A halt from a newer bean of your own (signed with the 24 words) is not passed: update bean.
+
+### `restore [-list] [-seal-all] [-no-seal <id>]... [-nostr new|<file>] [-identity <id>]`
+
+Rebuilds `local/` on a new machine. Copy `objects/` and `blobs/` from your backup into the folder, then run it and give the 24 words on stdin. It finds your identity, writes the identity secret, and moves you to a new signing key. Your identity id and records do not change. The lost key can no longer add, delete or correct anything. Sync every copy you still have into the folder first. The flags work as for `rotate`. If more than one identity matches the words, it fails with `ambiguous` and writes nothing; pass `-identity <id>`.
+
+### `migrate [-also <id>]... [-also-file <file>] [-nostr new|<file>] <empty folder>`, `migrate -list`
+
+Starts a new identity from a frozen log. On any other log it refuses: run `rotate`. On a new machine, run `restore` first: it fails with `compromised`, but it gives this copy what `migrate` needs. It copies your own records that `ls` shows, signs them with the new key, and shows 24 new words once. Each record keeps the old id in `context.migrated_from`. A record that only one side of the freeze corrected moves with its old value and names the correction in `context.migrated_disputed_by`, so check those. An agent's records, a stranger's, and claims in doubt do not move: signing them would vouch for them. The command counts them, and they stay in the old log. `migrate -list` shows them. What you logged after the fork is among them: if a claim is yours, name it with `-also <id>` or `-also-file <file>`. A thief can hold the same key, so read before you name it. Nothing links the two identities by signature. Set up agents again. A later import of an old export adds its records again, because the new identity makes different dedupe refs.
 
 ## Delete
 
 ### `purge [-reason <text>] <id>`
 
-Deletes a record about you. Writes a tombstone that every copy obeys, and erases the record here at once. The tombstone keeps the import ref of the record, so a later import of the same data adds nothing on any copy. You cannot purge identity records or other tombstones.
+Deletes a record about you. Writes a tombstone that every copy obeys, and erases the record here at once. The tombstone does not keep the import ref of the record. `local/purged-refs.jsonl` does, so a later import of the same data adds nothing on this copy, but it does on a copy without that file. You cannot purge identity records or other tombstones.
 
 ### `gc`
 

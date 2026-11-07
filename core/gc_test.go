@@ -136,7 +136,7 @@ func TestGCHoldTombstoneDiesOtherLives(t *testing.T) {
 	for tid := range h {
 		holder = tid
 	}
-	if _, err := s.Rotate(words, []string{holder}, NewKey{}); err != nil {
+	if _, err := s.Rotate(words, Seals{All: true, NoSeal: []string{holder}}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
 	l, _ := s.Load()
@@ -218,7 +218,7 @@ func TestGCNewTombstoneGetsOwnHold(t *testing.T) {
 	if err := writeFileAtomic(b.path(PathOf(xid)), ax, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := b.Rotate(words, []string{t1}, NewKey{}); err != nil {
+	if _, err := b.Rotate(words, Seals{All: true, NoSeal: []string{t1}}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
 	t2, err := b.Purge(xid, "")

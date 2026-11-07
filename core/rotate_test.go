@@ -21,12 +21,12 @@ func initWithWords(t *testing.T) (*Store, string, []string) {
 func TestRotateTwice(t *testing.T) {
 	s, id, words := initWithWords(t)
 	c1 := appendLines(t, s, partial("hrv.rmssd", 1, nil)).IDs[0]
-	r1, err := s.Rotate(words, nil, NewKey{})
+	r1, err := s.Rotate(words, Seals{All: true}, NewKey{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	c2 := appendLines(t, s, partial("hrv.rmssd", 2, nil)).IDs[0]
-	r2, err := s.Rotate(words, nil, NewKey{})
+	r2, err := s.Rotate(words, Seals{All: true}, NewKey{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,16 +58,16 @@ func TestRotateErrors(t *testing.T) {
 	s, _, words := initWithWords(t)
 	bad := append([]string{}, words...)
 	bad[0] = "zoo"
-	if _, err := s.Rotate(bad, nil, NewKey{}); err != ErrSeedMismatch {
+	if _, err := s.Rotate(bad, Seals{All: true}, NewKey{}); err != ErrSeedMismatch {
 		t.Errorf("wrong words: %v", err)
 	}
 	other, _, otherWords := initWithWords(t)
 	_ = other
-	if _, err := s.Rotate(otherWords, nil, NewKey{}); err != ErrSeedMismatch {
+	if _, err := s.Rotate(otherWords, Seals{All: true}, NewKey{}); err != ErrSeedMismatch {
 		t.Errorf("other seed: %v", err)
 	}
 	e := newStore(t)
-	if _, err := e.Rotate(words, nil, NewKey{}); err != ErrNotInitialized {
+	if _, err := e.Rotate(words, Seals{All: true}, NewKey{}); err != ErrNotInitialized {
 		t.Errorf("uninitialized: %v", err)
 	}
 }
@@ -87,7 +87,7 @@ func TestRotateSeals(t *testing.T) {
 		"source": map[string]any{"system": "test", "adapter": "t@1", "ref": nil},
 		"refs":   []any{map[string]any{"rel": "supersedes", "id": ids[2]}}}
 	d3 := appendLines(t, a, string(Canonical(sup))).IDs[0]
-	res, err := a.Rotate(words, []string{d3}, NewKey{})
+	res, err := a.Rotate(words, Seals{All: true, NoSeal: []string{d3}}, NewKey{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,10 +136,10 @@ func TestDoubleRotationFreeze(t *testing.T) {
 	a, id, words := initWithWords(t)
 	appendLines(t, a, partial("hrv.rmssd", 1, nil))
 	b := cloneLocal(t, a)
-	if _, err := a.Rotate(words, nil, NewKey{}); err != nil {
+	if _, err := a.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := b.Rotate(words, nil, NewKey{}); err != nil {
+	if _, err := b.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
 	a.Sync(b)
@@ -150,7 +150,7 @@ func TestDoubleRotationFreeze(t *testing.T) {
 			t.Errorf("exit %d\n%s", code, strings.Join(lines, "\n"))
 		}
 	}
-	if _, err := a.Rotate(words, nil, NewKey{}); err == nil || !strings.HasPrefix(err.Error(), "compromised: ") {
+	if _, err := a.Rotate(words, Seals{All: true}, NewKey{}); err == nil || !strings.HasPrefix(err.Error(), "compromised: ") {
 		t.Errorf("rotate on frozen: %v", err)
 	}
 	// Trunk claim is still valid. A frozen identity refuses new records
@@ -186,7 +186,7 @@ func TestRestoreLostLaptop(t *testing.T) {
 	}
 	withBlob := strings.Replace(partial("hrv.rmssd", 1, nil), `"source":`, `"blobs":[{"hash":"`+blob+`","media_type":"text/plain","role":"raw-export"}],"source":`, 1)
 	ids := appendLines(t, a, withBlob, partial("hrv.rmssd", 2, nil), partial("hrv.rmssd", 3, nil)).IDs
-	if _, err := a.Rotate(words, nil, NewKey{}); err != nil { // one earlier rotation: restore must use generation 1
+	if _, err := a.Rotate(words, Seals{All: true}, NewKey{}); err != nil { // one earlier rotation: restore must use generation 1
 		t.Fatal(err)
 	}
 	purge, err := a.Purge(ids[2], "")
@@ -204,7 +204,7 @@ func TestRestoreLostLaptop(t *testing.T) {
 		t.Fatalf("backup has local/: %v", err)
 	}
 
-	res, got, err := b.Restore(words, nil, NewKey{}, "")
+	res, got, err := b.Restore(words, Seals{All: true}, NewKey{}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +256,7 @@ func TestRestoreLostLaptop(t *testing.T) {
 func TestRestoreErrors(t *testing.T) {
 	a, _, words := initWithWords(t)
 	appendLines(t, a, partial("hrv.rmssd", 1, nil))
-	if _, _, err := a.Restore(words, nil, NewKey{}, ""); err != ErrAlreadyInitialized {
+	if _, _, err := a.Restore(words, Seals{All: true}, NewKey{}, ""); err != ErrAlreadyInitialized {
 		t.Errorf("restore over local/: %v", err)
 	}
 	b := newStore(t)
@@ -264,18 +264,18 @@ func TestRestoreErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _, otherWords := initWithWords(t)
-	if _, _, err := b.Restore(otherWords, nil, NewKey{}, ""); err == nil || err.Error() != "input missing: genesis for these words" {
+	if _, _, err := b.Restore(otherWords, Seals{All: true}, NewKey{}, ""); err == nil || err.Error() != "input missing: genesis for these words" {
 		t.Errorf("other words: %v", err)
 	}
 	bad := append([]string{}, words...)
 	bad[0] = "notaword"
-	if _, _, err := b.Restore(bad, nil, NewKey{}, ""); err != ErrSeedMismatch {
+	if _, _, err := b.Restore(bad, Seals{All: true}, NewKey{}, ""); err != ErrSeedMismatch {
 		t.Errorf("bad word: %v", err)
 	}
 	if _, err := b.ReadLocal(); err != ErrNotInitialized {
 		t.Errorf("failed restore left local/ initialized: %v", err)
 	}
-	if _, _, err := newStore(t).Restore(words, nil, NewKey{}, ""); err == nil {
+	if _, _, err := newStore(t).Restore(words, Seals{All: true}, NewKey{}, ""); err == nil {
 		t.Error("restore into an empty folder")
 	}
 }

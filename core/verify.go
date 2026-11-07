@@ -137,6 +137,33 @@ type Report struct {
 	// Dropped: records of too-new identities, which 6.3 does not evaluate.
 	// A crashed rotation still needs to find its own seal parts there.
 	Dropped map[string]*Record
+	// Unknown: records of an unknown version. Nothing evaluates them, but
+	// they are in the folder and an export must carry them.
+	Unknown []*Record
+	// OnChain: the nodes of every chain. A succession that is not one is not
+	// the identity's record, whatever its author field says: no step checks
+	// its key (DECISIONS 187).
+	OnChain map[string]bool
+	// What readers show for a frozen identity (DECISIONS 191). None of this
+	// changes Valid, Errors or the verify output.
+	Kept           map[string]bool     // corrections that are "frozen", but every branch kept them
+	KeptSuperseded map[string]bool     // targets of those corrections
+	Doubted        map[string]bool     // claims of the key at the fork that not every branch kept, and claims of keys below it
+	BranchClaims   map[string]bool     // those claims of keys below the fork
+	DeletedInDoubt map[string]bool     // targets of "frozen" tombstones that a branch or an older key stands behind
+	DoubtedFix     map[string]bool     // corrections that are "frozen" and that not every branch kept
+	DisputedBy     map[string][]string // target -> those corrections
+}
+
+// InDoubt reports a record that a freeze keeps from the default reads, but that
+// a person must be able to see.
+func (rp *Report) InDoubt(id string) bool {
+	return rp.Doubted[id] || rp.DeletedInDoubt[id] || rp.DoubtedFix[id]
+}
+
+// OffTree reports an identity record that no key vouches for.
+func (rp *Report) OffTree(r *Record) bool {
+	return (r.Type == "bean.succession" && !rp.OnChain[r.ID]) || (r.Type == "bean.seal" && rp.Held[r.ID])
 }
 
 func (rp *Report) warn(id, msg string) { rp.Warnings[id] = append(rp.Warnings[id], msg) }
@@ -177,9 +204,12 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 		Records: map[string]*Record{}, Valid: map[string]bool{}, Errors: map[string]string{},
 		Warnings: map[string][]string{}, Chains: map[string][]*Record{}, Superseded: map[string][]string{},
 		Purged: map[string]string{}, Held: map[string]bool{}, Duplicates: map[string]string{},
-		HeadHalt: map[string][]string{}, Dropped: map[string]*Record{},
+		HeadHalt: map[string][]string{}, Dropped: map[string]*Record{}, OnChain: map[string]bool{},
+		Kept: map[string]bool{}, KeptSuperseded: map[string]bool{}, Doubted: map[string]bool{}, DeletedInDoubt: map[string]bool{},
+		DoubtedFix: map[string]bool{}, DisputedBy: map[string][]string{}, BranchClaims: map[string]bool{},
 	}
-	unknown := rp.checkFiles(files, proven)        // step 1
+	unknown := rp.checkFiles(files, proven) // step 1
+	rp.Unknown = unknown
 	trees := rp.buildTrees(sortedKeys(rp.Records)) // steps 2 and 3
 	rp.gate(unknown, trees)                        // 8.2
 	ids := rp.dropTooNew(trees)
@@ -191,7 +221,114 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 	rp.mapSuperseded(ids)
 	rp.checkSubjects(ids, trees) // step 11
 	rp.findDuplicates(ids)       // step 12
+	rp.frozenView(ids, trees, position)
 	return rp
+}
+
+// frozenView works out what a reader should show for a frozen identity. The
+// verifier's rule stands: every correction and deletion is "frozen". But a
+// person who restored from a stale backup and kept everything would see old
+// values come back, deleted records return, and new claims of a key that a
+// thief may hold. So readers follow what every branch at the fork agreed on,
+// and a deletion stays in effect on doubt only if a branch seals it or an older
+// key signed it: otherwise one signature with the key at the fork or a key below
+// it, which a thief may hold, could hide the whole log. A hidden record is not lost. The
+// verify output still says what the rule says.
+func (rp *Report) frozenView(ids []string, trees map[string]*tree, position map[string]map[string]int) {
+	forked := false
+	for _, t := range trees {
+		forked = forked || t.forked
+	}
+	if !forked {
+		return
+	}
+	parts := map[string][]*Record{} // succession id -> its seal parts, in one pass
+	for _, id := range ids {
+		if r := rp.Records[id]; r.Type == "bean.seal" {
+			parts[r.Targets("seals")[0]] = append(parts[r.Targets("seals")[0]], r)
+		}
+	}
+	// For each identity, how many branches seal each id: one pass over the seal
+	// lists, so a stranger's own forks cost no more than their size.
+	sealedBy := map[string]map[string]int{}
+	branches := map[string]int{}
+	for gid, t := range trees {
+		if !t.forked {
+			continue
+		}
+		sealedBy[gid] = map[string]int{}
+		for _, c := range t.children[t.chain[len(t.chain)-1].ID] {
+			branches[gid]++
+			set := map[string]bool{}
+			for _, x := range c.Sealed() {
+				set[x] = true
+			}
+			for _, r := range parts[c.ID] {
+				if r.Kid == c.Kid {
+					for _, x := range r.Sealed() {
+						set[x] = true
+					}
+				}
+			}
+			for x := range set {
+				sealedBy[gid][x]++
+			}
+		}
+	}
+	count := func(gid, id string) int { return sealedBy[gid][id] }
+	every := func(gid, id string) bool { return sealedBy[gid][id] == branches[gid] }
+	keptTargets := map[string][]string{} // target -> corrections that every branch kept
+	for _, id := range ids {
+		r := rp.Records[id]
+		if sealedBy[r.Author] == nil || r.IsIdentity() {
+			continue
+		}
+		p, ok := position[r.Author][r.Kid]
+		if !ok {
+			continue
+		}
+		head := len(trees[r.Author].chain) - 1
+		frozen := rp.Errors[id] == "frozen"
+		switch {
+		case r.Type == "bean.tombstone":
+			if t := rp.Records[r.Targets("purges")[0]]; frozen && t != nil && !t.IsIdentity() && t.Type != "bean.tombstone" && t.Subject == r.Subject && (p < head || count(r.Author, id) > 0) {
+				rp.DeletedInDoubt[t.ID] = true
+			}
+		case r.IsDestructive():
+			if !frozen {
+				continue
+			}
+			keep := p != offChain && (p < head || every(r.Author, id))
+			if keep {
+				rp.Kept[id] = true
+			} else {
+				rp.DoubtedFix[id] = true
+			}
+			for _, t := range r.Targets("supersedes") {
+				if target := rp.Records[t]; target != nil && target.Author == r.Author {
+					if keep {
+						keptTargets[t] = append(keptTargets[t], id)
+					} else {
+						rp.DisputedBy[t] = append(rp.DisputedBy[t], id)
+					}
+				}
+			}
+		case frozen && p == offChain:
+			rp.Doubted[id] = true
+			rp.BranchClaims[id] = true
+		case rp.Valid[id] && p == head && !every(r.Author, id):
+			rp.Doubted[id] = true
+		}
+	}
+	// A correction replaces its target only while it can be shown itself: a
+	// reading must not vanish because its correction is hidden too.
+	for t, list := range keptTargets {
+		for _, id := range list {
+			if !rp.DeletedInDoubt[id] {
+				rp.KeptSuperseded[t] = true
+			}
+		}
+	}
 }
 
 // checkFiles is step 1. It returns the records of an unknown version.
@@ -433,6 +570,7 @@ func (rp *Report) freeze(trees map[string]*tree) map[string]map[string]int {
 		for i, c := range t.chain {
 			pos[c.ValueKey()] = i
 			onChain[c.ID] = true
+			rp.OnChain[c.ID] = true
 		}
 		for id, s := range t.nodes {
 			if !onChain[id] {

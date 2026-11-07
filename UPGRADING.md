@@ -68,6 +68,16 @@ Four rules changed. bean never wrote a record that the new rules reject. Most ef
   - a tombstone with blobs names `blobs`;
   - a record of an `hlog.*` core type says only `old format`.
 
+### Re-audit fixes (2026-11-07)
+
+No validity rule changes: `bean verify` prints the same lines for the same files. Commands change:
+
+- `rotate` and `restore` need `-seal-all` once the old key has signed anything. Without it they show what the old key signed and stop. A wrong `-no-seal` id is now an error. Update your scripts.
+- An import with a new value for a reading you already have now says so and exits 1. It used to skip it in silence. `append -corrections` writes it.
+- `ls`, `show`, `export` and the MCP tools exit 3 for a too-new identity instead of showing nothing, and warn and exit 4 for a frozen one.
+- `export` writes everything it can, also past a missing stored file, and records of a newer format.
+- For a frozen identity, reads show what both sides kept, and `ls -all` marks the rest. New: `bean migrate`, for a frozen identity only.
+
 ### Change notes C25 to C29 and K1 (builds from 2026-10-30)
 
 If you never ran `rotate` or `restore` on your log, nothing changes for you.

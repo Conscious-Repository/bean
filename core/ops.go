@@ -17,7 +17,17 @@ import (
 // AppendResult is the output of Append.
 type AppendResult struct {
 	Added, Skipped int
+	Corrected      int       // of Added: new values for readings, written with -corrections
+	Changed        []Changed // readings with a new value that were not written
 	IDs            []string
+}
+
+// Changed is a reading that a source gives a new value for. bean does not know
+// which value is right: an older report, a parser bug or a mistaken file look
+// the same as a lab's corrected report. So it never replaces a value by itself.
+type Changed struct {
+	ID, Type string // the record the log shows now
+	Old, New string // canonical values
 }
 
 var forbiddenPartial = []string{"v", "nonce", "author", "kid", "id", "sig"}
@@ -25,9 +35,15 @@ var forbiddenPartial = []string{"v", "nonce", "author", "kid", "id", "sig"}
 // Append reads JSONL partial records (SPEC.md 9.2), completes, dedupes,
 // signs and writes them (12.3 bean append). On the first error it stops;
 // records before it stay written.
-func (s *Store) Append(in io.Reader) (AppendResult, error) { return s.appendAs(in, false) }
+func (s *Store) Append(in io.Reader) (AppendResult, error) { return s.appendAs(in, false, false) }
 
-func (s *Store) appendAs(in io.Reader, agent bool) (AppendResult, error) {
+// AppendCorrections is Append for a person who checked the changed readings
+// that Append reported: each new value supersedes the current record.
+func (s *Store) AppendCorrections(in io.Reader) (AppendResult, error) {
+	return s.appendAs(in, false, true)
+}
+
+func (s *Store) appendAs(in io.Reader, agent, corrections bool) (AppendResult, error) {
 	unlock, err := s.lock()
 	if err != nil {
 		return AppendResult{}, err
@@ -41,6 +57,7 @@ func (s *Store) appendAs(in io.Reader, agent bool) (AppendResult, error) {
 	if err != nil {
 		return AppendResult{}, err
 	}
+	w.corrections = corrections
 	return s.appendWith(l, w, in)
 }
 
@@ -51,7 +68,7 @@ func (s *Store) writerFor(l *Loaded, agent bool) (writer, error) {
 		if err != nil {
 			return writer{}, err
 		}
-		return writer{a.Signer, a.Signer.Public(), a.Identity, a.Secret}, nil
+		return writer{signer: a.Signer, author: a.Signer.Public(), identity: a.Identity, secret: a.Secret}, nil
 	}
 	if l.Local == nil {
 		if _, err := s.Identity(); err == nil {
@@ -59,7 +76,7 @@ func (s *Store) writerFor(l *Loaded, agent bool) (writer, error) {
 		}
 		return writer{}, ErrNotInitialized
 	}
-	return writer{l.Local.Signer, l.Local.Identity, l.Local.Identity, l.Local.Secret}, nil
+	return writer{signer: l.Local.Signer, author: l.Local.Identity, identity: l.Local.Identity, secret: l.Local.Secret}, nil
 }
 
 // writer is who signs appended records: the person, or an agent key that
@@ -69,6 +86,8 @@ type writer struct {
 	author   string
 	identity string // the default subject
 	secret   []byte // nil on a replica without the identity secret
+	// corrections: the person checked the changed readings of this input.
+	corrections bool
 }
 
 func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, error) {
@@ -87,10 +106,30 @@ func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, err
 	// Existing valid refs of this author and, per 9.7, the ids they belong
 	// to. Dedupe is per author (C27): another key's record with the same
 	// ref never hides or blocks this author's record.
+	// values holds every value a ref has had, so a value the log already knows
+	// is skipped, also after a correction. currents holds the records of a ref
+	// that no record supersedes, and existing is the one that supersedes_ref
+	// names: the first current one, or, when a correction without this ref
+	// replaced them all, the first one that has it.
 	existing := map[string]string{}
-	for id, r := range l.Report.Records {
-		if l.Report.Valid[id] && r.Source.Ref != "" && r.Author == w.author {
-			existing[refLine(r.Subject, r.Source.System, r.Source.Ref)] = id
+	currents := map[string][]string{}
+	values := map[string]map[string]bool{}
+	for _, id := range sortedKeys(l.Report.Records) {
+		r := l.Report.Records[id]
+		if !l.Report.Valid[id] || r.Source.Ref == "" || r.Author != w.author {
+			continue
+		}
+		key := refLine(r.Subject, r.Source.System, r.Source.Ref)
+		if values[key] == nil {
+			values[key] = map[string]bool{}
+			existing[key] = id
+		}
+		values[key][string(Canonical(r.Raw["value"]))] = true
+		if len(l.Report.Superseded[id]) == 0 {
+			if currents[key] == nil {
+				existing[key] = id
+			}
+			currents[key] = append(currents[key], id)
 		}
 	}
 	seen := map[string]bool{}
@@ -175,11 +214,31 @@ func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, err
 			subject, _ := obj["subject"].(string)
 			system, _ := src["system"].(string)
 			key := refLine(subject, system, ref)
-			if prev, has := existing[key]; (has && !supersedes[prev]) || purged[key] || seen[key] {
+			if purged[key] || seen[key] {
 				res.Skipped++
 				continue
 			}
-			seen[key] = true
+			seen[key] = true // the first line of an input decides for that ref
+			if known := values[key]; known != nil && !supersedes[existing[key]] {
+				value := string(Canonical(obj["value"]))
+				if known[value] {
+					res.Skipped++
+					continue
+				}
+				current := l.Report.Records[existing[key]]
+				typ, _ := obj["type"].(string)
+				if !w.corrections || len(currents[key]) == 0 || typ != current.Type || hasNoValue(obj["value"]) {
+					res.Skipped++
+					res.Changed = append(res.Changed, Changed{current.ID, current.Type, string(Canonical(current.Raw["value"])), value})
+					continue
+				}
+				refs, _ := obj["refs"].([]any)
+				for _, id := range currents[key] { // duplicates too, or a copy would hide the fix
+					refs = append(refs, map[string]any{"rel": "supersedes", "id": id})
+				}
+				obj["refs"] = refs
+				res.Corrected++
+			}
 		}
 		id, bytes, err := SignRecord(obj, w.signer)
 		if err != nil {
@@ -205,6 +264,17 @@ func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, err
 		return res, err
 	}
 	return res, nil
+}
+
+// hasNoValue reports a value that says nothing, like {"n": null}: a test not
+// performed must not replace a result.
+func hasNoValue(v any) bool {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return true
+	}
+	n, has := m["n"]
+	return len(m) == 0 || (has && n == nil)
 }
 
 // inputRef removes source.<key> (ref_input or supersedes_ref) from src
@@ -470,13 +540,28 @@ func (s *Store) Export(dir string) (records, blobs int, err error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	if l.Local == nil {
+	if l.ID == "" { // a copy without a signing key can still leave
 		return 0, 0, ErrNotInitialized
 	}
+	// Every record file goes out, also of a too-new identity and of a newer
+	// format: an export needs no judgment of them, and it is the way out.
+	all := map[string]*Record{}
+	for id, r := range l.Report.Records {
+		all[id] = r
+	}
+	for id, r := range l.Report.Dropped {
+		all[id] = r
+	}
+	for _, r := range l.Report.Unknown {
+		all[r.ID] = r
+	}
+	labels := l.AgentLabels()
 	type manBlob struct{ id, sha, mt string }
 	blobSet := map[string]manBlob{}
-	for _, id := range sortedKeys(l.Report.Records) {
-		r := l.Report.Records[id]
+	missing := map[string]bool{}
+	var missingErr error
+	for _, id := range sortedKeys(all) {
+		r := all[id]
 		if _, purged := l.Report.Purged[id]; purged || l.Hidden[id] {
 			continue
 		}
@@ -484,19 +569,35 @@ func (s *Store) Export(dir string) (records, blobs int, err error) {
 			return 0, 0, err
 		}
 		records++
-		for _, bl := range r.Blobs {
+		named := r.Blobs
+		if r.V != 0 { // a newer format: its fields were not read
+			for _, h := range namedBlobs(r.Bytes) {
+				if IsID(h) {
+					named = append(named, Blob{Hash: h, MediaType: "application/octet-stream"})
+				}
+			}
+		}
+		for _, bl := range named {
 			if _, done := blobSet[bl.Hash]; done {
 				continue
 			}
 			pt, err := s.GetBlob(bl.Hash)
 			if err != nil {
-				return 0, 0, err
+				// One file must not stop the way out. The manifest names it, and
+				// the command fails at the end only for the person's own record:
+				// any stranger can name an absent blob.
+				missing[bl.Hash] = true
+				if missingErr == nil && (r.Author == l.ID || labels[r.Author] != "") {
+					missingErr = err
+				}
+				continue
 			}
 			if err := writeFileAtomic(filepath.Join(dir, "blobs", bl.Hash[7:]), pt, 0o600); err != nil {
 				return 0, 0, err
 			}
 			sum := sha256.Sum256(pt)
 			blobSet[bl.Hash] = manBlob{bl.Hash, hex.EncodeToString(sum[:]), bl.MediaType}
+			delete(missing, bl.Hash)
 			blobs++
 		}
 	}
@@ -508,11 +609,21 @@ func (s *Store) Export(dir string) (records, blobs int, err error) {
 	if list == nil {
 		list = []any{}
 	}
-	man := map[string]any{"spec": "bean-v0", "identity": l.Local.Identity, "records": float64(records), "blobs": list}
+	man := map[string]any{"spec": "bean-v0", "identity": l.ID, "records": float64(records), "blobs": list}
+	if len(missing) > 0 {
+		var m []any
+		for _, id := range sortedKeys(missing) {
+			m = append(m, id)
+		}
+		man["missing_blobs"] = m
+	}
 	if err := writeFileAtomic(filepath.Join(dir, "manifest.json"), Canonical(man), 0o600); err != nil {
 		return 0, 0, err
 	}
-	return records, blobs, nil
+	if l.IsTooNew() {
+		return records, blobs, l.TooNewError()
+	}
+	return records, blobs, missingErr
 }
 
 // ImportExport reverses Export into a log with the same identity secret.

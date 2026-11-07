@@ -32,21 +32,21 @@ func TestRotateRestoreTooNewError(t *testing.T) {
 		t.Fatal(err)
 	}
 	futureRecord(t, a, id, RecoverySigner(seed, 0))
-	if _, err := a.Rotate(words, nil, NewKey{}); err == nil || !strings.HasPrefix(err.Error(), "too new: "+id) {
+	if _, err := a.Rotate(words, Seals{All: true}, NewKey{}); err == nil || !strings.HasPrefix(err.Error(), "too new: "+id) {
 		t.Fatalf("rotate: %v, want too new", err)
 	}
 	b := newStore(t)
 	if _, err := b.Sync(a); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := b.Restore(words, nil, NewKey{}, ""); err == nil || !strings.HasPrefix(err.Error(), "too new: "+id) {
+	if _, _, err := b.Restore(words, Seals{All: true}, NewKey{}, ""); err == nil || !strings.HasPrefix(err.Error(), "too new: "+id) {
 		t.Fatalf("restore: %v, want too new", err)
 	}
 	c := newStore(t)
 	if _, err := c.Sync(a); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := c.Restore(words, nil, NewKey{}, id); err == nil || !strings.HasPrefix(err.Error(), "too new: "+id) {
+	if _, _, err := c.Restore(words, Seals{All: true}, NewKey{}, id); err == nil || !strings.HasPrefix(err.Error(), "too new: "+id) {
 		t.Fatalf("restore -identity: %v, want too new", err)
 	}
 }
@@ -58,7 +58,7 @@ func TestTooNewGateRetiredKeyAndStranger(t *testing.T) {
 	s, id, words := initWithWords(t)
 	appendLines(t, s, partial("hr", 1, nil))
 	old := s.mustLocal(t).Signer
-	if _, err := s.Rotate(words, nil, NewKey{}); err != nil {
+	if _, err := s.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
 	retired := futureRecord(t, s, id, old)
@@ -78,7 +78,7 @@ func TestTooNewGateRetiredKeyAndStranger(t *testing.T) {
 	if _, err := s.Append(strings.NewReader(partial("hr", 2, nil) + "\n")); err != nil {
 		t.Fatalf("append: %v", err)
 	}
-	if _, err := s.Rotate(words, nil, NewKey{}); err != nil {
+	if _, err := s.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 		t.Fatalf("rotate: %v", err)
 	}
 	if _, _, err := s.GC(); err != nil {
@@ -105,7 +105,7 @@ func TestTooNewGateNextRecoveryKey(t *testing.T) {
 	if !contains(l.Report.TooNew, id) {
 		t.Fatalf("too new %v, want %s", l.Report.TooNew, id)
 	}
-	if _, err := s.Rotate(words, nil, NewKey{}); err == nil || !strings.HasPrefix(err.Error(), "too new: "+id) {
+	if _, err := s.Rotate(words, Seals{All: true}, NewKey{}); err == nil || !strings.HasPrefix(err.Error(), "too new: "+id) {
 		t.Fatalf("rotate: %v, want too new", err)
 	}
 	if _, err := s.Append(strings.NewReader(partial("hr", 2, nil) + "\n")); err == nil || !strings.HasPrefix(err.Error(), "too new: "+id) {

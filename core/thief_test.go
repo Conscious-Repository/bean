@@ -42,7 +42,7 @@ func TestThiefHaltOwnerRotatesPast(t *testing.T) {
 	if _, err := s.Append(strings.NewReader(partial("hr", 3, nil) + "\n")); err == nil || !strings.HasPrefix(err.Error(), "too new") {
 		t.Fatalf("append while halted: %v", err)
 	}
-	res, err := s.Rotate(words, nil, NewKey{})
+	res, err := s.Rotate(words, Seals{All: true}, NewKey{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestThiefRetriesAfterRecovery(t *testing.T) {
 	appendLines(t, s, partial("hr", 1, nil))
 	stolen := s.mustLocal(t).Signer
 	thiefHalt(t, s, id, stolen)
-	if _, err := s.Rotate(words, nil, NewKey{}); err != nil {
+	if _, err := s.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
 	// A second halt by the stolen key: ungated.
@@ -119,7 +119,7 @@ func TestHaltByRecoveryKeyIsNotPassed(t *testing.T) {
 		t.Fatalf("head halt %v with a recovery-key record", l.Report.HeadHalt[id])
 	}
 	before := fileSet(t, s)
-	if _, err := s.Rotate(words, nil, NewKey{}); err == nil || !strings.HasPrefix(err.Error(), "too new: "+id) {
+	if _, err := s.Rotate(words, Seals{All: true}, NewKey{}); err == nil || !strings.HasPrefix(err.Error(), "too new: "+id) {
 		t.Fatalf("rotate: %v", err)
 	}
 	if fileSet(t, s) != before {
@@ -132,7 +132,7 @@ func TestHaltWrongWords(t *testing.T) {
 	s, id, _ := initWithWords(t)
 	thiefHalt(t, s, id, s.mustLocal(t).Signer)
 	_, _, words2 := initWithWords(t)
-	if _, err := s.Rotate(words2, nil, NewKey{}); err != ErrSeedMismatch {
+	if _, err := s.Rotate(words2, Seals{All: true}, NewKey{}); err != ErrSeedMismatch {
 		t.Fatalf("rotate with other words: %v", err)
 	}
 }
@@ -146,7 +146,7 @@ func TestThiefHaltRestoreElsewhere(t *testing.T) {
 	if _, err := b.Sync(a); err != nil {
 		t.Fatal(err)
 	}
-	res, got, err := b.Restore(words, nil, NewKey{}, "")
+	res, got, err := b.Restore(words, Seals{All: true}, NewKey{}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestThiefHaltRacesRotation(t *testing.T) {
 		t.Fatal(err)
 	}
 	stolen := a.mustLocal(t).Signer
-	if _, err := a.Rotate(words, nil, NewKey{}); err != nil {
+	if _, err := a.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
 	x := thiefHalt(t, b, id, stolen)
@@ -214,10 +214,10 @@ func TestPastHaltTwiceForks(t *testing.T) {
 	if _, err := b.Sync(a); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.Rotate(words, nil, NewKey{}); err != nil {
+	if _, err := a.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := b.Rotate(words, nil, NewKey{}); err != nil {
+	if _, err := b.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := a.Sync(b); err != nil {
@@ -228,7 +228,7 @@ func TestPastHaltTwiceForks(t *testing.T) {
 	// halt finds the fork and stops.
 	mustTooNew(t, a, id, true)
 	before := fileSet(t, a)
-	if _, err := a.Rotate(words, nil, NewKey{}); err == nil || !strings.HasPrefix(err.Error(), "compromised") {
+	if _, err := a.Rotate(words, Seals{All: true}, NewKey{}); err == nil || !strings.HasPrefix(err.Error(), "compromised") {
 		t.Fatalf("rotate after fork: %v", err)
 	}
 	if fileSet(t, a) != before {
@@ -246,10 +246,10 @@ func TestPastHaltOnFrozenIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	forkKey := a.mustLocal(t).Signer
-	if _, err := a.Rotate(words, nil, NewKey{}); err != nil {
+	if _, err := a.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := b.Rotate(words, nil, NewKey{}); err != nil {
+	if _, err := b.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := a.Sync(b); err != nil {
@@ -257,7 +257,7 @@ func TestPastHaltOnFrozenIdentity(t *testing.T) {
 	}
 	thiefHalt(t, a, id, forkKey) // the fork point's key is the head of a frozen identity
 	before := fileSet(t, a)
-	if _, err := a.Rotate(words, nil, NewKey{}); err == nil || !strings.HasPrefix(err.Error(), "compromised") {
+	if _, err := a.Rotate(words, Seals{All: true}, NewKey{}); err == nil || !strings.HasPrefix(err.Error(), "compromised") {
 		t.Fatalf("rotate: %v", err)
 	}
 	if fileSet(t, a) != before {
@@ -282,7 +282,7 @@ func TestPastHaltWithThiefTombstone(t *testing.T) {
 	if _, err := os.Stat(s.path(PathOf(claim))); err != nil {
 		t.Fatalf("claim hidden while halted: %v", err)
 	}
-	res, err := s.Rotate(words, []string{tid}, NewKey{})
+	res, err := s.Rotate(words, Seals{All: true, NoSeal: []string{tid}}, NewKey{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -314,7 +314,7 @@ func TestPastHaltKeepsAgentRecords(t *testing.T) {
 	if _, err := s.AppendAsAgent(strings.NewReader(partial("note", 2, nil) + "\n")); err == nil || !strings.HasPrefix(err.Error(), "too new: "+id) {
 		t.Fatalf("agent write for a halted identity: %v", err)
 	}
-	if _, err := s.Rotate(words, nil, NewKey{}); err != nil {
+	if _, err := s.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
 	l = verifyOK(t, s)
@@ -344,7 +344,7 @@ func TestPastHaltCrashBetweenParts(t *testing.T) {
 		}
 	}
 	defer func() { hookAfterPart = nil }()
-	if _, err := s.Rotate(words, nil, NewKey{}); err != nil {
+	if _, err := s.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
 	hookAfterPart = nil
@@ -359,7 +359,7 @@ func TestPastHaltCrashBetweenParts(t *testing.T) {
 			t.Fatalf("%s left", f)
 		}
 	}
-	if _, err := snap.Rotate(words, nil, NewKey{}); err != nil {
+	if _, err := snap.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
 	verifyOK(t, snap)
@@ -375,7 +375,7 @@ func TestPastHaltCrashAfterSuccession(t *testing.T) {
 	snap := newStore(t)
 	hookAfterSuccession = func() { os.CopyFS(snap.Dir, os.DirFS(s.Dir)) }
 	defer func() { hookAfterSuccession = nil }()
-	res, err := s.Rotate(words, nil, NewKey{})
+	res, err := s.Rotate(words, Seals{All: true}, NewKey{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -414,7 +414,7 @@ func TestRestorePastHaltAmongStrangers(t *testing.T) {
 	if _, err := b.Sync(a); err != nil {
 		t.Fatal(err)
 	}
-	if _, got, err := b.Restore(words, nil, NewKey{}, ""); err != nil || got != id {
+	if _, got, err := b.Restore(words, Seals{All: true}, NewKey{}, ""); err != nil || got != id {
 		t.Fatalf("restore %s: %v", got, err)
 	}
 	mustTooNew(t, b, id, false)

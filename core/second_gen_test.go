@@ -21,11 +21,11 @@ func TestSecondGen(t *testing.T) {
 	for i := 0; i < 11; i++ {
 		appendLines(t, s, partial("hr", float64(i), nil))
 	}
-	if _, err := s.Rotate(words, nil, NewKey{}); err != nil {
+	if _, err := s.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
 	appendLines(t, s, partial("hr", 99, nil))
-	if _, err := s.Rotate(words, nil, NewKey{}); err != nil {
+	if _, err := s.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
 }

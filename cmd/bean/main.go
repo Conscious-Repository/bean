@@ -45,9 +45,13 @@ Copies and keys
   sync <folder>                 Copy the records and files that another copy has.
   export <folder>               Write a plaintext copy of the log.
   import-export <folder>        Read an export into a log of the same identity.
-  rotate [-nostr new|<file>]    Change your signing key. Reads the 24 words.
-  restore [-nostr new|<file>]   Rebuild your log on a new machine from the
-                                24 words and a backup.
+  rotate [-seal-all] [-no-seal <id>]... [-no-seal-file <file>] [-list] [-nostr new|<file>]
+                                Change your signing key. Reads the 24 words.
+                                Shows what the old key signed: you choose.
+  restore [flags]               Rebuild your log on a new machine from the
+                                24 words and a backup. Same flags as rotate.
+  migrate <empty folder>        Start a new identity from a frozen log, with your
+                                own records. Shows 24 new words once.
 
 Delete
   purge [-reason <text>] <id>   Delete a record from every copy.
@@ -66,7 +70,7 @@ var syntax = map[string]string{
 	"init":          "init [-nostr new|-|<nsec file>] [-force]",
 	"whoami":        "whoami",
 	"add":           "add <type> <value> [-unit <u>] [-at <time>] [-note <text>] [-about <id>] [-corrects <id>] [-photo <file>] [-agent]",
-	"append":        "append [-agent] < records.jsonl",
+	"append":        "append [-agent | -corrections] < records.jsonl",
 	"blob":          "blob put <file> | blob get <id>",
 	"ls":            "ls [-type <t>] [-since <time>] [-until <time>] [-author me|agent|<id>|<npub>] [-all] [-json]",
 	"show":          "show <id>",
@@ -76,8 +80,9 @@ var syntax = map[string]string{
 	"sync":          "sync <source folder>",
 	"export":        "export <empty folder>",
 	"import-export": "import-export <export folder>",
-	"rotate":        "rotate [-no-seal <id>]... [-nostr new|<nsec file>] < words.txt",
-	"restore":       "restore [-no-seal <id>]... [-nostr new|<nsec file>] [-identity <id>] < words.txt",
+	"rotate":        "rotate [-list] [-seal-all] [-no-seal <id>]... [-no-seal-file <file>] [-nostr new|<nsec file>] < words.txt",
+	"restore":       "restore [-list] [-seal-all] [-no-seal <id>]... [-no-seal-file <file>] [-nostr new|<nsec file>] [-identity <id>] < words.txt",
+	"migrate":       "migrate [-also <id>]... [-also-file <file>] [-nostr new|<nsec file>] <empty folder> | migrate -list",
 	"purge":         "purge [-reason <text>] <id>",
 	"gc":            "gc",
 	"help":          "help",
@@ -200,17 +205,31 @@ func main() {
 		af := flag.NewFlagSet("append", flag.ContinueOnError)
 		af.SetOutput(io.Discard)
 		agent := af.Bool("agent", false, "sign with this machine's agent key")
-		if err := af.Parse(rest); err != nil || af.NArg() != 0 {
+		corrections := af.Bool("corrections", false, "write new values for readings you already have, as corrections")
+		if err := af.Parse(rest); err != nil || af.NArg() != 0 || (*agent && *corrections) {
 			usage()
 		}
 		appendFn := s.Append
 		if *agent {
 			appendFn = s.AppendAsAgent
 		}
+		if *corrections {
+			appendFn = s.AppendCorrections
+		}
 		res, err := appendFn(os.Stdin)
-		fmt.Printf("added %d, skipped %d\n", res.Added, res.Skipped)
+		if res.Corrected > 0 {
+			fmt.Printf("added %d, skipped %d, %d of them new values for readings you already had\n", res.Added, res.Skipped, res.Corrected)
+		} else {
+			fmt.Printf("added %d, skipped %d\n", res.Added, res.Skipped)
+		}
 		if err != nil {
 			fail(err)
+		}
+		if len(res.Changed) > 0 {
+			for _, c := range res.Changed {
+				fmt.Fprintf(os.Stderr, "changed: %s %s: the log has %s, this input says %s\n", c.ID[7:19], safe(c.Type), safe(c.Old), safe(c.New))
+			}
+			fail(fmt.Errorf("%d readings have a new value, and nothing was written for them. Check that this input is newer and right, then run append -corrections", len(res.Changed)))
 		}
 	case "blob":
 		if len(rest) != 2 {
@@ -276,79 +295,11 @@ func main() {
 		}
 		fmt.Printf("erased %d records, %d blobs\n", r, b)
 	case "rotate":
-		rf := flag.NewFlagSet("rotate", flag.ContinueOnError)
-		rf.SetOutput(io.Discard)
-		var noSeal multiFlag
-		rf.Var(&noSeal, "no-seal", "leave this destructive record unsealed (repeatable)")
-		nostr := rf.String("nostr", "", "new, or a file holding an nsec")
-		if err := rf.Parse(rest); err != nil || rf.NArg() != 0 {
-			usage()
-		}
-		key, err := nostrKey(*nostr, false)
-		if err != nil {
-			fail(err)
-		}
-		fmt.Fprintln(os.Stderr, "sync all devices before you rotate. paste the 24 words, then end input:")
-		text, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			fail(err)
-		}
-		res, err := s.Rotate(core.ParseWords(string(text)), noSeal, key)
-		if err != nil {
-			fail(err)
-		}
-		for _, id := range res.Sealed {
-			fmt.Println("sealed", id)
-		}
-		for _, id := range res.NotSealed {
-			fmt.Println("not sealed", id)
-		}
-		for _, id := range res.Parts {
-			fmt.Println("seal part", id)
-		}
-		for _, id := range res.Past {
-			fmt.Println("past halt", id)
-		}
-		fmt.Println("rotated to", res.NewKey)
-		fmt.Printf("sealed %d\n", len(res.Sealed))
+		cmdRotate(s, rest, false)
 	case "restore":
-		rf := flag.NewFlagSet("restore", flag.ContinueOnError)
-		rf.SetOutput(io.Discard)
-		var noSeal multiFlag
-		rf.Var(&noSeal, "no-seal", "leave this destructive record unsealed (repeatable)")
-		nostr := rf.String("nostr", "", "new, or a file holding an nsec")
-		ident := rf.String("identity", "", "the identity id to restore when the words match more than one genesis")
-		if err := rf.Parse(rest); err != nil || rf.NArg() != 0 {
-			usage()
-		}
-		key, err := nostrKey(*nostr, false)
-		if err != nil {
-			fail(err)
-		}
-		fmt.Fprintln(os.Stderr, "sync every copy of the log you still have into this folder first. paste the 24 words, then end input:")
-		text, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			fail(err)
-		}
-		res, id, err := s.Restore(core.ParseWords(string(text)), noSeal, key, *ident)
-		if err != nil {
-			fail(err)
-		}
-		fmt.Println("identity", id)
-		for _, x := range res.Sealed {
-			fmt.Println("sealed", x)
-		}
-		for _, x := range res.NotSealed {
-			fmt.Println("not sealed", x)
-		}
-		for _, x := range res.Parts {
-			fmt.Println("seal part", x)
-		}
-		for _, x := range res.Past {
-			fmt.Println("past halt", x)
-		}
-		fmt.Println("rotated to", res.NewKey)
-		fmt.Printf("sealed %d\n", len(res.Sealed))
+		cmdRotate(s, rest, true)
+	case "migrate":
+		cmdMigrate(s, rest)
 	case "sync":
 		if len(rest) != 1 {
 			usage()
@@ -369,10 +320,13 @@ func main() {
 		}
 		fmt.Fprintln(os.Stderr, "bean: the export is not encrypted")
 		r, b, err := s.Export(rest[0])
+		fmt.Printf("exported %d records, %d blobs (plaintext)\n", r, b)
 		if err != nil {
 			fail(err)
 		}
-		fmt.Printf("exported %d records, %d blobs (plaintext)\n", r, b)
+		if l, err := s.Load(); err == nil && warnFrozen(l) {
+			os.Exit(4)
+		}
 	case "import-export":
 		if len(rest) != 1 {
 			usage()
@@ -392,7 +346,7 @@ func main() {
 var needsLog = map[string]bool{
 	"whoami": true, "add": true, "append": true, "blob": true, "ls": true, "show": true,
 	"verify": true, "mcp": true, "export": true, "import-export": true, "rotate": true,
-	"purge": true, "gc": true,
+	"purge": true, "gc": true, "migrate": true,
 }
 
 // hasLog reports whether the folder holds a log: an identity, or synced

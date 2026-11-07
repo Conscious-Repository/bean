@@ -26,7 +26,7 @@ func FuzzTooNewGate(f *testing.F) {
 		keys := []Signer{s.mustLocal(t).Signer} // signing keys, oldest first
 		rots := int(in[0] % 4)
 		for i := 0; i < rots; i++ {
-			if _, err := s.Rotate(words, nil, NewKey{}); err != nil {
+			if _, err := s.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 				t.Fatal(err)
 			}
 			keys = append(keys, s.mustLocal(t).Signer)
@@ -67,7 +67,7 @@ func FuzzTooNewGate(f *testing.F) {
 			return
 		}
 		before := fileSet(t, s)
-		_, err = s.Rotate(words, nil, NewKey{})
+		_, err = s.Rotate(words, Seals{All: true}, NewKey{})
 		switch {
 		case recovery || (head && ahead):
 			if err == nil {

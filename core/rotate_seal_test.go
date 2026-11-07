@@ -14,7 +14,7 @@ func TestNoSealSupersedeShowsTarget(t *testing.T) {
 	tgt := appendLines(t, a, partial("hr", 1, nil)).IDs[0]
 	fix := strings.Replace(partial("hr", 2, nil), `"type":"hr"`, `"refs":[{"id":"`+tgt+`","rel":"supersedes"}],"type":"hr"`, 1)
 	d := appendLines(t, a, fix).IDs[0]
-	res, err := a.Rotate(words, []string{d}, NewKey{})
+	res, err := a.Rotate(words, Seals{All: true, NoSeal: []string{d}}, NewKey{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,11 +35,11 @@ func TestTwoRotationsKeepEverything(t *testing.T) {
 	if _, _, err := a.AgentInit("", "assistant"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.Rotate(words, nil, NewKey{}); err != nil {
+	if _, err := a.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
 	r2 := appendLines(t, a, partial("hr", 2, nil)).IDs[0]
-	if _, err := a.Rotate(words, nil, NewKey{}); err != nil {
+	if _, err := a.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
 	r3 := appendLines(t, a, partial("hr", 3, nil)).IDs[0]
@@ -55,7 +55,7 @@ func TestTwoRotationsKeepEverything(t *testing.T) {
 	// Restore on a fresh folder from the synced files keeps all of it.
 	n := newStore(t)
 	n.Sync(a)
-	if _, _, err := n.Restore(words, nil, NewKey{}, ""); err != nil {
+	if _, _, err := n.Restore(words, Seals{All: true}, NewKey{}, ""); err != nil {
 		t.Fatal(err)
 	}
 	ln := verifyOK(t, n)
@@ -71,7 +71,7 @@ func TestTwoRotationsKeepEverything(t *testing.T) {
 func TestExportKeepsSealedRecords(t *testing.T) {
 	a, _, words := initWithWords(t)
 	r1 := appendLines(t, a, partial("hr", 1, nil)).IDs[0]
-	if _, err := a.Rotate(words, nil, NewKey{}); err != nil {
+	if _, err := a.Rotate(words, Seals{All: true}, NewKey{}); err != nil {
 		t.Fatal(err)
 	}
 	x := t.TempDir() + "/x"
