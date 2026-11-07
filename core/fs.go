@@ -25,6 +25,7 @@ const (
 	fileHolds     = "local/holds.json"
 	filePurgedRef = "local/purged-refs.jsonl"
 	fileIndex     = "local/cache/index.json"
+	fileLock      = "local/lock"
 )
 
 // writeFileAtomic writes data to a temporary name in the same directory,
@@ -107,8 +108,8 @@ func listShardFiles(root, dir string) ([]string, error) {
 			return nil, err
 		}
 		for _, f := range files {
-			if f.IsDir() || strings.HasPrefix(f.Name(), ".tmp-") {
-				continue
+			if !f.Type().IsRegular() || strings.HasPrefix(f.Name(), ".tmp-") {
+				continue // a pipe here would hang a read, and rsync can bring one
 			}
 			out = append(out, dir+"/"+s.Name()+"/"+f.Name())
 		}

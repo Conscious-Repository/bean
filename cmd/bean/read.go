@@ -91,13 +91,29 @@ func cmdList(s *core.Store, args []string) {
 		}
 		return
 	}
-	me, _ := s.Identity()
 	labels := l.AgentLabels()
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	for _, r := range recs {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", whenText(r), r.Type, valueText(r), byText(r, me, labels), r.ID[7:19])
+		by := byText(r, l.Me, labels)
+		if l.Report.Unattested[r.ID] {
+			by = strings.TrimSpace(by + " [unattested]")
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", whenText(r), r.Type, valueText(r), by, r.ID[7:19])
 	}
 	tw.Flush()
+	if warnFrozen(l) {
+		os.Exit(4)
+	}
+}
+
+// warnFrozen tells the person that the log they just read is not in its
+// usual state, and reports whether it is frozen.
+func warnFrozen(l *core.Loaded) bool {
+	if !l.IsFrozen() {
+		return false
+	}
+	fmt.Fprintf(os.Stderr, "bean: compromised: %s\nbean: two rotations split this identity. It is frozen for good: corrections and deletions that both sides did not seal are not in effect, so old values can show. To go on, run bean migrate.\n", l.Me)
+	return true
 }
 
 func cmdShow(s *core.Store, args []string) {
@@ -108,12 +124,22 @@ func cmdShow(s *core.Store, args []string) {
 	if err != nil {
 		fail(err)
 	}
+	if l.IsTooNew() {
+		fail(l.Standing())
+	}
 	r, err := l.Resolve(args[0])
 	if err != nil {
 		fail(err)
 	}
+	labels := l.AgentLabels()
 	fmt.Println("id", r.ID)
 	fmt.Println("status", l.Status(r.ID))
+	if by := byText(r, l.Me, labels); by != "" {
+		fmt.Println("author", by)
+	}
+	if !l.Trusted(r, labels) {
+		fmt.Println("trusted no: not written by you or an agent you paired")
+	}
 	var pretty bytes.Buffer
 	if err := json.Indent(&pretty, r.Bytes, "", "  "); err != nil {
 		fail(err)
@@ -130,7 +156,10 @@ func cmdShow(s *core.Store, args []string) {
 				break
 			}
 		}
-		fmt.Printf("reply %s %s %s %s\n", x.ID, rel, x.Type, valueText(x))
+		fmt.Printf("reply %s %s %s %s %s\n", x.ID, rel, x.Type, valueText(x), byText(x, l.Me, labels))
+	}
+	if warnFrozen(l) {
+		os.Exit(4)
 	}
 }
 
@@ -171,6 +200,8 @@ func cmdAdd(s *core.Store, args []string) {
 // label, or the start of an unpaired key's npub.
 func byText(r *core.Record, me string, labels map[string]string) string {
 	switch {
+	case r.Subject != "" && r.Subject != me:
+		return "[about " + r.Subject[:min(18, len(r.Subject))] + "]"
 	case r.Author == me:
 		return ""
 	case labels[r.Author] != "":

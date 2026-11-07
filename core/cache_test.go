@@ -25,7 +25,7 @@ func age(t *testing.T, s *Store) {
 
 func proven(t *testing.T, s *Store) int {
 	t.Helper()
-	_, _, _, p, _, err := s.readObjects(false)
+	_, _, _, p, _, _, err := s.readObjects(false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestParallelMatchesSerial(t *testing.T) {
 		lines = append(lines, partial("hrv.rmssd", float64(i), nil))
 	}
 	appendLines(t, s, lines...)
-	_, _, files, _, _, err := s.readObjects(true)
+	_, _, files, _, _, _, err := s.readObjects(true)
 	if err != nil {
 		t.Fatal(err)
 	}

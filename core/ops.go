@@ -26,6 +26,11 @@ var forbiddenPartial = []string{"v", "nonce", "author", "kid", "id", "sig"}
 // records before it stay written.
 func (s *Store) Append(in io.Reader) (AppendResult, error) {
 	var res AppendResult
+	unlock, err := s.lock()
+	if err != nil {
+		return res, err
+	}
+	defer unlock()
 	l, err := s.Load()
 	if err != nil {
 		return res, err
@@ -34,11 +39,22 @@ func (s *Store) Append(in io.Reader) (AppendResult, error) {
 	if err != nil {
 		return res, err
 	}
-	return s.appendWith(l, w, in)
+	res, err = s.appendWith(l, w, in)
+	if err != nil {
+		return res, err
+	}
+	return res, s.autoCheckpoint(l, res.Added)
 }
 
 // writerFor is the person (agent false) or this machine's agent key.
+//
+// It refuses a frozen or too-new identity (SPEC.md 5.7, 8.2): a record written
+// now would be invalid or could not be evaluated. It also refuses a retired
+// signing key, because its claims would show as unattested.
 func (s *Store) writerFor(l *Loaded, agent bool) (writer, error) {
+	if err := l.Standing(); err != nil {
+		return writer{}, err
+	}
 	if agent {
 		a, err := s.ReadAgent()
 		if err != nil {
@@ -51,6 +67,9 @@ func (s *Store) writerFor(l *Loaded, agent bool) (writer, error) {
 			return writer{}, errors.New("no personal key on this replica (agent-only): sign with the agent key instead (-agent)")
 		}
 		return writer{}, ErrNotInitialized
+	}
+	if chain := l.Report.Chains[l.Local.Identity]; len(chain) > 0 && chain[len(chain)-1].ValueKey() != l.Local.Signer.Public() {
+		return writer{}, errors.New("retired key: this machine's signing key was replaced on another copy; run bean rotate here to get a new one")
 	}
 	return writer{l.Local.Signer, l.Local.Identity, l.Local.Identity, l.Local.Secret}, nil
 }
@@ -77,8 +96,8 @@ func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, err
 	// Existing valid triples and, per 9.7, the ids they belong to.
 	existing := map[string]string{}
 	for id, r := range l.Report.Records {
-		if l.Report.Valid[id] && r.Source.Ref != "" {
-			existing[refLine(r.Subject, r.Source.System, r.Source.Ref)] = id
+		if l.Report.Valid[id] && !l.Report.Unattested[id] && r.Source.Ref != "" {
+			existing[refLine(r.Author, r.Subject, r.Source.System, r.Source.Ref)] = id
 		}
 	}
 	seen := map[string]bool{}
@@ -143,7 +162,7 @@ func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, err
 			}
 			subject, _ := obj["subject"].(string)
 			system, _ := src["system"].(string)
-			target, found := existing[refLine(subject, system, DedupeRef(dedupeKey, arr))]
+			target, found := existing[refLine(w.author, subject, system, DedupeRef(dedupeKey, arr))]
 			delete(src, "supersedes_ref")
 			if !found {
 				res.Skipped++
@@ -170,7 +189,7 @@ func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, err
 		if ref, ok := src["ref"].(string); ok {
 			subject, _ := obj["subject"].(string)
 			system, _ := src["system"].(string)
-			key := refLine(subject, system, ref)
+			key := refLine(w.author, subject, system, ref)
 			if prev, has := existing[key]; (has && !supersedes[prev]) || purged[key] || seen[key] {
 				res.Skipped++
 				continue
@@ -202,6 +221,11 @@ func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, err
 // Purge writes a tombstone for id (or a 6+ hex prefix of it) and erases
 // the target at once (7.7).
 func (s *Store) Purge(id, reason string) (string, error) {
+	unlock, err := s.lock()
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
 	l, err := s.Load()
 	if err != nil {
 		return "", err
@@ -209,16 +233,25 @@ func (s *Store) Purge(id, reason string) (string, error) {
 	if l.Local == nil {
 		return "", ErrNotInitialized
 	}
-	target, err := l.Resolve(id)
-	if err != nil {
+	if _, err := s.writerFor(l, false); err != nil {
 		return "", err
 	}
-	id = target.ID
-	if target.IsIdentity() || target.Type == "bean.tombstone" {
-		return "", ErrBadTarget
-	}
-	if target.Subject != l.Local.Identity {
-		return "", ErrNotSubject
+	target, err := l.Resolve(id)
+	switch {
+	case err == nil:
+		id = target.ID
+		if target.Unpurgeable() {
+			return "", ErrBadTarget
+		}
+		if target.Subject != l.Local.Identity {
+			return "", ErrNotSubject
+		}
+	case !l.Report.Missing[[2]string{l.Local.Identity, "sha256:" + strings.TrimPrefix(id, "sha256:")}]:
+		return "", err
+	default:
+		// verify reports this record missing and no copy has it. A tombstone
+		// by full id says that the person accepts that.
+		id, target = "sha256:"+strings.TrimPrefix(id, "sha256:"), nil
 	}
 	t := NewTombstone(l.Local.Identity, l.Local.Signer.Public(), id, reason, Adapter, s.nowString())
 	tid, bytes, err := SignRecord(t, l.Local.Signer)
@@ -231,20 +264,15 @@ func (s *Store) Purge(id, reason string) (string, error) {
 	if _, err := writeIfAbsent(s.path(PathOf(tid)), bytes, 0o600); err != nil {
 		return "", err
 	}
-	if err := s.addPurgedRef(target); err != nil {
-		return "", err
+	if target != nil {
+		if err := s.addPurgedRef(target); err != nil {
+			return "", err
+		}
 	}
 	for _, p := range []string{s.path(PathOf(id)), hiddenPath(s.Dir, id)} {
 		if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return "", err
 		}
-	}
-	l.Holds[tid] = Hold{Target: id, Received: s.nowString()}
-	// A local purge erases at once; the hold entry records it so gc and
-	// restores agree, but there is nothing hidden to erase or restore.
-	delete(l.Holds, tid)
-	if err := s.writeHolds(l.Holds); err != nil {
-		return "", err
 	}
 	l2, err := s.Load()
 	if err != nil {
@@ -266,6 +294,11 @@ type SyncResult struct {
 // fails its signature when the incoming one passes).
 func (s *Store) Sync(src *Store) (SyncResult, error) {
 	var res SyncResult
+	unlock, err := s.lock()
+	if err != nil {
+		return res, err
+	}
+	defer unlock()
 	a, err := src.Load()
 	if err != nil {
 		return res, err
@@ -311,7 +344,7 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 		}
 		if t, ok := tombs[id]; ok && !fr.Unknown { // 3.2 and 7.5
 			target := fr.Record
-			if !target.IsIdentity() && target.Type != "bean.tombstone" && target.Subject == t.Subject {
+			if !target.Unpurgeable() && target.Subject == t.Subject {
 				if err := s.addPurgedRef(target); err != nil {
 					return res, err
 				}
@@ -387,6 +420,12 @@ func (s *Store) Export(dir string) (records, blobs int, err error) {
 	if l.Local == nil {
 		return 0, 0, ErrNotInitialized
 	}
+	if l.IsTooNew() {
+		return 0, 0, l.Standing() // this build cannot tell which records are good
+	}
+	labels := l.AgentLabels()
+	var missing []string
+	var missingErr error
 	type manBlob struct{ id, sha, mt string }
 	blobSet := map[string]manBlob{}
 	for _, id := range sortedKeys(l.Report.Records) {
@@ -404,7 +443,16 @@ func (s *Store) Export(dir string) (records, blobs int, err error) {
 			}
 			pt, err := s.GetBlob(bl.Hash)
 			if err != nil {
-				return 0, 0, err
+				// One file must not stop an exit. The manifest names it, and
+				// the command fails at the end if the file was the person's.
+				if !contains(missing, bl.Hash) {
+					missing = append(missing, bl.Hash)
+					sort.Strings(missing)
+				}
+				if missingErr == nil && l.Trusted(r, labels) {
+					missingErr = err
+				}
+				continue
 			}
 			if err := writeFileAtomic(filepath.Join(dir, "blobs", bl.Hash[7:]), pt, 0o600); err != nil {
 				return 0, 0, err
@@ -422,15 +470,27 @@ func (s *Store) Export(dir string) (records, blobs int, err error) {
 	if list == nil {
 		list = []any{}
 	}
-	man := map[string]any{"spec": "bean-core-v0.5", "identity": l.Local.Identity, "records": float64(records), "blobs": list}
+	man := map[string]any{"spec": "bean-core-v0.6", "identity": l.Local.Identity, "records": float64(records), "blobs": list}
+	if len(missing) > 0 {
+		m := make([]any, len(missing))
+		for i, x := range missing {
+			m[i] = x
+		}
+		man["missing_blobs"] = m
+	}
 	if err := writeFileAtomic(filepath.Join(dir, "manifest.json"), Canonical(man), 0o600); err != nil {
 		return 0, 0, err
 	}
-	return records, blobs, nil
+	return records, blobs, missingErr
 }
 
 // ImportExport reverses Export into a log with the same identity secret.
 func (s *Store) ImportExport(dir string) (records, blobs int, err error) {
+	unlock, err := s.lock()
+	if err != nil {
+		return 0, 0, err
+	}
+	defer unlock()
 	if _, err := s.ReadLocal(); err != nil {
 		return 0, 0, err
 	}
@@ -461,7 +521,11 @@ func (s *Store) ImportExport(dir string) (records, blobs int, err error) {
 		if err != nil {
 			return 0, 0, err
 		}
-		p := PathOf("sha256:" + strings.TrimSuffix(e.Name(), ".json"))
+		id := "sha256:" + strings.TrimSuffix(e.Name(), ".json")
+		if !IsID(id) {
+			return 0, 0, fmt.Errorf("%s: %s", e.Name(), ErrBadPath)
+		}
+		p := PathOf(id)
 		if fr := CheckFile(p, data); fr.Err != nil {
 			return 0, 0, fmt.Errorf("%s: %s", e.Name(), fr.Err)
 		}
@@ -514,7 +578,7 @@ func (s *Store) Reindex() (int, error) {
 	if rows == nil {
 		rows = []any{}
 	}
-	idx := map[string]any{"spec": "bean-core-v0.5", "records": rows}
+	idx := map[string]any{"spec": "bean-core-v0.6", "records": rows}
 	if err := writeFileAtomic(s.path(fileIndex), append(Canonical(idx), '\n'), 0o600); err != nil {
 		return 0, err
 	}

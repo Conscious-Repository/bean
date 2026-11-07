@@ -99,12 +99,26 @@ func (s *Store) ReadAgent() (*Agent, error) {
 // when identity is "". When this replica holds the person's signing key,
 // it also writes the agent.pair claim and returns its id.
 func (s *Store) AgentInit(identity, label string) (string, string, error) {
+	unlock, err := s.lock()
+	if err != nil {
+		return "", "", err
+	}
+	defer unlock()
 	have, err := s.Identity()
 	switch {
 	case errors.Is(err, ErrNotInitialized):
 		if identity == "" {
 			if identity, err = s.onlyGenesis(); err != nil {
 				return "", "", err
+			}
+		} else {
+			// A mistyped id in local/identity would stop every later command.
+			l, err := s.Load()
+			if err != nil {
+				return "", "", err
+			}
+			if len(l.Report.Chains[identity]) == 0 {
+				return "", "", errors.New("input missing: genesis of " + identity + " is not in this folder")
 			}
 		}
 		if err := writeFileAtomic(s.path(fileIdentity), []byte(identity+"\n"), 0o600); err != nil {
@@ -133,7 +147,7 @@ func (s *Store) AgentInit(identity, label string) (string, string, error) {
 	if _, err := s.ReadLocal(); err != nil {
 		return pub, "", nil // agent-only: the person pairs it on their own machine
 	}
-	pairID, err := s.Pair(pub, label)
+	pairID, err := s.pair(pub, label)
 	return pub, pairID, err
 }
 
@@ -156,6 +170,15 @@ func (s *Store) onlyGenesis() (string, error) {
 // key to write claims about them. A current pair claim for the same key is
 // returned instead of writing another.
 func (s *Store) Pair(key, label string) (string, error) {
+	unlock, err := s.lock()
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
+	return s.pair(key, label)
+}
+
+func (s *Store) pair(key, label string) (string, error) {
 	if !strings.HasPrefix(key, "secp256k1:") && !strings.HasPrefix(key, "ed25519:") && !strings.HasPrefix(key, "p256:") {
 		return "", ErrUnsupportedKeyAlgorithm
 	}
@@ -195,12 +218,13 @@ func (s *Store) Pair(key, label string) (string, error) {
 	return res.IDs[0], nil
 }
 
-// AgentLabels maps each key that the subject paired with a current
-// agent.pair claim to its label ("agent" when it has none).
+// AgentLabels maps each key that the person this copy reads for paired with
+// a current agent.pair claim to its label ("agent" when it has none). A pair
+// claim by any other identity is not a pairing: a stranger can write one.
 func (l *Loaded) AgentLabels() map[string]string {
 	out := map[string]string{}
 	for id, r := range l.Report.Records {
-		if r.Type != "agent.pair" || r.Author != r.Subject || !l.Current(id) || r.ValueKey() == "" {
+		if r.Type != "agent.pair" || r.Author != l.Me || r.Subject != l.Me || !l.Current(id) || r.ValueKey() == "" {
 			continue
 		}
 		if st, _ := r.Value["status"].(string); st == "unpaired" {
@@ -218,6 +242,11 @@ func (l *Loaded) AgentLabels() map[string]string {
 // AppendAsAgent is Append signed by the local agent key, with the agent's
 // key as the author and the local identity as the default subject.
 func (s *Store) AppendAsAgent(in io.Reader) (AppendResult, error) {
+	unlock, err := s.lock()
+	if err != nil {
+		return AppendResult{}, err
+	}
+	defer unlock()
 	l, err := s.Load()
 	if err != nil {
 		return AppendResult{}, err

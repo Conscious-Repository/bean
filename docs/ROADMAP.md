@@ -62,6 +62,17 @@ Core spec. Done 2026-10-28: CORE.md, the protocol in two pages, tested by an imp
 
 Freeze at `v` = 1. When Ben has run his real log for two weeks (lab results, Apple Health, chat and agent logging) and nothing in CORE.md had to change. Then every DEFAULT in SPEC.md is final. Rob reviews before then; his comments can still change the format.
 
+Audit blockers. Fixed 2026-11-06 (SPEC v0.6, DECISIONS 106 to 134): too-new brick, duplicate substitution, default seals, removed records, retired-key claims, trusted reads, write lock, freeze rules, `bean migrate`, vector V19.
+
+Still open from that audit:
+- Directory fsync for new shard folders, and F_FULLFSYNC for init, rotate and purge.
+- A purged record returns on re-import after a restore: carry its dedupe ref in the tombstone.
+- The Labcorp importer stores an unparsed value the same way as "not performed", and has seen one real report.
+- Every command loads the whole log: 1.1 GB and 1.3 s for `add` at 100,000 records.
+- Remove `net/http`, used only to detect image types, so the binary has no network stack.
+- CI, fuzz tests in the repository, a second implementation of V19.
+- An outside witness for the newest checkpoint (OpenTimestamps).
+
 Documentation and first-run UX. Done 2026-10-28 (DECISIONS 91 to 100): README, docs/COMMANDS.md, SECURITY.md and CONTRIBUTING.md, checked by following the README from a clean home folder.
 
 M11. Release.

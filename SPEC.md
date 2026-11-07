@@ -1,13 +1,22 @@
-# bean core specification v0.5, draft
+# bean core specification v0.6, draft
 
 Status: draft. This text is not frozen. [CORE.md](CORE.md) section 6 tells when it freezes.
-Date: 2026-10-28.
+Date: 2026-11-06.
 Changes: v0.4 applied change notes C1 to C20: seed-only rotation, a fixed envelope, verify before copy in sync, and no erasure on a timer. v0.5 adds four change notes:
 
 - C21: secp256k1 (Nostr) signing keys (4.4, 4.5).
 - C22: restore on a new host (5.10).
 - C23: superseded records are not in duplicate groups (6.3 step 12).
 - C24: the protocol name is bean. The HKDF labels (4.7), the dedupe ref label (4.8), the blob label (4.9), the reserved types (3.3) and the wrapper `alt` tag (4.5) say `bean`. Keys, ids and vectors from builds before C24 do not match.
+
+v0.6 adds these change notes, from the audit of 2026-11-06:
+
+- C25: only a recovery key can make an identity too new (8.2). Writes stop for a too-new or frozen identity, and reads say why.
+- C26: the author is part of a duplicate group (6.3 step 12, 7.8, 9.5).
+- C27: nothing is sealed by default. A rotation needs a decision on each record of the outgoing key (5.4, 5.5).
+- C28: new reserved type `bean.checkpoint`. A claim of a retired key must be attested. A record that an identity committed to must be in the set (6.8).
+- C29: in a frozen identity, a record that needs a seal stays valid when every branch at the fork sealed it (5.7).
+- C30: readers show only trusted authors by default (6.9).
 
 Reference implementation: the `bean` repository.
 License: CC0 1.0 (section 19).
@@ -187,6 +196,7 @@ These keys are conventions. The core does not check them.
 | `bean.genesis` | Starts an identity. | No `subject`. `author` = `kid` = `value.key`. No `refs`. `value` = `{"key": tagged key, "recovery": commitment}`. `times.observed` = null. `source` = `{"system":"self","adapter":<name@version>,"ref":null}`. |
 | `bean.succession` | Names the next signing key. | `subject` = `author` = the identity id. Exactly one ref, rel `succeeds`. `value` = `{"key": tagged key, "recovery": commitment, "sealed": [ids]}`. |
 | `bean.tombstone` | Deletes a target. | `subject` = `author`. Exactly one ref, rel `purges`. No `value`. No `blobs`. An optional reason goes in `context.reason` (string, at most 200 characters). |
+| `bean.checkpoint` | Commits to a set of records (6.8). | `subject` = `author` = the identity id. No `refs`. No `blobs`. `value` = `{"covers": [ids]}`, one or more ids, unique, sorted in ascending order of their ASCII bytes. Error: `bad field: value.covers`. `times.observed` = null. `source` = `{"system":"self","adapter":<name@version>,"ref":null}`. |
 
 Any other type that starts with `bean.` is reserved for future core versions.
 A writer MUST NOT make one.
@@ -487,12 +497,16 @@ A destructive record signed by the head key is valid.
 A destructive record signed by an older chain key is valid only when the succession that ends that key seals it.
 The succession that ends a key is the next node on the chain after the node that names the key.
 Only that succession can seal records of that key.
-`bean rotate` MUST print every destructive record of the outgoing key and seal all of them by default. `-no-seal <id>` excludes one.
+A checkpoint needs a seal in the same way. A seal can also name a claim (6.8).
+`bean rotate` MUST NOT seal a record without a decision from the person.
+The person is told to sync before a rotation, so a thief's records can be in this replica. Only the person can tell them apart.
+Before it writes anything, `bean rotate` MUST list every record of the outgoing key that needs a decision: each destructive record, each checkpoint, and each claim that no checkpoint of that key covers. A record that a tombstone hides is in the list, because it comes back if the person does not keep the tombstone.
+If a record has no decision, `bean rotate` MUST stop and write nothing. `-seal-all`, `-seal-none`, `-seal <id>` and `-no-seal <id>` give the decisions. An id that names no record in the list is an error. DEFAULT.
 The maximum file size of an `bean.succession` is 16 MiB, so `sealed` can hold about 230,000 ids. DEFAULT.
 
 `value.sealed` is an array of record ids.
 The ids MUST be unique and sorted in ascending order of their ASCII bytes. Error: `bad field: value.sealed`.
-An id in `sealed` that does not name a destructive record of the outgoing key has no effect.
+An id in `sealed` that does not name a record of the outgoing key has no effect on that record's seal, but the identity has committed to the id (6.8).
 
 Thus every replica with the same files gets the same result. No trusted time is necessary.
 A thief who steals a key cannot keep a destructive record after a rotation, unless the person seals it.
@@ -510,7 +524,7 @@ The person rotates when a device is lost, a key is stolen, or a device leaves. S
    - `refs` = `[{"rel":"succeeds","id":<parent id>}]`.
    - `value.key` = the new tagged public key.
    - `value.recovery` = the commitment to recovery generation `g + 1`.
-   - `value.sealed` = the sorted ids of the parent key's valid destructive records in this replica, minus any the person excludes.
+   - `value.sealed` = the sorted ids of the records that the person chose to keep (5.4).
 7. Sign with recovery key generation `g`. The `kid` is the recovery public key. This reveals the key.
 8. Store the new signing key in `local/`.
 9. Erase the paper seed and the recovery private keys.
@@ -534,11 +548,12 @@ For a frozen identity, a verifier MUST:
 
 1. Report `compromised: <identity id>`.
 2. Treat every succession below the fork point as invalid. Error: `frozen`.
-3. Treat every destructive record of the identity as invalid. Error: `frozen`.
+3. Treat a destructive record or checkpoint signed by the key at the fork point as invalid unless every succession at the fork seals it. Error: `frozen`. A record signed by an older chain key follows step 7 of 6.3. Thus neither party decides alone, and a person who restored from a stale backup and sealed everything keeps their corrections.
 4. Treat every claim signed by a key that is not on the path from genesis to the fork point as invalid. Error: `frozen`.
 5. Restore any target that a now-invalid tombstone hides (7.6).
 
-A frozen identity cannot rotate. The person MUST make a new identity.
+A frozen identity cannot rotate, and a person MUST NOT write for it. Commands that write MUST stop with `compromised: <identity id>` and exit code 4. Commands that read MUST say that the identity is frozen and exit with code 4.
+The person MUST make a new identity. `bean migrate` does this (12.3).
 DEFAULT for items 2 to 4.
 
 ### 5.8 Key rules
@@ -560,9 +575,9 @@ If the identity secret leaks, the person MUST make a new identity and a new log,
 A person who lost the host, but has the paper and a copy of `objects/` and `blobs/`, restores:
 
 1. Sync every copy of the log that still exists into one folder. A copy that lacks a succession another device wrote makes a fork, and a fork freezes the identity (5.7).
-2. Enter the 24 words. Find the genesis whose `value.recovery` is the commitment of recovery generation 0 of the words. Error: `input missing: genesis for these words`.
-3. Write `local/identity-secret` from the words.
-4. Write a succession from the chain head to a new signing key, as 5.5 steps 2 to 9 do, with the same seals.
+2. Enter the 24 words. Find the genesis whose `value.recovery` is the commitment of recovery generation 0 of the words. Error: `input missing: genesis for these words`. The commitment is public, so a stranger can copy it into a genesis. If more than one genesis fits, stop. Error: `ambiguous identity`. The person names theirs with `-identity <id>`.
+3. Write a succession from the chain head to a new signing key, as 5.5 steps 2 to 9 do. The person decides on each record, as 5.4 says.
+4. Write `local/identity-secret` from the words.
 5. Write `local/identity` last. Until it exists, the folder is not initialized, so a failed restore can run again.
 
 Restore always rotates. The old signing key stayed on the lost host and is not trusted.
@@ -613,7 +628,7 @@ Repeat until no node is added:
 4. Apply the key rules in 5.8. If one fails, S is invalid with that error.
 5. Otherwise add S to N.
 
-A succession that never gets a parent in N stays held. Report `held: <id>` as a warning.
+A succession that never gets a parent in N stays held. Report `held: <id>` as a warning. It is not valid. No step has checked its key, so any key can write one that names the identity as its author. A succession whose author has no genesis in R is not valid either.
 
 Step 4. (Merged into step 5.)
 
@@ -638,31 +653,37 @@ For each record D in R that is not an identity record:
 4. Else if `D.kid` is the `value.key` of a node below a fork point, D is invalid. Error: `frozen`.
 5. Else D is invalid. Error: `key not in chain`.
 
-Step 7. Check seals for destructive records.
-For each destructive record D with an identity author and position p:
+Step 7. Check seals for destructive records and checkpoints.
+For each destructive record or checkpoint D with an identity author and position p:
 
 1. If the node at p is the head, D passes this step.
 2. Else let Y be the chain node at position p + 1.
 3. If `D.id` is in `Y.value.sealed`, D passes this step.
 4. Else D is invalid. Error: `not sealed`.
 
-Destructive records with a bare-key author pass this step.
+Destructive records with a bare-key author pass this step. A checkpoint always has an identity author.
 
 Step 8. Apply the frozen rules in 5.7 to each frozen identity.
 
 Step 9. Check supersede records (6.6).
 
 Step 10. Check tombstones (6.7).
+Remove purged targets from the valid set.
+
+Step 10a. Find what is missing (6.8).
+
+Step 10b. Find unattested claims (6.8).
 
 Step 11. Check subjects.
 For each claim D whose `subject` has no genesis in R, report `unresolved subject: <id>` as a warning.
 D stays valid. The subject check is a warning because a lab can write about a person whose genesis the replica does not hold.
 
 Step 12. Find duplicates.
-Group the valid records by (`subject`, `source.system`, `source.ref`) where `source.ref` is not null. Do not include a record that a valid supersede record names (C23). A parser fix (9.7) keeps the ref of the record that it corrects. Without this rule, the verifier could report the fix as a duplicate of its own target.
+Group the valid records by (`author`, `subject`, `source.system`, `source.ref`) where `source.ref` is not null. Do not include an unattested claim (6.8), so a retired key cannot hide a record of the same author. Do not include a record that a valid supersede record names (C23). A parser fix (9.7) keeps the ref of the record that it corrects. Without this rule, the verifier could report the fix as a duplicate of its own target.
 In each group, the record with the lowest id is the primary.
 Report the others as `duplicate: <id> of <primary id>`.
 Duplicates stay valid. Indexes and readers SHOULD ignore them.
+The author is in the group (C26). Without this, any key could copy a ref, find a lower id, and hide the real record as a duplicate.
 
 ### 6.4 Validity is order-free
 
@@ -674,7 +695,7 @@ Two verifiers with the same F MUST report the same valid set, the same errors an
 
 A claim signed by any chain key is valid, even after rotation.
 Thus a rotated-out key can still sign a claim with an old `times.observed`.
-See 17.
+Such a claim is unattested unless something vouches for it (6.8). A reader MUST NOT show an unattested claim as the person's.
 
 ### 6.6 Supersede rules
 
@@ -695,12 +716,52 @@ For each tombstone D with target T:
 
 1. `D.author` MUST equal `D.subject`. Otherwise D is invalid. Error: `not subject`.
 2. If T is not in R, D is held. D is valid. Section 7.5 tells how sync uses a held tombstone.
-3. If T is an `bean.genesis`, `bean.succession` or `bean.tombstone`, D is invalid. Error: `bad target`.
+3. If T is an `bean.genesis`, `bean.succession`, `bean.tombstone` or `bean.checkpoint`, D is invalid. Error: `bad target`.
 4. If `T.subject` is not equal to `D.subject`, D is invalid. Error: `not subject`.
 5. Otherwise D is a valid tombstone for T. T is purged.
 
 A purged target is not valid data. A reader MUST NOT show it.
 A verifier reports a purged target that is hidden and past its hold as `hidden pending gc: <id>` (a warning). `bean gc` erases it (7.6).
+
+### 6.8 Checkpoints and attestation (C28)
+
+A `bean.checkpoint` names records by id. A writer lists only ids that no valid checkpoint or seal of the identity names yet. The ids include older checkpoints. Validity does not depend on a chain of checkpoints or on their order.
+
+An identity commits to an id when a valid checkpoint of the identity covers it, or when a succession on its chain seals it.
+
+Step 10a. For each id that identity I committed to:
+
+1. If the id names a file in F, stop.
+2. If a valid tombstone with `subject` = I names the id, stop. This includes a held tombstone.
+3. Otherwise report `missing: <id> of <I>`. Report one line for each identity that committed to the id.
+
+Thus a record that was removed from a copy shows in `verify`. A tombstone of another identity does not explain the absence. A missing id of another identity does not change the exit code when `local/identity` names a different identity.
+If a record is gone for good, the person writes a tombstone for its full id (`bean purge <id>`).
+
+Step 10b. For each valid claim D with an identity author and position p, where p is not the head:
+
+1. If a valid checkpoint of the same identity at position p or later covers D, D is attested.
+2. If the succession at a position after p seals D, D is attested.
+3. Otherwise report `unattested: <id>` as a warning. D stays valid.
+
+For a frozen identity, also apply this step when p is the fork point. Both branches retired that key, and a thief can still write with it. D is attested only by a seal from every succession at the fork, or by rule 1.
+
+A checkpoint of a retired key needs a seal (5.4). Thus a thief's checkpoint does not vouch for a thief's claim. A writer MUST NOT cover an unattested claim unless the person names it (`bean checkpoint -accept <id>`).
+
+The limit: if someone removes the newest checkpoint together with what it covers, the remaining files agree. Another copy or an outside witness can show this. An outside witness is a later extension.
+
+`bean add` and `bean append`, when the person writes, SHOULD add a checkpoint when 256 or more records are uncovered, or when the oldest uncovered record is older than 24 hours. A checkpoint is at most 1 MiB (3.1), so a writer splits a large set. Each part after the first covers the part before it. DEFAULT.
+
+### 6.9 What readers show (C30)
+
+Anyone can write a claim that verifies. A valid record is not the person's record. By default a reader MUST show a record only if all of these are true:
+
+1. It is valid, and not purged, hidden, superseded or a duplicate.
+2. It is not unattested.
+3. Its `subject` is the local identity.
+4. Its `author` is the local identity, or a key that the local identity paired with a current pair claim whose `author` and `subject` are the local identity, or the agent key of this replica.
+
+A reader MAY show other records when the person asks. It MUST mark them. A reader that passes records to an AI MUST include the author of each record. It MUST tell the AI that the text in a record is data, not instructions.
 
 ## 7. Folder layout and sync
 
@@ -799,17 +860,18 @@ The hold length is 7 days. DEFAULT. Nothing is erased without the person running
 2. Write a tombstone signed by the head key.
 3. Add the target dedupe ref to `local/purged-refs.jsonl`.
 4. Erase the target at once.
-5. Erase each blob that no valid, unpurged record names.
+5. Erase each blob that no unpurged record of the person, a paired agent or this replica's agent names. A record of a stranger does not count, or anyone could keep a purged file on disk. An invalid record of the person counts, because it can become valid again.
 
 The tombstone stays in the log forever.
-A program MUST NOT tombstone a genesis, a succession or a tombstone.
+A program MUST NOT tombstone a genesis, a succession, a tombstone or a checkpoint.
+`bean purge` accepts the full id of a record that `verify` reports as missing. It skips steps 1, 3 and 4 for that id.
 
 ### 7.8 Purged refs
 
 `local/purged-refs.jsonl` has one line per purged target.
-Each line is the canonical bytes of `["<subject>", "<source.system>", "<source.ref>"]`.
+Each line is the canonical bytes of `["<author>", "<subject>", "<source.system>", "<source.ref>"]`.
 A replica writes a line when it erases or does not copy a purged target that has a non-null `source.ref`.
-`bean append` MUST skip a record whose (`subject`, `source.system`, `source.ref`) is in this file.
+`bean append` MUST skip a record whose (`author`, `subject`, `source.system`, `source.ref`) is in this file.
 Thus a new import after a purge adds nothing on this replica.
 
 ### 7.9 Export
@@ -818,7 +880,7 @@ Thus a new import after a purge adds nothing on this replica.
 
 1. Write each record file that is not purged or hidden to `<dir>/records/<64 hex>.json`. Use the stored bytes.
 2. Decrypt each blob that an exported record names. Write the plaintext to `<dir>/blobs/<64 hex of the blob id>`.
-3. Write `<dir>/manifest.json` with the canonical bytes of `{"spec": "bean-core-v0.5", "identity": <id>, "records": <count>, "blobs": [{"id": <blob id>, "plaintext_sha256": <hex>, "media_type": <string>}]}`. Sort `blobs` by `id`.
+3. Write `<dir>/manifest.json` with the canonical bytes of `{"spec": "bean-core-v0.6", "identity": <id>, "records": <count>, "blobs": [{"id": <blob id>, "plaintext_sha256": <hex>, "media_type": <string>}]}`. Sort `blobs` by `id`. If a blob is not available, continue. Add `"missing_blobs": [<blob id>]`, sorted. If a record that the person trusts (6.9) names that blob, the command fails after it writes everything else. One file MUST NOT stop an exit.
 
 The export is not encrypted. The CLI MUST say this before it writes.
 `bean import-export <dir>` reverses the export for a log with the same identity secret.
@@ -848,9 +910,9 @@ A verifier MUST NOT interpret a record whose `v` it does not know.
 The record reached step 13 of 3.8, so its envelope, id and signature are good. The affected identity is:
 
 1. For `bean.genesis`: the record's own id, when `author` = `kid`.
-2. For other `bean.*` types: the `author` field. This applies only when `kid` is a signing key or a recovery key of that identity. The key must be on a node of its succession tree (6.3 step 3). Otherwise, skip the record. The identity is not too new.
+2. For other `bean.*` types: the `author` field. This applies only when `kid` is a recovery key of that identity: the commitment of `kid` (4.6) is the `value.recovery` of a node of its succession tree (6.3 step 3). Otherwise, skip the record. The identity is not too new.
 
-A file that no known key signed cannot make an identity too new. There is no `too new: log`.
+A file that a recovery key did not sign cannot make an identity too new. There is no `too new: log`. A signing key must not count. Item 2 hides the whole identity from every copy and stops its rotation, so a thief with one old signing key could otherwise destroy the log's use. A format change that old readers must not evaluate needs the 24 words.
 DEFAULT.
 
 For a too-new identity, the verifier MUST:
@@ -860,7 +922,7 @@ For a too-new identity, the verifier MUST:
 3. Not erase or hide anything for that identity.
 4. Process all other identities as usual.
 
-Commands that write for a too-new identity MUST stop with exit code 3.
+Commands that write for a too-new identity MUST stop with exit code 3. So MUST commands that read or export it: an empty result would look like lost data.
 
 ### 8.3 Unknown fields
 
@@ -910,9 +972,11 @@ The adapter writes the HMAC input array (4.8) as `source.ref_input`.
 
 `bean append` MUST skip a record when:
 
-- the index has a valid record with the same (`subject`, `source.system`, `source.ref`), or
-- `local/purged-refs.jsonl` has that triple, or
-- an earlier line of the same input has that triple.
+- the index has a valid record with the same (`author`, `subject`, `source.system`, `source.ref`), or
+- `local/purged-refs.jsonl` has those values, or
+- an earlier line of the same input has those values.
+
+The author is the writer of this `bean append`. A record of another author with the same ref does not stop an import.
 
 `bean append` reports the count of added and skipped records.
 
@@ -1060,7 +1124,7 @@ Exit codes:
 | 0 | Success. `verify` found no errors. |
 | 1 | The command failed, or `verify` found one or more errors. |
 | 2 | Usage error: unknown command, bad flag or bad argument. |
-| 3 | Too new. The command found an identity it cannot process (8.2). For `verify`, other identities were still checked. |
+| 3 | Too new. The command found an identity it cannot process (8.2). For `verify`, other identities were still checked. When `local/identity` exists, only that identity sets this code, so a stranger's file cannot. |
 | 4 | Compromised. A local identity is frozen (5.7). |
 
 If more than one code applies, use the highest. DEFAULT.
@@ -1071,7 +1135,8 @@ Verify output lines:
     warning: <id>: <warning string>
     too new: <identity id>
     compromised: <identity id>
-    summary: <v> valid, <i> invalid, <s> skipped, <h> held, <d> duplicate
+    missing: <id> of <identity id>
+    summary: <v> valid, <i> invalid, <s> skipped, <h> held, <d> duplicate[, <u> unattested][, <m> missing]
 
 Lines are sorted by their ASCII bytes, with the summary line last.
 
@@ -1079,7 +1144,7 @@ Lines are sorted by their ASCII bytes, with the summary line last.
 
 A conforming CLI MUST use these exact strings. Ids follow after `: ` where shown.
 
-`bad path`, `too large`, `bad json`, `duplicate key`, `bad number`, `bad string`, `bad v`, `bad type`, `not canonical`, `bad field: <name>`, `id mismatch`, `unsupported key algorithm`, `bad key`, `bad signature`, `unknown core type`, `unknown rel`, `blob not listed`, `bad succession`, `key reuse`, `recovery not advanced`, `key not in chain`, `not sealed`, `frozen`, `not author`, `not subject`, `bad target`, `too new: <identity id>`, `compromised: <identity id>`, `seed does not match`, `input purged: <id>`, `input missing: <id>`, `input invalid: <id>`, `method unknown`, `method mismatch`, `replay mismatch`, `not initialized`, `already initialized`, `blob missing: <id>`, `blob corrupt: <id>`.
+`bad path`, `too large`, `bad json`, `duplicate key`, `bad number`, `bad string`, `bad v`, `bad type`, `not canonical`, `bad field: <name>`, `id mismatch`, `unsupported key algorithm`, `bad key`, `bad signature`, `unknown core type`, `unknown rel`, `blob not listed`, `bad succession`, `key reuse`, `recovery not advanced`, `key not in chain`, `not sealed`, `frozen`, `not author`, `not subject`, `bad target`, `too new: <identity id>`, `compromised: <identity id>`, `seed does not match`, `input purged: <id>`, `input missing: <id>`, `input invalid: <id>`, `ambiguous identity: <text>`, `undecided: <text>`, `retired key: <text>`, `method unknown`, `method mismatch`, `replay mismatch`, `not initialized`, `already initialized`, `blob missing: <id>`, `blob corrupt: <id>`.
 
 Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <id>`, `duplicate: <id> of <id>`, `superseded by sibling: <id>`, `hidden pending gc: <id>`, `blob missing: <id>` (for a purged or invalid record).
 
@@ -1115,19 +1180,30 @@ Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <
 - Action: delete `local/cache/` and rebuild it.
 - Output: `indexed <n> records`.
 
-`bean rotate [-no-seal <id>]... [-nostr new|<file>]`
+`bean rotate [-seal-all | -seal-none] [-seal <id>]... [-no-seal <id>]... [-nostr new|<file>]`
 
 - Input: the 24 words on standard input. Numbering and case are ignored. `-nostr` selects a new secp256k1 key, as for `init`. The nsec comes from a file, because standard input carries the words.
-- Action: section 5.5. Seal every valid destructive record of the outgoing key in this replica except the ids that `-no-seal` names.
-- Output: one line `sealed <id>` or `not sealed <id>` per destructive record of the outgoing key, then `rotated to <tagged key>`, then `sealed <n>`. Before reading input, print `sync all devices before you rotate` to standard error.
-- Errors: `seed does not match`, `compromised: <id>` (exit 4), `key reuse`.
+- Action: sections 5.4 and 5.5. If a record has no decision, list the records on standard error, stop, and do not read the words.
+- Output: one line `sealed <id>` or `not sealed <id>` per record that needed a decision, then `rotated to <tagged key>`, then `sealed <n>`. Before reading input, print `sync all devices before you rotate` to standard error.
+- Errors: `undecided: <n> records of the outgoing key: ...`, `seed does not match`, `compromised: <id>` (exit 4), `too new: <id>` (exit 3), `key reuse`.
 
-`bean restore [-no-seal <id>]... [-nostr new|<file>]`
+`bean restore [-seal-all | -seal-none] [-seal <id>]... [-no-seal <id>]... [-nostr new|<file>] [-identity <id>]`
 
 - Input: the 24 words on standard input.
 - Action: section 5.10.
 - Output: `identity <id>`, then the `rotate` output.
-- Errors: `already initialized`, `seed does not match`, `input missing: genesis for these words`, `compromised: <id>` (exit 4), `key reuse`.
+- Errors: `already initialized` (when `local/signing-key` exists; an agent-only copy can restore), `undecided: <n> records of the outgoing key: ...`, `seed does not match`, `input missing: genesis for these words`, `ambiguous identity: ...`, `compromised: <id>` (exit 4), `too new: <id>` (exit 3), `key reuse`.
+
+`bean checkpoint [-accept <id>]...`
+
+- Action: section 6.8. `-accept` names an unattested claim that the person vouches for.
+- Output: one line `checkpoint <id>` per record written, or `nothing new to cover`.
+
+`bean migrate [-nostr new|<file>] <empty folder>`
+
+- Action: make a new identity in the folder, then write each record that this replica shows by default (6.9) as a new record of the new identity. Encrypt its blobs again under the new key. Put the old id in `context.migrated_from` and the old `times.imported` in `context.migrated_imported`. If another author wrote it, put that author in `context.migrated_author` and set `source.ref` to null. Keep `about` refs between moved records. Do not move pair claims or unattested claims. Nothing links the two identities by signature.
+- Output: `identity <id>`, the 24 new words, then `migrated <r> records, <b> blobs, <m> blobs missing`, then a line that counts what it left out.
+- Errors: `not initialized`, `migrate folder not empty`, `too new: <id>` (exit 3).
 
 `bean whoami`
 
@@ -1286,7 +1362,7 @@ Tests 1 to 22 cover the v0.2 acceptance tests 1 to 6 and the new decisions. Test
     - Expected: D is `not sealed` on both. T is visible on both.
 20. Rotation with a sealed tombstone.
     - Setup: the head key writes tombstone D, then the person rotates.
-    - Action: rotate with the default seals.
+    - Action: rotate with `-seal-all`.
     - Expected: the succession lists D in `value.sealed`. D stays valid.
 21. Double rotation freeze.
     - Setup: I at head H on replicas A and B.
@@ -1304,7 +1380,8 @@ Tests 1 to 22 cover the v0.2 acceptance tests 1 to 6 and the new decisions. Test
 24. Unknown version, core type, per identity.
     - Setup: identities I and J in one log.
     - Action: add an `bean.succession` file with `v` = 99 and `author` = I.
-    - Expected: `too new: <I>`. Exit 3. All records of J are still checked. A file error in J is still reported.
+    - Expected, when I's recovery key signed the file: `too new: <I>`. Exit 3. All records of J are still checked. A file error in J is still reported.
+    - Expected, when a signing key of I signed the file: no `too new` line. The file is skipped.
 
 ### Delete hold
 
@@ -1351,7 +1428,7 @@ Tests 1 to 22 cover the v0.2 acceptance tests 1 to 6 and the new decisions. Test
 The project MUST publish these vectors before the format freezes at version 1.
 Each vector is a JSON file in `vectors/` with inputs and expected outputs.
 Two independent implementations MUST produce each value before the vector is published.
-The reference implementation has published V1 to V12, V17 and V18. Its independent checks are `tools/checkvectors.py` and `tools/checksecp256k1.py`. V13 to V16 are not published yet.
+The reference implementation has published V1 to V12, V17, V18 and V19. Its independent checks are `tools/checkvectors.py` and `tools/checksecp256k1.py`. V13 to V16 are not published yet.
 
 | # | Vector | Inputs | Expected output |
 |---|---|---|---|
@@ -1373,12 +1450,16 @@ The reference implementation has published V1 to V12, V17 and V18. Its independe
 | V16 | Median method | Input records and `D.value` | Method hash and canonical output. Not published. |
 | V17 | Bad files | One file per error string in 3.8 | The error string. Published. |
 | V18 | secp256k1 | A fixed secret key and a record id, created_at 0 and 1761566400, zero aux | `kid`, npub, nsec, wrapper bytes and id, `sig`, and five rejects. Published. Checked by `tools/checksecp256k1.py`. |
+| V19 | Authority | A set of files for each attack on sections 5.4, 5.7, 6.3 step 12, 6.8 and 8.2 | The valid set, errors, too new, compromised, unattested, missing and duplicates. Published. The expected values are written by hand in `tools/genvectors`. No second implementation has run V19 yet. |
 
 The AES-SIV code MUST also pass the RFC 5297 Appendix A vectors. The HKDF code MUST pass the RFC 5869 Appendix A vectors.
 
 ## 15. Security considerations
 
-- Key theft. A thief with the head key can add claims, supersede, tombstone and rotate. Recovery with the paper seed ends this. The thief's destructive records become invalid unless the person seals them. The thief's claims on the chain trunk stay valid (17).
+- Key theft. A thief with the head key can add claims, supersede and tombstone. A thief cannot rotate. Recovery with the paper seed ends this. The thief's destructive records and checkpoints become invalid unless the person seals them. The thief's claims stay valid but unattested (6.8). A thief's key cannot make the identity too new (8.2).
+- Forged records. Anyone can write a claim that verifies. Readers show only trusted authors (6.9). A foreign record cannot hide a real one as a duplicate (6.3 step 12).
+- Removed records. A record that an identity committed to shows as `missing` when it is removed (6.8). Records after the newest checkpoint, and the newest checkpoint itself, have no such protection.
+- Writers. A write holds a lock on the replica (`local/lock`). Two rotations at the same moment on one replica run one after the other, so they do not fork.
 - Paper seed theft. The seed holder can recover and take the identity. If the owner also recovers from the same parent, the identity freezes. There is no way back from a freeze in v0.
 - Seed exposure. Devices never store the seed. `init` and `recover` MUST erase it from memory after use, as far as the language allows.
 - No trusted time. Validity never uses a clock. Only the delete hold uses the local clock, and it never changes validity.
@@ -1403,13 +1484,14 @@ The AES-SIV code MUST also pass the RFC 5297 Appendix A vectors. The HKDF code M
 - Rotation needs the paper seed. A person who loses the paper and the device loses the identity. This limit is the cost of the rule that a stolen device cannot take over the identity.
 - Records are plaintext on disk. Only blobs are encrypted. Folder-level encryption is the sync tool's job in v0.
 
-1. A rotated-out chain key can still sign a claim that verifies, with any `times.observed`. Witness records are a later extension.
+1. A rotated-out chain key can still sign a claim that verifies, with any `times.observed`. The claim is unattested (6.8). A thief can also backdate a claim with the head key before the rotation. The person must find it in the list that the rotation shows. Witness records are a later extension.
 2. An identity secret leak needs a new paper seed, a new identity and a new log. The old data must be re-encrypted into the new log.
 3. A replica that never saw a purged target does not have its dedupe ref. A re-import on that replica brings the data back.
 4. Two hosts that import the same source before they sync make duplicate records. Section 6.3 step 12 marks them. They stay in the log.
 5. Tuple dedupe refs merge two real readings with the same type, observed time and value in two different exports when the occurrence counts match.
 6. After erasure, a replica cannot restore a target from its own disk.
-7. A frozen identity cannot recover.
+7. A frozen identity cannot recover. `bean migrate` starts a new identity from it. Nothing links the two by signature.
+10. Removing the newest checkpoint together with what it covers leaves files that agree (6.8).
 8. Destructive records that a device signs and does not sync before a rotation become invalid.
 9. Device records cannot carry encrypted blobs (11.4).
 

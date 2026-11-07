@@ -3,7 +3,9 @@ package main
 import (
 	"bufio"
 	"errors"
+	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 
@@ -62,6 +64,142 @@ func readSecretLine(prompt string) (string, error) {
 		return "", err
 	}
 	return line, nil
+}
+
+// cmdRotate is bean rotate and bean restore. It lists any record that needs a
+// decision before it asks for the 24 words, and writes nothing until each one
+// has a decision.
+func cmdRotate(s *core.Store, args []string, restore bool) {
+	fs := flag.NewFlagSet(current, flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	var seal, noSeal multiFlag
+	all := fs.Bool("seal-all", false, "keep every record of the outgoing key")
+	none := fs.Bool("seal-none", false, "keep only the records named with -seal")
+	fs.Var(&seal, "seal", "keep this record (repeatable)")
+	fs.Var(&noSeal, "no-seal", "do not keep this record (repeatable)")
+	nostr := fs.String("nostr", "", "new, or a file holding an nsec")
+	identity := fs.String("identity", "", "restore: the identity id, when the words fit more than one genesis")
+	if err := fs.Parse(args); err != nil || fs.NArg() != 0 || (*identity != "" && !restore) {
+		usage()
+	}
+	key, err := nostrKey(*nostr, false)
+	if err != nil {
+		fail(err)
+	}
+	c := core.Seals{All: *all, None: *none, Seal: seal, NoSeal: noSeal}
+	undecided, l, err := s.Undecided(c)
+	if err != nil {
+		fail(err)
+	}
+	if len(undecided) > 0 {
+		printUndecided(undecided, l)
+		fail(&core.UndecidedError{Records: undecided})
+	}
+	if restore {
+		fmt.Fprintln(os.Stderr, "sync every copy of the log you still have into this folder first. paste the 24 words, then end input:")
+	} else {
+		fmt.Fprintln(os.Stderr, "sync all devices before you rotate. paste the 24 words, then end input:")
+	}
+	text, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		fail(err)
+	}
+	var res core.RotateResult
+	if restore {
+		var id string
+		if res, id, err = s.Restore(core.ParseWords(string(text)), c, key, *identity); err == nil {
+			fmt.Println("identity", id)
+		}
+	} else {
+		res, err = s.Rotate(core.ParseWords(string(text)), c, key)
+	}
+	if err != nil {
+		fail(err)
+	}
+	for _, id := range res.Sealed {
+		fmt.Println("sealed", id)
+	}
+	for _, id := range res.NotSealed {
+		fmt.Println("not sealed", id)
+	}
+	fmt.Println("rotated to", res.NewKey)
+	fmt.Printf("sealed %d\n", len(res.Sealed))
+}
+
+// printUndecided shows what each record of the outgoing key does, so the
+// person can tell their own from a thief's.
+func printUndecided(recs []*core.Record, l *core.Loaded) {
+	fmt.Fprintln(os.Stderr, "These records were signed by the key you are replacing. If the key was stolen, some may not be yours.")
+	fmt.Fprintln(os.Stderr, "A record you keep stays in effect for good. A correction or deletion you do not keep is undone.")
+	for _, r := range recs {
+		what := "claim " + r.Type + " " + valueText(r)
+		target := func(id string) string {
+			if t := l.Report.Records[id]; t != nil {
+				return t.Type + " " + valueText(t)
+			}
+			return id
+		}
+		switch {
+		case r.Type == "bean.tombstone":
+			what = "deletes " + target(r.Targets("purges")[0])
+		case r.IsCheckpoint():
+			what = fmt.Sprintf("checkpoint over %d records", len(r.Covers()))
+		case r.IsDestructive():
+			what = "corrects " + target(r.Targets("supersedes")[0]) + " to " + valueText(r)
+		}
+		fmt.Fprintf(os.Stderr, "  %s  %s  %s\n", r.ID[7:19], r.Imported, what)
+	}
+	fmt.Fprintln(os.Stderr, "Run again with -seal-all if the key was not stolen. Otherwise use -seal-none, with -seal <id> for each record that is yours.")
+}
+
+func cmdCheckpoint(s *core.Store, args []string) {
+	fs := flag.NewFlagSet("checkpoint", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	var accept multiFlag
+	fs.Var(&accept, "accept", "vouch for an unattested claim (repeatable)")
+	if err := fs.Parse(args); err != nil || fs.NArg() != 0 {
+		usage()
+	}
+	ids, err := s.Checkpoint(accept)
+	if err != nil {
+		fail(err)
+	}
+	for _, id := range ids {
+		fmt.Println("checkpoint", id)
+	}
+	if len(ids) == 0 {
+		fmt.Println("nothing new to cover")
+	}
+}
+
+func cmdMigrate(s *core.Store, args []string) {
+	fs := flag.NewFlagSet("migrate", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	nostr := fs.String("nostr", "", "new, or a file holding an nsec")
+	pos, err := parseInterspersed(fs, args)
+	if err != nil || len(pos) != 1 {
+		usage()
+	}
+	key, err := nostrKey(*nostr, false)
+	if err != nil {
+		fail(err)
+	}
+	res, err := s.Migrate(core.Open(pos[0]), key)
+	if res.Words == nil && err != nil {
+		fail(err)
+	}
+	fmt.Println("identity", res.Identity)
+	for i, w := range res.Words {
+		fmt.Printf("%2d. %s\n", i+1, w)
+	}
+	fmt.Fprintln(os.Stderr, "Write these 24 new words on paper now. bean shows them only once. The old words do not work for the new log.")
+	if err != nil {
+		fail(err)
+	}
+	fmt.Printf("migrated %d records, %d blobs, %d blobs missing\n", res.Records, res.Blobs, res.MissingBlobs)
+	if res.Unattested > 0 || res.Skipped > 0 {
+		fmt.Printf("left out %d unattested claims and %d records too large to move: they stay in the old log\n", res.Unattested, res.Skipped)
+	}
 }
 
 func cmdWhoami(s *core.Store, args []string) {

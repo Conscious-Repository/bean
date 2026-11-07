@@ -229,9 +229,17 @@ func TestUnknownVersion(t *testing.T) {
 	if len(rp.TooNew) != 0 {
 		t.Errorf("stranger-signed future succession made I too new")
 	}
-	// 24: core type, v 99, signed by I's chain key.
-	s2 := map[string]any{"v": 99.0, "nonce": l.nonce(), "type": "bean.succession", "subject": i.id, "author": i.id, "kid": i.signer.Public()}
-	l.put(s2, i.signer)
+	// A signing key of I must not count either: a thief could hide I.
+	s1 := map[string]any{"v": 99.0, "nonce": l.nonce(), "type": "bean.succession", "subject": i.id, "author": i.id, "kid": i.signer.Public()}
+	l.put(s1, i.signer)
+	rp = l.verify()
+	if len(rp.TooNew) != 0 {
+		t.Errorf("signing-key future succession made I too new")
+	}
+	// 24: core type, v 99, signed by I's recovery key.
+	rec := RecoverySigner(i.seed, 0)
+	s2 := map[string]any{"v": 99.0, "nonce": l.nonce(), "type": "bean.succession", "subject": i.id, "author": i.id, "kid": rec.Public()}
+	l.put(s2, rec)
 	// A broken file of J must still be reported.
 	l.files["objects/00/"+strings.Repeat("0", 62)+".json"] = []byte("{")
 	rp = l.verify()

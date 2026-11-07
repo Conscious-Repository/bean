@@ -1,0 +1,493 @@
+[
+  {
+    "name": "too-new-by-signing-key",
+    "why": "A signing key cannot make an identity too new, or a thief could hide it from every copy.",
+    "files": {
+      "objects/41/bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37.json": "{\"author\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000001\",\"sig\":\"ed25519:54a54094c0014cfa77d50ef24537c8c3c4ffa0b1685ba1c2bea1c616c9d22afb1a770f37d77b6a53e1944cbaf27215f74e5fecb1024d1bb6eb01290f63143d07\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"recovery\":\"sha256:5591de8902e771dee4defcd2bbd5188a22dda29faeeecc1c4d8b6258292bb8d9\"}}",
+      "objects/bd/5c209d182a82f8c23909e436a3b546f5f44858146dbdd3991213bc8d21bba1.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:bd5c209d182a82f8c23909e436a3b546f5f44858146dbdd3991213bc8d21bba1\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000003\",\"sig\":\"ed25519:c74907fa6b009b1a743a67c2fe1d3f160aae4e424457f1ae5cccb8176d474a8518ee188bb26530bf0b9e91efcb809d9490a77aa70479ff450e9529bdf9c5f70c\",\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"type\":\"bean.anything\",\"v\":1}",
+      "objects/bd/b8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:a2c60788c813098fad2ae7484ac20f82660522adaae03df93decdf124826a75a13041681a43d1f0647848522fe3e94f874fc266eb4a8c49d36db304e17c99f03\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"v19\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"lab.x\",\"v\":0,\"value\":{\"n\":1}}"
+    },
+    "expect": {
+      "too_new": null,
+      "compromised": null,
+      "valid": [
+        "sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37",
+        "sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0"
+      ],
+      "errors": null,
+      "unattested": null,
+      "missing": null,
+      "duplicates": null
+    }
+  },
+  {
+    "name": "too-new-by-retired-key",
+    "why": "A retired signing key cannot do it either.",
+    "files": {
+      "objects/41/bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37.json": "{\"author\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000001\",\"sig\":\"ed25519:54a54094c0014cfa77d50ef24537c8c3c4ffa0b1685ba1c2bea1c616c9d22afb1a770f37d77b6a53e1944cbaf27215f74e5fecb1024d1bb6eb01290f63143d07\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"recovery\":\"sha256:5591de8902e771dee4defcd2bbd5188a22dda29faeeecc1c4d8b6258292bb8d9\"}}",
+      "objects/6b/b02be7429cb53c9e26b75498fa2652594c23471247ea67c043bc3f0187e5ac.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:6bb02be7429cb53c9e26b75498fa2652594c23471247ea67c043bc3f0187e5ac\",\"kid\":\"ed25519:4af656d924a6b6f5e199f85c86fdc73fb605cfc71ca14986f6a52269bd911e7d\",\"nonce\":\"00000000000000000000000000000002\",\"refs\":[{\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"rel\":\"succeeds\"}],\"sig\":\"ed25519:17050acc179df880ce128e8ebda67067be3502f04d4b398fc77a8e923c3522b3cd5fea5547b6380457e48738289b9c147da3f3775f8a27715248b7b3668a400f\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.succession\",\"v\":0,\"value\":{\"key\":\"ed25519:93db9f2ee0f7e39e942fb59441190bf20b9c43cfcc8a051a152499cf392b7a37\",\"recovery\":\"sha256:689746f169f570a7d9bee482ee26ddceeff0ea9a466d2b525d312f6e2dd7dcf0\",\"sealed\":[]}}",
+      "objects/bd/5c209d182a82f8c23909e436a3b546f5f44858146dbdd3991213bc8d21bba1.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:bd5c209d182a82f8c23909e436a3b546f5f44858146dbdd3991213bc8d21bba1\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000003\",\"sig\":\"ed25519:c74907fa6b009b1a743a67c2fe1d3f160aae4e424457f1ae5cccb8176d474a8518ee188bb26530bf0b9e91efcb809d9490a77aa70479ff450e9529bdf9c5f70c\",\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"type\":\"bean.anything\",\"v\":1}"
+    },
+    "expect": {
+      "too_new": null,
+      "compromised": null,
+      "valid": [
+        "sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37",
+        "sha256:6bb02be7429cb53c9e26b75498fa2652594c23471247ea67c043bc3f0187e5ac"
+      ],
+      "errors": null,
+      "unattested": null,
+      "missing": null,
+      "duplicates": null
+    }
+  },
+  {
+    "name": "too-new-by-recovery-key",
+    "why": "A recovery key on the identity's tree can, including the next one, which no succession has used yet.",
+    "files": {
+      "objects/41/bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37.json": "{\"author\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000001\",\"sig\":\"ed25519:54a54094c0014cfa77d50ef24537c8c3c4ffa0b1685ba1c2bea1c616c9d22afb1a770f37d77b6a53e1944cbaf27215f74e5fecb1024d1bb6eb01290f63143d07\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"recovery\":\"sha256:5591de8902e771dee4defcd2bbd5188a22dda29faeeecc1c4d8b6258292bb8d9\"}}",
+      "objects/bd/b8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:a2c60788c813098fad2ae7484ac20f82660522adaae03df93decdf124826a75a13041681a43d1f0647848522fe3e94f874fc266eb4a8c49d36db304e17c99f03\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"v19\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"lab.x\",\"v\":0,\"value\":{\"n\":1}}",
+      "objects/ce/248a96e4278ed3bf817465c653a29708a397fa318ec28977cc0ddb481eb207.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:ce248a96e4278ed3bf817465c653a29708a397fa318ec28977cc0ddb481eb207\",\"kid\":\"ed25519:4af656d924a6b6f5e199f85c86fdc73fb605cfc71ca14986f6a52269bd911e7d\",\"nonce\":\"00000000000000000000000000000003\",\"sig\":\"ed25519:74bcf4183fa34168512654d4a13899714a671b22360264618f459d23c09ba098031f9d2e3944af985d4b078ea0c51e9ea1a0d06aeeedd743dc9932dda2507d0a\",\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"type\":\"bean.anything\",\"v\":1}"
+    },
+    "expect": {
+      "too_new": [
+        "sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37"
+      ],
+      "compromised": null,
+      "valid": null,
+      "errors": null,
+      "unattested": null,
+      "missing": null,
+      "duplicates": null
+    }
+  },
+  {
+    "name": "duplicate-other-author",
+    "why": "A record with another author's dedupe ref does not make that author's record a duplicate, whatever the ids.",
+    "files": {
+      "objects/35/a51bb683022ec8ab3dd7f25201b24948fb0bbf7ee3d23a153ab795831a53f6.json": "{\"author\":\"ed25519:c853ad0f0cd2b619aea92ceec4fd56a24d6499d584ce79257e45cfd8139b60a7\",\"id\":\"sha256:35a51bb683022ec8ab3dd7f25201b24948fb0bbf7ee3d23a153ab795831a53f6\",\"kid\":\"ed25519:c853ad0f0cd2b619aea92ceec4fd56a24d6499d584ce79257e45cfd8139b60a7\",\"nonce\":\"00000000000000000000000000000003\",\"sig\":\"ed25519:0c831f60d2d71d3493451967183897fd87f810de0514ffedb9a4d178055e9a9b6bfd6ca611c4119ff48db48352dfca9927e963f94bf8d0af838a8b515bb06e06\",\"source\":{\"adapter\":\"v19@0\",\"ref\":\"hmac-sha256:abababababababababababababababababababababababababababababababab\",\"system\":\"v19\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"lab.x\",\"v\":0,\"value\":{\"n\":2}}",
+      "objects/41/bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37.json": "{\"author\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000001\",\"sig\":\"ed25519:54a54094c0014cfa77d50ef24537c8c3c4ffa0b1685ba1c2bea1c616c9d22afb1a770f37d77b6a53e1944cbaf27215f74e5fecb1024d1bb6eb01290f63143d07\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"recovery\":\"sha256:5591de8902e771dee4defcd2bbd5188a22dda29faeeecc1c4d8b6258292bb8d9\"}}",
+      "objects/a2/72d6cd68ab79d00248dbd5342fc0cd607c2bc7d9f23af8e4f21c30d9e52565.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:a272d6cd68ab79d00248dbd5342fc0cd607c2bc7d9f23af8e4f21c30d9e52565\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:1665ef0fdd628a5201dc1a2465eceb3091dd78004e556336be6c83acdb953a396bea2e322b5d296854615e4fbbb5d3ce1d74ed7fe6f69285ee817f7a525aa500\",\"source\":{\"adapter\":\"v19@0\",\"ref\":\"hmac-sha256:abababababababababababababababababababababababababababababababab\",\"system\":\"v19\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"lab.x\",\"v\":0,\"value\":{\"n\":1}}"
+    },
+    "expect": {
+      "too_new": null,
+      "compromised": null,
+      "valid": [
+        "sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37",
+        "sha256:a272d6cd68ab79d00248dbd5342fc0cd607c2bc7d9f23af8e4f21c30d9e52565",
+        "sha256:35a51bb683022ec8ab3dd7f25201b24948fb0bbf7ee3d23a153ab795831a53f6"
+      ],
+      "errors": null,
+      "unattested": null,
+      "missing": null,
+      "duplicates": null
+    }
+  },
+  {
+    "name": "duplicate-same-author",
+    "why": "Two records of one author with one ref are duplicates. The lowest id is the primary.",
+    "files": {
+      "objects/41/bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37.json": "{\"author\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000001\",\"sig\":\"ed25519:54a54094c0014cfa77d50ef24537c8c3c4ffa0b1685ba1c2bea1c616c9d22afb1a770f37d77b6a53e1944cbaf27215f74e5fecb1024d1bb6eb01290f63143d07\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"recovery\":\"sha256:5591de8902e771dee4defcd2bbd5188a22dda29faeeecc1c4d8b6258292bb8d9\"}}",
+      "objects/80/3ef6f1f6537ce1da2af660ac79022eeba3e4f6c27a3c07e42778404228fc0f.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:803ef6f1f6537ce1da2af660ac79022eeba3e4f6c27a3c07e42778404228fc0f\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000003\",\"sig\":\"ed25519:126022ad1ca8e1ade0e5f2049460745788e13a55ca9fe1eac0e84d2556548829d3c8cc88a91ecd5aa1a81f89d6a4bae8706112fad3a9d9b3ef8366ad029e7607\",\"source\":{\"adapter\":\"v19@0\",\"ref\":\"hmac-sha256:abababababababababababababababababababababababababababababababab\",\"system\":\"v19\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"lab.x\",\"v\":0,\"value\":{\"n\":2}}",
+      "objects/a2/72d6cd68ab79d00248dbd5342fc0cd607c2bc7d9f23af8e4f21c30d9e52565.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:a272d6cd68ab79d00248dbd5342fc0cd607c2bc7d9f23af8e4f21c30d9e52565\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:1665ef0fdd628a5201dc1a2465eceb3091dd78004e556336be6c83acdb953a396bea2e322b5d296854615e4fbbb5d3ce1d74ed7fe6f69285ee817f7a525aa500\",\"source\":{\"adapter\":\"v19@0\",\"ref\":\"hmac-sha256:abababababababababababababababababababababababababababababababab\",\"system\":\"v19\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"lab.x\",\"v\":0,\"value\":{\"n\":1}}"
+    },
+    "expect": {
+      "too_new": null,
+      "compromised": null,
+      "valid": [
+        "sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37",
+        "sha256:803ef6f1f6537ce1da2af660ac79022eeba3e4f6c27a3c07e42778404228fc0f",
+        "sha256:a272d6cd68ab79d00248dbd5342fc0cd607c2bc7d9f23af8e4f21c30d9e52565"
+      ],
+      "errors": null,
+      "unattested": null,
+      "missing": null,
+      "duplicates": {
+        "sha256:a272d6cd68ab79d00248dbd5342fc0cd607c2bc7d9f23af8e4f21c30d9e52565": "sha256:803ef6f1f6537ce1da2af660ac79022eeba3e4f6c27a3c07e42778404228fc0f"
+      }
+    }
+  },
+  {
+    "name": "checkpoint-missing",
+    "why": "A record that a checkpoint covers must be in the set.",
+    "files": {
+      "objects/41/bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37.json": "{\"author\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000001\",\"sig\":\"ed25519:54a54094c0014cfa77d50ef24537c8c3c4ffa0b1685ba1c2bea1c616c9d22afb1a770f37d77b6a53e1944cbaf27215f74e5fecb1024d1bb6eb01290f63143d07\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"recovery\":\"sha256:5591de8902e771dee4defcd2bbd5188a22dda29faeeecc1c4d8b6258292bb8d9\"}}",
+      "objects/d5/08a18880c9db7896b56930271b17b05c4d67ec9577b7aa64ced803fe02497b.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:d508a18880c9db7896b56930271b17b05c4d67ec9577b7aa64ced803fe02497b\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000003\",\"sig\":\"ed25519:db56fa5163524e5582c42ab8eaaee25037a210f5c5ee20fcfe9951439a1e8f8000d7f93357637372c6966d8674460e31e4e1a616bab22a396ee0a823efc5a60a\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.checkpoint\",\"v\":0,\"value\":{\"covers\":[\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0\"]}}"
+    },
+    "expect": {
+      "too_new": null,
+      "compromised": null,
+      "valid": [
+        "sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37",
+        "sha256:d508a18880c9db7896b56930271b17b05c4d67ec9577b7aa64ced803fe02497b"
+      ],
+      "errors": null,
+      "unattested": null,
+      "missing": [
+        "sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0 of sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37"
+      ],
+      "duplicates": null
+    }
+  },
+  {
+    "name": "checkpoint-and-tombstone",
+    "why": "A valid tombstone of the identity explains a covered record that is gone.",
+    "files": {
+      "objects/41/bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37.json": "{\"author\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000001\",\"sig\":\"ed25519:54a54094c0014cfa77d50ef24537c8c3c4ffa0b1685ba1c2bea1c616c9d22afb1a770f37d77b6a53e1944cbaf27215f74e5fecb1024d1bb6eb01290f63143d07\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"recovery\":\"sha256:5591de8902e771dee4defcd2bbd5188a22dda29faeeecc1c4d8b6258292bb8d9\"}}",
+      "objects/65/f52e7e07dbc88832a1cf258a8b1a83c3b626520b1f2dad96ef250b4c501e96.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:65f52e7e07dbc88832a1cf258a8b1a83c3b626520b1f2dad96ef250b4c501e96\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000004\",\"refs\":[{\"id\":\"sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0\",\"rel\":\"purges\"}],\"sig\":\"ed25519:ab9f73173d7f1537fd217ba81a7748509e32954abb63b58a8e082940335829633a194cc9498a535db9e9dc88e1206379394e37bf5effe33b6c6db182d096a408\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.tombstone\",\"v\":0}",
+      "objects/66/2f3792acfa093e12e2810413b9771340533dac34b67b81143d5b2436c65723.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:662f3792acfa093e12e2810413b9771340533dac34b67b81143d5b2436c65723\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000003\",\"sig\":\"ed25519:8cf58c5fd67b18dfde57fc99173795d1ba9273dfd79d53620186b837d1fee71f786eb5a3e86d6540057c2ab8900df4a40dbf4e3736af5820bb83f259c44a7b0d\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.checkpoint\",\"v\":0,\"value\":{\"covers\":[\"sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0\"]}}"
+    },
+    "expect": {
+      "too_new": null,
+      "compromised": null,
+      "valid": [
+        "sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37",
+        "sha256:662f3792acfa093e12e2810413b9771340533dac34b67b81143d5b2436c65723",
+        "sha256:65f52e7e07dbc88832a1cf258a8b1a83c3b626520b1f2dad96ef250b4c501e96"
+      ],
+      "errors": null,
+      "unattested": null,
+      "missing": null,
+      "duplicates": null
+    }
+  },
+  {
+    "name": "checkpoint-stranger-tombstone",
+    "why": "Another identity's tombstone does not explain it.",
+    "files": {
+      "objects/12/f354e742585368870380c4280b731a2c6f4c696443d30a7a78c271e827508b.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:12f354e742585368870380c4280b731a2c6f4c696443d30a7a78c271e827508b\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000004\",\"sig\":\"ed25519:c7ee36f85e5bb15905b8a0a0f540da9c592a21a6a8f620d8b62806f04d5da5b6e1126ada188face1f8959e0ffabd675fd07d7d99cd9d53b9979fa1f4d1648e0a\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.checkpoint\",\"v\":0,\"value\":{\"covers\":[\"sha256:8d2e2d83c53789e7f75d047b9cdcb86276a53954d8de372e459588b564be8efd\"]}}",
+      "objects/41/bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37.json": "{\"author\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000001\",\"sig\":\"ed25519:54a54094c0014cfa77d50ef24537c8c3c4ffa0b1685ba1c2bea1c616c9d22afb1a770f37d77b6a53e1944cbaf27215f74e5fecb1024d1bb6eb01290f63143d07\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"recovery\":\"sha256:5591de8902e771dee4defcd2bbd5188a22dda29faeeecc1c4d8b6258292bb8d9\"}}",
+      "objects/bf/4ebd8250c6e9b72c39db4e10c1a0364f5d5a7c0d8ecf3aec2174ec2a4ecea4.json": "{\"author\":\"ed25519:2152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db12\",\"id\":\"sha256:bf4ebd8250c6e9b72c39db4e10c1a0364f5d5a7c0d8ecf3aec2174ec2a4ecea4\",\"kid\":\"ed25519:2152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db12\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:095df3d20564ddfdbe9420feed81382c585db3e4fd092b242082d541ff62eae175537486ec573aa9500e502b171db4d206f67ef601e259be3a1624ae12b50408\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:2152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db12\",\"recovery\":\"sha256:ec8b3b8ef123af8fb00b9f81641e910f8b283301959048780819f78ab9274f02\"}}",
+      "objects/c7/87f4e0c222fcaa34305afa9b2712ae17a4fb424738f5f721cec07c2573b1e7.json": "{\"author\":\"sha256:bf4ebd8250c6e9b72c39db4e10c1a0364f5d5a7c0d8ecf3aec2174ec2a4ecea4\",\"id\":\"sha256:c787f4e0c222fcaa34305afa9b2712ae17a4fb424738f5f721cec07c2573b1e7\",\"kid\":\"ed25519:2152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db12\",\"nonce\":\"00000000000000000000000000000005\",\"refs\":[{\"id\":\"sha256:8d2e2d83c53789e7f75d047b9cdcb86276a53954d8de372e459588b564be8efd\",\"rel\":\"purges\"}],\"sig\":\"ed25519:b4c26f31f7e0fed532f7fe7531b90fb086b68093c9e2b6580614792a4566604b6937e0cbba9824e416d7c66d98059dd85ec01628b0b77f7d8cd47f0d1c264307\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:bf4ebd8250c6e9b72c39db4e10c1a0364f5d5a7c0d8ecf3aec2174ec2a4ecea4\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.tombstone\",\"v\":0}"
+    },
+    "expect": {
+      "too_new": null,
+      "compromised": null,
+      "valid": [
+        "sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37",
+        "sha256:bf4ebd8250c6e9b72c39db4e10c1a0364f5d5a7c0d8ecf3aec2174ec2a4ecea4",
+        "sha256:12f354e742585368870380c4280b731a2c6f4c696443d30a7a78c271e827508b",
+        "sha256:c787f4e0c222fcaa34305afa9b2712ae17a4fb424738f5f721cec07c2573b1e7"
+      ],
+      "errors": null,
+      "unattested": null,
+      "missing": [
+        "sha256:8d2e2d83c53789e7f75d047b9cdcb86276a53954d8de372e459588b564be8efd of sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37"
+      ],
+      "duplicates": null
+    }
+  },
+  {
+    "name": "retired-claim-unattested",
+    "why": "A claim of a retired key that nothing vouches for stays valid but is unattested.",
+    "files": {
+      "objects/41/bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37.json": "{\"author\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000001\",\"sig\":\"ed25519:54a54094c0014cfa77d50ef24537c8c3c4ffa0b1685ba1c2bea1c616c9d22afb1a770f37d77b6a53e1944cbaf27215f74e5fecb1024d1bb6eb01290f63143d07\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"recovery\":\"sha256:5591de8902e771dee4defcd2bbd5188a22dda29faeeecc1c4d8b6258292bb8d9\"}}",
+      "objects/6b/b02be7429cb53c9e26b75498fa2652594c23471247ea67c043bc3f0187e5ac.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:6bb02be7429cb53c9e26b75498fa2652594c23471247ea67c043bc3f0187e5ac\",\"kid\":\"ed25519:4af656d924a6b6f5e199f85c86fdc73fb605cfc71ca14986f6a52269bd911e7d\",\"nonce\":\"00000000000000000000000000000002\",\"refs\":[{\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"rel\":\"succeeds\"}],\"sig\":\"ed25519:17050acc179df880ce128e8ebda67067be3502f04d4b398fc77a8e923c3522b3cd5fea5547b6380457e48738289b9c147da3f3775f8a27715248b7b3668a400f\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.succession\",\"v\":0,\"value\":{\"key\":\"ed25519:93db9f2ee0f7e39e942fb59441190bf20b9c43cfcc8a051a152499cf392b7a37\",\"recovery\":\"sha256:689746f169f570a7d9bee482ee26ddceeff0ea9a466d2b525d312f6e2dd7dcf0\",\"sealed\":[]}}",
+      "objects/8d/2e2d83c53789e7f75d047b9cdcb86276a53954d8de372e459588b564be8efd.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:8d2e2d83c53789e7f75d047b9cdcb86276a53954d8de372e459588b564be8efd\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000003\",\"sig\":\"ed25519:dbf7fa0b4ac0ea124e986b4f507b71826eeb20a476692aa24d3d48aa62b4dbc3af662ebadfece2374e0fea268732bd65e3ccc4d9918896b5909f4f22b40d1d08\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"v19\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"lab.x\",\"v\":0,\"value\":{\"n\":2}}"
+    },
+    "expect": {
+      "too_new": null,
+      "compromised": null,
+      "valid": [
+        "sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37",
+        "sha256:6bb02be7429cb53c9e26b75498fa2652594c23471247ea67c043bc3f0187e5ac",
+        "sha256:8d2e2d83c53789e7f75d047b9cdcb86276a53954d8de372e459588b564be8efd"
+      ],
+      "errors": null,
+      "unattested": [
+        "sha256:8d2e2d83c53789e7f75d047b9cdcb86276a53954d8de372e459588b564be8efd"
+      ],
+      "missing": null,
+      "duplicates": null
+    }
+  },
+  {
+    "name": "retired-claim-sealed",
+    "why": "The succession that ended the key can vouch for the claim.",
+    "files": {
+      "objects/39/de2006fbb05e90adad72b77925e28f9beff2fae70ac3c9bbf3a0afaeedc715.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:39de2006fbb05e90adad72b77925e28f9beff2fae70ac3c9bbf3a0afaeedc715\",\"kid\":\"ed25519:4af656d924a6b6f5e199f85c86fdc73fb605cfc71ca14986f6a52269bd911e7d\",\"nonce\":\"00000000000000000000000000000003\",\"refs\":[{\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"rel\":\"succeeds\"}],\"sig\":\"ed25519:a78f7160e3c2eeec771b69f37fdcee9923e47fc6a4998f8e3433f911e910237573aa0687365aeeda731819f467ad68b7c6c47d7251697a425bd8961d4da7e20a\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.succession\",\"v\":0,\"value\":{\"key\":\"ed25519:93db9f2ee0f7e39e942fb59441190bf20b9c43cfcc8a051a152499cf392b7a37\",\"recovery\":\"sha256:689746f169f570a7d9bee482ee26ddceeff0ea9a466d2b525d312f6e2dd7dcf0\",\"sealed\":[\"sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0\"]}}",
+      "objects/41/bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37.json": "{\"author\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000001\",\"sig\":\"ed25519:54a54094c0014cfa77d50ef24537c8c3c4ffa0b1685ba1c2bea1c616c9d22afb1a770f37d77b6a53e1944cbaf27215f74e5fecb1024d1bb6eb01290f63143d07\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"recovery\":\"sha256:5591de8902e771dee4defcd2bbd5188a22dda29faeeecc1c4d8b6258292bb8d9\"}}",
+      "objects/bd/b8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:a2c60788c813098fad2ae7484ac20f82660522adaae03df93decdf124826a75a13041681a43d1f0647848522fe3e94f874fc266eb4a8c49d36db304e17c99f03\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"v19\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"lab.x\",\"v\":0,\"value\":{\"n\":1}}"
+    },
+    "expect": {
+      "too_new": null,
+      "compromised": null,
+      "valid": [
+        "sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37",
+        "sha256:39de2006fbb05e90adad72b77925e28f9beff2fae70ac3c9bbf3a0afaeedc715",
+        "sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0"
+      ],
+      "errors": null,
+      "unattested": null,
+      "missing": null,
+      "duplicates": null
+    }
+  },
+  {
+    "name": "retired-claim-covered-by-later-key",
+    "why": "A checkpoint of a later key can vouch for the claim.",
+    "files": {
+      "objects/41/bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37.json": "{\"author\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000001\",\"sig\":\"ed25519:54a54094c0014cfa77d50ef24537c8c3c4ffa0b1685ba1c2bea1c616c9d22afb1a770f37d77b6a53e1944cbaf27215f74e5fecb1024d1bb6eb01290f63143d07\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"recovery\":\"sha256:5591de8902e771dee4defcd2bbd5188a22dda29faeeecc1c4d8b6258292bb8d9\"}}",
+      "objects/5e/0866663bdd9f1d905bf88754ab9f069a53ffbdcbf5714c2620d6ae2dbbd531.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:5e0866663bdd9f1d905bf88754ab9f069a53ffbdcbf5714c2620d6ae2dbbd531\",\"kid\":\"ed25519:93db9f2ee0f7e39e942fb59441190bf20b9c43cfcc8a051a152499cf392b7a37\",\"nonce\":\"00000000000000000000000000000004\",\"sig\":\"ed25519:d70163f4375b3b9fd9932cc2f31c3af1b2571e7d02229ed18c3e7ef7c6900cdeb7747c34dfc067adc7b62329d162ecb174be8d6d50e9df3b1d717c41bdc0a80b\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.checkpoint\",\"v\":0,\"value\":{\"covers\":[\"sha256:8d2e2d83c53789e7f75d047b9cdcb86276a53954d8de372e459588b564be8efd\"]}}",
+      "objects/6b/b02be7429cb53c9e26b75498fa2652594c23471247ea67c043bc3f0187e5ac.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:6bb02be7429cb53c9e26b75498fa2652594c23471247ea67c043bc3f0187e5ac\",\"kid\":\"ed25519:4af656d924a6b6f5e199f85c86fdc73fb605cfc71ca14986f6a52269bd911e7d\",\"nonce\":\"00000000000000000000000000000002\",\"refs\":[{\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"rel\":\"succeeds\"}],\"sig\":\"ed25519:17050acc179df880ce128e8ebda67067be3502f04d4b398fc77a8e923c3522b3cd5fea5547b6380457e48738289b9c147da3f3775f8a27715248b7b3668a400f\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.succession\",\"v\":0,\"value\":{\"key\":\"ed25519:93db9f2ee0f7e39e942fb59441190bf20b9c43cfcc8a051a152499cf392b7a37\",\"recovery\":\"sha256:689746f169f570a7d9bee482ee26ddceeff0ea9a466d2b525d312f6e2dd7dcf0\",\"sealed\":[]}}",
+      "objects/8d/2e2d83c53789e7f75d047b9cdcb86276a53954d8de372e459588b564be8efd.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:8d2e2d83c53789e7f75d047b9cdcb86276a53954d8de372e459588b564be8efd\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000003\",\"sig\":\"ed25519:dbf7fa0b4ac0ea124e986b4f507b71826eeb20a476692aa24d3d48aa62b4dbc3af662ebadfece2374e0fea268732bd65e3ccc4d9918896b5909f4f22b40d1d08\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"v19\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"lab.x\",\"v\":0,\"value\":{\"n\":2}}"
+    },
+    "expect": {
+      "too_new": null,
+      "compromised": null,
+      "valid": [
+        "sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37",
+        "sha256:6bb02be7429cb53c9e26b75498fa2652594c23471247ea67c043bc3f0187e5ac",
+        "sha256:8d2e2d83c53789e7f75d047b9cdcb86276a53954d8de372e459588b564be8efd",
+        "sha256:5e0866663bdd9f1d905bf88754ab9f069a53ffbdcbf5714c2620d6ae2dbbd531"
+      ],
+      "errors": null,
+      "unattested": null,
+      "missing": null,
+      "duplicates": null
+    }
+  },
+  {
+    "name": "retired-checkpoint-unsealed",
+    "why": "A checkpoint of a retired key needs a seal, like a deletion, so a thief's checkpoint does not vouch for a thief's claim.",
+    "files": {
+      "objects/12/f354e742585368870380c4280b731a2c6f4c696443d30a7a78c271e827508b.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:12f354e742585368870380c4280b731a2c6f4c696443d30a7a78c271e827508b\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000004\",\"sig\":\"ed25519:c7ee36f85e5bb15905b8a0a0f540da9c592a21a6a8f620d8b62806f04d5da5b6e1126ada188face1f8959e0ffabd675fd07d7d99cd9d53b9979fa1f4d1648e0a\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.checkpoint\",\"v\":0,\"value\":{\"covers\":[\"sha256:8d2e2d83c53789e7f75d047b9cdcb86276a53954d8de372e459588b564be8efd\"]}}",
+      "objects/41/bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37.json": "{\"author\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000001\",\"sig\":\"ed25519:54a54094c0014cfa77d50ef24537c8c3c4ffa0b1685ba1c2bea1c616c9d22afb1a770f37d77b6a53e1944cbaf27215f74e5fecb1024d1bb6eb01290f63143d07\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"recovery\":\"sha256:5591de8902e771dee4defcd2bbd5188a22dda29faeeecc1c4d8b6258292bb8d9\"}}",
+      "objects/6b/b02be7429cb53c9e26b75498fa2652594c23471247ea67c043bc3f0187e5ac.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:6bb02be7429cb53c9e26b75498fa2652594c23471247ea67c043bc3f0187e5ac\",\"kid\":\"ed25519:4af656d924a6b6f5e199f85c86fdc73fb605cfc71ca14986f6a52269bd911e7d\",\"nonce\":\"00000000000000000000000000000002\",\"refs\":[{\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"rel\":\"succeeds\"}],\"sig\":\"ed25519:17050acc179df880ce128e8ebda67067be3502f04d4b398fc77a8e923c3522b3cd5fea5547b6380457e48738289b9c147da3f3775f8a27715248b7b3668a400f\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.succession\",\"v\":0,\"value\":{\"key\":\"ed25519:93db9f2ee0f7e39e942fb59441190bf20b9c43cfcc8a051a152499cf392b7a37\",\"recovery\":\"sha256:689746f169f570a7d9bee482ee26ddceeff0ea9a466d2b525d312f6e2dd7dcf0\",\"sealed\":[]}}",
+      "objects/8d/2e2d83c53789e7f75d047b9cdcb86276a53954d8de372e459588b564be8efd.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:8d2e2d83c53789e7f75d047b9cdcb86276a53954d8de372e459588b564be8efd\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000003\",\"sig\":\"ed25519:dbf7fa0b4ac0ea124e986b4f507b71826eeb20a476692aa24d3d48aa62b4dbc3af662ebadfece2374e0fea268732bd65e3ccc4d9918896b5909f4f22b40d1d08\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"v19\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"lab.x\",\"v\":0,\"value\":{\"n\":2}}"
+    },
+    "expect": {
+      "too_new": null,
+      "compromised": null,
+      "valid": [
+        "sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37",
+        "sha256:6bb02be7429cb53c9e26b75498fa2652594c23471247ea67c043bc3f0187e5ac",
+        "sha256:8d2e2d83c53789e7f75d047b9cdcb86276a53954d8de372e459588b564be8efd"
+      ],
+      "errors": {
+        "sha256:12f354e742585368870380c4280b731a2c6f4c696443d30a7a78c271e827508b": "not sealed"
+      },
+      "unattested": [
+        "sha256:8d2e2d83c53789e7f75d047b9cdcb86276a53954d8de372e459588b564be8efd"
+      ],
+      "missing": null,
+      "duplicates": null
+    }
+  },
+  {
+    "name": "stranger-checkpoint-does-not-attest",
+    "why": "A checkpoint of another identity vouches for nothing.",
+    "files": {
+      "objects/41/bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37.json": "{\"author\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000001\",\"sig\":\"ed25519:54a54094c0014cfa77d50ef24537c8c3c4ffa0b1685ba1c2bea1c616c9d22afb1a770f37d77b6a53e1944cbaf27215f74e5fecb1024d1bb6eb01290f63143d07\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"recovery\":\"sha256:5591de8902e771dee4defcd2bbd5188a22dda29faeeecc1c4d8b6258292bb8d9\"}}",
+      "objects/82/aa3ae4e8f4a2e1e3865701e4984156c82e9146e77ee28c1faad9323acc7a6a.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:82aa3ae4e8f4a2e1e3865701e4984156c82e9146e77ee28c1faad9323acc7a6a\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000004\",\"sig\":\"ed25519:58a2860e24a27b5b3629e1629a64cd509a5996f04595821e2cc221f9da822f66f8c354d58fc3e6584ff1ce501bfcaf58d213452cbd36120ffafe1ddb87e29b06\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"v19\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"lab.x\",\"v\":0,\"value\":{\"n\":3}}",
+      "objects/bf/4ebd8250c6e9b72c39db4e10c1a0364f5d5a7c0d8ecf3aec2174ec2a4ecea4.json": "{\"author\":\"ed25519:2152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db12\",\"id\":\"sha256:bf4ebd8250c6e9b72c39db4e10c1a0364f5d5a7c0d8ecf3aec2174ec2a4ecea4\",\"kid\":\"ed25519:2152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db12\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:095df3d20564ddfdbe9420feed81382c585db3e4fd092b242082d541ff62eae175537486ec573aa9500e502b171db4d206f67ef601e259be3a1624ae12b50408\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:2152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db12\",\"recovery\":\"sha256:ec8b3b8ef123af8fb00b9f81641e910f8b283301959048780819f78ab9274f02\"}}",
+      "objects/ed/4b9e4033ceb07dad98d4f9abe00a263768a9006f4a49d4e39b8053e347d248.json": "{\"author\":\"sha256:bf4ebd8250c6e9b72c39db4e10c1a0364f5d5a7c0d8ecf3aec2174ec2a4ecea4\",\"id\":\"sha256:ed4b9e4033ceb07dad98d4f9abe00a263768a9006f4a49d4e39b8053e347d248\",\"kid\":\"ed25519:2152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db12\",\"nonce\":\"00000000000000000000000000000005\",\"sig\":\"ed25519:47e256aca19e4a447ca6bae769105e4675c414a847e01bb43921b380a2da61168d09e88ebe7096e5a9671e0658d75f0a7a71f5dfe5f683ed8d5f546255ea4b0a\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:bf4ebd8250c6e9b72c39db4e10c1a0364f5d5a7c0d8ecf3aec2174ec2a4ecea4\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.checkpoint\",\"v\":0,\"value\":{\"covers\":[\"sha256:82aa3ae4e8f4a2e1e3865701e4984156c82e9146e77ee28c1faad9323acc7a6a\"]}}",
+      "objects/ef/289707c7363dfc2c0cc0b10fede5fc9e272604e60abc39304b10bc20b3bcf9.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:ef289707c7363dfc2c0cc0b10fede5fc9e272604e60abc39304b10bc20b3bcf9\",\"kid\":\"ed25519:4af656d924a6b6f5e199f85c86fdc73fb605cfc71ca14986f6a52269bd911e7d\",\"nonce\":\"00000000000000000000000000000003\",\"refs\":[{\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"rel\":\"succeeds\"}],\"sig\":\"ed25519:b30b48ce1cf0ddb8398dd68720d03624a59f0e219b2ffb8bf315d09ced8ae8660604aeb15734fc0e6bef698b190cbcb3763f4d629dd8fcc84b0afe85a5ead002\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.succession\",\"v\":0,\"value\":{\"key\":\"ed25519:93db9f2ee0f7e39e942fb59441190bf20b9c43cfcc8a051a152499cf392b7a37\",\"recovery\":\"sha256:689746f169f570a7d9bee482ee26ddceeff0ea9a466d2b525d312f6e2dd7dcf0\",\"sealed\":[]}}"
+    },
+    "expect": {
+      "too_new": null,
+      "compromised": null,
+      "valid": [
+        "sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37",
+        "sha256:bf4ebd8250c6e9b72c39db4e10c1a0364f5d5a7c0d8ecf3aec2174ec2a4ecea4",
+        "sha256:ef289707c7363dfc2c0cc0b10fede5fc9e272604e60abc39304b10bc20b3bcf9",
+        "sha256:82aa3ae4e8f4a2e1e3865701e4984156c82e9146e77ee28c1faad9323acc7a6a",
+        "sha256:ed4b9e4033ceb07dad98d4f9abe00a263768a9006f4a49d4e39b8053e347d248"
+      ],
+      "errors": null,
+      "unattested": [
+        "sha256:82aa3ae4e8f4a2e1e3865701e4984156c82e9146e77ee28c1faad9323acc7a6a"
+      ],
+      "missing": null,
+      "duplicates": null
+    }
+  },
+  {
+    "name": "freeze-sealed-by-both",
+    "why": "A correction by the key at a fork stays valid when both branches sealed it.",
+    "files": {
+      "objects/41/bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37.json": "{\"author\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000001\",\"sig\":\"ed25519:54a54094c0014cfa77d50ef24537c8c3c4ffa0b1685ba1c2bea1c616c9d22afb1a770f37d77b6a53e1944cbaf27215f74e5fecb1024d1bb6eb01290f63143d07\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"recovery\":\"sha256:5591de8902e771dee4defcd2bbd5188a22dda29faeeecc1c4d8b6258292bb8d9\"}}",
+      "objects/98/a14addafa6ca17ddf92a6b5c690e20b6b1066f0abf8c79d23a52d29190429a.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:98a14addafa6ca17ddf92a6b5c690e20b6b1066f0abf8c79d23a52d29190429a\",\"kid\":\"ed25519:4af656d924a6b6f5e199f85c86fdc73fb605cfc71ca14986f6a52269bd911e7d\",\"nonce\":\"00000000000000000000000000000005\",\"refs\":[{\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"rel\":\"succeeds\"}],\"sig\":\"ed25519:35805b63c4a588a8ddd8fb1bf0d4a2333859e3b8e626a6d7b59d6be866c77aae515df645b3172cca872f0c4b9475261f0ca73189a7a821300fb9879c9ccb7d03\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.succession\",\"v\":0,\"value\":{\"key\":\"ed25519:fa01347a991e04ae0f1a6d81db29a5ea4eeb5965f577ac9efb44e7b1f2fbb028\",\"recovery\":\"sha256:689746f169f570a7d9bee482ee26ddceeff0ea9a466d2b525d312f6e2dd7dcf0\",\"sealed\":[\"sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0\",\"sha256:e5b9ac63aaee084db4709208e0a741a440263c3bed86747bbb0d4bcc4310269a\"]}}",
+      "objects/bd/b8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:a2c60788c813098fad2ae7484ac20f82660522adaae03df93decdf124826a75a13041681a43d1f0647848522fe3e94f874fc266eb4a8c49d36db304e17c99f03\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"v19\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"lab.x\",\"v\":0,\"value\":{\"n\":1}}",
+      "objects/c3/1336027e928938591c44d0d0681588642a1a69d799c1713bd716e60693025f.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:c31336027e928938591c44d0d0681588642a1a69d799c1713bd716e60693025f\",\"kid\":\"ed25519:4af656d924a6b6f5e199f85c86fdc73fb605cfc71ca14986f6a52269bd911e7d\",\"nonce\":\"00000000000000000000000000000004\",\"refs\":[{\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"rel\":\"succeeds\"}],\"sig\":\"ed25519:c9c6e616e64ccb19249586b833203963fba9668bfbb160d352bb62be3e1fab3230888dd2b32352ca19d088798703bc02acc56aa2fe8ada0d74e7b6771205f509\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.succession\",\"v\":0,\"value\":{\"key\":\"ed25519:93db9f2ee0f7e39e942fb59441190bf20b9c43cfcc8a051a152499cf392b7a37\",\"recovery\":\"sha256:689746f169f570a7d9bee482ee26ddceeff0ea9a466d2b525d312f6e2dd7dcf0\",\"sealed\":[\"sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0\",\"sha256:e5b9ac63aaee084db4709208e0a741a440263c3bed86747bbb0d4bcc4310269a\"]}}",
+      "objects/e5/b9ac63aaee084db4709208e0a741a440263c3bed86747bbb0d4bcc4310269a.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:e5b9ac63aaee084db4709208e0a741a440263c3bed86747bbb0d4bcc4310269a\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000003\",\"refs\":[{\"id\":\"sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0\",\"rel\":\"supersedes\"}],\"sig\":\"ed25519:4ef29a5b1232f335ec98df0441978c801e9e73621591dbcc9c96d36dfcf4ecbf5092128f1f96ccba8eeb20e647f683362de286c851e3a6f945d74a96f3c2b701\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"v19\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"lab.x\",\"v\":0,\"value\":{\"n\":1.5}}"
+    },
+    "expect": {
+      "too_new": null,
+      "compromised": [
+        "sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37"
+      ],
+      "valid": [
+        "sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37",
+        "sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0",
+        "sha256:e5b9ac63aaee084db4709208e0a741a440263c3bed86747bbb0d4bcc4310269a"
+      ],
+      "errors": {
+        "sha256:98a14addafa6ca17ddf92a6b5c690e20b6b1066f0abf8c79d23a52d29190429a": "frozen",
+        "sha256:c31336027e928938591c44d0d0681588642a1a69d799c1713bd716e60693025f": "frozen"
+      },
+      "unattested": null,
+      "missing": null,
+      "duplicates": null
+    }
+  },
+  {
+    "name": "freeze-sealed-by-one",
+    "why": "It does not when only one branch sealed it, so neither party decides alone.",
+    "files": {
+      "objects/41/bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37.json": "{\"author\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000001\",\"sig\":\"ed25519:54a54094c0014cfa77d50ef24537c8c3c4ffa0b1685ba1c2bea1c616c9d22afb1a770f37d77b6a53e1944cbaf27215f74e5fecb1024d1bb6eb01290f63143d07\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"recovery\":\"sha256:5591de8902e771dee4defcd2bbd5188a22dda29faeeecc1c4d8b6258292bb8d9\"}}",
+      "objects/67/4bc9a70eb065dab5abfd7294dd0c05f96ed6bad116914e140f330c6de099b8.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:674bc9a70eb065dab5abfd7294dd0c05f96ed6bad116914e140f330c6de099b8\",\"kid\":\"ed25519:4af656d924a6b6f5e199f85c86fdc73fb605cfc71ca14986f6a52269bd911e7d\",\"nonce\":\"00000000000000000000000000000005\",\"refs\":[{\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"rel\":\"succeeds\"}],\"sig\":\"ed25519:77fdddaa72ac32191fd2f1cd0ca4508db3e1cebebc6d2f8c817756b9738701a02006a328d006cf506b5636f29eab4646b1935bbb232a3c027f268fd7149c8906\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.succession\",\"v\":0,\"value\":{\"key\":\"ed25519:fa01347a991e04ae0f1a6d81db29a5ea4eeb5965f577ac9efb44e7b1f2fbb028\",\"recovery\":\"sha256:689746f169f570a7d9bee482ee26ddceeff0ea9a466d2b525d312f6e2dd7dcf0\",\"sealed\":[]}}",
+      "objects/6f/fc2e9da6390d410ff3c3e98a58ae44260c60d66a639aca32397ebda2fdb5bd.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:6ffc2e9da6390d410ff3c3e98a58ae44260c60d66a639aca32397ebda2fdb5bd\",\"kid\":\"ed25519:4af656d924a6b6f5e199f85c86fdc73fb605cfc71ca14986f6a52269bd911e7d\",\"nonce\":\"00000000000000000000000000000004\",\"refs\":[{\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"rel\":\"succeeds\"}],\"sig\":\"ed25519:c210027dd01191718cdd8b42929270d35cbade29695b7266b134651e435bac2880c74fc0ba783c25be600917f2216f3a260e10196bdec87bd383b3124184e003\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.succession\",\"v\":0,\"value\":{\"key\":\"ed25519:93db9f2ee0f7e39e942fb59441190bf20b9c43cfcc8a051a152499cf392b7a37\",\"recovery\":\"sha256:689746f169f570a7d9bee482ee26ddceeff0ea9a466d2b525d312f6e2dd7dcf0\",\"sealed\":[\"sha256:e5b9ac63aaee084db4709208e0a741a440263c3bed86747bbb0d4bcc4310269a\"]}}",
+      "objects/bd/b8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:a2c60788c813098fad2ae7484ac20f82660522adaae03df93decdf124826a75a13041681a43d1f0647848522fe3e94f874fc266eb4a8c49d36db304e17c99f03\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"v19\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"lab.x\",\"v\":0,\"value\":{\"n\":1}}",
+      "objects/e5/b9ac63aaee084db4709208e0a741a440263c3bed86747bbb0d4bcc4310269a.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:e5b9ac63aaee084db4709208e0a741a440263c3bed86747bbb0d4bcc4310269a\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000003\",\"refs\":[{\"id\":\"sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0\",\"rel\":\"supersedes\"}],\"sig\":\"ed25519:4ef29a5b1232f335ec98df0441978c801e9e73621591dbcc9c96d36dfcf4ecbf5092128f1f96ccba8eeb20e647f683362de286c851e3a6f945d74a96f3c2b701\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"v19\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"lab.x\",\"v\":0,\"value\":{\"n\":1.5}}"
+    },
+    "expect": {
+      "too_new": null,
+      "compromised": [
+        "sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37"
+      ],
+      "valid": [
+        "sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37",
+        "sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0"
+      ],
+      "errors": {
+        "sha256:674bc9a70eb065dab5abfd7294dd0c05f96ed6bad116914e140f330c6de099b8": "frozen",
+        "sha256:6ffc2e9da6390d410ff3c3e98a58ae44260c60d66a639aca32397ebda2fdb5bd": "frozen",
+        "sha256:e5b9ac63aaee084db4709208e0a741a440263c3bed86747bbb0d4bcc4310269a": "frozen"
+      },
+      "unattested": [
+        "sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0"
+      ],
+      "missing": null,
+      "duplicates": null
+    }
+  },
+  {
+    "name": "freeze-claim-by-fork-key",
+    "why": "A claim by the key at a fork stays valid, but is unattested unless every branch sealed it. A thief can still write with that key.",
+    "files": {
+      "objects/39/de2006fbb05e90adad72b77925e28f9beff2fae70ac3c9bbf3a0afaeedc715.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:39de2006fbb05e90adad72b77925e28f9beff2fae70ac3c9bbf3a0afaeedc715\",\"kid\":\"ed25519:4af656d924a6b6f5e199f85c86fdc73fb605cfc71ca14986f6a52269bd911e7d\",\"nonce\":\"00000000000000000000000000000003\",\"refs\":[{\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"rel\":\"succeeds\"}],\"sig\":\"ed25519:a78f7160e3c2eeec771b69f37fdcee9923e47fc6a4998f8e3433f911e910237573aa0687365aeeda731819f467ad68b7c6c47d7251697a425bd8961d4da7e20a\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.succession\",\"v\":0,\"value\":{\"key\":\"ed25519:93db9f2ee0f7e39e942fb59441190bf20b9c43cfcc8a051a152499cf392b7a37\",\"recovery\":\"sha256:689746f169f570a7d9bee482ee26ddceeff0ea9a466d2b525d312f6e2dd7dcf0\",\"sealed\":[\"sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0\"]}}",
+      "objects/41/bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37.json": "{\"author\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000001\",\"sig\":\"ed25519:54a54094c0014cfa77d50ef24537c8c3c4ffa0b1685ba1c2bea1c616c9d22afb1a770f37d77b6a53e1944cbaf27215f74e5fecb1024d1bb6eb01290f63143d07\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"recovery\":\"sha256:5591de8902e771dee4defcd2bbd5188a22dda29faeeecc1c4d8b6258292bb8d9\"}}",
+      "objects/8d/2dee1a0f75cfa8178689ff6cb31e5f74e714d028991c8ac22c06772cb81420.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:8d2dee1a0f75cfa8178689ff6cb31e5f74e714d028991c8ac22c06772cb81420\",\"kid\":\"ed25519:4af656d924a6b6f5e199f85c86fdc73fb605cfc71ca14986f6a52269bd911e7d\",\"nonce\":\"00000000000000000000000000000004\",\"refs\":[{\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"rel\":\"succeeds\"}],\"sig\":\"ed25519:029a98bc65ad5818d71e353c0565ddc0c608e2fab5557aa464eeaa614d2f1badc7f20ab5d815469b3aae14b91c23ad451f554dfcca60d394c47433e63c951202\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.succession\",\"v\":0,\"value\":{\"key\":\"ed25519:fa01347a991e04ae0f1a6d81db29a5ea4eeb5965f577ac9efb44e7b1f2fbb028\",\"recovery\":\"sha256:689746f169f570a7d9bee482ee26ddceeff0ea9a466d2b525d312f6e2dd7dcf0\",\"sealed\":[\"sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0\"]}}",
+      "objects/b1/03c421e0f632dd88c79a223c7250a57d00cf2bacd4a62797723c6bbad1c9ae.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:b103c421e0f632dd88c79a223c7250a57d00cf2bacd4a62797723c6bbad1c9ae\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000005\",\"sig\":\"ed25519:6ff6650f9ac5b45cca73bf3c045fc039e8aa41a01f184db8b08b199f4aa87b5f099dd629f8387d07a2bf61683285fa4659c92c256e7955334e7aff00a621d802\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"v19\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"lab.x\",\"v\":0,\"value\":{\"n\":4}}",
+      "objects/bd/b8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:a2c60788c813098fad2ae7484ac20f82660522adaae03df93decdf124826a75a13041681a43d1f0647848522fe3e94f874fc266eb4a8c49d36db304e17c99f03\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"v19\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"lab.x\",\"v\":0,\"value\":{\"n\":1}}"
+    },
+    "expect": {
+      "too_new": null,
+      "compromised": [
+        "sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37"
+      ],
+      "valid": [
+        "sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37",
+        "sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0",
+        "sha256:b103c421e0f632dd88c79a223c7250a57d00cf2bacd4a62797723c6bbad1c9ae"
+      ],
+      "errors": {
+        "sha256:39de2006fbb05e90adad72b77925e28f9beff2fae70ac3c9bbf3a0afaeedc715": "frozen",
+        "sha256:8d2dee1a0f75cfa8178689ff6cb31e5f74e714d028991c8ac22c06772cb81420": "frozen"
+      },
+      "unattested": [
+        "sha256:b103c421e0f632dd88c79a223c7250a57d00cf2bacd4a62797723c6bbad1c9ae"
+      ],
+      "missing": null,
+      "duplicates": null
+    }
+  },
+  {
+    "name": "missing-named-by-two-identities",
+    "why": "Two identities that name one missing id each get a line. The result does not depend on map order.",
+    "files": {
+      "objects/12/f354e742585368870380c4280b731a2c6f4c696443d30a7a78c271e827508b.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:12f354e742585368870380c4280b731a2c6f4c696443d30a7a78c271e827508b\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000004\",\"sig\":\"ed25519:c7ee36f85e5bb15905b8a0a0f540da9c592a21a6a8f620d8b62806f04d5da5b6e1126ada188face1f8959e0ffabd675fd07d7d99cd9d53b9979fa1f4d1648e0a\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.checkpoint\",\"v\":0,\"value\":{\"covers\":[\"sha256:8d2e2d83c53789e7f75d047b9cdcb86276a53954d8de372e459588b564be8efd\"]}}",
+      "objects/41/bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37.json": "{\"author\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000001\",\"sig\":\"ed25519:54a54094c0014cfa77d50ef24537c8c3c4ffa0b1685ba1c2bea1c616c9d22afb1a770f37d77b6a53e1944cbaf27215f74e5fecb1024d1bb6eb01290f63143d07\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"recovery\":\"sha256:5591de8902e771dee4defcd2bbd5188a22dda29faeeecc1c4d8b6258292bb8d9\"}}",
+      "objects/5f/a1da4d3ae0e3cb032ec0df09813f007257fb46371a0ebe050cea74a0d78bcf.json": "{\"author\":\"sha256:bf4ebd8250c6e9b72c39db4e10c1a0364f5d5a7c0d8ecf3aec2174ec2a4ecea4\",\"id\":\"sha256:5fa1da4d3ae0e3cb032ec0df09813f007257fb46371a0ebe050cea74a0d78bcf\",\"kid\":\"ed25519:2152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db12\",\"nonce\":\"00000000000000000000000000000005\",\"sig\":\"ed25519:ad4dfb3c6e31f0c4be4fcaf4f426807eba8bcd75bd4933edc88ab192deb0a8c4b2e4bd6cf4febae1bc6e72b88e46bdfd0350b45b6d24308bf768e555791d1e03\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:bf4ebd8250c6e9b72c39db4e10c1a0364f5d5a7c0d8ecf3aec2174ec2a4ecea4\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.checkpoint\",\"v\":0,\"value\":{\"covers\":[\"sha256:8d2e2d83c53789e7f75d047b9cdcb86276a53954d8de372e459588b564be8efd\"]}}",
+      "objects/bf/4ebd8250c6e9b72c39db4e10c1a0364f5d5a7c0d8ecf3aec2174ec2a4ecea4.json": "{\"author\":\"ed25519:2152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db12\",\"id\":\"sha256:bf4ebd8250c6e9b72c39db4e10c1a0364f5d5a7c0d8ecf3aec2174ec2a4ecea4\",\"kid\":\"ed25519:2152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db12\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:095df3d20564ddfdbe9420feed81382c585db3e4fd092b242082d541ff62eae175537486ec573aa9500e502b171db4d206f67ef601e259be3a1624ae12b50408\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:2152f8d19b791d24453242e15f2eab6cb7cffa7b6a5ed30097960e069881db12\",\"recovery\":\"sha256:ec8b3b8ef123af8fb00b9f81641e910f8b283301959048780819f78ab9274f02\"}}"
+    },
+    "expect": {
+      "too_new": null,
+      "compromised": null,
+      "valid": [
+        "sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37",
+        "sha256:bf4ebd8250c6e9b72c39db4e10c1a0364f5d5a7c0d8ecf3aec2174ec2a4ecea4",
+        "sha256:12f354e742585368870380c4280b731a2c6f4c696443d30a7a78c271e827508b",
+        "sha256:5fa1da4d3ae0e3cb032ec0df09813f007257fb46371a0ebe050cea74a0d78bcf"
+      ],
+      "errors": null,
+      "unattested": null,
+      "missing": [
+        "sha256:8d2e2d83c53789e7f75d047b9cdcb86276a53954d8de372e459588b564be8efd of sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37",
+        "sha256:8d2e2d83c53789e7f75d047b9cdcb86276a53954d8de372e459588b564be8efd of sha256:bf4ebd8250c6e9b72c39db4e10c1a0364f5d5a7c0d8ecf3aec2174ec2a4ecea4"
+      ],
+      "duplicates": null
+    }
+  },
+  {
+    "name": "held-succession-not-valid",
+    "why": "A succession not on the tree is held and not valid. Its signature proves nothing, because no key was checked.",
+    "files": {
+      "objects/24/58c8e607f251d37dbba433dcfb04c00d2a70ebb120d21f42cf413fd010d75d.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:2458c8e607f251d37dbba433dcfb04c00d2a70ebb120d21f42cf413fd010d75d\",\"kid\":\"ed25519:c853ad0f0cd2b619aea92ceec4fd56a24d6499d584ce79257e45cfd8139b60a7\",\"nonce\":\"00000000000000000000000000000003\",\"refs\":[{\"id\":\"sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0\",\"rel\":\"succeeds\"}],\"sig\":\"ed25519:b92b0dae2431de69693c124a7b1463bfb5a6c6163c76058f0f15134c1e38ecf96abdd7b7b2b4bd3d5211d2a389c8cfa3eb8dde98f841a45122b2b76ba1fbac09\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.succession\",\"v\":0,\"value\":{\"key\":\"ed25519:c853ad0f0cd2b619aea92ceec4fd56a24d6499d584ce79257e45cfd8139b60a7\",\"recovery\":\"sha256:1a9f8014c54a3fdc94ee8a463ce1b0b6d4d3b1542025c2b2c051486fb7cf0be3\",\"sealed\":[]}}",
+      "objects/41/bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37.json": "{\"author\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000001\",\"sig\":\"ed25519:54a54094c0014cfa77d50ef24537c8c3c4ffa0b1685ba1c2bea1c616c9d22afb1a770f37d77b6a53e1944cbaf27215f74e5fecb1024d1bb6eb01290f63143d07\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"recovery\":\"sha256:5591de8902e771dee4defcd2bbd5188a22dda29faeeecc1c4d8b6258292bb8d9\"}}",
+      "objects/bd/b8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:a2c60788c813098fad2ae7484ac20f82660522adaae03df93decdf124826a75a13041681a43d1f0647848522fe3e94f874fc266eb4a8c49d36db304e17c99f03\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"v19\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"lab.x\",\"v\":0,\"value\":{\"n\":1}}"
+    },
+    "expect": {
+      "too_new": null,
+      "compromised": null,
+      "valid": [
+        "sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37",
+        "sha256:bdb8888eafe099e5eb8e11a6f8bac6f5487cf2909714ee0d2f52ce34a3cf6ca0"
+      ],
+      "errors": null,
+      "unattested": null,
+      "missing": null,
+      "duplicates": null
+    }
+  },
+  {
+    "name": "unattested-copy-of-ref",
+    "why": "An unattested claim is not in a duplicate group, so a retired key cannot hide a record by copying its ref.",
+    "files": {
+      "objects/1f/6866e1fc08cb57a356f2a23a59cacde064aa4b96ea9ea2e2748dfbfc09c2c4.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:1f6866e1fc08cb57a356f2a23a59cacde064aa4b96ea9ea2e2748dfbfc09c2c4\",\"kid\":\"ed25519:4af656d924a6b6f5e199f85c86fdc73fb605cfc71ca14986f6a52269bd911e7d\",\"nonce\":\"00000000000000000000000000000003\",\"refs\":[{\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"rel\":\"succeeds\"}],\"sig\":\"ed25519:f7fc639b856ff47fc3b98b96cf816434a2515c3e00b2fbf015cb21797def40fc2103c8353632e32c351e8a0a828832e38075d9ebc5f4bf85d37f8b82cfdd2f05\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.succession\",\"v\":0,\"value\":{\"key\":\"ed25519:93db9f2ee0f7e39e942fb59441190bf20b9c43cfcc8a051a152499cf392b7a37\",\"recovery\":\"sha256:689746f169f570a7d9bee482ee26ddceeff0ea9a466d2b525d312f6e2dd7dcf0\",\"sealed\":[\"sha256:a272d6cd68ab79d00248dbd5342fc0cd607c2bc7d9f23af8e4f21c30d9e52565\"]}}",
+      "objects/41/bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37.json": "{\"author\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000001\",\"sig\":\"ed25519:54a54094c0014cfa77d50ef24537c8c3c4ffa0b1685ba1c2bea1c616c9d22afb1a770f37d77b6a53e1944cbaf27215f74e5fecb1024d1bb6eb01290f63143d07\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"recovery\":\"sha256:5591de8902e771dee4defcd2bbd5188a22dda29faeeecc1c4d8b6258292bb8d9\"}}",
+      "objects/76/b583aec8cb81f2628b5ea7b4e03c97f8aed914388f7a7833ba021e362a95df.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:76b583aec8cb81f2628b5ea7b4e03c97f8aed914388f7a7833ba021e362a95df\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000004\",\"sig\":\"ed25519:933d20b54a97b48fa91e59746a54c7771f1843677d1ad74eb09903fcced8ca7453cbd7c7ad37871d0fa36ea06e97a005b2ac639cf3d9943b26af82d39700a204\",\"source\":{\"adapter\":\"v19@0\",\"ref\":\"hmac-sha256:abababababababababababababababababababababababababababababababab\",\"system\":\"v19\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"lab.x\",\"v\":0,\"value\":{\"n\":3}}",
+      "objects/a2/72d6cd68ab79d00248dbd5342fc0cd607c2bc7d9f23af8e4f21c30d9e52565.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:a272d6cd68ab79d00248dbd5342fc0cd607c2bc7d9f23af8e4f21c30d9e52565\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:1665ef0fdd628a5201dc1a2465eceb3091dd78004e556336be6c83acdb953a396bea2e322b5d296854615e4fbbb5d3ce1d74ed7fe6f69285ee817f7a525aa500\",\"source\":{\"adapter\":\"v19@0\",\"ref\":\"hmac-sha256:abababababababababababababababababababababababababababababababab\",\"system\":\"v19\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"lab.x\",\"v\":0,\"value\":{\"n\":1}}"
+    },
+    "expect": {
+      "too_new": null,
+      "compromised": null,
+      "valid": [
+        "sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37",
+        "sha256:a272d6cd68ab79d00248dbd5342fc0cd607c2bc7d9f23af8e4f21c30d9e52565",
+        "sha256:1f6866e1fc08cb57a356f2a23a59cacde064aa4b96ea9ea2e2748dfbfc09c2c4",
+        "sha256:76b583aec8cb81f2628b5ea7b4e03c97f8aed914388f7a7833ba021e362a95df"
+      ],
+      "errors": null,
+      "unattested": [
+        "sha256:76b583aec8cb81f2628b5ea7b4e03c97f8aed914388f7a7833ba021e362a95df"
+      ],
+      "missing": null,
+      "duplicates": null
+    }
+  },
+  {
+    "name": "tombstone-of-checkpoint",
+    "why": "A tombstone must not name a checkpoint.",
+    "files": {
+      "objects/14/51108d03f1665297ce5637baa0d002e9841b5273b930c9c2b50d4ff28c3e6c.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:1451108d03f1665297ce5637baa0d002e9841b5273b930c9c2b50d4ff28c3e6c\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000002\",\"sig\":\"ed25519:d4083a309333daab7964f0649d08482febd8ec72bb8befc837645baf4ab13f1956062887006380fa86fd2d1c18bb2e2b99d13d0b2098cad04b6b6ffe3c8c6008\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.checkpoint\",\"v\":0,\"value\":{\"covers\":[\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\"]}}",
+      "objects/41/bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37.json": "{\"author\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"id\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000001\",\"sig\":\"ed25519:54a54094c0014cfa77d50ef24537c8c3c4ffa0b1685ba1c2bea1c616c9d22afb1a770f37d77b6a53e1944cbaf27215f74e5fecb1024d1bb6eb01290f63143d07\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.genesis\",\"v\":0,\"value\":{\"key\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"recovery\":\"sha256:5591de8902e771dee4defcd2bbd5188a22dda29faeeecc1c4d8b6258292bb8d9\"}}",
+      "objects/4a/60b7ab98dc88206e8f78a0eada8f1aec127bda800cd1e607d6f03c62c4fafa.json": "{\"author\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"id\":\"sha256:4a60b7ab98dc88206e8f78a0eada8f1aec127bda800cd1e607d6f03c62c4fafa\",\"kid\":\"ed25519:db995fe25169d141cab9bbba92baa01f9f2e1ece7df4cb2ac05190f37fcc1f9d\",\"nonce\":\"00000000000000000000000000000003\",\"refs\":[{\"id\":\"sha256:1451108d03f1665297ce5637baa0d002e9841b5273b930c9c2b50d4ff28c3e6c\",\"rel\":\"purges\"}],\"sig\":\"ed25519:7870c980bf785bf638a31abc643fa670b7e6f1b8ad0a50fd5d1fcde76b609b3b86f7728da1ed15ee1e6b2f7ff394d2fddbca10e6bddc5a35e166e05301828306\",\"source\":{\"adapter\":\"v19@0\",\"ref\":null,\"system\":\"self\"},\"subject\":\"sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37\",\"times\":{\"imported\":\"2026-11-06T00:00:00Z\",\"observed\":null},\"type\":\"bean.tombstone\",\"v\":0}"
+    },
+    "expect": {
+      "too_new": null,
+      "compromised": null,
+      "valid": [
+        "sha256:41bf7ce9235bbb5b40106c6e87243ab4208756bca0113dae86c2101157f52b37",
+        "sha256:1451108d03f1665297ce5637baa0d002e9841b5273b930c9c2b50d4ff28c3e6c"
+      ],
+      "errors": {
+        "sha256:4a60b7ab98dc88206e8f78a0eada8f1aec127bda800cd1e607d6f03c62c4fafa": "bad target"
+      },
+      "unattested": null,
+      "missing": null,
+      "duplicates": null
+    }
+  }
+]

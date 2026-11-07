@@ -20,7 +20,7 @@ bean [-dir <folder>] <command> [arguments]
 | 1 | The command failed, or `verify` found errors. |
 | 2 | Usage error: unknown command, bad flag or bad argument. |
 | 3 | The log has a record of a newer format version than this `bean` knows. Update `bean`. |
-| 4 | Your identity is frozen: two rotations were made from the same point. Make a new identity. |
+| 4 | Your identity is frozen: two rotations were made from the same point. Commands that read still print, and warn you. Commands that write stop. Run `bean migrate`. |
 
 | Environment variable | Meaning |
 |---|---|
@@ -105,7 +105,9 @@ Reads and checks every file and signature, and every stored file's hash. Run it 
 | `warning: <id>: duplicate: <id> of <id>` | The same reading was imported twice, for example on two machines. Readers show the first. |
 | `warning: <id>: hidden pending gc: <id>` | A record deleted from another copy. `gc` erases it after 7 days. |
 | `warning: <id>: unresolved author: <id>` | A record by an identity whose first record this copy does not have. |
-| `summary: <v> valid, <i> invalid, <s> skipped, <h> held, <d> duplicate` | The counts. |
+| `warning: <id>: unattested: <id>` | A claim that a retired key signed and nothing vouches for. `ls` hides it. If it is yours, run `bean checkpoint -accept <id>`. |
+| `missing: <id> of <identity>` | A checkpoint names this record, but this copy does not have it and no deletion explains it. Exit code 1 if the identity is yours. Sync it from another copy. If it is gone for good, run `bean purge <full id>`. |
+| `summary: <v> valid, <i> invalid, <s> skipped, <h> held, <d> duplicate` | The counts. `, <u> unattested` and `, <m> missing` follow when they are not zero. |
 
 ## AI and agents
 
@@ -150,13 +152,32 @@ Writes a plaintext copy of every record and file into an empty or new folder, wi
 
 Reads an export into a log that has the same identity secret.
 
-### `rotate [-no-seal <id>]... [-nostr new|<file>]`
+### `rotate [-seal-all | -seal-none] [-seal <id>]... [-no-seal <id>]... [-nostr new|<file>]`
 
-Changes your signing key. Reads the 24 words from stdin. Sync every copy first. Deletions and corrections made with the old key stay valid; `-no-seal` excludes one (for example one that a thief made). `-nostr` makes the new key a Nostr key, from a file because stdin carries the words.
+Changes your signing key. Reads the 24 words from stdin. Sync every copy first.
 
-### `restore [-no-seal <id>]... [-nostr new|<file>]`
+The sync can bring in records from a thief, so `rotate` keeps nothing without your decision. It lists each deletion, correction and checkpoint of the old key, and each claim that no checkpoint covers. If a record has no decision, it stops before it asks for the words, and it writes nothing.
 
-Rebuilds `local/` on a new machine. Copy `objects/` and `blobs/` from your backup into the folder, then run it and give the 24 words on stdin. It finds your identity, writes the identity secret, and moves you to a new signing key. Your identity id and records do not change. The lost key can no longer delete or correct anything. Sync every copy you still have into the folder first.
+| Flag | Effect |
+|---|---|
+| `-seal-all` | Keep every record in the list. Use it only if the key was not stolen. |
+| `-seal-none` | Keep only the records that `-seal` names. |
+| `-seal <id>` | Keep this record. Repeat it for more records. |
+| `-no-seal <id>` | Do not keep this record. A deletion or correction that you do not keep is undone. A claim that you do not keep is unattested. |
+
+`-nostr` makes the new key a Nostr key, from a file because stdin carries the words.
+
+### `restore [-seal-all | -seal-none] [-seal <id>]... [-no-seal <id>]... [-nostr new|<file>] [-identity <id>]`
+
+Rebuilds `local/` on a new machine. Copy `objects/` and `blobs/` from your backup into the folder, then run it and give the 24 words on stdin. It finds your identity, moves you to a new signing key, and writes the identity secret. The flags are the same as for `rotate`. Your identity id and records do not change. The lost key can no longer delete or correct anything. Sync every copy you still have into the folder first. If the words fit more than one genesis, it stops: someone may have copied yours. `-identity <id>` picks yours, the id that `bean init` printed. It also works on an agent-only copy.
+
+### `checkpoint [-accept <id>]...`
+
+Writes a signed list of the record ids that no checkpoint covers yet. A covered record that is removed then shows in `verify`. Your writes add a checkpoint when 256 or more records are uncovered, or the oldest is more than a day old, so you seldom need this command. `-accept <id>` vouches for an unattested claim.
+
+### `migrate [-nostr new|<file>] <empty folder>`
+
+Starts a new identity from this log, for example after a freeze. It copies what `ls` shows, signs it with the new key, and shows 24 new words once. Each record keeps the old id in `context.migrated_from`. It leaves out unattested claims and pairings, and says how many claims it left out. Nothing links the two identities by signature. Agents must be set up again. A later import of an old export adds its records again, because the new identity makes different dedupe refs.
 
 ## Delete
 
@@ -166,7 +187,7 @@ Deletes a record about you. Writes a tombstone that every copy obeys, and erases
 
 ### `gc`
 
-Erases records that a deletion from another copy hid at least 7 days ago, and files that no record uses. Nothing is erased without `gc` or `purge`.
+Erases records that a deletion from another copy hid at least 7 days ago, and files that no record uses. Nothing is erased without `gc` or `purge`. It refuses to run on a frozen or too-new identity, or without the genesis, because it cannot tell what is still needed.
 
 ## Other
 
@@ -205,3 +226,4 @@ Reads a CSV file with a header row. Column `value` is required. Column `time` (R
 | `local/agent-key` | The agent key of this machine. | No. |
 | `local/hidden/`, `local/holds.json`, `local/purged-refs.jsonl` | Deletion state of this copy. | No. |
 | `local/cache/` | Caches. Safe to delete. | No. |
+| `local/lock` | Held while a command writes. Safe to delete when no command runs. | No. |

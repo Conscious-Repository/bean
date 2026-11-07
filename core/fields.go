@@ -52,6 +52,19 @@ func (r *Record) IsDestructive() bool {
 	return false
 }
 
+// IsCheckpoint reports a record that commits to a set of record ids.
+func (r *Record) IsCheckpoint() bool { return r.Type == "bean.checkpoint" }
+
+// NeedsSeal reports a record that an older chain key keeps only when the
+// succession that ended that key seals it (SPEC.md 5.4).
+func (r *Record) NeedsSeal() bool { return r.IsDestructive() || r.IsCheckpoint() }
+
+// Unpurgeable reports a record that a tombstone must not name. The identity
+// chain, tombstones and checkpoints are what make a deletion detectable.
+func (r *Record) Unpurgeable() bool {
+	return r.IsIdentity() || r.IsCheckpoint() || r.Type == "bean.tombstone"
+}
+
 // Targets returns the ids named by refs with the given rel.
 func (r *Record) Targets(rel string) []string {
 	var out []string
@@ -68,6 +81,16 @@ func (r *Record) ValueKey() string { s, _ := r.Value["key"].(string); return s }
 
 // Recovery returns value.recovery for identity records.
 func (r *Record) Recovery() string { s, _ := r.Value["recovery"].(string); return s }
+
+// Covers returns value.covers for checkpoints.
+func (r *Record) Covers() []string {
+	a, _ := r.Value["covers"].([]any)
+	out := make([]string, 0, len(a))
+	for _, x := range a {
+		out = append(out, x.(string))
+	}
+	return out
+}
 
 // Sealed returns value.sealed for successions.
 func (r *Record) Sealed() []string {
@@ -287,6 +310,31 @@ func (r *Record) checkReservedType() error {
 			s, ok := x.(string)
 			if !ok || !IsID(s) || s <= prev {
 				return badField("value.sealed")
+			}
+			prev = s
+		}
+	case "bean.checkpoint":
+		if r.Subject != r.Author || !IsID(r.Author) {
+			return badField("author")
+		}
+		if len(r.Refs) != 0 {
+			return badField("refs")
+		}
+		if r.Blobs != nil || r.Observed != nil {
+			return badField("value")
+		}
+		if r.Source.System != "self" || r.Source.Ref != "" {
+			return badField("source")
+		}
+		covers, ok := r.Value["covers"].([]any)
+		if !ok || len(r.Value) != 1 || len(covers) == 0 {
+			return badField("value.covers")
+		}
+		prev := ""
+		for _, x := range covers {
+			s, ok := x.(string)
+			if !ok || !IsID(s) || s <= prev {
+				return badField("value.covers")
 			}
 			prev = s
 		}

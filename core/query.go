@@ -19,8 +19,8 @@ type Filter struct {
 	Until  time.Time // When(r) before Until
 	Author string
 	// All includes superseded records, duplicates, tombstones, identity
-	// records and pairing claims. Purged, hidden and invalid records are
-	// never listed.
+	// records, pairing claims, unattested claims, other subjects and
+	// untrusted authors. Purged, hidden and invalid records are never listed.
 	All bool
 }
 
@@ -60,18 +60,48 @@ func (f Filter) match(r *Record) bool {
 }
 
 // Current reports whether a reader should show the record: visible, not
-// superseded, not a duplicate, and not a core record.
+// superseded, not a duplicate, not a core record, and not an unattested claim
+// of a retired key.
 func (l *Loaded) Current(id string) bool {
 	r := l.Report.Records[id]
 	if r == nil || !l.Visible(id) || IsCoreType(r.Type) {
 		return false
 	}
-	if len(l.Report.Superseded[id]) > 0 {
+	if len(l.Report.Superseded[id]) > 0 || l.Report.Unattested[id] {
 		return false
 	}
 	_, dup := l.Report.Duplicates[id]
 	return !dup
 }
+
+// Trusted reports whether a record is about the person this copy reads for
+// and comes from that person, an agent they paired, or this machine's own
+// agent. labels is AgentLabels. Anyone can write a claim that verifies, so a
+// reader must not treat a valid record as the person's.
+func (l *Loaded) Trusted(r *Record, labels map[string]string) bool {
+	if (r.Subject != l.Me && r.ID != l.Me) || l.Report.Unattested[r.ID] {
+		return false
+	}
+	return r.Author == l.Me || labels[r.Author] != "" || (l.AgentKey != "" && r.Author == l.AgentKey)
+}
+
+// Standing is the error for a person whose identity cannot be used as usual:
+// "too new: <id>" or "compromised: <id>". It is nil otherwise.
+func (l *Loaded) Standing() error {
+	switch {
+	case l.IsTooNew():
+		return errors.New("too new: " + l.Me)
+	case l.IsFrozen():
+		return errors.New("compromised: " + l.Me)
+	}
+	return nil
+}
+
+// IsTooNew reports that this build cannot evaluate the person's identity.
+func (l *Loaded) IsTooNew() bool { return l.Me != "" && contains(l.Report.TooNew, l.Me) }
+
+// IsFrozen reports that the person's identity forked.
+func (l *Loaded) IsFrozen() bool { return l.Me != "" && contains(l.Report.Compromised, l.Me) }
 
 // isSetup reports pairing claims: configuration, not things that happened.
 func isSetup(typ string) bool { return typ == "agent.pair" || typ == "device.pair" }
@@ -82,9 +112,18 @@ func (s *Store) List(f Filter) ([]*Record, *Loaded, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	if l.IsTooNew() {
+		return nil, l, l.Standing() // an empty list would look like lost data
+	}
+	labels := l.AgentLabels()
 	var out []*Record
 	for id, r := range l.Report.Records {
 		if !l.Visible(id) || (!f.All && (!l.Current(id) || isSetup(r.Type))) || !f.match(r) {
+			continue
+		}
+		// Asking for one author by name shows that author's records about
+		// this person, trusted or not.
+		if !f.All && (r.Subject != l.Me || (f.Author == "" && !l.Trusted(r, labels))) {
 			continue
 		}
 		out = append(out, r)
@@ -152,6 +191,8 @@ func (l *Loaded) Status(id string) string {
 		return "hidden, purged by " + rp.Purged[id]
 	case rp.Errors[id] != "":
 		return "invalid: " + rp.Errors[id]
+	case rp.Unattested[id]:
+		return "unattested: a retired key signed it and nothing vouches for it"
 	case rp.Purged[id] != "":
 		return "purged by " + rp.Purged[id]
 	case !rp.Valid[id]:

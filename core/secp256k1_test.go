@@ -118,7 +118,8 @@ func TestNostrLog(t *testing.T) {
 		t.Errorf("local/signing-key = %q", b)
 	}
 	ids := appendLines(t, s, partial("hrv.rmssd", 1, nil), partial("hrv.rmssd", 2, nil)).IDs
-	if _, err := s.Purge(ids[1], ""); err != nil {
+	tomb, err := s.Purge(ids[1], "")
+	if err != nil {
 		t.Fatal(err)
 	}
 	l := verifyOK(t, s)
@@ -127,16 +128,16 @@ func TestNostrLog(t *testing.T) {
 	}
 
 	// Rotate to a new random npub; the purge by the old npub is sealed.
-	res, err := s.Rotate(words, nil, NewKey{Alg: "secp256k1"})
+	res, err := s.Rotate(words, Seals{All: true}, NewKey{Alg: "secp256k1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(res.NewKey, "secp256k1:") || res.NewKey == first || len(res.Sealed) != 1 {
+	if !strings.HasPrefix(res.NewKey, "secp256k1:") || res.NewKey == first || !contains(res.Sealed, tomb) {
 		t.Errorf("rotate %+v", res)
 	}
 	appendLines(t, s, partial("hrv.rmssd", 3, nil))
 	verifyOK(t, s)
-	if _, err := s.Rotate(words, nil, NewKey{Alg: "secp256k1", Secret: sec}); err == nil || err.Error() != "key reuse" {
+	if _, err := s.Rotate(words, Seals{All: true}, NewKey{Alg: "secp256k1", Secret: sec}); err == nil || err.Error() != "key reuse" {
 		t.Errorf("rotate back to the first npub: %v", err)
 	}
 
@@ -147,13 +148,13 @@ func TestNostrLog(t *testing.T) {
 	if _, err := b.Sync(s); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := b.Restore(words, nil, NewKey{Alg: "secp256k1", Secret: sec}); err == nil || err.Error() != "key reuse" {
+	if _, _, err := b.Restore(words, Seals{All: true}, NewKey{Alg: "secp256k1", Secret: sec}, ""); err == nil || err.Error() != "key reuse" {
 		t.Errorf("restore to a used npub: %v", err)
 	}
 	if _, err := b.ReadLocal(); err != ErrNotInitialized {
 		t.Errorf("failed restore left local/: %v", err)
 	}
-	if _, got, err := b.Restore(words, nil, NewKey{}); err != nil || got != id {
+	if _, got, err := b.Restore(words, Seals{All: true}, NewKey{}, ""); err != nil || got != id {
 		t.Fatalf("restore: %s %v", got, err)
 	}
 	if lb := verifyOK(t, b); len(lb.Report.Chains[id]) != 3 {

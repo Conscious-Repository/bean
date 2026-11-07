@@ -14,7 +14,7 @@ import (
 
 // Version is the version of this implementation. It follows the spec
 // version until the format freezes at v1.
-const Version = "0.5.0"
+const Version = "0.6.0"
 
 // Adapter is the source.adapter string the core writes on its own records.
 const Adapter = "bean@" + Version
@@ -149,6 +149,11 @@ func (k NewKey) signer() (Signer, string, error) {
 // zero NewKey is a new random Ed25519 key. It returns the identity id and
 // the 24 words, which the caller shows once.
 func (s *Store) Init(key NewKey) (string, []string, error) {
+	unlock, err := s.lock()
+	if err != nil {
+		return "", nil, err
+	}
+	defer unlock()
 	if _, err := os.Stat(s.path(fileIdentity)); err == nil {
 		return "", nil, ErrAlreadyInitialized
 	}
@@ -245,15 +250,15 @@ func (s *Store) readPurgedRefs() (map[string]bool, error) {
 	return out, sc.Err()
 }
 
-func refLine(subject, system, ref string) string {
-	return string(Canonical([]any{subject, system, ref}))
+func refLine(author, subject, system, ref string) string {
+	return string(Canonical([]any{author, subject, system, ref}))
 }
 
 func (s *Store) addPurgedRef(r *Record) error {
 	if r == nil || r.Source.Ref == "" {
 		return nil
 	}
-	line := refLine(r.Subject, r.Source.System, r.Source.Ref)
+	line := refLine(r.Author, r.Subject, r.Source.System, r.Source.Ref)
 	have, err := s.readPurgedRefs()
 	if err != nil {
 		return err
@@ -273,6 +278,27 @@ func (s *Store) addPurgedRef(r *Record) error {
 	return err
 }
 
+// removePurgedRef forgets the ref of a target whose tombstone became invalid.
+func (s *Store) removePurgedRef(r *Record) error {
+	if r == nil || r.Source.Ref == "" {
+		return nil
+	}
+	have, err := s.readPurgedRefs()
+	if err != nil {
+		return err
+	}
+	line := refLine(r.Author, r.Subject, r.Source.System, r.Source.Ref)
+	if !have[line] {
+		return nil
+	}
+	delete(have, line)
+	var b strings.Builder
+	for _, x := range sortedKeys(have) {
+		b.WriteString(x + "\n")
+	}
+	return writeFileAtomic(s.path(filePurgedRef), []byte(b.String()), 0o600)
+}
+
 // Loaded is a replica after the hold rules ran.
 type Loaded struct {
 	Files  map[string][]byte // objects/ plus hidden records, by objects/ path
@@ -280,6 +306,11 @@ type Loaded struct {
 	Report *Report
 	Holds  map[string]Hold
 	Local  *Local // nil when not initialized
+	// Me is the identity this copy reads for: local/identity, or the only
+	// genesis in a copy that has none yet. "" when neither exists.
+	Me string
+	// AgentKey is the tagged key of this machine's agent, or "".
+	AgentKey string
 }
 
 // Load reads the folder, verifies it, and applies the hold rules (SPEC.md
@@ -294,9 +325,9 @@ func (s *Store) load(full bool) (*Loaded, error) {
 	if err != nil && !errors.Is(err, ErrNotInitialized) && !errors.Is(err, os.ErrNotExist) {
 		return nil, err // an agent-only replica has no signing key; it still loads
 	}
-	disk, hidden, files, proven, cacheLen, err := s.readObjects(full)
+	disk, hidden, files, proven, bad, cacheLen, err := s.readObjects(full)
 	for try := 0; errors.Is(err, errMoved) && try < 5; try++ {
-		disk, hidden, files, proven, cacheLen, err = s.readObjects(full)
+		disk, hidden, files, proven, bad, cacheLen, err = s.readObjects(full)
 	}
 	if err != nil {
 		return nil, err
@@ -306,28 +337,36 @@ func (s *Store) load(full bool) (*Loaded, error) {
 		return nil, err
 	}
 	rp := verifyFiles(files, proven)
+	for p, reason := range bad {
+		rp.Errors[p] = reason
+	}
 	s.writeObjCache(disk, files, rp, proven, cacheLen)
 	changed := false
 	// New valid purges: hide the target.
 	for target, tid := range rp.Purged {
-		if hidden[target] {
-			continue
-		}
 		if _, ok := files[PathOf(target)]; !ok {
 			continue
 		}
-		if _, held := holds[tid]; !held {
+		_, held := holds[tid]
+		if hidden[target] && held {
+			continue
+		}
+		// A hidden target with no hold means a crash came between the rename
+		// and the hold. Finish the job, or gc never erases it.
+		if !held {
 			holds[tid] = Hold{Target: target, Received: s.nowString()}
 			changed = true
 		}
-		if err := os.MkdirAll(s.path(dirHidden), 0o700); err != nil {
-			return nil, err
+		if !hidden[target] {
+			if err := os.MkdirAll(s.path(dirHidden), 0o700); err != nil {
+				return nil, err
+			}
+			// Another bean process (an MCP server, say) may have moved it first.
+			if err := os.Rename(s.path(PathOf(target)), hiddenPath(s.Dir, target)); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return nil, err
+			}
+			hidden[target] = true
 		}
-		// Another bean process (an MCP server, say) may have moved it first.
-		if err := os.Rename(s.path(PathOf(target)), hiddenPath(s.Dir, target)); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return nil, err
-		}
-		hidden[target] = true
 		if err := s.addPurgedRef(rp.Records[target]); err != nil {
 			return nil, err
 		}
@@ -347,6 +386,10 @@ func (s *Store) load(full bool) (*Loaded, error) {
 			return nil, err
 		}
 		delete(hidden, target)
+		// The deletion was undone, so a re-import must not skip this record.
+		if err := s.removePurgedRef(rp.Records[target]); err != nil {
+			return nil, err
+		}
 		for tid, h := range holds {
 			if h.Target == target {
 				delete(holds, tid)
@@ -359,7 +402,16 @@ func (s *Store) load(full bool) (*Loaded, error) {
 			return nil, err
 		}
 	}
-	return &Loaded{Files: files, Hidden: hidden, Report: rp, Holds: holds, Local: local}, nil
+	out := &Loaded{Files: files, Hidden: hidden, Report: rp, Holds: holds, Local: local}
+	if out.Me, err = s.Identity(); err != nil && len(rp.Chains) == 1 {
+		for id := range rp.Chains {
+			out.Me = id
+		}
+	}
+	if a, err := s.ReadAgent(); err == nil {
+		out.AgentKey = a.Signer.Public()
+	}
+	return out, nil
 }
 
 // Visible reports whether a record is valid and not hidden.
@@ -369,9 +421,23 @@ func (l *Loaded) Visible(id string) bool { return l.Report.Valid[id] && !l.Hidde
 // HoldDays old, and blobs that no valid unpurged record names. It returns
 // the counts.
 func (s *Store) GC() (records, blobs int, err error) {
+	unlock, err := s.lock()
+	if err != nil {
+		return 0, 0, err
+	}
+	defer unlock()
 	l, err := s.Load()
 	if err != nil {
 		return 0, 0, err
+	}
+	// Erasing needs a full picture of what is valid. A too-new or frozen
+	// identity, or one whose genesis is not here, does not give one: its blobs
+	// would look unnamed.
+	if err := l.Standing(); err != nil {
+		return 0, 0, err
+	}
+	if len(l.Report.Chains[l.Me]) == 0 {
+		return 0, 0, errors.New("input missing: genesis of this log; sync it from another copy")
 	}
 	cutoff := s.Now().UTC().Add(-HoldDays * 24 * time.Hour)
 	for tid, h := range l.Holds {
@@ -394,15 +460,26 @@ func (s *Store) GC() (records, blobs int, err error) {
 		return 0, 0, err
 	}
 	blobs, err = s.eraseOrphanBlobs(l)
+	if err != nil {
+		return records, blobs, err
+	}
+	// Rewrites the object cache, so erased bytes do not stay in it.
+	_, err = s.Load()
 	return records, blobs, err
 }
 
-// eraseOrphanBlobs removes blobs that no valid, unpurged record names
-// (7.6 step 5, 7.7 step 5).
+// eraseOrphanBlobs removes blobs that no unpurged record of the person, a
+// paired agent or this machine's agent names (7.6 step 5, 7.7 step 5). A
+// stranger's record does not count, or anyone could keep a purged file on
+// disk. An invalid record of the person counts: it can become valid again.
 func (s *Store) eraseOrphanBlobs(l *Loaded) (int, error) {
+	labels := l.AgentLabels()
 	named := map[string]bool{}
 	for id, r := range l.Report.Records {
-		if !l.Report.Valid[id] {
+		if _, purged := l.Report.Purged[id]; purged {
+			continue
+		}
+		if r.Author != l.Me && labels[r.Author] == "" && r.Author != l.AgentKey {
 			continue
 		}
 		for _, b := range r.Blobs {
@@ -483,10 +560,10 @@ func (s *Store) VerifyLines() ([]string, int, error) {
 	for _, p := range paths {
 		id := blobIDOfPath(p)
 		b, err := os.ReadFile(s.path(p))
-		if err != nil {
+		if err != nil && !errors.Is(err, os.ErrPermission) {
 			return nil, 1, err
 		}
-		if id == "" || HashID(b) != id {
+		if err != nil || id == "" || HashID(b) != id {
 			if id == "" {
 				id = p
 			}
@@ -511,8 +588,8 @@ func (s *Store) VerifyLines() ([]string, int, error) {
 		rp.warn(target, "hidden pending gc: "+target)
 	}
 	var localIDs []string
-	if l.Local != nil {
-		localIDs = []string{l.Local.Identity}
+	if l.Me != "" {
+		localIDs = []string{l.Me}
 	}
 	lines := rp.Lines()
 	code := rp.ExitCode(localIDs)

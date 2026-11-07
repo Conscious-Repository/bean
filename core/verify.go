@@ -127,7 +127,29 @@ type Report struct {
 	Purged      map[string]string    // target id -> tombstone id
 	Held        map[string]bool      // ids of held destructive records
 	Duplicates  map[string]string    // duplicate id -> primary id
+	Unattested  map[string]bool      // valid claims of a retired key that nothing vouches for
+	Missing     map[[2]string]bool   // {identity, id} that the identity committed to but the set lacks
 	Skipped     int
+
+	// covered holds, for {identity, id}, the highest chain position of a
+	// valid checkpoint or a succession seal of that identity that names id.
+	covered map[[2]string]int
+}
+
+// MissingList is the sorted form of Missing: "<id> of <identity>".
+func (rp *Report) MissingList() []string {
+	out := []string{}
+	for k := range rp.Missing {
+		out = append(out, k[1]+" of "+k[0])
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Covered reports whether a valid checkpoint or seal of identity names id.
+func (rp *Report) Covered(identity, id string) bool {
+	_, ok := rp.covered[[2]string{identity, id}]
+	return ok
 }
 
 func (rp *Report) warn(id, msg string) { rp.Warnings[id] = append(rp.Warnings[id], msg) }
@@ -173,6 +195,7 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 		Records: map[string]*Record{}, Valid: map[string]bool{}, Errors: map[string]string{},
 		Warnings: map[string][]string{}, Chains: map[string][]*Record{}, Superseded: map[string][]string{},
 		Purged: map[string]string{}, Held: map[string]bool{}, Duplicates: map[string]string{},
+		Unattested: map[string]bool{}, Missing: map[[2]string]bool{}, covered: map[[2]string]int{},
 	}
 	paths := make([]string, 0, len(files))
 	for p := range files {
@@ -209,10 +232,10 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 	}
 	// Step 3: succession trees (seed-only rule, change set C5 to C11).
 	nodes := map[string]map[string]*Record{} // identity -> node id -> node
-	nodeKeys := map[string]map[string]bool{} // identity -> signing or recovery keys of nodes
+	commits := map[string]map[string]bool{}  // identity -> commitments to its recovery keys
 	for gid, g := range genesis {
 		n := map[string]*Record{gid: g}
-		keys := map[string]bool{g.ValueKey(): true}
+		cs := map[string]bool{g.Recovery(): true}
 		pending := []*Record{}
 		for _, id := range ids {
 			r := rp.Records[id]
@@ -235,8 +258,7 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 					continue
 				}
 				n[s.ID] = s
-				keys[s.ValueKey()] = true
-				keys[s.Kid] = true
+				cs[s.Recovery()] = true
 			}
 			pending = rest
 		}
@@ -244,10 +266,12 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 			rp.warn(s.ID, "held: "+s.ID)
 			rp.Held[s.ID] = true
 		}
-		nodes[gid], nodeKeys[gid] = n, keys
+		nodes[gid], commits[gid] = n, cs
 	}
-	// Too new (SPEC.md 8.2 with change set C15): an unknown-v bean.* record
-	// counts only when its signer is a key of the identity's known tree.
+	// Too new (SPEC.md 8.2): an unknown-v bean.* record counts only when a
+	// recovery key of the identity signed it, which takes the 24 words. A
+	// signing key must not count: a thief or a retired key could then hide
+	// the whole identity from every copy, and stop its rotation.
 	tooNew := map[string]bool{}
 	for _, r := range unknown {
 		if !strings.HasPrefix(r.Type, "bean.") {
@@ -261,7 +285,7 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 			}
 			continue
 		}
-		if keys, ok := nodeKeys[r.Author]; ok && keys[r.Kid] {
+		if cs, ok := commits[r.Author]; ok && cs[Commitment(r.Kid)] {
 			tooNew[r.Author] = true
 		}
 	}
@@ -287,11 +311,17 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 		if _, failed := rp.Errors[id]; !failed {
 			rp.Valid[id] = true
 		}
+		// A succession not on the tree is not valid. No key has been checked:
+		// any key can write one that names its author as the identity.
+		if r := rp.Records[id]; r.Type == "bean.succession" && nodes[r.Author][id] == nil {
+			delete(rp.Valid, id)
+		}
 	}
 	sort.Strings(ids)
 
 	// Steps 4 and 5: freeze and chain. Any fork is a freeze (C7, C11).
-	frozen := map[string]*Record{} // identity -> lowest common ancestor
+	frozen := map[string]*Record{}     // identity -> lowest common ancestor
+	forkKids := map[string][]*Record{} // identity -> the successions at the fork
 	position := map[string]map[string]int{}
 	for gid, g := range genesis {
 		n := nodes[gid]
@@ -310,6 +340,7 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 			}
 			if len(children) > 1 {
 				frozen[gid] = x
+				forkKids[gid] = children
 				rp.Compromised = append(rp.Compromised, gid)
 				break
 			}
@@ -358,15 +389,29 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 		recPos[id] = p
 		chain := rp.Chains[r.Author]
 		if lca, isFrozen := frozen[r.Author]; isFrozen {
-			if r.IsDestructive() || p > recPos0(chain, lca) {
+			forkPos := recPos0(chain, lca)
+			if p > forkPos {
 				rp.fail(id, "frozen")
+				continue
+			}
+			// The key at the fork was retired by both branches. A record that
+			// needs a seal stays valid only when every branch sealed it, so
+			// neither party decides alone and a stale restore that sealed
+			// everything does not undo the person's corrections.
+			if p == forkPos && r.NeedsSeal() {
+				for _, c := range forkKids[r.Author] {
+					if !contains(c.Sealed(), id) {
+						rp.fail(id, "frozen")
+						break
+					}
+				}
 				continue
 			}
 		} else if p == offChain {
 			rp.fail(id, "key not in chain")
 			continue
 		}
-		if r.IsDestructive() && p < len(chain)-1 {
+		if r.NeedsSeal() && p < len(chain)-1 {
 			if !contains(chain[p+1].Sealed(), id) {
 				rp.fail(id, "not sealed")
 			}
@@ -396,6 +441,7 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 		}
 	}
 	// Step 10: tombstones.
+	named := map[[2]string]bool{} // {identity, id} that a valid tombstone of the identity names
 	for _, id := range ids {
 		r := rp.Records[id]
 		if !rp.Valid[id] || r.Type != "bean.tombstone" {
@@ -407,11 +453,13 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 		case !ok:
 			rp.warn(id, "held: "+id)
 			rp.Held[id] = true
-		case target.IsIdentity() || target.Type == "bean.tombstone":
+			named[[2]string{r.Subject, t}] = true
+		case target.Unpurgeable():
 			rp.fail(id, "bad target")
 		case target.Subject != r.Subject:
 			rp.fail(id, "not subject")
 		default:
+			named[[2]string{r.Subject, t}] = true
 			if prev, has := rp.Purged[t]; !has || id < prev {
 				rp.Purged[t] = id
 			}
@@ -420,6 +468,7 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 	for t := range rp.Purged {
 		delete(rp.Valid, t)
 	}
+	rp.attest(ids, files, recPos, named, forkKids)
 	// Supersede map after purges (a purged supersede record no longer counts).
 	for _, id := range ids {
 		r := rp.Records[id]
@@ -451,11 +500,15 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 	// Step 12: duplicates. A superseded record is left out: a parser fix
 	// (9.7) keeps the ref of the record it corrects, and grouping the two
 	// would hide the fix as a duplicate whenever its id is the higher one.
-	groups := map[[3]string][]string{}
+	groups := map[[4]string][]string{}
 	for _, id := range ids {
 		r := rp.Records[id]
-		if rp.Valid[id] && r.Source.Ref != "" && !r.IsIdentity() && len(rp.Superseded[id]) == 0 {
-			k := [3]string{r.Subject, r.Source.System, r.Source.Ref}
+		// An unattested claim is left out, so a retired key cannot copy a ref
+		// and hide the record of the same author.
+		if rp.Valid[id] && !rp.Unattested[id] && r.Source.Ref != "" && !r.IsIdentity() && len(rp.Superseded[id]) == 0 {
+			// The author is part of the key. Otherwise any key could copy a
+			// ref, grind a lower id, and hide the real record as a duplicate.
+			k := [4]string{r.Author, r.Subject, r.Source.System, r.Source.Ref}
 			groups[k] = append(groups[k], id)
 		}
 	}
@@ -467,6 +520,67 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 		}
 	}
 	return rp
+}
+
+// attest applies steps 10a and 10b (SPEC.md 6.8). A claim of a retired key
+// stays valid, but it counts as attested only when the succession that ended
+// the key seals it or a valid checkpoint of the same or a later key covers
+// it. Every id that a checkpoint or seal names must be in the set, or a valid
+// tombstone of that identity must name it. The result depends only on files.
+func (rp *Report) attest(ids []string, files map[string][]byte, recPos map[string]int, named map[[2]string]bool, forkKids map[string][]*Record) {
+	mark := func(identity, id string, pos int) {
+		k := [2]string{identity, id}
+		if q, ok := rp.covered[k]; !ok || pos > q {
+			rp.covered[k] = pos
+		}
+	}
+	for gid, chain := range rp.Chains {
+		for i := 1; i < len(chain); i++ {
+			for _, x := range chain[i].Sealed() {
+				mark(gid, x, i-1)
+			}
+		}
+	}
+	for _, id := range ids {
+		if r := rp.Records[id]; rp.Valid[id] && r.IsCheckpoint() {
+			for _, x := range r.Covers() {
+				mark(r.Author, x, recPos[id])
+			}
+		}
+	}
+	for k := range rp.covered {
+		if _, here := files[PathOf(k[1])]; !here && !named[k] {
+			rp.Missing[k] = true
+		}
+	}
+	for _, id := range ids {
+		r := rp.Records[id]
+		if !rp.Valid[id] || r.IsIdentity() || r.NeedsSeal() || IsTaggedKey(r.Author) {
+			continue
+		}
+		p, ok := recPos[id]
+		if !ok {
+			continue // an author this set cannot resolve
+		}
+		if q, ok := rp.covered[[2]string{r.Author, id}]; ok && q >= p {
+			continue
+		}
+		if p >= len(rp.Chains[r.Author])-1 {
+			// The head key is live, unless the identity forked at it. Both
+			// branches retired that key, and a thief can still write with it,
+			// so a claim then needs a seal from every branch.
+			kids := forkKids[r.Author]
+			sealed := true
+			for _, c := range kids {
+				sealed = sealed && contains(c.Sealed(), id)
+			}
+			if sealed {
+				continue
+			}
+		}
+		rp.Unattested[id] = true
+		rp.warn(id, "unattested: "+id)
+	}
 }
 
 // offChain marks a key of a tree node that is below a freeze point.
@@ -524,9 +638,18 @@ func (rp *Report) Lines() []string {
 	for _, id := range rp.Compromised {
 		out = append(out, "compromised: "+id)
 	}
+	for _, m := range rp.MissingList() {
+		out = append(out, "missing: "+m)
+	}
 	sort.Strings(out)
-	out = append(out, fmt.Sprintf("summary: %d valid, %d invalid, %d skipped, %d held, %d duplicate", len(rp.Valid), len(rp.Errors), rp.Skipped, len(rp.Held), len(rp.Duplicates)))
-	return out
+	summary := fmt.Sprintf("summary: %d valid, %d invalid, %d skipped, %d held, %d duplicate", len(rp.Valid), len(rp.Errors), rp.Skipped, len(rp.Held), len(rp.Duplicates))
+	if n := len(rp.Unattested); n > 0 {
+		summary += fmt.Sprintf(", %d unattested", n)
+	}
+	if n := len(rp.Missing); n > 0 {
+		summary += fmt.Sprintf(", %d missing", n)
+	}
+	return append(out, summary)
 }
 
 // ExitCode is the verify exit code (SPEC.md 12.1). local lists the identities
@@ -536,8 +659,26 @@ func (rp *Report) ExitCode(local []string) int {
 	if len(rp.Errors) > 0 {
 		code = 1
 	}
-	if len(rp.TooNew) > 0 {
-		code = 3
+	// A stranger's identity in the folder can name ids that do not exist;
+	// that must not fail the verify of this person's log.
+	for k := range rp.Missing {
+		if len(local) == 0 || contains(local, k[0]) {
+			code = 1
+		}
+	}
+	// A stranger's identity in the folder can name ids that do not exist;
+	// that must not fail the verify of this person's log.
+	for k := range rp.Missing {
+		if len(local) == 0 || contains(local, k[0]) {
+			code = 1
+		}
+	}
+	// A stranger's file can make the stranger's identity too new. With a
+	// local identity, only that identity sets the code.
+	for _, id := range rp.TooNew {
+		if len(local) == 0 || contains(local, id) {
+			code = 3
+		}
 	}
 	for _, l := range local {
 		if contains(rp.Compromised, l) {

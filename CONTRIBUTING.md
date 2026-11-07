@@ -29,7 +29,7 @@ cmd/bean-import-csv/      CSV importer
 cmd/bean-import-labcorp/  Labcorp patient report importer
 tools/genvectors/         writes vectors/
 tools/check*.py           independent second implementations
-vectors/                  published test vectors V1 to V18
+vectors/                  published test vectors V1 to V19
 ```
 
 ## Rules

@@ -41,6 +41,7 @@ type diskObject struct {
 	rel   string // path on disk, relative to the log
 	path  string // the objects/ path the verifier sees
 	stamp stamp
+	bad   string // why the file is not read; "" when it is fine
 }
 
 // listObjects lists objects/ and local/hidden/ with their stamps, and the
@@ -62,7 +63,16 @@ func (s *Store) listObjects() ([]diskObject, map[string]bool, error) {
 			return err
 		}
 		seen[path] = true
-		out = append(out, diskObject{rel, path, stamp{info.Size(), info.ModTime().UnixNano()}})
+		// rsync can bring anything. A pipe would hang a read, a sparse file
+		// would take all the memory, and neither may stop other commands.
+		bad := ""
+		switch {
+		case !info.Mode().IsRegular():
+			bad = "not a regular file"
+		case info.Size() > MaxSuccessionSize:
+			bad = ErrTooLarge.Error()
+		}
+		out = append(out, diskObject{rel, path, stamp{info.Size(), info.ModTime().UnixNano()}, bad})
 		return nil
 	}
 	shards, err := os.ReadDir(s.path(dirObjects))
@@ -140,13 +150,15 @@ func (s *Store) readObjCache() map[string]cached {
 }
 
 // readObjects returns the files on disk, the hidden ids, the record files
-// as the verifier sees them, which paths this replica already proved, and
-// the size of the cache. full ignores the cache.
-func (s *Store) readObjects(full bool) ([]diskObject, map[string]bool, map[string][]byte, map[string]bool, int, error) {
+// as the verifier sees them, which paths this replica already proved, the
+// files it could not use and why, and the size of the cache. full ignores the
+// cache.
+func (s *Store) readObjects(full bool) ([]diskObject, map[string]bool, map[string][]byte, map[string]bool, map[string]string, int, error) {
 	disk, hidden, err := s.listObjects()
 	if err != nil {
-		return nil, nil, nil, nil, 0, err
+		return nil, nil, nil, nil, nil, 0, err
 	}
+	bad := map[string]string{}
 	cache := map[string]cached{}
 	if !full {
 		cache = s.readObjCache()
@@ -155,6 +167,10 @@ func (s *Store) readObjects(full bool) ([]diskObject, map[string]bool, map[strin
 	proven := map[string]bool{}
 	var todo []diskObject
 	for _, d := range disk {
+		if d.bad != "" {
+			bad[d.rel] = d.bad
+			continue
+		}
 		if c, ok := cache[d.rel]; ok && c.stamp == d.stamp {
 			files[d.path] = c.data
 			proven[d.path] = true
@@ -183,14 +199,18 @@ func (s *Store) readObjects(full bool) ([]diskObject, map[string]bool, map[strin
 	wg.Wait()
 	for i, d := range todo {
 		if errors.Is(errs[i], os.ErrNotExist) {
-			return nil, nil, nil, nil, 0, errMoved
+			return nil, nil, nil, nil, nil, 0, errMoved
+		}
+		if errors.Is(errs[i], os.ErrPermission) {
+			bad[d.rel] = "unreadable"
+			continue
 		}
 		if errs[i] != nil {
-			return nil, nil, nil, nil, 0, errs[i]
+			return nil, nil, nil, nil, nil, 0, errs[i]
 		}
 		files[d.path] = data[i]
 	}
-	return disk, hidden, files, proven, len(cache), nil
+	return disk, hidden, files, proven, bad, len(cache), nil
 }
 
 // writeObjCache stores every record that passed steps 1 to 15, unless

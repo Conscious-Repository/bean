@@ -99,6 +99,11 @@ func (s *Store) Add(typ, value string, o AddOptions) (string, error) {
 	if len(ctx) > 0 {
 		obj["context"] = ctx
 	}
+	unlock, err := s.lock()
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
 	l, err := s.Load()
 	if err != nil {
 		return "", err
@@ -135,5 +140,8 @@ func (s *Store) Add(typ, value string, o AddOptions) (string, error) {
 	if len(res.IDs) != 1 {
 		return "", errors.New("not added")
 	}
-	return res.IDs[0], nil
+	if o.Agent {
+		return res.IDs[0], nil
+	}
+	return res.IDs[0], s.autoCheckpoint(l, res.Added)
 }

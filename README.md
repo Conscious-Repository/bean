@@ -156,7 +156,7 @@ Add it to your client as an MCP server that uses stdio. Most clients take a JSON
 
 Then tell the assistant what happened, for example "had ramen with extra broth around 1" or "took 400 mg magnesium". You can also ask questions: "is my resting heart rate going up this month?" The assistant logs your words with the correct type and time. It puts a calorie or sodium estimate in a separate record that points to the meal. Your words do not change. Its records show as `[assistant]` in `bean ls`. Use a different `-label` for each assistant.
 
-Without `-write`, the server can only read. With `-write`, the assistant signs with its own **agent key**, not your key. An agent can add records about you. It cannot correct or delete your records, and it cannot sign as you. The server sends the records it returns to the AI provider. Use a local model if that is a problem for you.
+Without `-write`, the server can only read. With `-write`, the assistant signs with its own **agent key**, not your key. An agent can add records about you. It cannot correct or delete your records, and it cannot sign as you. The AI sees who wrote each record, and it does not see records from keys that you did not pair. The server sends the records it returns to the AI provider. Use a local model if that is a problem for you.
 
 ## More than one machine
 
@@ -192,7 +192,7 @@ For example, an assistant on a cloud server. The server gets a copy of the log a
    bean -dir ~/health agent init -label server
    ```
 
-   It prints the agent's npub and the command for the next step.
+   It prints the agent's npub and the command for the next step. Until you pair the agent, its records do not show on your machine.
 3. On your own machine, trust the agent:
 
    ```
@@ -219,18 +219,22 @@ If you lose the laptop:
 3. Rebuild `local/` and move to a new signing key:
 
    ```
-   bean -dir ~/health restore -nostr new
+   bean -dir ~/health restore -nostr new -seal-all
    ```
 
    Type or paste the 24 words, then press Ctrl-D.
 
-Your identity and records stay the same. The lost key can no longer correct or delete anything. Use `bean rotate` the same way on a machine that you still have, for example when a key is old.
+Use `-seal-all` only if you know that nobody used the lost key. It keeps everything that the old key signed. If the key may be stolen, run the command without `-seal-all`. It lists each record and stops before it asks for the words. Then run it again with `-seal-none` and `-seal <id>` for each record that is yours. A deletion or correction that you do not keep is undone.
 
-Sync every copy before you rotate or restore. Never rotate or restore on two machines from the same point: that freezes the identity, and you must make a new one.
+Your identity and records stay the same. The lost key can no longer correct or delete anything, and new records from it do not show. Use `bean rotate` the same way on a machine that you still have, for example when a key is old.
+
+Sync every copy before you rotate or restore. Never rotate or restore on two machines from the same point: that freezes the identity for good. `bean migrate <empty folder>` then starts a new identity from what you have.
 
 ## How it works
 
 A record is a JSON file in `objects/`, named by the SHA-256 hash of its content and signed with your key. Your identity is the hash of your first record, so it never changes when keys change. Corrections and deletions are new records. The protocol says who may make them, so every copy reaches the same result from the same files. Stored files (PDFs, photos) are encrypted in `blobs/`. Sync copies the files that one copy has and the other does not.
+
+Your writes also add checkpoints: signed lists of record ids. A record removed from a copy then shows in `bean verify`. Run `bean checkpoint` to add one at once.
 
 Every record is checked when it is first read, then cached, the same way git trusts its object store. `bean verify` checks everything again. At 20,000 records, `add` and an AI query take about 0.2 s and `verify` about 1 s. Every write goes to disk before it counts.
 

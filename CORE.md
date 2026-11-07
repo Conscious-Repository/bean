@@ -1,6 +1,6 @@
 # bean core
 
-This document gives the rules that two independent implementations must agree on. [SPEC.md](SPEC.md) (version 0.5) gives all rules, the error strings and the conformance tests. If the two documents are different, SPEC.md is correct. This is a draft. Section 6 tells when it freezes.
+This document gives the rules that two independent implementations must agree on. [SPEC.md](SPEC.md) (version 0.6) gives all rules, the error strings and the conformance tests. If the two documents are different, SPEC.md is correct. This is a draft. Section 6 tells when it freezes.
 
 ## 0. Summary
 
@@ -67,7 +67,7 @@ Check each file in this order. Stop at the first failure.
 2. `v`, `type`, `author` and `kid` are present.
 3. The id, the key and the signature.
 4. The version. The earlier checks use only the envelope fields. These fields do not change between versions. An unknown version has two cases:
-   - The type starts with `bean.` and a key of that identity signed the record. The identity is too new. Do not evaluate its records.
+   - The type starts with `bean.` and a recovery key of that identity signed the record. The identity is too new. Do not evaluate its records. A signing key does not count: a thief could then hide the identity from every copy.
    - Any other type. Skip the record, but sync it.
 5. The canonical bytes.
 6. The fields.
@@ -80,6 +80,7 @@ Check each file in this order. Stop at the first failure.
 |---|---|
 | `bean.genesis` | No `subject` and no `refs`. `author`, `kid` and `value.key` are the same key. `value.recovery` is the commitment to recovery key 0. The id of the genesis is the identity id. It does not change. |
 | `bean.succession` | `subject` and `author` are the identity id. One `succeeds` ref names the parent. `value` is `{"key", "recovery", "sealed"}`: the new signing key, the commitment to recovery key g+1, and a sorted list of ids. Recovery key g signs it. g is the position of the parent on the chain. The genesis has position 0. |
+| `bean.checkpoint` | `subject` and `author` are the identity id. No `refs`, no `blobs`, `times.observed` null, `source` system `self`. `value` is `{"covers"}`: a sorted list of one or more record ids. |
 
 ### 2.2 Paper seed and derived keys
 
@@ -92,10 +93,10 @@ Check each file in this order. Stop at the first failure.
 
 ### 2.3 Chain and freeze
 
-1. Start at the genesis. At each node, go to its one child. The last node is the head.
+1. Start at the genesis. At each node, go to its one child. The last node is the head. A succession that this walk or a branch below a fork does not reach is not valid: no key has been checked.
 2. If a node has two children, that is a fork, and the identity is frozen. In a frozen identity, these records are invalid:
    - every succession below the fork,
-   - every correction and deletion,
+   - every correction, deletion and checkpoint signed by the key at the fork, unless every succession at the fork seals it,
    - every claim that a key signed if the key is not on the path from the genesis to the fork.
 3. A succession must not use a key that is already on its path. It must change `recovery`.
 
@@ -105,15 +106,19 @@ Check each file in this order. Stop at the first failure.
 |---|---|---|
 | Add a claim | Any author. Readers decide whom to trust. | A key on the chain of the author, or a bare key with `kid` equal to `author`. |
 | Correct (a record with a `supersedes` ref) | The author of the target. The target must not be an `bean.*` record. | The head key, or an older key on the chain whose next succession lists the record in `sealed`. |
-| Delete (an `bean.tombstone` with one `purges` ref and `author` equal to `subject`) | The subject of the target. The target must not be a genesis, a succession or a tombstone. | The same as for a correction. |
+| Delete (an `bean.tombstone` with one `purges` ref and `author` equal to `subject`) | The subject of the target. The target must not be a genesis, a succession, a tombstone or a checkpoint. | The same as for a correction. |
+| Commit (a `bean.checkpoint`) | The identity. | The same as for a correction. |
 | Rotate | The identity. | The recovery key to which the head commits. |
 
 More rules:
 
 1. A recovery key signs only successions.
 2. If two or more valid records correct the same target, readers show the one with the lowest id.
-3. Valid records that have the same `subject`, `source.system` and `source.ref` are duplicates. Do not count corrected records. The record with the lowest id is the primary.
+3. Valid records that have the same `author`, `subject`, `source.system` and `source.ref` are duplicates. Do not count corrected records or unattested claims. The record with the lowest id is the primary.
 4. A claim is not valid if the set has no genesis for its author.
+5. An identity commits to an id when a valid checkpoint of the identity covers it, or a succession on its chain seals it. If the set has no file for that id, and no valid tombstone of the identity names it, report `missing`.
+6. A valid claim signed by a chain key that is not the head key is unattested, unless a succession seals it or a valid checkpoint of that key or a later key covers it. In a frozen identity this includes the key at the fork, and the seal must come from every succession at the fork. A reader must not show an unattested claim as the person's.
+7. A valid record is not always the person's record. By default, a reader shows a record only when its `subject` is the local identity and its `author` is that identity or a key that identity paired.
 
 ## 4. Folder and sync
 
@@ -146,7 +151,7 @@ The error strings, the warning strings and the conformance tests are in SPEC.md 
 
 ## 5. Not in the core
 
-These parts are not in the core: indexes and caches, the CLI, the MCP server, importers, the type vocabulary, agents, computed results and device capture. An agent is a bare key that writes claims, and the subject writes an `agent.pair` claim for it. That is a convention, not a core rule. These parts can change without a new `v`. A change that makes an existing record valid or invalid needs a new `v`.
+These parts are not in the core: indexes and caches, the CLI, the MCP server, importers, the type vocabulary, agents, computed results and device capture. An agent is a bare key that writes claims, and the subject writes an `agent.pair` claim for it. These parts can change without a new `v`. A change that makes an existing record valid or invalid needs a new `v`.
 
 ## 6. Decisions and freeze
 

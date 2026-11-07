@@ -44,7 +44,7 @@ func TestCLIHelpAndErrors(t *testing.T) {
 			t.Errorf("%v: exit %d\n%s", args, code, out)
 		}
 	}
-	if out, _, code := run(t, dir, "", "version"); code != 0 || !strings.HasPrefix(out, "bean 0.5.0") {
+	if out, _, code := run(t, dir, "", "version"); code != 0 || !strings.HasPrefix(out, "bean 0.6.0") {
 		t.Errorf("version: %d %q", code, out)
 	}
 	if _, errs, code := run(t, dir, ""); code != 2 || !strings.Contains(errs, "usage: bean") {
@@ -80,5 +80,86 @@ func TestCLIFirstRun(t *testing.T) {
 	}
 	if out, _, code := run(t, dir, "", "verify"); code != 0 || !strings.Contains(out, "summary: 2 valid, 0 invalid") {
 		t.Errorf("verify: %d\n%s", code, out)
+	}
+}
+
+// wordsOf cuts the 24 words out of the init output.
+func wordsOf(initOut string) string {
+	var b strings.Builder
+	for _, l := range strings.Split(initOut, "\n") {
+		if strings.Contains(l, ". ") {
+			b.WriteString(l + "\n")
+		}
+	}
+	return b.String()
+}
+
+// rotate lists the records that need a decision and writes nothing until each
+// one has one. It does not ask for the 24 words first.
+func TestCLIRotateNeedsDecision(t *testing.T) {
+	dir := t.TempDir()
+	out, _, _ := run(t, dir, "", "init")
+	words := wordsOf(out)
+	id, _, _ := run(t, dir, "", "add", "lab.hba1c", "9.1", "-unit", "%")
+	if _, errs, code := run(t, dir, "", "rotate"); code != 1 || !strings.Contains(errs, "undecided: 1 records") || !strings.Contains(errs, id[7:19]) || !strings.Contains(errs, "lab.hba1c 9.1 %") || strings.Contains(errs, "paste the 24 words") {
+		t.Errorf("rotate with no decision: %d\n%s", code, errs)
+	}
+	if out, _, _ := run(t, dir, "", "ls", "-all", "-type", "bean.succession"); strings.Contains(out, "bean.succession") {
+		t.Error("rotate wrote a succession")
+	}
+	if _, errs, code := run(t, dir, words, "rotate", "-seal-all", "-no-seal", "abcdef"); code != 1 || !strings.Contains(errs, "input missing") {
+		t.Errorf("bad id: %d %s", code, errs)
+	}
+	if out, errs, code := run(t, dir, words, "rotate", "-seal-all"); code != 0 || !strings.Contains(out, "sealed 1") {
+		t.Errorf("rotate -seal-all: %d\n%s\n%s", code, out, errs)
+	}
+	if out, _, code := run(t, dir, "", "verify"); code != 0 {
+		t.Errorf("verify: %d\n%s", code, out)
+	}
+}
+
+// A frozen log says so on stderr and exits 4, on reads too. It still prints.
+func TestCLIFreezeIsLoud(t *testing.T) {
+	a, b := t.TempDir(), t.TempDir()
+	out, _, _ := run(t, a, "", "init")
+	words := wordsOf(out)
+	run(t, a, "", "add", "weight", "81", "-unit", "kg")
+	if _, errs, code := run(t, b, "", "sync", a); code != 0 {
+		t.Fatalf("sync: %d %s", code, errs)
+	}
+	if _, errs, code := run(t, a, words, "rotate", "-seal-all"); code != 0 {
+		t.Fatalf("rotate: %d %s", code, errs)
+	}
+	if _, errs, code := run(t, b, words, "restore", "-seal-all"); code != 0 {
+		t.Fatalf("restore: %d %s", code, errs)
+	}
+	run(t, a, "", "sync", b)
+	out, errs, code := run(t, a, "", "ls")
+	if code != 4 || !strings.Contains(out, "weight") || !strings.Contains(errs, "bean: compromised:") || !strings.Contains(errs, "bean migrate") {
+		t.Errorf("ls: %d\n%s\n%s", code, out, errs)
+	}
+	if _, errs, code := run(t, a, "", "add", "weight", "82"); code != 4 || !strings.Contains(errs, "compromised") {
+		t.Errorf("add: %d %s", code, errs)
+	}
+	dst := t.TempDir()
+	out, errs, code = run(t, a, "", "migrate", dst)
+	if code != 0 || !strings.Contains(out, "24. ") || !strings.Contains(out, "migrated 1 records") {
+		t.Errorf("migrate: %d\n%s\n%s", code, out, errs)
+	}
+	if out, _, code := run(t, dst, "", "ls"); code != 0 || !strings.Contains(out, "81 kg") {
+		t.Errorf("ls after migrate: %d\n%s", code, out)
+	}
+}
+
+// checkpoint is a command, and a removed record shows in verify.
+func TestCLICheckpoint(t *testing.T) {
+	dir := t.TempDir()
+	run(t, dir, "", "init")
+	run(t, dir, "", "add", "weight", "81")
+	if out, errs, code := run(t, dir, "", "checkpoint"); code != 0 || !strings.HasPrefix(out, "checkpoint sha256:") {
+		t.Errorf("checkpoint: %d %s %s", code, out, errs)
+	}
+	if out, _, code := run(t, dir, "", "checkpoint"); code != 0 || !strings.Contains(out, "nothing new") {
+		t.Errorf("second checkpoint: %d %s", code, out)
 	}
 }
