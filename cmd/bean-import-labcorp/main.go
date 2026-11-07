@@ -19,17 +19,21 @@
 //     says "Local" without a zone, so the day is all that is known unless
 //     -tz names the zone; then the minute is used.
 //
-// Patient name, birth date and patient ids are never copied.
+// Recognized patient header fields are excluded. Comments and other free text
+// may contain names or identifiers; medical text is preserved without redaction.
 package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"math/big"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -40,7 +44,7 @@ import (
 )
 
 const (
-	version = "bean-import-labcorp@0.1.1"
+	version = "bean-import-labcorp@0.1.4"
 	system  = "labcorp"
 )
 
@@ -56,9 +60,9 @@ func main() {
 	if *blob == "" {
 		fmt.Fprintln(os.Stderr, "bean-import-labcorp: warning: no -blob: the report is not kept; run bean blob put <report.pdf> first and pass -blob <id>")
 	}
-	text, err := readText(fs.Arg(0))
+	text, raw, err := readSource(fs.Arg(0))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "bean-import-labcorp: %s\n", err)
+		fmt.Fprintln(os.Stderr, "bean-import-labcorp: input or report validation failed")
 		os.Exit(1)
 	}
 	var loc *time.Location
@@ -73,41 +77,136 @@ func main() {
 		fmt.Fprintf(os.Stderr, "bean-import-labcorp: %s\n", err)
 		os.Exit(1)
 	}
+	records := rep.records(*blob, loc)
 	missing := 0
-	for _, rec := range rep.records(*blob, loc) {
+	for _, rec := range records {
 		if v := rec["value"].(map[string]any); v["n"] == nil && v["s"] == nil {
 			missing++
 		}
-		os.Stdout.Write(append(core.Canonical(rec), '\n'))
 	}
-	fmt.Fprintf(os.Stderr, "bean-import-labcorp: %d results, %d without a value, collected %s\n", len(rep.Results), missing, rep.Collected)
+	if *blob != "" {
+		if !regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(*blob) {
+			fmt.Fprintln(os.Stderr, "bean-import-labcorp: invalid blob reference")
+			os.Exit(2)
+		}
+		for _, rec := range records {
+			for _, attachment := range rec["blobs"].([]any) {
+				attachment.(map[string]any)["media_type"] = reportMedia(raw)
+			}
+		}
+		records = append([]map[string]any{archiveRecord(raw, *blob)}, records...)
+	}
+	if err := writeRecords(os.Stdout, records); err != nil {
+		fmt.Fprintln(os.Stderr, "bean-import-labcorp: output failed; partial output possible")
+		os.Exit(1)
+	}
+	fmt.Fprintf(os.Stderr, "bean-import-labcorp: %d results, %d without a value; existing specimen/test identities dedupe, amendments require explicit correction\n", len(rep.Results), missing)
+}
+
+const maxReportBytes = 32 << 20
+const maxReportText = 32 << 20
+
+// Adapter resource limits, deliberately above ordinary lab reports. Bound line
+// splitting and result maps independently of source bytes and serialized output.
+const maxReportLines = 100000
+const maxReportResults = 10000
+
+// Bean adds identity, signature, imported time and dedupe fields after import.
+// Leave a conservative allowance within its 1 MiB ordinary-record limit.
+const maxPartialRecordBytes = (1 << 20) - (4 << 10)
+
+func writeRecords(out io.Writer, records []map[string]any) error {
+	// Stage before output so local validation never creates an importable prefix.
+	var staged bytes.Buffer
+	for _, r := range records {
+		typ, _ := r["type"].(string)
+		if len(typ) > 128 || typ == "lab." {
+			return errors.New("invalid lab result name")
+		}
+		b := append(core.Canonical(r), '\n')
+		if len(b) > maxPartialRecordBytes {
+			return errors.New("lab result exceeds record limit")
+		}
+		if staged.Len()+len(b) > maxReportText*4 {
+			return errors.New("report output exceeds limit")
+		}
+		staged.Write(b)
+	}
+	_, err := io.Copy(out, &staged)
+	return err
 }
 
 func readText(path string) (string, error) {
-	data, err := os.ReadFile(path)
+	text, _, err := readSource(path)
+	return text, err
+}
+
+// readSource binds extraction to the same bytes used for the source digest.
+// Temporary PDF and extracted text are bounded; diagnostics contain no source text.
+func readSource(name string) (string, []byte, error) {
+	info, err := os.Lstat(name)
+	if err != nil || !info.Mode().IsRegular() || info.Size() > maxReportBytes {
+		return "", nil, errors.New("input must be a regular report no larger than 32 MiB")
+	}
+	f, err := os.Open(name)
 	if err != nil {
-		return "", err
+		return "", nil, errors.New("cannot open report")
+	}
+	defer f.Close()
+	opened, err := f.Stat()
+	if err != nil || !opened.Mode().IsRegular() || !os.SameFile(info, opened) {
+		return "", nil, errors.New("report changed while opening")
+	}
+	data, err := io.ReadAll(io.LimitReader(f, maxReportBytes+1))
+	if err != nil || len(data) > maxReportBytes {
+		return "", nil, errors.New("report read failed or exceeds limit")
 	}
 	if !bytes.HasPrefix(data, []byte("%PDF")) {
 		if !utf8.Valid(data) {
-			return "", errors.New("bad string: the text is not UTF-8")
+			return "", nil, errors.New("bad string: report is not UTF-8")
 		}
-		return string(data), nil
+		return string(data), data, nil
 	}
 	bin, err := exec.LookPath("pdftotext")
 	if err != nil {
-		return "", fmt.Errorf("pdftotext not found; install poppler (brew install poppler) or pass the text from pdftotext -layout")
+		return "", nil, errors.New("pdftotext not found; install poppler or supply extracted layout text")
 	}
-	var out, errb bytes.Buffer
-	cmd := exec.Command(bin, "-layout", "-enc", "UTF-8", path, "-")
-	cmd.Stdout, cmd.Stderr = &out, &errb
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("pdftotext: %v: %s", err, strings.TrimSpace(errb.String()))
+	dir, err := os.MkdirTemp("", "bean-lab-report-*")
+	if err != nil {
+		return "", nil, errors.New("cannot stage report")
+	}
+	defer os.RemoveAll(dir)
+	snapshot := filepath.Join(dir, "source.pdf")
+	if err = os.WriteFile(snapshot, data, 0600); err != nil {
+		return "", nil, errors.New("cannot stage report")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, bin, "-layout", "-enc", "UTF-8", snapshot, "-")
+	// A converter descendant may inherit the pipes after the direct child exits.
+	cmd.WaitDelay = time.Second
+	out := &boundedText{limit: maxReportText}
+	cmd.Stdout = out
+	cmd.Stderr = io.Discard
+	if err = cmd.Run(); err != nil {
+		return "", nil, errors.New("PDF extraction failed, timed out or exceeded output limit")
 	}
 	if !utf8.Valid(out.Bytes()) {
-		return "", errors.New("bad string: pdftotext output is not UTF-8")
+		return "", nil, errors.New("bad string: pdftotext output is not UTF-8")
 	}
-	return out.String(), nil
+	return out.String(), data, nil
+}
+
+type boundedText struct {
+	bytes.Buffer
+	limit int
+}
+
+func (b *boundedText) Write(p []byte) (int, error) {
+	if len(p) > b.limit-b.Len() {
+		return 0, errors.New("extracted text exceeds limit")
+	}
+	return b.Buffer.Write(p)
 }
 
 // Result is one row of the report.
@@ -131,7 +230,7 @@ type Report struct {
 
 var (
 	reSpecimen    = regexp.MustCompile(`Specimen ID:\s*(\S+)`)
-	reCollected   = regexp.MustCompile(`Date Collected:\s*(\d\d/\d\d/\d{4})(?:\s+(\d{4})\s+Local)?`)
+	reCollected   = regexp.MustCompile(`Date Collected:\s*(\d\d/\d\d/\d{4})(?:\s+(\d{4})\s+Local)?(?:\s|$)`)
 	reReported    = regexp.MustCompile(`Date Reported:\s*(\d\d/\d\d/\d{4})`)
 	reFasting     = regexp.MustCompile(`Fasting:\s*(\S.*?)\s*$`)
 	reLab         = regexp.MustCompile(`^(\d\d):\s*\S+\s*-\s*([^,]+),`)
@@ -184,7 +283,7 @@ func headerColumns(line string) (columns, bool) {
 	p := strings.Index(line, "Previous Result")
 	u := strings.Index(line, "Units")
 	r := strings.Index(line, "Reference Interval")
-	if c < 0 || p < 0 || u < 0 || r < 0 {
+	if c < 0 || p <= c || u <= p || r <= u {
 		return columns{}, false
 	}
 	return columns{current: c, previous: p, units: u, ref: r}, true
@@ -193,8 +292,19 @@ func headerColumns(line string) (columns, bool) {
 // fill assigns value tokens to the result. It reports false when the
 // tokens do not look like a result row (a comment line).
 func (r *Result) fill(toks []token, c columns) bool {
+	next := *r
+	if !next.fillTokens(toks, c) {
+		return false
+	}
+	*r = next
+	return true
+}
+
+func (r *Result) fillTokens(toks []token, c columns) bool {
 	for _, t := range toks {
-		if len(t.text) > 25 {
+		// Comments start left of the result column. Text length cannot distinguish
+		// a comment from a legitimate long categorical result or reference range.
+		if t.start < c.current-4 {
 			return false
 		}
 	}
@@ -215,11 +325,10 @@ func (r *Result) fill(toks []token, c columns) bool {
 			right = append(right, t)
 		}
 	}
-	// In real reports units start 18 to 25 columns left of the "Reference
-	// Interval" header and intervals 3 to 8 columns right of it.
+	// Use the observed header spacing: pdftotext can compress the layout.
 	var units, ref []string
 	for _, t := range right {
-		if t.start >= c.ref-8 {
+		if t.start >= (c.units+c.ref)/2 {
 			ref = append(ref, t.text)
 		} else {
 			units = append(units, t.text)
@@ -230,14 +339,40 @@ func (r *Result) fill(toks []token, c columns) bool {
 }
 
 func parseReport(text string) (*Report, error) {
+	if strings.Count(text, "\n") >= maxReportLines {
+		return nil, errors.New("report exceeds line limit")
+	}
 	rep := &Report{Labs: map[string]string{}}
 	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
 	for _, l := range lines {
-		if m := reSpecimen.FindStringSubmatch(l); m != nil && rep.Specimen == "" {
+		specimenMatches := reSpecimen.FindAllStringSubmatch(l, -1)
+		if len(specimenMatches) != strings.Count(l, "Specimen ID:") {
+			return nil, errors.New("malformed specimen identifier label")
+		}
+		for _, m := range specimenMatches {
+			// The established native ID joins specimen and test with '/'. Test
+			// names may contain that character; specimen IDs must not.
+			if strings.Contains(m[1], "/") {
+				return nil, errors.New("ambiguous specimen identifier")
+			}
+			if rep.Specimen != "" && rep.Specimen != m[1] {
+				return nil, errors.New("conflicting specimen identifiers")
+			}
 			rep.Specimen = m[1]
 		}
-		if m := reCollected.FindStringSubmatch(l); m != nil && (rep.Collected == "" || m[2] != "") {
-			rep.Collected = strings.TrimSpace(m[1] + " " + m[2]) // the specimen details line has the time
+		collectedMatches := reCollected.FindAllStringSubmatch(l, -1)
+		if len(collectedMatches) != strings.Count(l, "Date Collected:") {
+			return nil, errors.New("malformed collection date label")
+		}
+		for _, m := range collectedMatches {
+			collected := strings.TrimSpace(m[1] + " " + m[2])
+			if rep.Collected != "" && (rep.Collected[:10] != m[1] ||
+				(len(rep.Collected) > 10 && m[2] != "" && rep.Collected != collected)) {
+				return nil, errors.New("conflicting collection dates or times")
+			}
+			if rep.Collected == "" || m[2] != "" {
+				rep.Collected = collected // the specimen details line has the time
+			}
 		}
 		if m := reReported.FindStringSubmatch(l); m != nil {
 			rep.Reported = m[1]
@@ -278,8 +413,11 @@ lines:
 		l = strings.TrimRight(l, " \t\f")
 		if c, ok := headerColumns(l); ok {
 			cols, inResults = c, true
-			wantValue = false
 			continue
+		}
+		if strings.Contains(l, "Current Result") && strings.Contains(l, "Previous Result") &&
+			strings.Contains(l, "Units") && strings.Contains(l, "Reference Interval") {
+			return nil, errors.New("unsupported result column order")
 		}
 		if !inResults {
 			if strings.TrimSpace(l) != "" && indent(l) == 0 {
@@ -302,27 +440,31 @@ lines:
 			p := strings.TrimSuffix(l, " (Cont.)")
 			if p != panel {
 				note = nil
+				wantValue = false
 			}
-			panel, wantValue = p, false
+			panel = p
 			continue
 		}
 		toks := tokens(l)
 		if wantValue && indent(l) >= 20 {
-			wantValue = false
 			if cur.fill(toks, cols) {
+				wantValue = false
 				continue
+			}
+			if len(toks) > 0 && toks[0].start >= cols.current-4 {
+				return nil, errors.New("ambiguous wrapped result columns")
 			}
 		}
 		if indent(l) < 20 {
 			// A row: name, optional lab code, then the value or nothing.
 			name, code := toks[0].text, ""
-			if m := reCode.FindStringSubmatch(name); m != nil {
+			if m := reCode.FindStringSubmatch(name); m != nil && rep.labCode(m[1]) {
 				name, code = strings.TrimSpace(name[:len(name)-len(m[0])]), m[1]
 			}
 			rest := toks[1:]
 			// A lab code sits left of the result column; a two-digit value
 			// ("eGFR  90") sits under it.
-			if len(rest) > 0 && code == "" && len(rest[0].text) == 2 && rest[0].start < cols.current-6 && strings.Trim(rest[0].text, "0123456789") == "" {
+			if len(rest) > 0 && code == "" && len(rest[0].text) == 2 && rest[0].start < cols.current-6 && strings.Trim(rest[0].text, "0123456789") == "" && rep.labCode(rest[0].text) {
 				code, rest = rest[0].text, rest[1:]
 			}
 			if strings.EqualFold(strings.TrimSuffix(name, ":"), "please note") {
@@ -333,9 +475,15 @@ lines:
 				continue
 			}
 			note = nil
+			if len(rep.Results) >= maxReportResults {
+				return nil, errors.New("report exceeds result limit")
+			}
 			cur = &Result{Name: name, Panel: panel, LabCode: code}
 			rep.Results = append(rep.Results, cur)
-			wantValue = len(rest) == 0 || !cur.fill(rest, cols)
+			wantValue = len(rest) == 0
+			if !wantValue && !cur.fill(rest, cols) {
+				return nil, errors.New("ambiguous result columns")
+			}
 			continue
 		}
 		addComment(l)
@@ -343,8 +491,36 @@ lines:
 	if len(rep.Results) == 0 {
 		return nil, fmt.Errorf("no results found")
 	}
+	// Refuse what cannot be read for sure. A wrong value in a health record is
+	// worse than no import: the person can fix a report, not a silent error.
+	// The same test listed twice with the same reading, as when two panels
+	// share it, is one reading. Two different readings for one type are not.
+	types := map[string]*Result{}
+	kept := rep.Results[:0]
+	for _, r := range rep.Results {
+		t := slug(r.Name)
+		if prev, ok := types[t]; ok {
+			if prev.Name == r.Name && prev.Value == r.Value && prev.Flag == r.Flag && prev.Units == r.Units && prev.Ref == r.Ref {
+				continue
+			}
+			return nil, fmt.Errorf("two results, %q and %q, map to one type lab.%s", prev.Name, r.Name, t)
+		}
+		types[t] = r
+		kept = append(kept, r)
+		if r.Value == "" && len(r.Comment) == 0 && reTrailingNumber.MatchString(r.Name) {
+			return nil, fmt.Errorf("result %q has no value, and its name ends in a number that may be the value", r.Name)
+		}
+	}
+	rep.Results = kept
 	return rep, nil
 }
+
+var reTrailingNumber = regexp.MustCompile(`\s[<>]?-?\d+(\.\d+)?$`)
+
+// labCode reports whether a two-digit token can be a lab code: one that the
+// report's list of performing labs names. Without that list, any two digits.
+// "Interleukin 10" keeps its number when no lab 10 performed a test.
+func (rep *Report) labCode(c string) bool { return len(rep.Labs) == 0 || rep.Labs[c] != "" }
 
 func slug(s string) string {
 	var b strings.Builder
@@ -365,19 +541,53 @@ func slug(s string) string {
 // report gives a time and loc is known, else the day in UTC.
 func (rep *Report) observed(loc *time.Location) (map[string]any, string) {
 	if loc != nil {
-		if t, err := time.ParseInLocation("01/02/2006 1504", rep.Collected, loc); err == nil {
-			return map[string]any{"start": t.Format(time.RFC3339), "precision": "minute"}, ""
+		if t, err := time.ParseInLocation("01/02/2006 1504", rep.Collected, loc); err == nil && uniqueLocalTime(t, rep.Collected) {
+			start := t.Format(time.RFC3339)
+			if _, ok := core.ParseTime(start); ok {
+				return map[string]any{"start": start, "precision": "minute"}, ""
+			}
 		}
 	}
 	t, err := time.Parse("01/02/2006", rep.Collected[:10])
 	if err != nil {
 		return nil, rep.Collected
 	}
-	return map[string]any{"start": t.Format("2006-01-02") + "T00:00:00Z", "precision": "day"}, rep.Collected
+	start := t.Format("2006-01-02") + "T00:00:00Z"
+	if _, ok := core.ParseTime(start); !ok {
+		return nil, rep.Collected
+	}
+	return map[string]any{"start": start, "precision": "day"}, rep.Collected
+}
+
+// A zone alone cannot identify a nonexistent or repeated DST wall-clock minute.
+// Retain day precision and the printed local time in those cases.
+func uniqueLocalTime(t time.Time, printed string) bool {
+	const layout = "01/02/2006 1504"
+	if t.Format(layout) != printed {
+		return false
+	}
+	_, offset := t.Zone()
+	start, end := t.ZoneBounds()
+	var neighbors []time.Time
+	if !start.IsZero() {
+		neighbors = append(neighbors, start.Add(-time.Second))
+	}
+	if !end.IsZero() {
+		neighbors = append(neighbors, end)
+	}
+	for _, adjacent := range neighbors {
+		_, other := adjacent.In(t.Location()).Zone()
+		candidate := t.Add(time.Duration(offset-other) * time.Second)
+		if !candidate.Equal(t) && candidate.Format(layout) == printed {
+			return false
+		}
+	}
+	return true
 }
 
 func (rep *Report) records(blob string, loc *time.Location) []map[string]any {
 	observed, rawTime := rep.observed(loc)
+	reportNote := strings.Join(rep.Notes, " ")
 	occurrence := map[string]int{}
 	var out []map[string]any
 	for _, r := range rep.Results {
@@ -402,7 +612,7 @@ func (rep *Report) records(blob string, loc *time.Location) []map[string]any {
 			"flag": r.Flag, "reference_interval": r.Ref, "previous_result": r.Previous,
 			"performing_lab": rep.Labs[r.LabCode], "reported": rep.Reported, "fasting": rep.Fasting,
 			"raw_time": rawTime, "lab_comment": strings.Join(r.Comment, " "),
-			"report_note": strings.Join(rep.Notes, " "),
+			"report_note": reportNote,
 		} {
 			if v != "" {
 				ctx[k] = v
@@ -431,6 +641,19 @@ func (rep *Report) records(blob string, loc *time.Location) []map[string]any {
 // exact reports whether a printed number fits a record number (SPEC 4.1).
 // A larger one stays text, so the import never fails on it.
 func exact(v string) bool {
+	// Keep unusually long numeric tokens as source text without costly big-int
+	// parsing. Normal values must survive conversion to canonical decimal intact.
+	if len(v) > 256 {
+		return false
+	}
 	n, err := strconv.ParseFloat(v, 64)
-	return err == nil && core.ExactNumber(n)
+	if err != nil || !core.ExactNumber(n) {
+		return false
+	}
+	original, ok := new(big.Rat).SetString(v)
+	if !ok {
+		return false
+	}
+	canonical, ok := new(big.Rat).SetString(string(core.Canonical(n)))
+	return ok && original.Cmp(canonical) == 0
 }

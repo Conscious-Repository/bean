@@ -118,15 +118,16 @@ bean purge 1b59a1                                 # deletes record 1b59a1 from e
 
 ### Blood work (Labcorp, Superpower)
 
-Superpower and Labcorp give you a Labcorp patient report as a PDF. Store the PDF, then import it:
+Superpower and Labcorp give you a Labcorp patient report as a PDF. Import it:
 
 ```
-BLOB=$(bean blob put lab-result.pdf)
-bean-import-labcorp -tz America/Chicago -blob $BLOB lab-result.pdf | bean append
+bean import labcorp -tz America/Chicago lab-result.pdf
 bean ls -type 'lab.*'
 ```
 
-You get one record for each result, with the value, unit, flag, reference interval, panel and lab comments. Your name, birth date and patient ids are not copied. `-tz` is the time zone where the sample was taken; without it, only the day is recorded. Import the same file again and nothing is added. If a later report changes a value, for example a final result replaces `Pending`, `bean append` names the reading, writes nothing for it, and exits 1. If the report is newer and right, run it again with `bean append -corrections`.
+bean keeps the PDF first, encrypted, as a `lab.report` record, and checks that it reads back. Then you get one record for each result, with the value, unit, flag, reference interval, panel and lab comments. Your name, birth date and patient ids are not copied; comments the lab wrote are, and the PDF keeps everything. `-tz` is the time zone where the sample was taken; without it, only the day is recorded. Import the same file again and nothing is added. If a later report changes a value, for example a final result replaces `Pending`, the new PDF is kept, but `bean import` names the reading, writes nothing for it, and exits 1. If the report is newer and right, run it again with `-corrections`.
+
+The importer refuses a report it cannot read for sure, and then nothing is written: two results with one type, or a result whose value may have run into its name. It needs `pdftotext` (`brew install poppler`) and reads only the Labcorp patient-report layout. See [the importer notes](cmd/bean-import-labcorp/README.md).
 
 ### A CSV file
 

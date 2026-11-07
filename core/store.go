@@ -331,6 +331,21 @@ func (s *Store) Load() (*Loaded, error) {
 	return s.load(false)
 }
 
+// LoadFull is Load that proves every file and ignores the object cache.
+// A caller that must not take a cached copy for the file on disk, such as
+// bean import checking that the log keeps a source file, uses it.
+func (s *Store) LoadFull() (*Loaded, error) {
+	unlock, err := s.lock()
+	if err != nil {
+		if readOnlyFolder(err) {
+			return s.loadWith(true, true)
+		}
+		return nil, err
+	}
+	defer unlock()
+	return s.load(true)
+}
+
 // load is Load for a caller that holds the lock; full proves every file
 // and rebuilds the object cache.
 func (s *Store) load(full bool) (*Loaded, error) { return s.loadWith(full, false) }

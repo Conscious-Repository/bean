@@ -26,6 +26,7 @@ Write
   add <type> <value> [flags]    Add one record. Flags: -unit, -at, -note, -about,
                                 -corrects, -photo, -agent.
   append [-agent]               Add the records that an importer writes to stdin.
+  import <source> <file>        Keep a provider file, then add its readings.
   blob put <file>               Store a file, encrypted. Prints its id.
 
 Read
@@ -71,6 +72,7 @@ var syntax = map[string]string{
 	"whoami":        "whoami",
 	"add":           "add <type> <value> [-unit <u>] [-at <time>] [-note <text>] [-about <id>] [-corrects <id>] [-photo <file>] [-agent]",
 	"append":        "append [-agent | -corrections] < records.jsonl",
+	"import":        "import <source> [importer flags] [-corrections] <file>",
 	"blob":          "blob put <file> | blob get <id>",
 	"ls":            "ls [-type <t>] [-since <time>] [-until <time>] [-author me|agent|<id>|<npub>] [-all] [-json]",
 	"show":          "show <id>",
@@ -261,6 +263,8 @@ func main() {
 		cmdShow(s, rest)
 	case "add":
 		cmdAdd(s, rest)
+	case "import":
+		cmdImport(s, rest)
 	case "mcp":
 		cmdMCP(s, rest)
 	case "whoami":
@@ -345,7 +349,7 @@ func main() {
 // a log; in an empty folder they say so instead of printing nothing.
 var needsLog = map[string]bool{
 	"whoami": true, "add": true, "append": true, "blob": true, "ls": true, "show": true,
-	"verify": true, "mcp": true, "export": true, "import-export": true, "rotate": true,
+	"verify": true, "mcp": true, "import": true, "export": true, "import-export": true, "rotate": true,
 	"purge": true, "gc": true, "migrate": true,
 }
 
