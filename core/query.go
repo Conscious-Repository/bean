@@ -76,13 +76,24 @@ func (l *Loaded) Current(id string) bool {
 	if r == nil || !l.Visible(id) || IsCoreType(r.Type) {
 		return false
 	}
-	if len(l.Report.Superseded[id]) > 0 || l.Report.KeptSuperseded[id] {
+	if l.supersededForReaders(id) || l.Report.KeptSuperseded[id] {
 		return false
 	}
 	// A duplicate shows when its primary cannot: a reading must not vanish
 	// behind a record that a freeze put in doubt.
 	primary, dup := l.Report.Duplicates[id]
 	return !dup || !l.Visible(primary)
+}
+
+// supersededForReaders reports a record that a correction a reader can show
+// replaces. A reading must not vanish because its correction is hidden too.
+func (l *Loaded) supersededForReaders(id string) bool {
+	for _, c := range l.Report.Superseded[id] {
+		if l.Visible(c) {
+			return true
+		}
+	}
+	return false
 }
 
 // isSetup reports pairing claims: configuration, not things that happened.
@@ -193,6 +204,8 @@ func (l *Loaded) Status(id string) string {
 		return "purged by " + rp.Purged[id]
 	case !rp.Valid[id]:
 		return "not valid"
+	case len(rp.Superseded[id]) > 0 && !l.supersededForReaders(id):
+		return "valid; readers show it, because its correction " + rp.Superseded[id][0] + " is not shown: " + l.Status(rp.Superseded[id][0])
 	case len(rp.Superseded[id]) > 0:
 		return "superseded by " + rp.Superseded[id][0]
 	case rp.Duplicates[id] != "":

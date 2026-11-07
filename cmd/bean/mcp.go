@@ -123,7 +123,7 @@ var mcpTools = []mcpTool{
 	},
 	{
 		Name:        "read_blob",
-		Description: "Return decrypted text only for a blob named by a current (non-superseded, non-duplicate) record. Historical get_record may show blob IDs without granting this tool access to their content. Binary blobs return only their size.",
+		Description: "Return decrypted text only for a blob named by a current (non-superseded, non-duplicate) record of the person or a paired agent. Historical get_record may show blob IDs without granting this tool access to their content. Binary blobs return only their size.",
 		InputSchema: schema(map[string]any{
 			"id":             strProp("Blob id (sha256:...)."),
 			"include_others": othersProp,
@@ -705,9 +705,12 @@ func toolReadBlob(s *core.Store, f core.Filter, id string, max int) (any, error)
 	if l.IsTooNew() {
 		return nil, l.TooNewError()
 	}
+	// Only a current record of the person or a paired agent unlocks a blob. A
+	// stranger can name any blob, also one the person deleted.
 	mediaType, named := "", false
+	labels := l.AgentLabels()
 	for rid, r := range l.Report.Records {
-		if !l.Current(rid) || !inScope(r, f) {
+		if !l.Current(rid) || !inScope(r, f) || (r.Author != l.ID && labels[r.Author] == "") {
 			continue
 		}
 		for _, b := range r.Blobs {

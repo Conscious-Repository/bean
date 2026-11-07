@@ -251,56 +251,99 @@ func refLine(subject, system, ref string) string {
 	return string(Canonical([]any{subject, system, ref}))
 }
 
+// addPurgedRef adds the ref of one purged record.
 func (s *Store) addPurgedRef(r *Record) error {
-	if r == nil || r.Source.Ref == "" {
-		return nil
-	}
-	line := refLine(r.Subject, r.Source.System, r.Source.Ref)
-	have, err := s.readPurgedRefs()
+	p, err := s.openPurgedRefs()
 	if err != nil {
 		return err
 	}
-	if have[line] {
-		return nil
-	}
-	return appendLineSync(s.path(filePurgedRef), line)
+	p.add(r)
+	return p.flush()
 }
 
-// removePurgedRef forgets the ref of a target whose tombstone became invalid,
-// unless another deletion may need the line. A line names only a ref, and one
-// ref can belong to several records. A record that is hidden can be checked.
-// One that is erased cannot, so a tombstone with an absent target keeps the line:
-// a re-import that is skipped says nothing wrong, and a deleted reading that
-// comes back cannot be unseen.
-func (s *Store) removePurgedRef(r *Record, rp *Report, hidden map[string]bool) error {
-	if r == nil || r.Source.Ref == "" {
-		return nil
-	}
+// purgedRefs is local/purged-refs.jsonl in memory. A load or a sync can change
+// many lines: it reads the file once and writes it once, so a stranger's
+// thousands of deletions cost one write, not one read and one flush each.
+type purgedRefs struct {
+	s       *Store
+	have    map[string]bool
+	changed bool
+	// For remove, built once: the subjects with a tombstone whose target is
+	// absent, and the ids of the records with each line.
+	absent map[string]bool
+	byLine map[string][]string
+}
+
+func (s *Store) openPurgedRefs() (*purgedRefs, error) {
 	have, err := s.readPurgedRefs()
 	if err != nil {
-		return err
+		return nil, err
+	}
+	return &purgedRefs{s: s, have: have}, nil
+}
+
+func (p *purgedRefs) add(r *Record) {
+	if r == nil || r.Source.Ref == "" {
+		return
+	}
+	if line := refLine(r.Subject, r.Source.System, r.Source.Ref); !p.have[line] {
+		p.have[line] = true
+		p.changed = true
+	}
+}
+
+// remove forgets the ref of a target whose tombstone became invalid, unless
+// another deletion may need the line. A line names only a ref, and one ref can
+// belong to several records. A record that is hidden can be checked. One that
+// is erased cannot, so a tombstone with an absent target keeps the line: a
+// re-import that is skipped says nothing wrong, and a deleted reading that
+// comes back cannot be unseen.
+func (p *purgedRefs) remove(r *Record, rp *Report, hidden map[string]bool) {
+	if r == nil || r.Source.Ref == "" {
+		return
 	}
 	line := refLine(r.Subject, r.Source.System, r.Source.Ref)
-	if !have[line] {
+	if !p.have[line] {
+		return
+	}
+	if p.byLine == nil {
+		p.absent, p.byLine = map[string]bool{}, map[string][]string{}
+		for id, o := range rp.Records {
+			if o.Type == "bean.tombstone" && rp.Records[o.Targets("purges")[0]] == nil {
+				p.absent[o.Subject] = true
+			}
+			if o.Source.Ref != "" {
+				k := refLine(o.Subject, o.Source.System, o.Source.Ref)
+				p.byLine[k] = append(p.byLine[k], id)
+			}
+		}
+	}
+	if p.absent[r.Subject] {
+		return
+	}
+	for _, id := range p.byLine[line] {
+		if id != r.ID && hidden[id] {
+			return
+		}
+	}
+	delete(p.have, line)
+	p.changed = true
+}
+
+// flush writes the file if a line changed.
+func (p *purgedRefs) flush() error {
+	if p == nil || !p.changed {
 		return nil
 	}
-	for id, o := range rp.Records {
-		if o.Subject != r.Subject {
-			continue
-		}
-		if o.Type == "bean.tombstone" && rp.Records[o.Targets("purges")[0]] == nil {
-			return nil
-		}
-		if id != r.ID && hidden[id] && refLine(o.Subject, o.Source.System, o.Source.Ref) == line {
-			return nil
-		}
-	}
-	delete(have, line)
 	var b strings.Builder
-	for _, x := range sortedKeys(have) {
+	for _, x := range sortedKeys(p.have) {
 		b.WriteString(x + "\n")
 	}
-	return writeFileAtomic(s.path(filePurgedRef), []byte(b.String()), 0o600)
+	if err := writeFileAtomic(p.s.path(filePurgedRef), []byte(b.String()), 0o600); err != nil {
+		return err
+	}
+	p.changed = false
+	return nil
 }
 
 // Loaded is a replica after the hold rules ran.
@@ -396,8 +439,20 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 		}
 	}
 	changed := false
+	// local/purged-refs.jsonl is read at most once and written at most once.
+	var refs *purgedRefs
+	openRefs := func() (*purgedRefs, error) {
+		if refs == nil {
+			var err error
+			refs, err = s.openPurgedRefs()
+			return refs, err
+		}
+		return refs, nil
+	}
 	// New valid purges: hide the target. The tombstone that purges it
 	// gets its own hold, also when an earlier tombstone hid the target.
+	// Every purged target present keeps its ref line, so a crash between the
+	// hide and the write of the line loses nothing.
 	for target, tid := range rp.Purged {
 		if _, ok := files[PathOf(target)]; !ok {
 			continue
@@ -406,6 +461,11 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 			holds[tid] = Hold{Target: target, Received: s.nowString()}
 			changed = true
 		}
+		p, err := openRefs()
+		if err != nil {
+			return nil, err
+		}
+		p.add(rp.Records[target])
 		if hidden[target] {
 			continue
 		}
@@ -417,9 +477,6 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 			return nil, err
 		}
 		hidden[target] = true
-		if err := s.addPurgedRef(rp.Records[target]); err != nil {
-			return nil, err
-		}
 	}
 	// Restores: a hidden target comes back only when every tombstone that
 	// hid it is judged invalid. A tombstone that is unresolved, held, too
@@ -439,15 +496,20 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 		}
 		delete(hidden, target)
 		// The deletion was undone, so a new import must not skip this reading.
-		if err := s.removePurgedRef(rp.Records[target], rp, hidden); err != nil {
+		p, err := openRefs()
+		if err != nil {
 			return nil, err
 		}
+		p.remove(rp.Records[target], rp, hidden)
 		for tid, h := range holds {
 			if h.Target == target {
 				delete(holds, tid)
 				changed = true
 			}
 		}
+	}
+	if err := refs.flush(); err != nil {
+		return nil, err
 	}
 	if changed {
 		if err := s.writeHolds(holds); err != nil {

@@ -112,7 +112,7 @@ Writes the decrypted file to stdout: `bean blob get <id> > report.pdf`.
 
 ### `append`, changed readings
 
-If an input gives a new value for a reading you already have, `append` writes nothing for it, prints a `changed:` line, and exits 1. bean cannot tell a lab's corrected report from an older report, a parser bug, or two sources that share an id. If the input is newer and right, run `append -corrections`: the new value replaces the old one as a correction, and the output says `1 of them new values`. It refuses a different type or an empty value: for two sources that share ids, give each its own `-system`. A value the reading has had is always skipped, so an old report cannot bring it back.
+If an input gives a new value for a reading you already have, `append` writes nothing for it, prints a `changed:` line, and exits 1. bean cannot tell a lab's corrected report from an older report, a parser bug, or two sources that share an id. If the input is newer and right, run `append -corrections`: the new value replaces the old one as a correction, and the output says `1 of them new values`. It refuses a different type or an empty value, with or without the flag. Then the `changed:` line names the input's type and says why, for example `(type lab.ldl): not written, because its type differs`, and the error does not send you to `-corrections`. For two sources that share ids, give each its own `-system`. A value the reading has had is always skipped, so an old report cannot bring it back.
 
 ### `verify`
 
@@ -143,7 +143,7 @@ Runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdin
 | `query_records` | Records by type and time. |
 | `stats` | Count, minimum, maximum, mean, median and spread of one type, by day, week or month if asked. Readings by different authors or in different units are in separate `groups`. |
 | `get_record` | One non-deleted, valid record, including superseded history, its status and replies. Blob IDs are metadata. |
-| `read_blob` | Only blobs of current records; superseded-only history does not grant content access. Text is returned; for binary files only size. |
+| `read_blob` | Only blobs of current records of yours or of a paired agent; superseded-only history and a stranger's record do not grant content access. Text is returned; for binary files only size. |
 | `log_entry` | With `-write` only. Adds a record signed by the agent key, of a type from the vocabulary only: the built-in one plus `vocabulary.md` in the bean folder, if it exists (cmd/bean/vocabulary.md, "Your own types"). It can also comment on a record (`about`) or replace one of the agent's own records (`corrects`). |
 
 With `-write`, the first start makes the agent key of this machine and, on your own machine, trusts it. `-label` names that agent (default: `agent@<computer name>`). Without `-label`, a key that already exists keeps its name. A label that differs from the key's pairing is refused with exit 1, as in `agent init`.
@@ -168,15 +168,32 @@ If the key is already paired, the same label or no `-label` prints that pairing.
 
 ### `sync <folder>`
 
-Copies to this log every record and file that the other folder has and this one does not. It checks each file first, and replaces a stored copy that fails the checks. It does not copy a record that a valid deletion names. Run it both ways to make two copies the same. Prints `copied <r> records, <b> blobs, refused <p> purged`. Sync only from your own copies.
+Copies to this log every record and file that the other folder has and this one does not. It checks each file first, and replaces a stored copy that fails the checks. It reads this log's files from disk, not from the cache, so it also repairs a file that was changed in place. It does not copy a record that a valid deletion names. It judges each deletion on the files of both folders together, not on what the other folder says: a copy that has not seen your rotation takes the old key's deletions for valid. Run it both ways to make two copies the same. Prints `copied <r> records, <b> blobs, refused <p> purged`. Sync only from your own copies.
+
+- The other folder must hold a log (`local/identity` or `objects/`). If it does not, `sync` fails with `no log in <folder>`, so a typo does not look like a sync with nothing to copy.
+- A record file of the other folder that fails its checks is not copied, nor a file that this log needs whose hash is wrong. Then `sync` copies the rest, prints `skipped <n> bad record files, <m> bad blobs in <folder>`, and exits 1. Run `bean verify` in that folder. A stranger's broken file there has the same effect.
+- It copies only the files that a record names. A file from `blob put` that no record names stays where it is; `export` writes it.
 
 ### `export <folder>`
 
-Writes a plaintext copy of every record and file into an empty or new folder, with a `manifest.json`. The export is not encrypted.
+Writes a plaintext copy of every record and file into an empty or new folder, with a `manifest.json`. The export is not encrypted. Prints `exported <r> records, <b> blobs (plaintext)` when it ran to its end. Into a folder that is not empty it fails at once and writes nothing.
+
+| In the export | What it holds |
+|---|---|
+| `records/` | Every record file that passes its checks, also of a newer format. Deleted records stay behind. |
+| `blobs/` | Your stored files, decrypted. |
+| `invalid/<path>` | Each record file that fails its checks, as it is. `export` prints how many, and exits 0: nothing is left behind. Run `bean verify`. |
+| `manifest.json` | The identity, the counts and each blob's SHA-256. Also, if any: `missing_blobs` (named, but not here), `unreferenced_blobs` (no record names them, for example from `blob put`; they are in `blobs/` too), `not_exported_blobs` (each with its reason), and `invalid_records`. |
+
+A file is decrypted only if a record of yours or of a paired agent names it, and that record is valid, kept or in doubt. A stranger's record, or one that is not valid, can name any file, also one you deleted: such a file is listed in `not_exported_blobs` and not written. The export fails at the end if a file of yours is missing, or if your identity has records from a newer bean. Everything else is in the folder by then.
 
 ### `import-export <folder>`
 
-Reads an export into a log that has the same identity secret.
+Reads an export into a log of the same identity. Prints `added <r> records, <b> blobs, refused <p> purged`.
+
+- It reads `manifest.json` first. An export of another identity fails with `export of identity <id>, this log is <id>`, and a folder without the file is `not an export`.
+- It follows the rule of `sync`: a record that a valid deletion names is refused, so an older export does not bring back what you purged since. Nor does it bring back a file that only deleted records name.
+- It does not read `invalid/`.
 
 ### `rotate [-list] [-seal-all] [-no-seal <id>]... [-nostr new|<file>]`
 
@@ -205,7 +222,7 @@ Starts a new identity from a frozen log. On any other log it refuses: run `rotat
 
 ### `purge [-reason <text>] <id>`
 
-Deletes a record about you. Writes a tombstone that every copy obeys, and erases the record here at once. The tombstone does not keep the import ref of the record. `local/purged-refs.jsonl` does, so a later import of the same data adds nothing on this copy, but it does on a copy without that file. You cannot purge identity records or other tombstones.
+Deletes a record about you. Writes a tombstone that every copy obeys, and erases the record here at once. `sync` and `import-export` refuse the record after that, also from an older copy or export. Its files are erased too, unless another record names them; `export` then writes them only if a valid record of yours or of a paired agent names them. The tombstone does not keep the import ref of the record. `local/purged-refs.jsonl` does, so a later import of the same data adds nothing on this copy, but it does on a copy without that file. You cannot purge identity records or other tombstones.
 
 ### `gc`
 

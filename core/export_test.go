@@ -7,16 +7,25 @@ import (
 	"testing"
 )
 
+// writeManifest makes a hand-made export say whose it is.
+func writeManifest(t *testing.T, dir, id string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), []byte(`{"identity":"`+id+`"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // A blob whose content does not match its name is refused before any
 // file is written (SPEC 7.9).
 func TestImportExportBadBlobWritesNothing(t *testing.T) {
-	a, _ := initStore(t)
+	a, id := initStore(t)
 	x := t.TempDir()
 	for _, d := range []string{"blobs", "records"} {
 		if err := os.MkdirAll(filepath.Join(x, d), 0o700); err != nil {
 			t.Fatal(err)
 		}
 	}
+	writeManifest(t, x, id)
 	if err := os.WriteFile(filepath.Join(x, "blobs", strings.Repeat("0", 64)), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}

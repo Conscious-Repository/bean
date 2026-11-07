@@ -87,25 +87,6 @@ func mkdirAllSync(dir string) error {
 	return nil
 }
 
-// appendLineSync appends one line to a file and flushes it.
-func appendLineSync(path, line string) error {
-	if err := mkdirAllSync(filepath.Dir(path)); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-	if err != nil {
-		return err
-	}
-	_, err = f.WriteString(line + "\n")
-	if err == nil {
-		err = syncFile(f)
-	}
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	return err
-}
-
 // removeStaleTemps deletes temporary files that a crashed writer left in
 // dir and its shard directories. Only files older than an hour go, so a
 // write in progress in another process is never touched.

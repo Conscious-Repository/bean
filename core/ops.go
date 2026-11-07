@@ -28,6 +28,10 @@ type AppendResult struct {
 type Changed struct {
 	ID, Type string // the record the log shows now
 	Old, New string // canonical values
+	NewType  string // the type in the input
+	// Reason is why -corrections cannot write it either, or "" when the person's
+	// word (-corrections) would write it.
+	Reason string
 }
 
 var forbiddenPartial = []string{"v", "nonce", "author", "kid", "id", "sig"}
@@ -227,9 +231,18 @@ func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, err
 				}
 				current := l.Report.Records[existing[key]]
 				typ, _ := obj["type"].(string)
-				if !w.corrections || len(currents[key]) == 0 || typ != current.Type || hasNoValue(obj["value"]) {
+				reason := ""
+				switch {
+				case typ != current.Type:
+					reason = "its type differs, so it is not the same reading. Two sources may share ids: give each its own -system"
+				case hasNoValue(obj["value"]):
+					reason = "the input has no value, and an empty value never replaces one"
+				case len(currents[key]) == 0:
+					reason = "a correction without this ref replaced the reading, so there is no current record to correct"
+				}
+				if !w.corrections || reason != "" {
 					res.Skipped++
-					res.Changed = append(res.Changed, Changed{current.ID, current.Type, string(Canonical(current.Raw["value"])), value})
+					res.Changed = append(res.Changed, Changed{current.ID, current.Type, string(Canonical(current.Raw["value"])), value, typ, reason})
 					continue
 				}
 				refs, _ := obj["refs"].([]any)
@@ -359,13 +372,22 @@ func (s *Store) Purge(id, reason string) (string, error) {
 // SyncResult is the output of Sync.
 type SyncResult struct {
 	Records, Blobs, Refused, Replaced int // Replaced counts repaired record files and blobs.
+	// BadRecords counts record files of the source that fail their checks, and
+	// BadBlobs the blobs of the source that this copy needed and that do not
+	// match their hash. Sync copies none of them.
+	BadRecords, BadBlobs int
 }
 
 // Sync copies from src into this store (SPEC.md 7.4 with change set C13:
 // verify through the signature before copying, replace a stored file that
-// fails its signature when the incoming one passes).
+// fails its signature when the incoming one passes). Deletions are judged on
+// the union of both folders, never on the source's own verdict: a copy that
+// has not seen a rotation takes a retired key's tombstone for valid.
 func (s *Store) Sync(src *Store) (SyncResult, error) {
 	var res SyncResult
+	if !isLog(src) {
+		return res, errors.New("no log in " + src.Dir)
+	}
 	unlock, err := s.lock()
 	if err != nil {
 		return res, err
@@ -377,41 +399,80 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 	if err != nil {
 		return res, err
 	}
-	b, err := s.load(false)
+	// This copy is read from disk, not through the object cache, so a file
+	// damaged in place with its size and time kept is seen and repaired.
+	b, err := s.load(true)
 	if err != nil {
 		return res, err
 	}
-	// Valid tombstones of A and B by target id.
-	tombs := map[string]*Record{}
-	for _, l := range []*Loaded{a, b} {
-		for _, id := range sortedKeys(l.Report.Records) {
-			r := l.Report.Records[id]
-			if r.Type == "bean.tombstone" && l.Report.Valid[id] {
-				tombs[r.Targets("purges")[0]] = r
+	// Check every file of the source once. The source's own cache is not
+	// trusted: it is a file in the source.
+	paths := sortedKeys(a.Files)
+	results := make([]FileResult, len(paths))
+	parallel(len(paths), func(i int) { results[i] = CheckFile(paths[i], a.Files[paths[i]]) })
+	good := map[string][]byte{}
+	checked := map[string]FileResult{}
+	for i, p := range paths {
+		if results[i].Err != nil {
+			res.BadRecords++ // 7.4: fails a step from 1 to 15
+			continue
+		}
+		good[p], checked[p] = a.Files[p], results[i]
+	}
+	for p := range a.Report.Errors {
+		if _, file := a.Files[p]; !file && !strings.HasPrefix(p, "sha256:") {
+			res.BadRecords++ // not a plain file
+		}
+	}
+	// The union, judged once. Every file in it passed its checks in this call,
+	// so no signature is checked twice.
+	union := overlay(b.Files, nil, good)
+	proven := map[string]bool{}
+	for p := range union {
+		if _, bad := b.Report.Errors[p]; good[p] != nil || !bad {
+			proven[p] = true
+		}
+	}
+	u := verifyFiles(union, proven)
+	tombsOf := map[string][]string{} // target -> tombstones in the union
+	for _, id := range sortedKeys(u.Records) {
+		if r := u.Records[id]; r.Type == "bean.tombstone" {
+			tombsOf[r.Targets("purges")[0]] = append(tombsOf[r.Targets("purges")[0]], id)
+		}
+	}
+	// undone: the source hid id, and the union judges every tombstone of it
+	// invalid. Anything else keeps it hidden (fail closed).
+	undone := func(id string) bool {
+		for _, tid := range tombsOf[id] {
+			if _, bad := u.Errors[tid]; !bad {
+				return false
 			}
 		}
+		return len(tombsOf[id]) > 0
+	}
+	refs, err := s.openPurgedRefs()
+	if err != nil {
+		return res, err
 	}
 	// Seal continuations go first, so a sync that stops halfway never
 	// leaves a succession without its parts (C28). Order changes nothing
 	// else: the result is a set union.
-	order := sortedKeys(a.Files)
+	order := sortedKeys(good)
 	sort.SliceStable(order, func(i, j int) bool { return isSealPath(a, order[i]) && !isSealPath(a, order[j]) })
 	for _, p := range order {
-		data := a.Files[p]
-		fr := CheckFile(p, data)
-		if fr.Err != nil {
-			continue // 7.4: fails a step from 1 to 15
-		}
+		data := good[p]
+		fr := checked[p]
 		id := fr.Record.ID
-		if a.Hidden[id] {
-			continue
-		}
 		if have, ok := b.Files[p]; ok {
 			if string(have) == string(data) {
 				continue
 			}
-			if CheckFile(p, have).Err != nil { // C13: replace a bad copy
-				if err := writeFileAtomic(s.path(p), data, 0o600); err != nil {
+			if _, bad := b.Report.Errors[p]; bad { // C13: replace a bad copy where it is
+				dest := s.path(p)
+				if _, err := os.Lstat(dest); err != nil && b.Hidden[id] {
+					dest = hiddenPath(s.Dir, id)
+				}
+				if err := writeFileAtomic(dest, data, 0o600); err != nil {
 					return res, err
 				}
 				res.Replaced++
@@ -421,23 +482,25 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 		if b.Hidden[id] {
 			continue // 3.3
 		}
-		if t, ok := tombs[id]; ok && !fr.Unknown { // 3.2 and 7.5
-			target := fr.Record
-			if !target.IsIdentity() && target.Type != "bean.tombstone" && target.Subject == t.Subject {
-				if err := s.addPurgedRef(target); err != nil {
-					return res, err
-				}
-				res.Refused++
-				continue
-			}
+		if _, purged := u.Purged[id]; purged { // 3.2 and 7.5
+			refs.add(fr.Record)
+			res.Refused++
+			continue
+		}
+		if a.Hidden[id] && !undone(id) {
+			continue
 		}
 		if err := writeFileAtomic(s.path(p), data, 0o600); err != nil {
 			return res, err
 		}
 		res.Records++
 	}
+	if err := refs.flush(); err != nil {
+		return res, err
+	}
 	// Blobs (7.4 step 4 as changed by C25): named by a record file of the
-	// union that is not purged or hidden, valid now or not.
+	// union that is not purged or hidden, valid now or not. A blob that no
+	// record names, such as one from blob put, is not copied.
 	b2, err := s.load(false)
 	if err != nil {
 		return res, err
@@ -489,6 +552,7 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 			return res, err
 		}
 		if HashID(data) != id {
+			res.BadBlobs++
 			continue // Never replace a damaged copy with a damaged source.
 		}
 		if err := writeFileAtomic(dest, data, 0o600); err != nil {
@@ -501,6 +565,16 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 		}
 	}
 	return res, nil
+}
+
+// isLog reports whether a folder holds a log: an identity, or an objects/
+// folder (an agent-only copy before agent init).
+func isLog(s *Store) bool {
+	if _, err := s.Identity(); err == nil {
+		return true
+	}
+	info, err := os.Stat(s.path(dirObjects))
+	return err == nil && info.IsDir()
 }
 
 // fileHashID checks a stored blob without reading its entire content into memory.
@@ -526,22 +600,46 @@ func sortedKeys[V any](m map[string]V) []string {
 	return keys
 }
 
+// ExportResult is the output of ExportAll. Every list is sorted.
+type ExportResult struct {
+	Records, Blobs int // files written to records/ and blobs/
+	// Invalid: record files that fail their checks. Their bytes are copied as
+	// they are to invalid/<path>, so nothing is left behind in silence.
+	Invalid []string
+	// Unreferenced: blobs that no record file names, such as one from blob put.
+	// They are in blobs/ too.
+	Unreferenced []string
+	// NotExported: blob id -> why it was not decrypted. A record that is not
+	// the person's or a paired agent's, or that is not valid, can name any
+	// blob, also one the person deleted.
+	NotExported map[string]string
+	Missing     []string // blobs named by a record that are not here or do not read
+	Written     bool     // the manifest was written: the export ran to its end
+}
+
 // Export writes a plaintext copy (7.9). dir must be empty or absent.
 func (s *Store) Export(dir string) (records, blobs int, err error) {
+	res, err := s.ExportAll(dir)
+	return res.Records, res.Blobs, err
+}
+
+// ExportAll is Export with the full result.
+func (s *Store) ExportAll(dir string) (ExportResult, error) {
+	res := ExportResult{NotExported: map[string]string{}}
 	if entries, err := os.ReadDir(dir); err == nil && len(entries) > 0 {
-		return 0, 0, errors.New("export dir not empty")
+		return res, errors.New("export dir not empty: " + dir)
 	}
 	unlock, err := s.lock()
 	if err != nil {
-		return 0, 0, err
+		return res, err
 	}
 	defer unlock()
 	l, err := s.load(false)
 	if err != nil {
-		return 0, 0, err
+		return res, err
 	}
 	if l.ID == "" { // a copy without a signing key can still leave
-		return 0, 0, ErrNotInitialized
+		return res, ErrNotInitialized
 	}
 	// Every record file goes out, also of a too-new identity and of a newer
 	// format: an export needs no judgment of them, and it is the way out.
@@ -555,26 +653,41 @@ func (s *Store) Export(dir string) (records, blobs int, err error) {
 	for _, r := range l.Report.Unknown {
 		all[r.ID] = r
 	}
-	labels := l.AgentLabels()
 	// A halt by the head key alone can be set aside to judge deletions. Without
 	// that view, a record could be left out on a tombstone that is not valid.
 	view := l
 	if l.IsTooNew() && len(l.Report.HeadHalt[l.ID]) > 0 {
 		view = l.past(l.ID)
 	}
-	type manBlob struct{ id, sha, mt string }
-	blobSet := map[string]manBlob{}
-	missing := map[string]bool{}
-	var missingErr error
+	labels := view.AgentLabels()
+	// unlocks: a record that may decrypt the blobs it names. The person or a
+	// paired agent signed it, and it is valid, kept or in doubt, or this build
+	// cannot judge it (a newer format, a too-new identity).
+	unlocks := func(r *Record) bool {
+		if r.Author != l.ID && labels[r.Author] == "" {
+			return false
+		}
+		vr := view.Report
+		if vr.Records[r.ID] == nil {
+			return true
+		}
+		return (vr.Valid[r.ID] || vr.Kept[r.ID] || vr.InDoubt(r.ID)) && !vr.OffTree(r)
+	}
+	type wanted struct {
+		mediaType string
+		own       bool // a record that unlocks names it
+	}
+	want := map[string]*wanted{}
+	other := map[string]string{} // blob -> reason, for blobs that no record unlocks
 	for _, id := range sortedKeys(all) {
 		r := all[id]
 		if _, purged := view.Report.Purged[id]; purged || view.Hidden[id] {
 			continue
 		}
 		if err := writeFileAtomic(filepath.Join(dir, "records", id[7:]+".json"), r.Bytes, 0o600); err != nil {
-			return 0, 0, err
+			return res, err
 		}
-		records++
+		res.Records++
 		named := r.Blobs
 		if r.V != 0 { // a newer format: its fields were not read
 			for _, h := range namedBlobs(r.Bytes) {
@@ -583,30 +696,128 @@ func (s *Store) Export(dir string) (records, blobs int, err error) {
 				}
 			}
 		}
+		own := unlocks(r)
 		for _, bl := range named {
-			if _, done := blobSet[bl.Hash]; done {
-				continue
+			w := want[bl.Hash]
+			if w == nil {
+				w = &wanted{mediaType: bl.MediaType}
+				want[bl.Hash] = w
 			}
-			pt, err := s.GetBlob(bl.Hash)
-			if err != nil {
-				// One file must not stop the way out. The manifest names it, and
-				// the command fails at the end only for the person's own record:
-				// any stranger can name an absent blob.
-				missing[bl.Hash] = true
-				if missingErr == nil && (r.Author == l.ID || labels[r.Author] != "") {
-					missingErr = err
+			w.own = w.own || own
+			if !own && other[bl.Hash] == "" {
+				other[bl.Hash] = "named only by a record that is not valid"
+				if r.Author != l.ID && labels[r.Author] == "" {
+					other[bl.Hash] = "named only by a record that is not yours or a paired agent's"
 				}
-				continue
 			}
-			if err := writeFileAtomic(filepath.Join(dir, "blobs", bl.Hash[7:]), pt, 0o600); err != nil {
-				return 0, 0, err
-			}
-			sum := sha256.Sum256(pt)
-			blobSet[bl.Hash] = manBlob{bl.Hash, hex.EncodeToString(sum[:]), bl.MediaType}
-			delete(missing, bl.Hash)
-			blobs++
 		}
 	}
+	// Record files that fail their checks go out as they are, beside the rest.
+	// A deleted one stays behind.
+	invalid := map[string]string{} // path -> error
+	for p, e := range l.Report.Errors {
+		if strings.HasPrefix(p, "sha256:") {
+			continue
+		}
+		if m := pathPattern.FindStringSubmatch(p); m != nil && l.Hidden["sha256:"+m[1]+m[2]] {
+			continue
+		}
+		invalid[p] = e
+	}
+	for _, p := range sortedKeys(invalid) {
+		res.Invalid = append(res.Invalid, p)
+		data, ok := l.Files[p]
+		if !ok {
+			continue // not a plain file: nothing to copy
+		}
+		if err := writeFileAtomic(filepath.Join(dir, "invalid", filepath.FromSlash(p)), data, 0o600); err != nil {
+			return res, err
+		}
+		for _, h := range namedBlobs(data) {
+			if IsID(h) && want[h] == nil && other[h] == "" {
+				other[h] = "named only by a record file that fails its checks"
+			}
+		}
+	}
+	// Blobs that no record file names at all, such as one from blob put. A blob
+	// of a deleted record is named by its hidden file, so it stays behind.
+	blobFiles, _, err := listShards(s.Dir, dirBlobs)
+	if err != nil {
+		return res, err
+	}
+	namedAny := map[string]bool{}
+	for _, data := range l.Files {
+		for _, h := range namedBlobs(data) {
+			namedAny[h] = true
+		}
+	}
+	unreferenced := map[string]bool{}
+	for _, f := range blobFiles {
+		if id := blobIDOfPath(f.rel); id != "" && !namedAny[id] {
+			unreferenced[id] = true
+		}
+	}
+	type manBlob struct{ id, sha, mt string }
+	blobSet := map[string]manBlob{}
+	missing := map[string]bool{}
+	var missingErr error
+	// write decrypts one blob into the export. readErr is about the blob here,
+	// err about the export folder.
+	write := func(id, mediaType string) (readErr, err error) {
+		pt, readErr := s.GetBlob(id)
+		if readErr != nil {
+			return readErr, nil
+		}
+		if err := writeFileAtomic(filepath.Join(dir, "blobs", id[7:]), pt, 0o600); err != nil {
+			return nil, err
+		}
+		sum := sha256.Sum256(pt)
+		blobSet[id] = manBlob{id, hex.EncodeToString(sum[:]), mediaType}
+		res.Blobs++
+		return nil, nil
+	}
+	for _, id := range sortedKeys(want) {
+		w := want[id]
+		if _, err := os.Lstat(s.path(BlobPathOf(id))); errors.Is(err, os.ErrNotExist) || !IsID(id) {
+			missing[id] = true // any stranger can name an absent blob
+			if w.own && missingErr == nil {
+				missingErr = errors.New("blob missing: " + id)
+			}
+			continue
+		}
+		if !w.own {
+			continue // in other, with its reason
+		}
+		readErr, err := write(id, w.mediaType)
+		if err != nil {
+			return res, err
+		}
+		if readErr != nil {
+			// One file must not stop the way out. The manifest names it, and the
+			// command fails at the end.
+			missing[id] = true
+			if missingErr == nil {
+				missingErr = readErr
+			}
+		}
+	}
+	for _, id := range sortedKeys(unreferenced) {
+		readErr, err := write(id, "application/octet-stream")
+		if err != nil {
+			return res, err
+		}
+		if readErr != nil {
+			other[id] = "no record names it, and it does not read: " + readErr.Error()
+			continue
+		}
+		res.Unreferenced = append(res.Unreferenced, id)
+	}
+	for id, why := range other {
+		if _, done := blobSet[id]; !done && !missing[id] {
+			res.NotExported[id] = why
+		}
+	}
+	res.Missing = sortedKeys(missing)
 	var list []any
 	for _, id := range sortedKeys(blobSet) {
 		mb := blobSet[id]
@@ -615,92 +826,191 @@ func (s *Store) Export(dir string) (records, blobs int, err error) {
 	if list == nil {
 		list = []any{}
 	}
-	man := map[string]any{"spec": "bean-v0", "identity": l.ID, "records": float64(records), "blobs": list}
-	if len(missing) > 0 {
-		var m []any
-		for _, id := range sortedKeys(missing) {
-			m = append(m, id)
+	man := map[string]any{"spec": "bean-v0", "identity": l.ID, "records": float64(res.Records), "blobs": list}
+	strs := func(ids []string) []any {
+		var out []any
+		for _, id := range ids {
+			out = append(out, id)
 		}
-		man["missing_blobs"] = m
+		return out
+	}
+	if len(res.Missing) > 0 {
+		man["missing_blobs"] = strs(res.Missing)
+	}
+	if len(res.Unreferenced) > 0 {
+		man["unreferenced_blobs"] = strs(res.Unreferenced)
+	}
+	if len(res.NotExported) > 0 {
+		var m []any
+		for _, id := range sortedKeys(res.NotExported) {
+			m = append(m, map[string]any{"id": id, "reason": res.NotExported[id]})
+		}
+		man["not_exported_blobs"] = m
+	}
+	if len(res.Invalid) > 0 {
+		var m []any
+		for _, p := range res.Invalid {
+			m = append(m, map[string]any{"path": p, "error": invalid[p]})
+		}
+		man["invalid_records"] = m
 	}
 	if err := writeFileAtomic(filepath.Join(dir, "manifest.json"), Canonical(man), 0o600); err != nil {
-		return 0, 0, err
+		return res, err
 	}
+	res.Written = true
 	if l.IsTooNew() {
-		return records, blobs, l.TooNewError()
+		return res, l.TooNewError()
 	}
-	return records, blobs, missingErr
+	return res, missingErr
+}
+
+// ImportResult is the output of ImportExportAll.
+type ImportResult struct {
+	Records, Blobs int
+	Refused        int // records that a valid deletion names (as in Sync)
 }
 
 // ImportExport reverses Export into a log with the same identity secret.
-// Export directories are untrusted input. Read them through os.Root so a
-// changed symlink cannot escape the selected folder.
 func (s *Store) ImportExport(dir string) (records, blobs int, err error) {
+	res, err := s.ImportExportAll(dir)
+	return res.Records, res.Blobs, err
+}
+
+// ImportExportAll is ImportExport with the full result. It follows the rule of
+// Sync: a record that a valid deletion of the log and the export together
+// names is refused, and so is a blob that only deleted records name. Export
+// directories are untrusted input. Read them through os.Root so a changed
+// symlink cannot escape the selected folder.
+func (s *Store) ImportExportAll(dir string) (ImportResult, error) {
+	var res ImportResult
 	unlock, err := s.lock()
 	if err != nil {
-		return 0, 0, err
+		return res, err
 	}
 	defer unlock()
-	if _, err := s.ReadLocal(); err != nil {
-		return 0, 0, err
+	local, err := s.ReadLocal()
+	if err != nil {
+		return res, err
 	}
 	root, err := os.OpenRoot(dir)
 	if err != nil {
-		return 0, 0, err
+		return res, err
 	}
 	defer root.Close()
+	// An export says whose it is. Another identity's blobs do not decrypt
+	// here, and its records are not this log's.
+	mb, err := readExportFile(root, "manifest.json", MaxSuccessionSize)
+	if errors.Is(err, os.ErrNotExist) {
+		return res, errors.New("not an export: no manifest.json in " + dir)
+	}
+	if err != nil {
+		return res, err
+	}
+	mv, err := Parse(mb)
+	man, _ := mv.(map[string]any)
+	who, _ := man["identity"].(string)
+	if err != nil || man == nil || !IsID(who) {
+		return res, errors.New("bad field: manifest.json identity")
+	}
+	if who != local.Identity {
+		return res, fmt.Errorf("export of identity %s, this log is %s", who, local.Identity)
+	}
 	blobEntries, err := exportEntries(dir, "blobs", true)
 	if err != nil {
-		return 0, 0, err
+		return res, err
 	}
 	recordEntries, err := exportEntries(dir, "records", false)
 	if err != nil {
-		return 0, 0, err
+		return res, err
 	}
 	secret, err := s.identitySecret()
 	if err != nil {
-		return 0, 0, err
+		return res, err
 	}
-	for _, e := range blobEntries {
-		pt, err := readExportFile(root, "blobs/"+e.Name(), maxImportBlobBytes)
-		if err != nil {
-			return records, blobs, err
-		}
-		out, err := EncryptBlob(BlobKey(secret), pt)
-		if err != nil {
-			return records, blobs, err
-		}
-		id := HashID(out)
-		if id != "sha256:"+e.Name() {
-			return records, blobs, errors.New("blob corrupt: sha256:" + e.Name())
-		}
-		wrote, err := writeIfAbsent(s.path(BlobPathOf(id)), out, 0o600)
-		if err != nil {
-			return records, blobs, err
-		}
-		if wrote {
-			blobs++
-		}
-	}
+	incoming := map[string][]byte{}
+	checked := map[string]*Record{}
 	for _, e := range recordEntries {
 		data, err := readExportFile(root, "records/"+e.Name(), MaxSuccessionSize)
 		if err != nil {
-			return records, blobs, err
+			return res, err
 		}
-		rid := "sha256:" + strings.TrimSuffix(e.Name(), ".json")
-		p := PathOf(rid)
-		if fr := CheckFile(p, data); fr.Err != nil {
-			return records, blobs, fmt.Errorf("%s: %s", e.Name(), fr.Err)
+		p := PathOf("sha256:" + strings.TrimSuffix(e.Name(), ".json"))
+		fr := CheckFile(p, data)
+		if fr.Err != nil {
+			return res, fmt.Errorf("%s: %s", e.Name(), fr.Err)
 		}
-		wrote, err := writeIfAbsent(s.path(p), data, 0o600)
-		if err != nil {
-			return records, blobs, err
+		incoming[p], checked[p] = data, fr.Record
+	}
+	l, err := s.load(false)
+	if err != nil {
+		return res, err
+	}
+	// Deletions are judged on the union, as in Sync.
+	union := overlay(l.Files, nil, incoming)
+	u := verifyFiles(union, nil)
+	deleted := func(id string) bool {
+		_, purged := u.Purged[id]
+		return purged || l.Hidden[id]
+	}
+	named, namedAny := map[string]bool{}, map[string]bool{}
+	for p, data := range union {
+		m := pathPattern.FindStringSubmatch(p)
+		if m == nil {
+			continue
 		}
-		if wrote {
-			records++
+		del := deleted("sha256:" + m[1] + m[2])
+		for _, h := range namedBlobs(data) {
+			namedAny[h] = true
+			named[h] = named[h] || !del
 		}
 	}
-	return records, blobs, nil
+	for _, e := range blobEntries {
+		id := "sha256:" + e.Name()
+		if namedAny[id] && !named[id] {
+			continue // only deleted records name it
+		}
+		pt, err := readExportFile(root, "blobs/"+e.Name(), maxImportBlobBytes)
+		if err != nil {
+			return res, err
+		}
+		out, err := EncryptBlob(BlobKey(secret), pt)
+		if err != nil {
+			return res, err
+		}
+		if HashID(out) != id {
+			return res, errors.New("blob corrupt: " + id)
+		}
+		wrote, err := writeIfAbsent(s.path(BlobPathOf(id)), out, 0o600)
+		if err != nil {
+			return res, err
+		}
+		if wrote {
+			res.Blobs++
+		}
+	}
+	refs, err := s.openPurgedRefs()
+	if err != nil {
+		return res, err
+	}
+	for _, p := range sortedKeys(incoming) {
+		if _, have := l.Files[p]; have {
+			continue // hidden records too (3.3)
+		}
+		r := checked[p]
+		if _, purged := u.Purged[r.ID]; purged { // 3.2 and 7.5
+			refs.add(r)
+			res.Refused++
+			continue
+		}
+		wrote, err := writeIfAbsent(s.path(p), incoming[p], 0o600)
+		if err != nil {
+			return res, err
+		}
+		if wrote {
+			res.Records++
+		}
+	}
+	return res, refs.flush()
 }
 
 // The reference import command supports 256 MiB raw blobs. The core
