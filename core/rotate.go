@@ -659,6 +659,15 @@ func renameSync(from, to string) error {
 func (l *Loaded) past(id string) *Loaded {
 	c := *l
 	c.Report = verifyFiles(overlay(l.Files, l.Report.HeadHalt[id], nil), nil)
+	// A load does not restore anything on a too-new identity, so a target can
+	// be hidden by a tombstone that is not valid in this view. It is not hidden
+	// here, by the same rule as a load. The file stays where it is.
+	c.Hidden = map[string]bool{}
+	for t := range l.Hidden {
+		if _, still := c.Report.Purged[t]; still || heldHidden(l.Holds, c.Report, t) {
+			c.Hidden[t] = true
+		}
+	}
 	return &c
 }
 

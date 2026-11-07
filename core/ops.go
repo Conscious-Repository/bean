@@ -556,13 +556,19 @@ func (s *Store) Export(dir string) (records, blobs int, err error) {
 		all[r.ID] = r
 	}
 	labels := l.AgentLabels()
+	// A halt by the head key alone can be set aside to judge deletions. Without
+	// that view, a record could be left out on a tombstone that is not valid.
+	view := l
+	if l.IsTooNew() && len(l.Report.HeadHalt[l.ID]) > 0 {
+		view = l.past(l.ID)
+	}
 	type manBlob struct{ id, sha, mt string }
 	blobSet := map[string]manBlob{}
 	missing := map[string]bool{}
 	var missingErr error
 	for _, id := range sortedKeys(all) {
 		r := all[id]
-		if _, purged := l.Report.Purged[id]; purged || l.Hidden[id] {
+		if _, purged := view.Report.Purged[id]; purged || view.Hidden[id] {
 			continue
 		}
 		if err := writeFileAtomic(filepath.Join(dir, "records", id[7:]+".json"), r.Bytes, 0o600); err != nil {

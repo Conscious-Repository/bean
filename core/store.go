@@ -266,8 +266,13 @@ func (s *Store) addPurgedRef(r *Record) error {
 	return appendLineSync(s.path(filePurgedRef), line)
 }
 
-// removePurgedRef forgets the ref of a target whose tombstone became invalid.
-func (s *Store) removePurgedRef(r *Record) error {
+// removePurgedRef forgets the ref of a target whose tombstone became invalid,
+// unless another deletion may need the line. A line names only a ref, and one
+// ref can belong to several records. A record that is hidden can be checked.
+// One that is erased cannot, so a tombstone with an absent target keeps the line:
+// a re-import that is skipped says nothing wrong, and a deleted reading that
+// comes back cannot be unseen.
+func (s *Store) removePurgedRef(r *Record, rp *Report, hidden map[string]bool) error {
 	if r == nil || r.Source.Ref == "" {
 		return nil
 	}
@@ -278,6 +283,17 @@ func (s *Store) removePurgedRef(r *Record) error {
 	line := refLine(r.Subject, r.Source.System, r.Source.Ref)
 	if !have[line] {
 		return nil
+	}
+	for id, o := range rp.Records {
+		if o.Subject != r.Subject {
+			continue
+		}
+		if o.Type == "bean.tombstone" && rp.Records[o.Targets("purges")[0]] == nil {
+			return nil
+		}
+		if id != r.ID && hidden[id] && refLine(o.Subject, o.Source.System, o.Source.Ref) == line {
+			return nil
+		}
 	}
 	delete(have, line)
 	var b strings.Builder
@@ -408,7 +424,7 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 		}
 		delete(hidden, target)
 		// The deletion was undone, so a new import must not skip this reading.
-		if err := s.removePurgedRef(rp.Records[target]); err != nil {
+		if err := s.removePurgedRef(rp.Records[target], rp, hidden); err != nil {
 			return nil, err
 		}
 		for tid, h := range holds {

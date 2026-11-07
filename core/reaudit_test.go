@@ -997,3 +997,145 @@ func TestReauditMigrateSmall(t *testing.T) {
 		t.Errorf("the date moved: %+v", got)
 	}
 }
+
+// A hidden record whose tombstone is not valid once a halt is set aside is not
+// hidden: migrate and export must not lose it. Sixth attack, DECISIONS 198.
+func TestReauditHiddenUnderHaltOnFrozenLog(t *testing.T) {
+	s, id, words := initWithWords(t)
+	real, _ := s.Add("lab.hba1c", "9.1", AddOptions{})
+	other, _ := s.Add("weight", "81", AddOptions{})
+	k := s.mustLocal(t).Signer
+	d1, d2 := t.TempDir(), t.TempDir()
+	reCopy(t, s.path("objects"), filepath.Join(d1, "objects"))
+	reCopy(t, s.path("objects"), filepath.Join(d2, "objects"))
+	n1, n2 := Open(d1), Open(d2)
+	rePlant(t, s, NewTombstone(id, k.Public(), real, "", "x@1", "2026-11-06T00:00:00Z"), k)
+	if got := reList(t, s, "lab.hba1c"); len(got) != 0 {
+		t.Fatalf("not hidden: %d", len(got))
+	}
+	if _, _, err := n1.Restore(words, Seals{All: true}, NewKey{}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := n2.Restore(words, Seals{All: true}, NewKey{}, ""); err != nil {
+		t.Fatal(err)
+	}
+	o := reClaim(k, id, id, "bean.future", map[string]any{"n": 1.0})
+	o["v"] = 9.0
+	rePlant(t, s, o, k)
+	for _, d := range []string{d1, d2} { // rsync: no load runs in between
+		reCopy(t, filepath.Join(d, "objects"), s.path("objects"))
+	}
+	l, _ := s.Load()
+	if !l.IsTooNew() || !l.Hidden[real] {
+		t.Fatalf("setup: too new %v, hidden %v", l.IsTooNew(), l.Hidden[real])
+	}
+	if p := l.past(id); p.Hidden[real] {
+		t.Errorf("the re-judged view still hides it: %q", p.Status(real))
+	}
+	dst := Open(t.TempDir())
+	res, err := s.Migrate(dst, NewKey{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reList(t, dst, "lab.hba1c"); len(got) != 1 || got[0].Context["migrated_from"] != real {
+		t.Errorf("migrate lost the reading: %+v %+v", got, res)
+	}
+	if got := reList(t, dst, "weight"); len(got) != 1 || got[0].Context["migrated_from"] != other {
+		t.Errorf("weight: %+v", got)
+	}
+	dir := filepath.Join(t.TempDir(), "x")
+	if _, _, err := s.Export(dir); err == nil || !strings.HasPrefix(err.Error(), "too new") {
+		t.Errorf("export: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "records", real[7:]+".json")); err != nil {
+		t.Errorf("export lost the reading: %v", err)
+	}
+	// Disk state does not change: this is a read of the log, not a repair.
+	if _, err := os.Stat(hiddenPath(s.Dir, real)); err != nil {
+		t.Errorf("the hidden file moved: %v", err)
+	}
+}
+
+// A tombstone that stays valid once a halt is set aside still hides its target.
+func TestReauditHiddenUnderHaltStaysHidden(t *testing.T) {
+	s, id, _ := initWithWords(t)
+	x, _ := s.Add("lab.secret", "1", AddOptions{})
+	d := t.TempDir()
+	reCopy(t, s.Dir, d)
+	k := s.mustLocal(t).Signer
+	rePlant(t, s, NewTombstone(id, k.Public(), x, "", "x@1", "2026-11-06T00:00:00Z"), k)
+	if got := reList(t, s, "lab.secret"); len(got) != 0 {
+		t.Fatalf("not hidden: %d", len(got))
+	}
+	o := reClaim(k, id, id, "bean.future", map[string]any{"n": 1.0})
+	o["v"] = 9.0
+	rePlant(t, s, o, k)
+	l, _ := s.Load()
+	if p := l.past(id); !p.Hidden[x] {
+		t.Error("the re-judged view shows a record whose tombstone is valid")
+	}
+	dir := filepath.Join(t.TempDir(), "x")
+	s.Export(dir)
+	if _, err := os.Stat(filepath.Join(dir, "records", x[7:]+".json")); err == nil {
+		t.Error("export carried a record the person deleted")
+	}
+}
+
+// Undoing one deletion must not forget a purged ref that another deletion may
+// need. Bean cannot read an erased record, so it keeps the line if unsure.
+func TestReauditPurgedRefKeptIfUnsure(t *testing.T) {
+	s, id, words := initWithWords(t)
+	r, err := s.Append(strings.NewReader(labLine(`{"n":5}`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, _ := s.Load()
+	ref := l.Report.Records[r.IDs[0]].Source.Ref
+	if _, err := s.Purge(r.IDs[0], ""); err != nil {
+		t.Fatal(err)
+	}
+	k := s.mustLocal(t).Signer
+	f := reClaim(k, id, id, "lab.potassium", map[string]any{"n": 7.0})
+	f["source"].(map[string]any)["ref"] = ref
+	fid := rePlant(t, s, f, k)
+	tomb := rePlant(t, s, NewTombstone(id, k.Public(), fid, "", "x@1", "2026-11-06T00:00:00Z"), k)
+	if _, err := s.Load(); err != nil { // hides the thief's record
+		t.Fatal(err)
+	}
+	if _, err := s.Rotate(words, Seals{All: true, NoSeal: []string{fid, tomb}}, NewKey{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Load(); err != nil { // the refusal restores it
+		t.Fatal(err)
+	}
+	if refs, _ := s.readPurgedRefs(); len(refs) != 1 {
+		t.Errorf("the purged ref is gone: %v", refs)
+	}
+	res, err := s.Append(strings.NewReader(labLine(`{"n":5}`)))
+	if err != nil || res.Added != 0 {
+		t.Errorf("a reading the person deleted came back: %+v %v", res, err)
+	}
+	// Another hidden record with that ref also keeps the line.
+	a, ida, wa := initWithWords(t)
+	r2, _ := a.Append(strings.NewReader(labLine(`{"n":1}`)))
+	l2, _ := a.Load()
+	ref2 := l2.Report.Records[r2.IDs[0]].Source.Ref
+	k2 := a.mustLocal(t).Signer
+	g := reClaim(k2, ida, ida, "lab.potassium", map[string]any{"n": 2.0})
+	g["source"].(map[string]any)["ref"] = ref2
+	gid := rePlant(t, a, g, k2)
+	t1 := rePlant(t, a, NewTombstone(ida, k2.Public(), r2.IDs[0], "", "x@1", "2026-11-06T00:00:00Z"), k2)
+	t2 := rePlant(t, a, NewTombstone(ida, k2.Public(), gid, "", "x@1", "2026-11-06T00:00:00Z"), k2)
+	if _, err := a.Load(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Rotate(wa, Seals{All: true, NoSeal: []string{gid, t2}}, NewKey{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Load(); err != nil {
+		t.Fatal(err)
+	}
+	if refs, _ := a.readPurgedRefs(); len(refs) != 1 {
+		t.Errorf("a line that another hidden record needs is gone: %v (tombstone %s)", refs, t1)
+	}
+}

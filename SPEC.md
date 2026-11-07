@@ -769,7 +769,7 @@ These rules change no valid set, error or verify line. They say what a reader sh
    - A claim of the key at the fork is shown only when every succession at the fork seals it. A thief can still sign with that key. A claim of a key below the fork is `frozen` and is not shown.
    - A target of a `frozen` tombstone is not shown when an older key signed the tombstone, or at least one succession at the fork seals it. Any other tombstone has no effect here: otherwise one signature from a thief, with the key at the fork or a key below it, could hide the log. The bytes stay on disk.
    - A correction replaces its target only while the correction itself can be shown. A duplicate is shown when its primary cannot be. A reading must not vanish behind a record that is in doubt.
-   - `bean ls -all` shows these records, marked `[in doubt]`. `bean export` writes them.
+   - `bean ls -all` shows these records, marked `[in doubt]`. `bean export` writes them, and judges deletions without a record of a newer format by the key at the fork.
 
 ## 7. Folder layout and sync
 
@@ -884,7 +884,7 @@ A program MUST NOT tombstone a genesis, a succession or a tombstone.
 `local/purged-refs.jsonl` has one line per purged target.
 Each line is the canonical bytes of `["<subject>", "<source.system>", "<source.ref>"]`.
 A replica writes a line when it hides, erases or does not copy a purged target that has a non-null `source.ref`.
-`bean append` MUST skip a record whose (`subject`, `source.system`, `source.ref`) is in this file. A replica removes the line when the target comes back because its tombstone became invalid.
+`bean append` MUST skip a record whose (`subject`, `source.system`, `source.ref`) is in this file. A replica removes the line when the target comes back because its tombstone became invalid, unless another hidden record has that ref or a tombstone of that subject names a target that this replica does not hold. A line names only a ref, and an erased record cannot be checked, so the replica keeps the line when it is unsure.
 Thus a new import after a purge adds nothing on this replica.
 A replica that never had the target, or that lost this file, does not know the ref, and a new import of the same source data adds it again (17).
 
