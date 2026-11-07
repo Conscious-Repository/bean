@@ -71,6 +71,17 @@ Reads records from stdin, one JSON object per line, as an importer writes them. 
 
 Encrypts and stores a file, for example the PDF an import came from. Prints the blob id. Give that id to an importer with `-blob`.
 
+### `import <source> [importer flags] [-corrections] <file>`
+
+Keeps a provider file, then adds its readings. Runs `bean-import-<source>`, found next to `bean` or on `PATH`, for example `bean import labcorp -tz America/Chicago report.pdf`. In order, and it stops at the first failure:
+
+1. It copies the file privately, at most 256 MiB, and runs the importer on the copy. If the importer refuses it, nothing is written.
+2. It stores the copy, encrypted, and reads it back. The bytes must match.
+3. It adds the importer's first record, the one that keeps the file (`lab.report`), and checks that the log keeps it: a current record of yours, about you, that names the blob and the file's SHA-256, and a blob that still reads back as the file. This check proves every record file, as `verify` does, because the object cache vouches for a file by its size and time. A file you purged before is not kept again, and its readings are not added.
+4. It adds the readings, then checks the file record again.
+
+The error says what was written. A failure in step 4 can leave some readings; run the same command again, it adds only what is missing. A changed reading works as in `append`: nothing is written for it, the command exits 1, and `-corrections` writes it.
+
 ## Read
 
 ### `ls [flags]`
@@ -199,13 +210,15 @@ Print the help or the version.
 
 ## Importers
 
-Importers read one source format and write records to stdout for `bean append`. They never sign and never see your keys.
+Importers read one source format and write records to stdout. They never sign and never see your keys. Run them with `bean import <source>`, which keeps the file first; run alone, they print the records for `bean append`.
 
 ### `bean-import-labcorp [-blob <id>] [-tz <zone>] <report.pdf | report.txt>`
 
 Reads a Labcorp patient report, which is also what Superpower gives you. Needs `pdftotext` (`brew install poppler`), or the text it makes. One record per result: type `lab.<test name>`, value and unit, and the flag, reference interval, panel, lab and comments. Your name, birth date and patient ids are not copied.
 
-- `-blob`: the blob id of the PDF, from `bean blob put`.
+It refuses a report it cannot read for sure: two specimens, two results that map to one type, or a result with no value whose name ends in a number. A two-digit number at the end of a name is a lab code only if the report's list of performing labs names it, so `Interleukin 10` stays `lab.interleukin-10`. The same reading listed in two panels is one result.
+
+- `-blob`: the blob id of the PDF, from `bean blob put`. With it, the first record is a `lab.report` that keeps the PDF. `bean import` passes it.
 - `-tz`: the time zone where the sample was taken, for example `America/Chicago`. Without it, only the day is recorded, because the report does not say the zone.
 
 ### `bean-import-csv -type <type> [-unit <unit>] [-system <name>] [-blob <id>] [-precision <p>] <file.csv>`
