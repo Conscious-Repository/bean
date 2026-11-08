@@ -48,24 +48,25 @@ func TestNameIntoResultColumnRefused(t *testing.T) {
 }
 
 // Without a Performing Labs list that reads whole, two digits at the end of
-// a name stay in the name. A code in the code column is still a code. The
-// torn list's address is not indented: after the end of the results an
-// indented line with a number in it reads like a row, and is refused (see
-// TestWrappedLabAddressRefused).
+// a name stay in the name, and a token in the code column is refused: it may
+// be the value of a compressed row. The torn list's address is not indented:
+// after the end of the results an indented line with a number in it reads
+// like a row, and is refused (see TestWrappedLabAddressRefused).
 func TestNoLabListKeepsTestNumber(t *testing.T) {
 	start := []string{
 		"Specimen ID: 123-456-7890-0  Date Collected: 10/19/2026 0800 Local",
 		header(),
 		"Cytokines",
 		row("Interleukin 10", "", "42", "High", "pg/mL", "0-9"),
-		row("Glucose", "01", "90", "", "mg/dL", "70-99"),
+		row("Glucose", "", "90", "", "mg/dL", "70-99"),
 	}
 	for label, tail := range map[string][]string{
 		"no list":   nil,
 		"torn list": {"", "Performing Labs", "01: BN - Labcorp Burlington", "1447 York Court, Burlington, NC 27215"},
 	} {
 		t.Run(label, func(t *testing.T) {
-			rep, err := parseReport(strings.Join(append(append([]string{}, start...), tail...), "\n") + "\n")
+			text := strings.Join(append(append([]string{}, start...), tail...), "\n") + "\n"
+			rep, err := parseReport(text)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -73,9 +74,11 @@ func TestNoLabListKeepsTestNumber(t *testing.T) {
 			for _, r := range rep.Results {
 				got[slug(r.Name)] = r.Value + "/" + r.LabCode
 			}
-			if got["interleukin-10"] != "42/" || got["glucose"] != "90/01" {
+			if got["interleukin-10"] != "42/" || got["glucose"] != "90/" {
 				t.Errorf("results: %v", got)
 			}
+			coded := strings.Replace(text, row("Glucose", "", "90", "", "mg/dL", "70-99"), row("Glucose", "01", "90", "", "mg/dL", "70-99"), 1)
+			mustRefuse(t, coded, "without a list of performing labs that reads whole")
 		})
 	}
 }

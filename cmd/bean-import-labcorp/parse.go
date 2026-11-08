@@ -3,8 +3,9 @@ package main
 // The report is read by a grammar (DECISIONS 222). Every line of the
 // extracted text is one known kind, or the report is refused with the line
 // number. Results are read by column: each token belongs to the column whose
-// band holds its start, and every character of a result line is accounted
-// for. A wrong lab value in a health record is worse than no import, and the
+// band holds its start, a token within two columns of a band's start is
+// refused, and every token of a result line must be in a field of the result
+// read from it (whole). A wrong lab value in a health record is worse than no import, and the
 // person keeps the file, so anything the grammar does not know is refused.
 //
 // Line kinds, in the order they are tried:
@@ -35,6 +36,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -46,8 +48,15 @@ type Result struct {
 	Value, Flag, Units   string
 	Ref, Previous        string
 	Comment              []string
-	// at is where Value, Flag, Units and Ref were read, by atValue...atRef.
-	at [4]cell
+	// Where the row was read: its name on line row, the code-column token
+	// as read (text "" when none), Value, Flag, Units and Ref by
+	// atValue...atRef, and the tokens of Previous on line prevLine.
+	row      int
+	name     token
+	code     token
+	at       [4]cell
+	prev     []token
+	prevLine int
 }
 
 // cell is a token's place in the text: line from 1, column from 0. Line 0
@@ -117,8 +126,7 @@ func tokens(line string) []token {
 	return out
 }
 
-// rebuild lays tokens out at their columns with spaces between. A line is
-// read whole when rebuilding the tokens read from it gives the line back.
+// rebuild lays tokens out at their columns with spaces between.
 func rebuild(toks []token) string {
 	var b strings.Builder
 	col := 0
@@ -194,6 +202,25 @@ func (c columns) band(col int) int {
 	return 0
 }
 
+// edge is how far from the start of a band a token must start, on either
+// side, for its band to be sure: a reference interval one column left of
+// its band would be read as the unit, a previous result two columns left of
+// its band as the current flag.
+const edge = 2
+
+// onEdge returns a token that starts within edge columns of where a band
+// starts.
+func (c columns) onEdge(toks []token) (token, bool) {
+	for _, t := range toks {
+		for b := 1; b < len(c); b++ {
+			if s := c[b] - slack; t.start >= s-edge && t.start < s+edge {
+				return t, true
+			}
+		}
+	}
+	return token{}, false
+}
+
 // nameAt reports whether col is where a test name starts.
 func (c columns) nameAt(col int) bool { return col >= c[0]-1 && col <= c[0]+1 }
 
@@ -207,15 +234,18 @@ var (
 	reNumberValue  = regexp.MustCompile(`^(?:<=|>=|<|>)?-?\d+(?:\.\d+)?$`)
 	reValuePattern = regexp.MustCompile(`^(?:[1-4]\+|\d+-\d+|[<>]?1:\d+)$`)
 	reDate         = regexp.MustCompile(`^\d\d/\d\d/\d{4}$`)
-	reUnits        = regexp.MustCompile(`^[!-~]+$`)
+	// A unit is one word with a letter, '%' or '/', so a reference interval
+	// (9-20, >59, <=0.5) is never a unit.
+	reUnits = regexp.MustCompile(`^[!-~]*[A-Za-z%/][!-~]*$`)
 )
 
 // resultTexts are the categorical results the result column may hold, in
 // any letter case. The list is short on purpose: any other text there is
-// refused, and the list can grow from real reports.
+// refused, and the list can grow from real reports. A flag word is never a
+// result: "Abnormal" alone in the result column is a flag with no value.
 var resultTexts = map[string]bool{
 	"negative": true, "positive": true, "reactive": true, "non reactive": true, "nonreactive": true, "non-reactive": true,
-	"detected": true, "not detected": true, "normal": true, "abnormal": true, "borderline": true, "equivocal": true,
+	"detected": true, "not detected": true, "normal": true, "borderline": true, "equivocal": true,
 	"indeterminate": true, "inconclusive": true, "pending": true, "immune": true,
 	"trace": true, "clear": true, "cloudy": true, "hazy": true, "turbid": true,
 	"present": true, "absent": true, "none": true, "tnp": true, "qns": true,
@@ -254,13 +284,16 @@ func isPrevious(s string) bool {
 // cells are the result columns of a row or a value line.
 type cells struct {
 	value, flag, units, ref string
-	prev                    []string
+	prev                    []token
 	at                      [4]int // columns by atValue...atRef; -1 when empty
 }
 
-// cells assigns each token to the band its start is in. The result column
-// holds a value and an optional flag, the units and reference columns one
-// token each, the previous column a value, an optional flag and a date.
+// cells assigns tokens to the fields of the band their start is in. The
+// result column holds a value and an optional flag, or a flag alone; the
+// units and reference columns one token each; the previous column a value,
+// an optional flag and a date. A token it assigns to no field, such as a
+// second unit or a third token in the result column, is left out, and the
+// rebuild check (whole) refuses the line.
 func (c columns) cells(toks []token) (cells, error) {
 	out := cells{at: [4]int{-1, -1, -1, -1}}
 	var cur []token
@@ -271,49 +304,79 @@ func (c columns) cells(toks []token) (cells, error) {
 		case 1:
 			cur = append(cur, t)
 		case 2:
-			out.prev = append(out.prev, t.text)
+			out.prev = append(out.prev, t)
 		case 3:
-			if out.at[atUnits] >= 0 {
-				return out, errors.New("two tokens in the units column")
+			if out.at[atUnits] < 0 {
+				out.units, out.at[atUnits] = t.text, t.start
 			}
-			out.units, out.at[atUnits] = t.text, t.start
 		case 4:
-			if out.at[atRef] >= 0 {
-				return out, errors.New("two tokens in the reference interval column")
+			if out.at[atRef] < 0 {
+				out.ref, out.at[atRef] = t.text, t.start
 			}
-			out.ref, out.at[atRef] = t.text, t.start
 		}
 	}
 	switch {
-	case len(cur) > 2:
-		return out, errors.New("more than a value and a flag in the result column")
+	case len(cur) == 1 && isFlag(cur[0].text):
+		// A flag alone: the value is missing, or one space after the name.
+		out.flag, out.at[atFlag] = cur[0].text, cur[0].start
 	case len(cur) > 0 && !isValue(cur[0].text):
 		return out, fmt.Errorf("%q in the result column is not a number or a result this importer knows", cur[0].text)
 	case len(cur) > 1 && !isFlag(cur[1].text):
 		return out, fmt.Errorf("%q after the result is not a flag this importer knows", cur[1].text)
-	case len(out.prev) > 0 && !isPrevious(strings.Join(out.prev, " ")):
-		return out, errors.New("the previous result column does not hold a result and its date")
-	case out.units != "" && !reUnits.MatchString(out.units):
-		return out, fmt.Errorf("%q in the units column is not one word", out.units)
-	}
-	if len(cur) > 0 {
+	case len(cur) > 1:
+		out.flag, out.at[atFlag] = cur[1].text, cur[1].start
+		fallthrough
+	case len(cur) > 0:
 		out.value, out.at[atValue] = cur[0].text, cur[0].start
 	}
-	if len(cur) > 1 {
-		out.flag, out.at[atFlag] = cur[1].text, cur[1].start
+	switch {
+	case len(out.prev) > 0 && !isPrevious(joinTokens(out.prev)):
+		return out, errors.New("the previous result column does not hold a result and its date")
+	case out.units != "" && !reUnits.MatchString(out.units):
+		return out, fmt.Errorf("%q in the units column is not one word with a letter, %% or /", out.units)
 	}
 	return out, nil
+}
+
+func joinTokens(toks []token) string {
+	s := make([]string, len(toks))
+	for i, t := range toks {
+		s[i] = t.text
+	}
+	return strings.Join(s, " ")
 }
 
 // fill puts the cells into r, read from line n.
 func (r *Result) fill(c cells, n int) {
 	r.Value, r.Flag, r.Units, r.Ref = c.value, c.flag, c.units, c.ref
-	r.Previous = strings.Join(c.prev, " ")
+	r.Previous, r.prev, r.prevLine = joinTokens(c.prev), c.prev, n
 	for i, col := range c.at {
 		if col >= 0 {
 			r.at[i] = cell{n, col}
 		}
 	}
+}
+
+// fieldsAt lays out what r holds from line n, each field at the column it
+// was read from.
+func (r *Result) fieldsAt(n int) []token {
+	var f []token
+	if r.row == n {
+		f = append(f, r.name)
+		if r.code.text != "" {
+			f = append(f, r.code)
+		}
+	}
+	for i, v := range [4]string{r.Value, r.Flag, r.Units, r.Ref} {
+		if r.at[i].line == n {
+			f = append(f, token{r.at[i].col, v})
+		}
+	}
+	if r.prevLine == n {
+		f = append(f, r.prev...)
+	}
+	slices.SortFunc(f, func(a, b token) int { return a.start - b.start })
+	return f
 }
 
 // Fields: "Label: value", one token each.
@@ -449,18 +512,9 @@ type parser struct {
 	ended   string // the end heading of the current section
 	details []token
 	panel   string
-	cur     *Result  // the result a comment belongs to
-	note    *string  // the panel of a "Please note" row whose text comes next
-	pending *rowRead // a row with nothing after its name, waiting for its value line
-	rows    []*rowRead
-}
-
-// rowRead is a result row as read, before lab codes are known.
-type rowRead struct {
-	r     *Result
-	code  string // a two-digit token in the code column
-	cells bool   // the row line held result columns after the name
-	line  int
+	cur     *Result // the result a comment belongs to
+	note    *string // the panel of a "Please note" row whose text comes next
+	pending *Result // a row with nothing after its name, waiting for its value line
 }
 
 func parseReport(text string) (*Report, error) {
@@ -607,15 +661,23 @@ func (p *parser) header(n int, l string, toks []token) error {
 	} else if c != p.cols {
 		return fmt.Errorf("line %d: a column header with other columns than the one at line %d; every header must give the same columns", n, p.colsAt)
 	}
-	return p.whole(n, l, toks)
+	return nil
 }
 
-// whole checks that the tokens read from line n give the line back.
-func (p *parser) whole(n int, l string, used []token) error {
-	if rebuild(used) != l {
-		return fmt.Errorf("line %d was not read whole", n)
+// whole checks that the fields of r read from line n, each laid out at the
+// column it was read from, give the line back: every token of a line that
+// holds results is in a field of the result, as it was read.
+func whole(n int, l string, r *Result) error {
+	fields := r.fieldsAt(n)
+	if rebuild(fields) == l {
+		return nil
 	}
-	return nil
+	for _, t := range tokens(l) {
+		if !slices.Contains(fields, t) {
+			return fmt.Errorf("line %d: %q at column %d is in no field of the result, so the row cannot be read for sure", n, t.text, t.start)
+		}
+	}
+	return fmt.Errorf("line %d was not read whole", n)
 }
 
 func (p *parser) results(n int, l string, toks []token) error {
@@ -642,11 +704,16 @@ func (p *parser) results(n int, l string, toks []token) error {
 		if panel := strings.TrimSuffix(first.text, " (Cont.)"); panel != p.panel {
 			p.panel, p.cur, p.note, p.pending = panel, nil, nil, nil
 		}
-		return p.whole(n, l, toks)
+		return nil
+	}
+	if t, ok := c.onEdge(toks); ok {
+		return fmt.Errorf("line %d: %q starts within %d columns of where a column starts, so its column cannot be read for sure", n, t.text, edge)
+	}
+	switch {
 	case c.nameAt(first.start):
 		return p.row(n, l, toks)
 	case c.commentAt(first.start):
-		return p.comment(n, l, toks)
+		return p.comment(n, toks)
 	case c.band(first.start) > 0:
 		if p.pending == nil {
 			return fmt.Errorf("line %d holds results, but the line above it is not a row waiting for them", n)
@@ -655,9 +722,10 @@ func (p *parser) results(n int, l string, toks []token) error {
 		if err != nil {
 			return fmt.Errorf("line %d: %v", n, err)
 		}
-		p.pending.r.fill(v, n)
+		r := p.pending
+		r.fill(v, n)
 		p.pending = nil
-		return p.whole(n, l, toks)
+		return whole(n, l, r)
 	}
 	return fmt.Errorf("line %d starts left of the test column", n)
 }
@@ -670,12 +738,12 @@ func (p *parser) row(n int, l string, toks []token) error {
 	if name.start+utf8.RuneCountInString(name.text) > c[1]-4 {
 		return fmt.Errorf("line %d: a test name runs into the result column, so its value cannot be read for sure", n)
 	}
-	rest, code := toks[1:], ""
+	rest, code := toks[1:], token{}
 	if len(rest) > 0 && c.band(rest[0].start) == 0 {
 		if !twoDigits(rest[0].text) {
 			return fmt.Errorf("line %d: %q in the test column is not a lab code", n, rest[0].text)
 		}
-		code, rest = rest[0].text, rest[1:]
+		code, rest = rest[0], rest[1:]
 	}
 	p.pending = nil
 	if strings.EqualFold(strings.TrimSuffix(name.text, ":"), "please note") {
@@ -684,9 +752,13 @@ func (p *parser) row(n int, l string, toks []token) error {
 		}
 		panel := p.panel
 		p.note = &panel
-		return p.whole(n, l, toks)
+		return nil
 	}
 	p.note = nil
+	// "Note:" at the test column is a label, not a test.
+	if strings.HasSuffix(name.text, ":") {
+		return fmt.Errorf("line %d: %q at the test column ends in a colon: it is a label, not a test name", n, name.text)
+	}
 	v, err := c.cells(rest)
 	if err != nil {
 		return fmt.Errorf("line %d: %v", n, err)
@@ -694,16 +766,14 @@ func (p *parser) row(n int, l string, toks []token) error {
 	if len(p.rep.Results) >= maxReportResults {
 		return errors.New("report exceeds result limit")
 	}
-	r := &Result{Name: name.text, Panel: p.panel}
+	r := &Result{Name: name.text, Panel: p.panel, row: n, name: name, code: code}
 	r.fill(v, n)
 	p.rep.Results = append(p.rep.Results, r)
-	rw := &rowRead{r: r, code: code, cells: len(rest) > 0, line: n}
-	p.rows = append(p.rows, rw)
 	p.cur = r
 	if len(rest) == 0 {
-		p.pending = rw
+		p.pending = r
 	}
-	return p.whole(n, l, toks)
+	return whole(n, l, r)
 }
 
 func twoDigits(s string) bool {
@@ -713,7 +783,7 @@ func twoDigits(s string) bool {
 // comment reads a comment line: one token of text, or "Note:" and one more
 // (the fixture's "Note:     Values greater than ..."). More columns may be
 // a row or a value, and are refused.
-func (p *parser) comment(n int, l string, toks []token) error {
+func (p *parser) comment(n int, toks []token) error {
 	if len(toks) > 2 || len(toks) == 2 && toks[0].text != "Note:" {
 		return fmt.Errorf("line %d in the comment column is not one column of text: a row or a value there would be lost", n)
 	}
@@ -731,7 +801,7 @@ func (p *parser) comment(n int, l string, toks []token) error {
 	default:
 		return fmt.Errorf("line %d is a comment with no result above it", n)
 	}
-	return p.whole(n, l, toks)
+	return nil
 }
 
 // afterEnd reads the lines after the results: nothing there is a result, so
@@ -826,28 +896,30 @@ func (p *parser) finish() (*Report, error) {
 	if len(rep.Results) == 0 {
 		return nil, fmt.Errorf("no results found")
 	}
-	// With a list of performing labs that reads whole, a lab code is one the
-	// list names. Without one, only a token in the code column is a code, and
-	// only when result columns follow it on the row: with nothing after it,
-	// it may be the value of a compressed row ("eGFR  90"). Two digits at the
-	// end of a name stay in the name, unless the list names them, so
-	// "Interleukin 10" keeps its number.
-	whole := len(rep.Labs) > 0 && !rep.LabsTorn
-	for _, rw := range p.rows {
-		r := rw.r
+	// A lab code is one that a list of performing labs that reads whole
+	// names. Without such a list, a token in the code column may be the
+	// value of a compressed row ("Bacteria  10  Abnormal"), and is refused.
+	// Two digits at the end of a name stay in the name, unless the list
+	// names them, so "Interleukin 10" keeps its number; a numbered test whose
+	// number the list names is refused, as either reading may be wrong.
+	listed := len(rep.Labs) > 0 && !rep.LabsTorn
+	for _, r := range rep.Results {
+		code := r.code.text
+		m := reCode.FindStringSubmatch(r.Name)
+		named := m != nil && listed && rep.Labs[m[1]] != ""
 		switch {
-		case rw.code != "" && whole && rep.Labs[rw.code] == "":
-			return nil, fmt.Errorf("line %d: result %q has %q in the lab code column, and the list of performing labs does not name it", rw.line, r.Name, rw.code)
-		case rw.code != "" && !whole && !rw.cells:
-			return nil, fmt.Errorf("result %q has %q in the lab code column and no value; without a list of performing labs it may be the value", r.Name, rw.code)
-		case rw.code != "" && whole && reCode.MatchString(r.Name) && rep.Labs[reCode.FindStringSubmatch(r.Name)[1]] != "":
-			return nil, fmt.Errorf("line %d: result %q has a lab code at the end of its name and another in the code column", rw.line, r.Name)
-		case rw.code != "":
-			r.LabCode = rw.code
-		case whole:
-			if m := reCode.FindStringSubmatch(r.Name); m != nil && rep.Labs[m[1]] != "" {
-				r.Name, r.LabCode = strings.TrimSuffix(r.Name, m[0]), m[1]
-			}
+		case code != "" && !listed:
+			return nil, fmt.Errorf("line %d: result %q has %q in the lab code column; without a list of performing labs that reads whole, it may be the value", r.row, r.Name, code)
+		case code != "" && rep.Labs[code] == "":
+			return nil, fmt.Errorf("line %d: result %q has %q in the lab code column, and the list of performing labs does not name it", r.row, r.Name, code)
+		case code != "" && named:
+			return nil, fmt.Errorf("line %d: result %q has a lab code at the end of its name and another in the code column", r.row, r.Name)
+		case code != "":
+			r.LabCode = code
+		case named && numberedTests[strings.ToLower(strings.TrimSuffix(r.Name, m[0]))] != nil:
+			return nil, fmt.Errorf("line %d: the number of %q is also a lab code in the list of performing labs, so it may be the test's number or its lab", r.row, r.Name)
+		case named:
+			r.Name, r.LabCode = strings.TrimSuffix(r.Name, m[0]), m[1]
 		}
 	}
 	// The same test listed twice with the same reading, as when two panels
@@ -866,6 +938,12 @@ func (p *parser) finish() (*Report, error) {
 		}
 		types[t] = r
 		kept = append(kept, r)
+		if "lab."+t == archiveType {
+			return nil, fmt.Errorf("result %q would have the type of the kept report, %s", r.Name, archiveType)
+		}
+		if r.Value == "" && r.Flag != "" {
+			return nil, fmt.Errorf("result %q has a flag and no value; the value may be in its name", r.Name)
+		}
 		// A row with no value is taken only when the lab says why, in the
 		// first line under it, and no word of its name after the first may be
 		// a value: the value may sit in the name, one space after it.
@@ -891,31 +969,44 @@ func (p *parser) finish() (*Report, error) {
 var reNameWord = regexp.MustCompile(`^[A-Za-z][A-Za-z-]*$`)
 
 // numberedTests are the tests whose name is a word and a number, such as
-// Interleukin 6 or CA 125. Any other name that ends in a number is refused:
-// the number may be the value, one space after the name.
-var numberedTests = map[string]bool{"interleukin": true, "ca": true, "cyfra": true, "factor": true}
+// Interleukin 6 or CA 125, with the numbers each may have. Any other name
+// with a number after its first word is refused: the number may be the
+// value, one space after the name.
+var numberedTests = map[string]*regexp.Regexp{
+	"interleukin": regexp.MustCompile(`^\d{1,2}$`),
+	"factor":      regexp.MustCompile(`^\d{1,2}$`),
+	"ca":          regexp.MustCompile(`^(?:125|15-3|19-9|27\.29|72-4)$`),
+	"cyfra":       regexp.MustCompile(`^21-1$`),
+}
 
-// wordFlags are the flags spelled out. One letter (A, H, L) is a flag only in
-// the result column: Vitamin A and Hepatitis A are names.
-var wordFlags = map[string]bool{"high": true, "low": true, "abnormal": true, "critical": true, "panic": true, "alert": true}
+var (
+	reBareNumber = regexp.MustCompile(`^[<>]?=?\d+([.,]\d+)?(-\d+([.,]\d+)?)?$`)
+	reTiterLike  = regexp.MustCompile(`\d:\d`)
+	reNegative   = regexp.MustCompile(`^-\d`)
+)
 
-var reBareNumber = regexp.MustCompile(`^[<>]?=?\d+([.,]\d+)?(-\d+([.,]\d+)?)?$`)
+// valueLike reports whether a word of a name may be a reading: a value, a
+// spelled-out flag, a number, a grade such as 3+, a titer such as 1:160, or
+// a negative number. One letter (A, H, L) is a flag only in the result
+// column: Vitamin A and Hepatitis A are names.
+func valueLike(w string) bool {
+	return isValue(w) || flagWords[strings.ToLower(w)] || reBareNumber.MatchString(w) ||
+		strings.HasSuffix(w, "+") || reTiterLike.MatchString(w) || reNegative.MatchString(w)
+}
 
-// nameHidesValue refuses a name that may hold a reading: a last word that is
-// a number, unless the name is a numbered test, or a flag word after the
-// first word.
+// nameHidesValue refuses a name with a word after the first that may be a
+// reading, unless the name is a numbered test and its number.
 func nameHidesValue(name string) error {
 	f := strings.Fields(name)
-	if len(f) < 2 {
-		return nil
-	}
-	for _, w := range f[1:] {
-		if wordFlags[strings.ToLower(w)] {
-			return fmt.Errorf("result %q has a flag in its name; the value may be in the name too", name)
+	if len(f) == 2 {
+		if num := numberedTests[strings.ToLower(f[0])]; num != nil && num.MatchString(f[1]) {
+			return nil
 		}
 	}
-	if last := f[len(f)-1]; reBareNumber.MatchString(last) && !(len(f) == 2 && numberedTests[strings.ToLower(f[0])]) {
-		return fmt.Errorf("result %q ends in a number that may be its value", name)
+	for _, w := range f[min(1, len(f)):] {
+		if valueLike(w) {
+			return fmt.Errorf("result %q has %q in its name, which may be its value or flag", name, w)
+		}
 	}
 	return nil
 }

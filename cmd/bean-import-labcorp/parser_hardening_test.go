@@ -32,15 +32,23 @@ func TestWrappedValueSurvivesRepeatedPageHeader(t *testing.T) {
 	}
 }
 
-// A third token in the result column is refused. The grammar reads a row's
-// cells before it makes the result, so a refused row changes nothing.
-func TestThirdResultColumnTokenRefused(t *testing.T) {
+// cells leaves out a token it puts in no field: a third token in the result
+// column, a second unit, a second reference interval. Only the rebuild check
+// (whole) refuses those rows, so this test fails if the check goes.
+func TestRebuildRefusesUnreadToken(t *testing.T) {
+	for label, l := range map[string]string{
+		"third result token": pad(pad(pad(pad("", 6)+"Glucose", 57)+"100", 68)+"High", 75) + "H",
+		"second unit":        pad(pad(pad(pad(pad("", 6)+"Glucose", 57)+"100", 140)+"mg/dL", 148)+"x", 160) + "70-99",
+		"second interval":    pad(pad(pad(pad("", 6)+"Glucose", 57)+"100", 140)+"mg/dL", 160) + "70-99  5",
+		"value line":         row("Glucose", "01", "-", "", "", "") + "\n" + pad(pad(pad(pad("", 57)+"100", 68)+"High", 75)+"L", 140) + "mg/dL",
+	} {
+		t.Run(label, func(t *testing.T) {
+			mustRefuse(t, ambiguityReport(l), "is in no field of the result")
+		})
+	}
 	cols, ok := parseHeader(tokens(header()))
 	if !ok {
 		t.Fatal("fixture header")
-	}
-	if _, err := cols.cells([]token{{57, "100"}, {68, "High"}, {75, "unexpected"}}); err == nil {
-		t.Fatal("accepted ambiguous result columns")
 	}
 	got, err := cols.cells([]token{{57, "100"}, {68, "High"}, {140, "mg/dL"}, {160, "70-99"}})
 	if err != nil || got.value != "100" || got.flag != "High" || got.units != "mg/dL" || got.ref != "70-99" {

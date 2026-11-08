@@ -145,7 +145,7 @@ func TestReportResultCountBound(t *testing.T) {
 		var b strings.Builder
 		b.WriteString(prefix)
 		for i, n := 0, 0; n < count; i++ {
-			if wordFlags[letters(i)] {
+			if valueLike(letters(i)) {
 				continue // "Synthetic low" is refused: a flag in a name
 			}
 			b.WriteString(row("Synthetic "+letters(i), "", "1", "", "", "") + "\n")
