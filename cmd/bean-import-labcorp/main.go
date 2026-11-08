@@ -350,17 +350,13 @@ func parseReport(text string) (*Report, error) {
 	}
 	rep := &Report{Labs: map[string]string{}}
 	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
-	// Columns are read from spaces only. A tab, a form feed, a vertical tab or
-	// a no-break space hides where a column starts, so a value could become
-	// part of a name or a row a heading. pdftotext puts a form feed at the
-	// start of the first line of each page: that one has no width, and goes.
+	// pdftotext puts a form feed at the start of the first line of each page:
+	// that one has no width, and goes. Every other character outside
+	// printable ASCII is refused below (see printable).
 	for i, l := range lines {
 		l = strings.TrimPrefix(l, "\f")
 		if i == len(lines)-1 && l == "\f" {
 			l = ""
-		}
-		if strings.ContainsAny(l, "\t\f\v ") {
-			return nil, fmt.Errorf("line %d holds a tab, form feed, vertical tab or no-break space, so its columns cannot be read for sure", i+1)
 		}
 		lines[i] = l
 	}
@@ -372,7 +368,9 @@ func parseReport(text string) (*Report, error) {
 		for _, m := range specimenMatches {
 			// The established native ID joins specimen and test with '/'. Test
 			// names may contain that character; specimen IDs must not.
-			if strings.Contains(m[1], "/") {
+			// A line the character check lets through (a page header, the
+			// patient details) may hold any character. The id may not.
+			if strings.Contains(m[1], "/") || !printable(m[1]) {
 				return nil, errors.New("ambiguous specimen identifier")
 			}
 			if rep.Specimen != "" && rep.Specimen != m[1] {
@@ -398,9 +396,15 @@ func parseReport(text string) (*Report, error) {
 			rep.Reported = m[1]
 		}
 		if m := reFasting.FindStringSubmatch(l); m != nil && rep.Fasting == "" {
+			if !printable(m[1]) {
+				return nil, errors.New("a character outside printable ASCII in the fasting field")
+			}
 			rep.Fasting = m[1]
 		}
 		if m := reLab.FindStringSubmatch(strings.TrimSpace(l)); m != nil {
+			if !printable(m[2]) {
+				return nil, errors.New("a character outside printable ASCII in a performing lab")
+			}
 			rep.Labs[m[1]] = strings.TrimSpace(m[2])
 		} else if reLabLike.MatchString(strings.TrimSpace(l)) {
 			rep.LabsTorn = true
@@ -431,26 +435,52 @@ func parseReport(text string) (*Report, error) {
 			cur.Comment = append(cur.Comment, s)
 		}
 	}
-lines:
-	for _, l := range lines {
+	var (
+		details bool // in the patient details, after the end of the results
+		rowLike bool // after the end, the last line with text was indented like a row
+	)
+	for i, l := range lines {
 		l = strings.TrimRight(l, " ")
+		boiler := false
+		for _, re := range reBoilerplate {
+			boiler = boiler || re.MatchString(l)
+		}
+		labLine := reLabLike.MatchString(strings.TrimSpace(l))
+		if ended != "" && indent(l) == 0 && strings.HasPrefix(l, "Patient Details") {
+			details = true
+		}
+		// Columns are read from spaces, one byte each. Any other character
+		// can hide where a column starts or shift it: a tab, a Unicode space,
+		// an invisible mark, a letter of two bytes. So a line that is read
+		// holds printable ASCII only. Two kinds of lines are not read for
+		// results and may hold more: page header lines (the © and ® of the
+		// copyright line, the patient's name) and, after the end of the
+		// results, the patient details. Their header fields are checked
+		// above.
+		if !boiler && (!details || labLine) && !printable(l) {
+			return nil, fmt.Errorf("line %d holds a character outside printable ASCII, so its columns cannot be read for sure", i+1)
+		}
 		if ended != "" {
-			// After the end of the results, a column header, or a line indented
-			// like a row with text in the result column, is a result that would
-			// be lost: refuse the report. A wrapped lab address is indented too,
-			// but holds no second column.
+			// After the end of the results, nothing is read. A column header,
+			// or a line indented like a row, is a result that would be lost:
+			// refuse the report. Lab list and page header lines may be
+			// indented. A line of one token, a disclaimer sentence, passes if
+			// no word in it looks like a value, and if no line under it does.
 			if strings.Contains(l, "Current Result") && strings.Contains(l, "Units") {
 				return nil, fmt.Errorf("a result column header comes after %q, so results there would be lost", ended)
 			}
-			boiler := false
-			for _, re := range reBoilerplate {
-				boiler = boiler || re.MatchString(l)
+			if strings.TrimSpace(l) == "" || boiler || labLine {
+				continue
 			}
-			if n := indent(l); !boiler && n > 0 && n < 20 && !reLabLike.MatchString(strings.TrimSpace(l)) {
-				if toks := tokens(l); len(toks) > 1 && toks[len(toks)-1].start >= cols.current-4 {
+			n := indent(l)
+			if n > 0 && n < 20 {
+				if toks := tokens(l); len(toks) > 1 || hidesValue(toks[0].text) {
 					return nil, fmt.Errorf("a line like a result row comes after %q, so it would be lost", ended)
 				}
+			} else if n >= 20 && rowLike {
+				return nil, fmt.Errorf("a line like a result value comes after %q, so it would be lost", ended)
 			}
+			rowLike = n > 0 && n < 20
 			continue
 		}
 		if c, ok := headerColumns(l); ok {
@@ -461,10 +491,8 @@ lines:
 			strings.Contains(l, "Units") && strings.Contains(l, "Reference Interval") {
 			return nil, errors.New("unsupported result column order")
 		}
-		for _, re := range reBoilerplate {
-			if re.MatchString(l) {
-				continue lines
-			}
+		if boiler {
+			continue
 		}
 		if !inResults {
 			if strings.TrimSpace(l) != "" && indent(l) == 0 {
@@ -568,33 +596,89 @@ lines:
 		}
 		types[t] = r
 		kept = append(kept, r)
-		// A value one space after the name, or under a header whose columns
-		// sit further right, stays in the name: "Glucose 101" with no value.
-		// A lab code the list names was taken off the name already.
-		if r.Value == "" && valueLike(r.Name) {
-			return nil, fmt.Errorf("result %q has no value, and its name ends in what may be the value", r.Name)
+		// A row with no value may hide its value: one space after the name, or
+		// under a header whose columns sit further right, it stays in the
+		// name ("Glucose 101", "Urine Protein Trace"). So a row with no value
+		// is taken only when the lab says why, in the first line under it,
+		// and no word of its name after the first may be a value. A lab code
+		// the list names was taken off the name already.
+		if r.Value == "" {
+			if len(r.Comment) == 0 || !notPerformed(r.Comment[0]) {
+				return nil, fmt.Errorf("result %q has no value, and no line under it says the test was not performed", r.Name)
+			}
+			if hidesValue(r.Name) {
+				return nil, fmt.Errorf("result %q has no value, and a word of its name may be the value", r.Name)
+			}
 		}
 	}
 	rep.Results = kept
 	return rep, nil
 }
 
-var reTrailingNumber = regexp.MustCompile(`\s[<>]?=?-?\d+(\.\d+)?%?$`)
+// printable reports whether s holds only printable ASCII, 0x20 to 0x7E.
+func printable(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < 0x20 || s[i] > 0x7e {
+			return false
+		}
+	}
+	return true
+}
 
-// resultWords are categorical results that can end a name with no value.
+// notPerformedPhrases are how a lab says it has no value for a test. The
+// list is short on purpose: a row with no value and any other comment is
+// refused.
+var notPerformedPhrases = []string{
+	"test not performed", "not performed",
+	"test cancelled", "test canceled", "cancelled", "canceled",
+}
+
+// notPerformed reports whether a comment line starts with one of
+// notPerformedPhrases, as a whole phrase.
+func notPerformed(comment string) bool {
+	c := strings.ToLower(comment)
+	for _, p := range notPerformedPhrases {
+		if rest, ok := strings.CutPrefix(c, p); ok && (rest == "" || strings.ContainsRune(" .,;:", rune(rest[0]))) {
+			return true
+		}
+	}
+	return false
+}
+
+// resultWords are categorical results that can sit in a name with no value.
 var resultWords = map[string]bool{
 	"negative": true, "positive": true, "reactive": true, "nonreactive": true, "non-reactive": true,
 	"detected": true, "normal": true, "abnormal": true, "borderline": true, "equivocal": true,
-	"indeterminate": true, "pending": true,
+	"indeterminate": true, "inconclusive": true, "pending": true, "immune": true,
+	"trace": true, "clear": true, "cloudy": true, "hazy": true, "turbid": true,
+	"present": true, "absent": true, "none": true, "tnp": true, "qns": true,
 }
 
-// valueLike reports whether the last word of a name may be a value.
-func valueLike(name string) bool {
-	if reTrailingNumber.MatchString(name) {
-		return true
-	}
+// flags are what the flag column holds. A one-letter flag counts in
+// capitals only.
+var flags = map[string]bool{"H": true, "L": true, "A": true, "high": true, "low": true, "abnormal": true, "critical": true, "panic": true}
+
+var reDigitColon = regexp.MustCompile(`[0-9]:[0-9]`)
+
+// hidesValue reports whether a word of a name, after the first, may be a
+// value, a flag or a unit: it starts with a digit, '<', '>', '=' or '+', or
+// with '-' and a digit; it holds '/', or ':' between digits; it is a flag or
+// a result word.
+func hidesValue(name string) bool {
 	f := strings.Fields(name)
-	return len(f) > 1 && resultWords[strings.ToLower(f[len(f)-1])]
+	for _, w := range f[min(1, len(f)):] {
+		lw := strings.ToLower(strings.Trim(w, ",;."))
+		switch {
+		case strings.ContainsAny(w[:1], "0123456789<>=+"),
+			len(w) > 1 && w[0] == '-' && w[1] >= '0' && w[1] <= '9',
+			strings.Contains(w, "/"),
+			reDigitColon.MatchString(w),
+			flags[w] || len(lw) > 1 && flags[lw],
+			resultWords[lw]:
+			return true
+		}
+	}
+	return false
 }
 
 // labCode reports whether a two-digit token can be a lab code. With a list of

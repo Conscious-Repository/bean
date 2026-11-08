@@ -48,7 +48,10 @@ func TestNameIntoResultColumnRefused(t *testing.T) {
 }
 
 // Without a Performing Labs list that reads whole, two digits at the end of
-// a name stay in the name. A code in the code column is still a code.
+// a name stay in the name. A code in the code column is still a code. The
+// torn list's address is not indented: after the end of the results an
+// indented line with a number in it reads like a row, and is refused (see
+// TestWrappedLabAddressRefused).
 func TestNoLabListKeepsTestNumber(t *testing.T) {
 	start := []string{
 		"Specimen ID: 123-456-7890-0  Date Collected: 10/19/2026 0800 Local",
@@ -59,7 +62,7 @@ func TestNoLabListKeepsTestNumber(t *testing.T) {
 	}
 	for label, tail := range map[string][]string{
 		"no list":   nil,
-		"torn list": {"", "Performing Labs", "01: BN - Labcorp Burlington", "    1447 York Court, Burlington, NC 27215"},
+		"torn list": {"", "Performing Labs", "01: BN - Labcorp Burlington", "1447 York Court, Burlington, NC 27215"},
 	} {
 		t.Run(label, func(t *testing.T) {
 			rep, err := parseReport(strings.Join(append(append([]string{}, start...), tail...), "\n") + "\n")

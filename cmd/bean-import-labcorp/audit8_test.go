@@ -155,7 +155,7 @@ func TestGluedValueWithoutValueRefused(t *testing.T) {
 		{pad("", 6) + "Glucose 101", comment("Specimen hemolyzed.")},
 		{pad("", 6) + "Vitamin D <5.0"},
 	} {
-		if _, err := parseReport(ambiguityReport(rows...)); err == nil || !strings.Contains(err.Error(), "may be the value") {
+		if _, err := parseReport(ambiguityReport(rows...)); err == nil || !strings.Contains(err.Error(), "has no value") {
 			t.Errorf("%q accepted: %v", rows[0], err)
 		}
 	}

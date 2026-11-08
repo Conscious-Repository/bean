@@ -104,7 +104,7 @@ func phaseError(phase string, err error) error {
 		"validation": "the file was not accepted, and nothing was written",
 		"purged":     "you deleted this file before (bean purge), and nothing was written",
 		"storage":    "the file could not be stored and read back; an encrypted copy may remain, but no record was written",
-		"archive":    "the record that keeps the file was not added; no reading was written",
+		"archive":    "the record that keeps the file was not added, and an encrypted copy of the file may remain; no reading was written",
 		"retention":  "the log does not keep the file (it may have been deleted with bean purge); no reading was written",
 		"readings":   "some readings may be written; run the same command again, it adds only what is missing",
 	}[phase]
@@ -117,8 +117,10 @@ func runImport(s *core.Store, bin, file string, args []string, corrections bool)
 	if err != nil {
 		return res, err
 	}
-	defer os.RemoveAll(dir)
+	// Deferred calls run last first: the folder goes, then the trap stops.
+	// A signal between the two still finds the folder removed.
 	defer removeOnSignal(dir)()
+	defer os.RemoveAll(dir)
 	// One private snapshot: the importer, the hash and the stored blob all see
 	// the same bytes, whatever happens to the file meanwhile.
 	snap := filepath.Join(dir, "source")
@@ -170,12 +172,23 @@ func runImport(s *core.Store, bin, file string, args []string, corrections bool)
 	if _, has := archive.Source["ref"]; has {
 		return res, phaseError("validation", errors.New("the record of the file carries a ready-made source.ref"))
 	}
+	// Append skips a line whose supersedes_ref names nothing: the file would
+	// be stored with no record naming it.
+	if _, has := archive.Source["supersedes_ref"]; has {
+		return res, phaseError("validation", errors.New("the record of the file carries source.supersedes_ref"))
+	}
 	purged, err := s.InputPurged(first)
 	if err != nil {
 		return res, phaseError("validation", err)
 	}
 	if purged {
 		return res, phaseError("purged", errors.New(archive.Type+" "+bid))
+	}
+	// Append's own checks of the record (its fields, its size, the key) run
+	// now too. Once the file is stored, a refusal would leave it there with
+	// no record naming it, and gc erases only what a record named.
+	if err := s.CheckPartial(first); err != nil {
+		return res, phaseError("validation", err)
 	}
 	stored, err := s.PutBlob(data)
 	if err != nil {
@@ -268,6 +281,12 @@ func removeOnSignal(dir string) func() {
 		case got := <-sig:
 			running.Lock()
 			if running.p != nil {
+				// The importer leads its own process group, so pdftotext and any
+				// other child it started die with it. Signal 0 fails once Wait
+				// has reaped the leader, so a reused id is not hit.
+				if running.p.Signal(syscall.Signal(0)) == nil {
+					syscall.Kill(-running.p.Pid, syscall.SIGKILL)
+				}
 				running.p.Kill()
 			}
 			os.RemoveAll(dir)
@@ -324,6 +343,9 @@ func runImporter(bin, blob string, args []string, file, dir string) (*os.File, s
 	cmd := exec.Command(bin, append(append([]string{"-blob", blob}, args...), file)...)
 	// The importer's own temporary copies land in the private folder too.
 	cmd.Env = append(os.Environ(), "TMPDIR="+dir)
+	// Its own process group: a signal to bean stops the whole group, and
+	// Ctrl-C at the terminal reaches only bean, which then stops it.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	stdout := &capped{w: f, left: importerOutputLimit}
 	stderr := &tail{max: maxImporterStderr}
 	cmd.Stdout, cmd.Stderr = stdout, stderr
