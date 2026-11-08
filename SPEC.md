@@ -421,6 +421,7 @@ Rules:
 4. `<occurrence>` is an integer that starts at 0.
 5. In one adapter run, two readings are identical when their arrays, without the occurrence, have equal canonical bytes.
 6. The first identical reading gets occurrence 0. The next gets 1, in source order.
+   A native id names one reading. Two different readings with the same native id in one run are a source error: the occurrence would tell them apart only by their order. An adapter SHOULD refuse such a run and name the lines. The reference CSV importer does.
 7. Do not use the file hash. Do not use the row position.
 8. When the source has a native id, an adapter MUST keep the HMAC input the same across adapter versions for the same source reading. A tuple input changes when a parser fix changes the value. Section 9.7 tells how to handle that case.
 9. Write `source.ref` as `hmac-sha256:` followed by 64 lowercase hex digits. DEFAULT.
@@ -1006,16 +1007,16 @@ The adapter writes the HMAC input array (4.8) as `source.ref_input`.
 - that triple is a purged ref (7.8), or
 - an earlier line of the same input has that triple.
 
-If the writer's records with that triple never had the `value` of the new record, the source changed the reading. A lab's corrected report, an older report, a parser bug and two sources that share an id all look like this, so a program MUST NOT replace the value by itself and MUST NOT skip it in silence. `bean append` MUST skip it, name it on standard error, and exit 1 after the rest of the input.
+If the writer's records with that triple never had the `type` and `value` of the new record, or the current record has another `type`, the source changed the reading. A lab's corrected report, an older report, a parser bug and two sources that share an id all look like this, so a program MUST NOT replace the value by itself and MUST NOT skip it in silence. `bean append` MUST skip it, name it on standard error, and exit 1 after the rest of the input.
 
-`bean append -corrections` is the person's word that the input is newer and right. It writes the new record with a `supersedes` ref to every current record of that triple, when the type is the same and the value is not empty (`{"n": null}`). Otherwise it reports the reading as before. A value that the triple has had is always skipped, so an old report cannot bring its value back. In one input, the first line for a triple decides.
+`bean append -corrections` is the person's word that the input is newer and right. It writes the new record with a `supersedes` ref to every current record of that triple, when the type is the same and the value is not empty (`{"n": null}`). Otherwise it reports the reading as before. A value that the triple has had under the current record's type is always skipped, so an old report cannot bring its value back. A record of another type is never skipped in silence, even with the same value. In one input, the first line for a triple decides.
 
-`bean append` reports the count of added and skipped records, and how many of the added records are new values. DEFAULT.
+`bean append` reports the count of added and skipped records, and how many of the added records are new values. Skipped counts every line not written: one this section says to skip, and each one named on standard error. DEFAULT.
 
 ### 9.6 Unknown values
 
 An adapter MUST write null when the source has no value for a time.
-An adapter MUST put an unparseable time in `context.raw_time` and set `times.observed` to null.
+An adapter MUST put an unparseable time in `context.raw_time` and set `times.observed` to null, or refuse the input. A tuple ref (4.8) does not hold `context.raw_time`, so readings that differ only in an unparseable time get refs by their order, and a re-export with one row more moves them. An adapter whose ref is a tuple SHOULD refuse. The reference CSV importer refuses with `-blob`.
 An adapter MUST NOT invent values.
 
 ### 9.7 Parser fixes
@@ -1196,7 +1197,7 @@ Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <
 `bean-import-<source> [flags] <file>`
 
 - Output: JSONL partial records (9.2) on standard output.
-- `bean-import-csv -type <type> -system <system> -blob <blob id> [-unit <unit>] <file.csv>` reads a header row. It uses column `value`, optional column `time` (a time of 3.5; any other text goes to `context.raw_time`) and optional column `id` (native id). Get `<blob id>` from `bean blob put <file.csv>` first.
+- `bean-import-csv -type <type> -system <system> -blob <blob id> [-unit <unit>] <file.csv>` reads a header row. It uses column `value`, optional column `time` (a time of 3.5; with `-blob` any other text refuses the file, without it the text goes to `context.raw_time`) and optional column `id` (native id, once per file). Get `<blob id>` from `bean blob put <file.csv>` first.
 
 Test clock: the reference CLI reads the current time from `$BEAN_NOW` (RFC 3339) when it is set. Tests use it for holds and `times.imported`. DEFAULT.
 

@@ -111,8 +111,9 @@ func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, err
 	// Existing valid refs of this author and, per 9.7, the ids they belong
 	// to. Dedupe is per author (C27): another key's record with the same
 	// ref never hides or blocks this author's record.
-	// values holds every value a ref has had, so a value the log already knows
-	// is skipped, also after a correction. currents holds the records of a ref
+	// values holds every value a ref has had, with its type, so a value the
+	// log already knows is skipped, also after a correction, but only under
+	// the current record's type. currents holds the records of a ref
 	// that no record supersedes, and existing is the one that supersedes_ref
 	// names: the first current one, or, when a correction without this ref
 	// replaced them all, the first one that has it.
@@ -129,7 +130,7 @@ func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, err
 			values[key] = map[string]bool{}
 			existing[key] = id
 		}
-		values[key][string(Canonical(r.Raw["value"]))] = true
+		values[key][typedValue(r.Type, string(Canonical(r.Raw["value"])))] = true
 		if len(l.Report.Superseded[id]) == 0 {
 			if currents[key] == nil {
 				existing[key] = id
@@ -193,12 +194,15 @@ func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, err
 			seen[key] = true // the first line of an input decides for that ref
 			if known := values[key]; known != nil && !supersedes[existing[key]] {
 				value := string(Canonical(obj["value"]))
-				if known[value] {
+				current := l.Report.Records[existing[key]]
+				typ, _ := obj["type"].(string)
+				// Already there: the ref has had this value under this type,
+				// and the type is the current record's. A reading of another
+				// type under the same ref is never skipped in silence.
+				if typ == current.Type && known[typedValue(typ, value)] {
 					res.Skipped++
 					continue
 				}
-				current := l.Report.Records[existing[key]]
-				typ, _ := obj["type"].(string)
 				reason := ""
 				switch {
 				case typ != current.Type:
@@ -290,6 +294,12 @@ func (s *Store) completePartial(w writer, line, dedupeKey []byte, lineNo int) (o
 		src["ref"] = nil
 	}
 	return obj, src, nil
+}
+
+// typedValue is the key of Append's value history: a type and a canonical
+// value. A type holds no NUL, so the two cannot run together.
+func typedValue(typ, value string) string {
+	return typ + "\x00" + value
 }
 
 // hasNoValue reports a value that says nothing, like {"n": null}: a test not

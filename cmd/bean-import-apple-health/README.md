@@ -70,10 +70,13 @@ of them. With `-records`, a selected type inside a Correlation is refused
 rather than dropped; none of the 16 supported types is expected there.
 
 Apple's percent unit `%` is a fraction in 0..1. It is used by the `*Percentage`
-types (walking double support, walking asymmetry) and by walking steadiness.
-Any reading with unit `%` stores unit `1`, so 0.272 means 27.2%, and keeps
-`context.source_unit: "%"`. A value outside 0..1 is refused, and so is a
-`*Percentage` type with another unit. The ref is computed from the
+types (walking double support, walking asymmetry) and by walking steadiness,
+the three percent types of the `metrics` table. Their readings store unit `1`,
+so 0.272 means 27.2%, and keep `context.source_unit: "%"`. A value outside
+0..1 is refused, and so is a percent type with another unit. Unit `%` on any
+other type is refused: a step count of 0.5 of 1 is no reading. Every quantity
+needs a unit; one without is refused, since 70 kg and 70 lb differ. Category
+readings have none. The ref is computed from the
 value as Apple wrote it, so a reading that 0.1.x stored with unit `%` is reported
 as changed on the next import; `-corrections` replaces it.
 
@@ -114,7 +117,11 @@ signature authenticates adoption, not Apple or device origin, accuracy or subjec
 Inputs must be regular files up to 256 MiB; symlinks and special files are rejected
 without waiting for FIFO writers. Decompressed export.xml is limited to
 256 MiB, ZIP declared contents to 512 MiB, members to 4096, Record elements to
-2 million, XML depth to 32 and attributes per element to 64 KiB. ZIP member paths,
+2 million, XML depth to 32 and attributes per element to 64 KiB. The 64 KiB
+is counted after `encoding/xml` has built the element, so the input is also
+read through a bound: more than 1 MiB without a `>` (one tag with its
+attributes, a comment, or text) is refused before the decoder holds it, which
+keeps an element of millions of attributes to tens of MiB. ZIP member paths,
 symlinks and ambiguous export.xml members are rejected. No files are extracted;
 DTD entities are not fetched or expanded; this is not full DTD validation.
 Repeated DOCTYPE and misplaced/repeated XML declarations are rejected. Complete XML EOF and the selected export.xml member CRC are

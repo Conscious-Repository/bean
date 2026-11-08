@@ -42,28 +42,40 @@ type options struct {
 	types   string
 	digest  string // plaintext SHA-256 of the input, set by convertFile
 }
+
+// A metric is a quantity, a category or a percent. A quantity needs a unit.
+// A percent is a quantity that Apple writes as a fraction with unit "%";
+// unit "%" on any other type is refused.
 type metric struct {
-	slug     string
-	category bool
+	slug string
+	kind kind
 }
 
+type kind int
+
+const (
+	quantity kind = iota
+	category
+	percent
+)
+
 var metrics = map[string]metric{
-	"HKQuantityTypeIdentifierHeight":                         {"height", false},
-	"HKQuantityTypeIdentifierBodyMass":                       {"body-mass", false},
-	"HKQuantityTypeIdentifierStepCount":                      {"steps", false},
-	"HKQuantityTypeIdentifierDistanceWalkingRunning":         {"distance-walking-running", false},
-	"HKQuantityTypeIdentifierBasalEnergyBurned":              {"basal-energy", false},
-	"HKQuantityTypeIdentifierActiveEnergyBurned":             {"active-energy", false},
-	"HKQuantityTypeIdentifierFlightsClimbed":                 {"flights-climbed", false},
-	"HKQuantityTypeIdentifierHeadphoneAudioExposure":         {"headphone-audio-exposure", false},
-	"HKQuantityTypeIdentifierWalkingDoubleSupportPercentage": {"walking-double-support", false},
-	"HKQuantityTypeIdentifierWalkingSpeed":                   {"walking-speed", false},
-	"HKQuantityTypeIdentifierWalkingStepLength":              {"walking-step-length", false},
-	"HKQuantityTypeIdentifierWalkingAsymmetryPercentage":     {"walking-asymmetry", false},
-	"HKDataTypeSleepDurationGoal":                            {"sleep-duration-goal", false},
-	"HKQuantityTypeIdentifierAppleWalkingSteadiness":         {"walking-steadiness", false},
-	"HKCategoryTypeIdentifierSleepAnalysis":                  {"sleep-analysis", true},
-	"HKCategoryTypeIdentifierHeadphoneAudioExposureEvent":    {"headphone-audio-exposure-event", true},
+	"HKQuantityTypeIdentifierHeight":                         {"height", quantity},
+	"HKQuantityTypeIdentifierBodyMass":                       {"body-mass", quantity},
+	"HKQuantityTypeIdentifierStepCount":                      {"steps", quantity},
+	"HKQuantityTypeIdentifierDistanceWalkingRunning":         {"distance-walking-running", quantity},
+	"HKQuantityTypeIdentifierBasalEnergyBurned":              {"basal-energy", quantity},
+	"HKQuantityTypeIdentifierActiveEnergyBurned":             {"active-energy", quantity},
+	"HKQuantityTypeIdentifierFlightsClimbed":                 {"flights-climbed", quantity},
+	"HKQuantityTypeIdentifierHeadphoneAudioExposure":         {"headphone-audio-exposure", quantity},
+	"HKQuantityTypeIdentifierWalkingDoubleSupportPercentage": {"walking-double-support", percent},
+	"HKQuantityTypeIdentifierWalkingSpeed":                   {"walking-speed", quantity},
+	"HKQuantityTypeIdentifierWalkingStepLength":              {"walking-step-length", quantity},
+	"HKQuantityTypeIdentifierWalkingAsymmetryPercentage":     {"walking-asymmetry", percent},
+	"HKDataTypeSleepDurationGoal":                            {"sleep-duration-goal", quantity},
+	"HKQuantityTypeIdentifierAppleWalkingSteadiness":         {"walking-steadiness", percent},
+	"HKCategoryTypeIdentifierSleepAnalysis":                  {"sleep-analysis", category},
+	"HKCategoryTypeIdentifierHeadphoneAudioExposureEvent":    {"headphone-audio-exposure-event", category},
 }
 var blobPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 var decimal = regexp.MustCompile(`^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$`)
@@ -239,8 +251,43 @@ func (w *limitedOutput) Write(p []byte) (int, error) {
 	return n, err
 }
 
+// maxTag bounds the bytes between two '>': one tag with its attributes, a
+// comment, or text. encoding/xml builds a whole element, every attribute of
+// it, before parseExport can count them, so the 64 KiB attribute bound alone
+// let one element cost many times its size in memory.
+const maxTag = 1 << 20
+
+var errTag = errors.New("XML tag or text exceeds 1 MiB without '>'")
+
+// tagBound fails the read once more than maxTag bytes pass without a '>'.
+type tagBound struct {
+	r   io.Reader
+	run int
+	err error
+}
+
+func (t *tagBound) Read(p []byte) (int, error) {
+	if t.err != nil {
+		return 0, t.err
+	}
+	n, err := t.r.Read(p)
+	for i, b := range p[:n] {
+		if b == '>' {
+			t.run = 0
+			continue
+		}
+		t.run++
+		if t.run > maxTag {
+			t.err = errTag
+			return i, errTag
+		}
+	}
+	return n, err
+}
+
 func parseExport(in io.Reader, out io.Writer, o options, selected map[string]bool) (map[string]any, error) {
-	d := xml.NewDecoder(in)
+	bound := &tagBound{r: in}
+	d := xml.NewDecoder(bound)
 	counts := map[string]any{}
 	occurrences := map[[32]byte]int{}
 	depth := 0
@@ -261,6 +308,9 @@ func parseExport(in io.Reader, out io.Writer, o options, selected map[string]boo
 			break
 		}
 		if err != nil {
+			if bound.err != nil {
+				return nil, bound.err
+			}
 			return nil, errors.New("invalid or truncated XML/ZIP contents")
 		}
 		switch t := token.(type) {
@@ -377,7 +427,7 @@ func reading(a map[string]string, m metric, index int, digest string, occ map[[3
 	if !exists || raw == "" {
 		return nil, errors.New("missing reading value")
 	}
-	if m.category {
+	if m.kind == category {
 		// Categories are opaque Apple constants, never interpreted as quantities.
 		if len(raw) > 256 || !strings.HasPrefix(raw, "HKCategoryValue") {
 			return nil, errors.New("unsupported category value")
@@ -400,20 +450,27 @@ func reading(a map[string]string, m metric, index int, digest string, occ map[[3
 			return nil, errors.New("oversized unit")
 		}
 		value["unit"] = u
+	} else if m.kind != category {
+		// A number without its unit is not a reading: 70 kg and 70 lb differ.
+		return nil, errors.New("quantity without a unit")
 	}
 	// The ref keeps the value as Apple wrote it, so a reading that an older
 	// version stored with unit "%" is reported as changed, not added again.
 	source := value
-	if !m.category && (value["unit"] == "%" || strings.HasSuffix(a["type"], "Percentage")) {
-		// Apple writes a percentage as a fraction with unit "%": 0.272 is 27.2%.
-		// That holds for every type with unit "%" (walking steadiness too), not
-		// only the *Percentage ones. Store unit "1", which says what the number
-		// is. Anything else is refused.
+	switch {
+	case m.kind == percent:
+		// Apple writes a percentage as a fraction with unit "%": 0.272 is
+		// 27.2%. Store unit "1", which says what the number is. Anything
+		// else is refused.
 		n, _ := value["n"].(float64)
 		if value["unit"] != "%" || n < 0 || n > 1 {
 			return nil, errors.New("percentage is not a fraction with unit %")
 		}
 		value = map[string]any{"n": n, "unit": "1"}
+	case value["unit"] == "%":
+		// Unit "%" on a type that is not a percent says the export is not
+		// what this importer reads; a fraction of steps is no reading.
+		return nil, errors.New("unit % on a type that is not a percentage")
 	}
 	start, err := appleTime(a["startDate"])
 	if err != nil {

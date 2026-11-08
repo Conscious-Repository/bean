@@ -66,7 +66,7 @@ Adds one record about you. Prints its id.
 
 ### `append [-agent]`
 
-Reads records from stdin, one JSON object per line, as an importer writes them. Signs and stores each one. Prints `added <n>, skipped <m>`. A record that is already in the log, or that you deleted, is skipped, so you can import the same file again safely. `-agent` signs with the agent key.
+Reads records from stdin, one JSON object per line, as an importer writes them. Signs and stores each one. Prints `added <n>, skipped <m>`. A record that is already in the log, or that you deleted, is skipped, so you can import the same file again safely. `skipped` counts every line not written: already in the log, deleted, a repeat of an earlier line of the same input, a correction whose target is not in the log, and each reading named on a `changed:` line (below). When there is a `changed:` line, `append` exits 1. `-agent` signs with the agent key.
 
 ### `blob put <file>`
 
@@ -113,7 +113,7 @@ Writes the decrypted file to stdout: `bean blob get <id> > report.pdf`.
 
 ### `append`, changed readings
 
-If an input gives a new value for a reading you already have, `append` writes nothing for it, prints a `changed:` line, and exits 1. bean cannot tell a lab's corrected report from an older report, a parser bug, or two sources that share an id. If the input is newer and right, run `append -corrections`: the new value replaces the old one as a correction, and the output says `1 of them new values`. It refuses a different type or an empty value, with or without the flag. Then the `changed:` line names the input's type and says why, for example `(type lab.ldl): not written, because its type differs`, and the error does not send you to `-corrections`. For two sources that share ids, give each its own `-system`. A value the reading has had is always skipped, so an old report cannot bring it back.
+If an input gives a new value for a reading you already have, `append` writes nothing for it, prints a `changed:` line, and exits 1. bean cannot tell a lab's corrected report from an older report, a parser bug, or two sources that share an id. If the input is newer and right, run `append -corrections`: the new value replaces the old one as a correction, and the output says `1 of them new values`. It refuses a different type or an empty value, with or without the flag. Then the `changed:` line names the input's type and says why, for example `(type lab.ldl): not written, because its type differs`, and the error does not send you to `-corrections`. For two sources that share ids, give each its own `-system`. A value the reading has had is always skipped, so an old report cannot bring it back, but only under the reading's own type: a reading of another type under the same id is a `changed:` line even when its value is the same.
 
 ### `verify`
 
@@ -260,11 +260,20 @@ The shapes come from a synthetic report. A real one may hold a line the grammar 
 
 ### `bean-import-apple-health -blob <id> [-records [-types <t>,...]] <export.zip | export.xml>`
 
-Reads an Apple Health export. By default it writes one `apple-health.export` record that keeps the file, with counts per type. With `-records` it also writes one record per reading of 16 supported types, or of the `-types` you name. Apple writes a percentage as a fraction with unit `%`, for the `*Percentage` types and walking steadiness alike. Any reading with unit `%` says unit `1` (0.272 is 27.2%) and keeps `context.source_unit: "%"`; a value outside 0..1 is refused. Blood pressure and food are Correlations: they are counted and kept in the file, and a selected reading inside one is refused. Your name, birth date, source and device names are not copied; the file keeps them. Run it as `bean import apple-health [-records] export.zip`.
+Reads an Apple Health export. By default it writes one `apple-health.export` record that keeps the file, with counts per type. With `-records` it also writes one record per reading of 16 supported types, or of the `-types` you name. Apple writes a percentage as a fraction with unit `%`, for the `*Percentage` types and walking steadiness alike. Those readings say unit `1` (0.272 is 27.2%) and keep `context.source_unit: "%"`; a value outside 0..1, or another unit, is refused. Unit `%` on any other type is refused, and so is a quantity with no unit. Blood pressure and food are Correlations: they are counted and kept in the file, and a selected reading inside one is refused. Your name, birth date, source and device names are not copied; the file keeps them. Run it as `bean import apple-health [-records] export.zip`.
 
 ### `bean-import-csv -type <type> [-unit <unit>] [-system <name>] [-blob <id>] [-precision <p>] <file.csv>`
 
-Reads a CSV file with a header row. Column `value` is required. Column `time` (RFC 3339) and column `id` (the source's id for the row) are optional. Other columns go into `context`. One type per file. With `-blob` the first record is a `csv.file` that keeps the file, at most 256 MiB, and each reading has its SHA-256 in `context.file_sha256`; a column of that name is refused. Run it as `bean import csv -type <type> [-unit <unit>] file.csv`.
+Reads a CSV file with a header row. Column `value` is required. Column `time` (RFC 3339) and column `id` (the source's id for the row) are optional. Each non-empty cell of another column goes into `context` as text, under the column's name in lower case. One type per file. With `-blob` the first record is a `csv.file` that keeps the file, at most 256 MiB, and each reading has its SHA-256 in `context.file_sha256`; a column of that name is refused. Run it as `bean import csv -type <type> [-unit <unit>] file.csv`.
+
+It refuses the file, names the line, and writes nothing when:
+
+- a row has more or fewer fields than the header. An unquoted `1,234` or `72,5` is two fields; put such a number in quotes, and it is kept as text.
+- two column names are the same in lower case without spaces (`Value` and `value `), or a column is named `raw_time`.
+- two rows have the same `id`. One id names one reading; the second would be dropped as already there.
+- with `-blob` (so under `bean import`): a `time` that is not RFC 3339 with an offset, or a `value` written as a number that cannot be stored exactly: more digits than a float keeps (`0.30000000000000001`), a nonzero number that would be 0 (`1e-400`), or one too large (`1e17`, `9007199254740993`). An empty `time` is no time and is taken.
+
+Without `-blob` it keeps its older behaviour for those two: an unread time goes to `context.raw_time`, and an inexact number stays text.
 
 ## Files in a log folder
 

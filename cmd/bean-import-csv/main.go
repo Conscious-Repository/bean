@@ -2,8 +2,10 @@
 // (SPEC.md 9 and 12.3). It never signs and never holds the dedupe key.
 //
 // The CSV has a header row. Column "value" is required. Optional columns:
-// "time" (RFC 3339, the observed start), "id" (a native id). Any other
-// column is copied into context as a string.
+// "time" (RFC 3339, the observed start), "id" (a native id, once per file).
+// Any other non-empty cell is copied into context as a string, under its
+// column name in lower case. Every row has as many fields as the header, and
+// no two column names are the same in lower case without spaces.
 //
 // With -blob it first writes a csv.file record that keeps the file, as
 // lab.report keeps a lab report, so bean import csv works. Readings name the
@@ -22,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/big"
 	"os"
 	"regexp"
 	"strconv"
@@ -123,7 +126,14 @@ func archive(raw []byte, o options) map[string]any {
 const noBlobWarning = "bean-import-csv: warning: no -blob: the raw file is not kept; run bean blob put <file.csv> first and pass -blob <id>"
 
 // convert writes one partial record per CSV row.
+//
+// Without -blob it is the standalone tool it always was: a time it cannot
+// read goes to context.raw_time, and a number it cannot store exactly stays
+// text. With -blob (bean import) it refuses both, and names the line: the
+// ref of such a row cannot tell one reading from another across exports, and
+// a number stored as text in a series of numbers is a value lost.
 func convert(in io.Reader, out io.Writer, o options) error {
+	strict := o.blob != ""
 	br := bufio.NewReader(in)
 	// Spreadsheet exports often start with a UTF-8 byte order mark; it is
 	// not part of the first column name.
@@ -131,82 +141,120 @@ func convert(in io.Reader, out io.Writer, o options) error {
 		br.Discard(3)
 	}
 	r := csv.NewReader(br)
-	r.FieldsPerRecord = -1
+	// 0: every row must have as many fields as the header. With -1 an
+	// unquoted "1,234" read as 1, and the 234 went nowhere.
+	r.FieldsPerRecord = 0
 	header, err := r.Read()
 	if err != nil {
 		return err
 	}
-	for _, h := range header {
+	vi, ti, ii := -1, -1, -1
+	type column struct {
+		i    int
+		name string
+	}
+	var extra []column // the columns that go into context, in header order
+	seen := map[string]int{}
+	for i, h := range header {
 		if !utf8.ValidString(h) {
 			return errors.New("line 1: bad string: not UTF-8")
 		}
+		name := strings.ToLower(strings.TrimSpace(h))
+		if j, dup := seen[name]; dup {
+			return fmt.Errorf("line 1: columns %d and %d have the same name %q (case and spaces do not count)", j+1, i+1, name)
+		}
+		seen[name] = i
+		switch name {
+		case "value":
+			vi = i
+		case "time":
+			ti = i
+		case "id":
+			ii = i
+		case "raw_time":
+			return errors.New("line 1: a column is named raw_time, which holds a time the importer cannot read")
+		case "file_sha256":
+			if o.digest != "" {
+				return errors.New("line 1: a column is named file_sha256, which names the kept file")
+			}
+			extra = append(extra, column{i, name})
+		default:
+			extra = append(extra, column{i, name})
+		}
 	}
-	col := map[string]int{}
-	for i, h := range header {
-		col[strings.ToLower(strings.TrimSpace(h))] = i
-	}
-	vi, ok := col["value"]
-	if !ok {
+	if vi < 0 {
 		return errors.New("no value column")
 	}
-	ti, hasTime := col["time"]
-	ii, hasID := col["id"]
-	if _, has := col["file_sha256"]; has && o.digest != "" {
-		return errors.New("a column is named file_sha256, which names the kept file")
-	}
 	occurrence := map[string]int{} // for identical readings without a native id
-	for line := 2; ; line++ {
+	ids := map[string]int{}        // native id -> the line that has it
+	for {
 		row, err := r.Read()
 		if err == io.EOF {
 			return nil
 		}
 		if err != nil {
-			return fmt.Errorf("line %d: %s", line, err)
+			var pe *csv.ParseError
+			if errors.As(err, &pe) && errors.Is(pe.Err, csv.ErrFieldCount) {
+				return fmt.Errorf("line %d: %d fields, but the header has %d; a number written with a comma must be in quotes", pe.StartLine, len(row), len(header))
+			}
+			return err // csv.ParseError names its line
 		}
+		line, _ := r.FieldPos(0)
 		for _, f := range row {
 			if !utf8.ValidString(f) {
 				return fmt.Errorf("line %d: bad string: not UTF-8", line)
 			}
 		}
 		get := func(i int) string {
-			if i < len(row) {
-				return strings.TrimSpace(row[i])
+			if i < 0 {
+				return ""
 			}
-			return ""
+			return strings.TrimSpace(row[i])
 		}
 		// SPEC.md 3.4 shapes; 9.6: null when the source has none, never invent.
 		value := map[string]any{"n": nil}
 		if v := get(vi); v != "" {
-			if n, ok := number(v); ok {
+			n, ok := number(v)
+			switch {
+			case ok:
 				value = map[string]any{"n": n}
 				if o.unit != "" {
 					value["unit"] = o.unit
 				}
-			} else {
+			case strict && decimal.MatchString(v):
+				return fmt.Errorf("line %d: the value is a number that cannot be stored exactly (too many digits, too large or too small)", line)
+			default:
 				value = map[string]any{"s": v}
 			}
 		}
 		context := map[string]any{}
 		var observed any
-		if raw := get(ti); hasTime && raw != "" {
+		if raw := get(ti); raw != "" {
 			// Keep the time as written, with its own offset.
 			if _, ok := core.ParseTime(raw); ok {
 				observed = map[string]any{"start": raw, "precision": o.precision}
+			} else if strict {
+				return fmt.Errorf("line %d: the time is not RFC 3339 with an offset, for example 2026-10-20T08:00:00Z", line)
 			} else {
 				context["raw_time"] = raw
 			}
 		}
-		for name, i := range col {
-			if name == "value" || name == "time" || name == "id" {
-				continue
-			}
-			if v := get(i); v != "" {
-				context[name] = v
+		for _, c := range extra {
+			if v := get(c.i); v != "" {
+				context[c.name] = v
 			}
 		}
 		src := map[string]any{"system": o.system, "adapter": version}
-		if hasID && get(ii) != "" {
-			src["ref_input"] = core.RefInputNative(o.system, get(ii), 0)
+		if id := get(ii); id != "" {
+			// One id is one reading (SPEC.md 4.8). Two rows with one id
+			// would both get occurrence 0, and the second would be dropped
+			// as already there; counting them would tie each to its row
+			// position. Refuse instead.
+			if first, dup := ids[id]; dup {
+				return fmt.Errorf("line %d: its id is the id of line %d; one id must name one reading", line, first)
+			}
+			ids[id] = line
+			src["ref_input"] = core.RefInputNative(o.system, id, 0)
 		} else {
 			key := string(core.Canonical([]any{observed, value}))
 			src["ref_input"] = core.RefInputTuple(o.system, o.typ, observed, value, occurrence[key])
@@ -235,9 +283,12 @@ func convert(in io.Reader, out io.Writer, o options) error {
 // those are kept as text.
 var decimal = regexp.MustCompile(`^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$`)
 
-// number parses v as a finite decimal number. An integer outside the
-// exact range of a float64 (from 2^53 up) is kept as text so no digit is
-// lost, and so is any value that SPEC 4.1 cannot carry (core.ExactNumber).
+// number parses v as a finite decimal number that is stored exactly: its
+// canonical form (SPEC 4.1) has the same decimal value as v. These checks are
+// the Apple Health importer's. An integer outside the exact range of a
+// float64 (from 2^53 up), a value SPEC 4.1 cannot carry (core.ExactNumber), a
+// nonzero value that would underflow to 0, and a value whose digits would be
+// rounded (0.30000000000000001) all fail.
 func number(v string) (float64, bool) {
 	if !decimal.MatchString(v) {
 		return 0, false
@@ -249,5 +300,34 @@ func number(v string) (float64, bool) {
 	if !strings.ContainsAny(v, ".eE") && math.Abs(n) >= 1<<53 {
 		return 0, false
 	}
-	return n, true
+	mantissa := v
+	if e := strings.IndexAny(v, "eE"); e >= 0 {
+		mantissa = v[:e]
+	}
+	if n == 0 && strings.Trim(mantissa, "+-.0") != "" {
+		return 0, false
+	}
+	return n, sameDecimal(v, n)
+}
+
+// sameDecimal compares the source and the emitted decimal values, not the
+// binary fraction behind a float, so ordinary 0.1 stays a number. Rational
+// parsing is bounded: a short zero with a huge exponent could otherwise
+// allocate without limit. A copy of the Apple Health importer's.
+func sameDecimal(raw string, n float64) bool {
+	if len(raw) > 256 {
+		return false
+	}
+	if i := strings.IndexAny(raw, "eE"); i >= 0 {
+		exponent, err := strconv.ParseInt(raw[i+1:], 10, 32)
+		if err != nil || exponent < -1000 || exponent > 1000 {
+			return false
+		}
+	}
+	source, ok := new(big.Rat).SetString(raw)
+	if !ok {
+		return false
+	}
+	emitted, ok := new(big.Rat).SetString(string(core.Canonical(n)))
+	return ok && source.Cmp(emitted) == 0
 }
