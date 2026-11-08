@@ -8,6 +8,10 @@ import (
 	"github.com/Conscious-Repository/bean/core"
 )
 
+// archiveType is the type of the record that keeps the report. No reading
+// may have it.
+const archiveType = "lab.report"
+
 // archiveRecord preserves each source independently of specimen/test dedupe.
 // Its digest describes plaintext; blob identifies the caller-preserved encrypted
 // source. This does not verify the caller's blob reference or the lab's origin.
@@ -18,12 +22,12 @@ func archiveRecord(raw []byte, blob string) map[string]any {
 	digest := sha256.Sum256(raw)
 	value := map[string]any{"blob": blob}
 	return map[string]any{
-		"type":  "lab.report",
+		"type":  archiveType,
 		"value": value,
 		"times": map[string]any{"observed": nil},
 		"source": map[string]any{
 			"system": system, "adapter": version,
-			"ref_input": core.RefInputTuple(system, "lab.report", nil, value, 0),
+			"ref_input": core.RefInputTuple(system, archiveType, nil, value, 0),
 		},
 		"context": map[string]any{
 			"sha256": hex.EncodeToString(digest[:]), "bytes": len(raw),

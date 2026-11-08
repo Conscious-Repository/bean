@@ -46,7 +46,7 @@ fixture and an adapter update.
 
 ## How a report is read
 
-Since 0.3.0 the report is read by a grammar (docs/DECISIONS.md 222). Every
+Since 0.3.0 the report is read by a grammar (docs/DECISIONS.md 222, 224). Every
 line of the extracted text must be one of the kinds below, or the report is
 refused, and the error names the line. Nothing is skipped because it looks
 unimportant. A line is split into tokens at runs of two or more spaces; a
@@ -92,13 +92,23 @@ In the results:
   is refused.
 - A result row: the name starts at `Test` (give or take one column) and ends
   at least 4 columns before `Current Result`, or the report is refused: the
-  value may have run into the name. A second token in the Test band must be
-  a two-digit lab code. Every other token goes to the band its start is in:
-  the result band holds a value and an optional flag, the previous band a
-  value, an optional flag and a date, the units band one word, the reference
-  band one token. A token in the Test band that is not a code, a third token
-  in the result band, a second in the units or reference band, a units token
-  with a space, or a result or flag outside the grammar below is refused.
+  value may have run into the name. A name that ends in `:` (`Note:`) is a
+  label, and is refused. A second token in the Test band must be a two-digit
+  lab code. Every other token goes to the band its start is in: the result
+  band holds a value and an optional flag, or a flag alone, which leaves the
+  row with no value; the previous band a value, an optional flag and a date;
+  the units band one word with a letter, `%` or `/`; the reference band one
+  token. A token in the Test band that is not a code, a units token with a
+  space or without a letter, `%` or `/` (`9-20`, `>59`), or a result or flag
+  outside the grammar below is refused. A token that starts within two
+  columns of where a band starts, on either side, is refused: a reference
+  interval one column left of its band would be read as the unit, a previous
+  result two columns left of its band as the current flag.
+- Every token of a row or value line must be in a field of the result read
+  from it. The parser lays out the name, code, value, flag, previous result,
+  units and range it kept, each at the column it read it from, and the line
+  must come back. So a third token in the result band, or a second in the
+  units or reference band, is in no field, and the report is refused.
 - `Please note` or `Please Note:` with an optional lab code and nothing else:
   its text follows as comment lines. In the panel of the result above it, the
   text is that result's comment; otherwise it is a report note.
@@ -116,10 +126,13 @@ A value is a number with an optional `<`, `>`, `<=` or `>=` (`101`, `-2.0`,
 `<0.5`); a dipstick grade `1+` to `4+`; a count range such as `0-5`; a titer
 such as `1:40`; or one of `Negative`, `Positive`, `Reactive`, `Non Reactive`,
 `Nonreactive`, `Non-Reactive`, `Detected`, `Not Detected`, `Normal`,
-`Abnormal`, `Borderline`, `Equivocal`, `Indeterminate`, `Inconclusive`,
-`Pending`, `Immune`, `Trace`, `Clear`, `Cloudy`, `Hazy`, `Turbid`, `Present`,
-`Absent`, `None`, `TNP`, `QNS`, in any letter case. A flag is `H`, `L`, `A`,
-`High`, `Low`, `Abnormal`, `Critical`, `Panic` or `Alert`. Anything else in
+`Borderline`, `Equivocal`, `Indeterminate`, `Inconclusive`, `Pending`,
+`Immune`, `Trace`, `Clear`, `Cloudy`, `Hazy`, `Turbid`, `Present`, `Absent`,
+`None`, `TNP`, `QNS`, in any letter case. A flag is `H`, `L`, `A`, `High`,
+`Low`, `Abnormal`, `Critical`, `Panic` or `Alert`. A flag word is never a
+value: `Abnormal` alone in the result band is a flag, the row has no value,
+and a flag with no value is refused, since the value may sit in the name. So
+a report with `Abnormal` as a categorical result is refused. Anything else in
 the result band is refused, so a free-text result (`No clinically
 significant antibodies detected`) or a number with a thousands comma
 (`1,234`) refuses the report. The lists can grow from real reports.
@@ -154,13 +167,17 @@ Then:
 - Lab codes. With a Performing Labs list that reads whole, a code is one the
   list names: a code in the code column it does not name is refused, and two
   digits at the end of a name are taken off as the code only when the list
-  names them, so `Interleukin 10` keeps its number. Without a list, or with a
-  lab line it cannot read, only a token in the code column is a code, and only
-  when result columns follow it on the row: with nothing after it, it may be
-  the value of a compressed row (`eGFR  90`), and the report is refused.
+  names them, so `Interleukin 10` keeps its number. A numbered test (below)
+  with no code in the code column whose number the list names is refused:
+  `Interleukin 10` with lab 10 listed may be test 10 or lab 10. Without a
+  list, or with a lab line it cannot read, any token in the code column is
+  refused: it may be the value of a compressed row (`Bacteria  10
+  Abnormal`). Such a report reads only when no row has a code.
 - Two results that map to one `lab.<test>` type are refused. The same test
   listed twice, as when two panels share it, is one result only when its
   value, flag, unit, range, previous result, lab code and comment all match.
+  A test whose type would be `lab.report`, the kept report's type, is
+  refused.
 - A result with no value is taken only when the first comment line under it
   starts with `Test not performed`, `Not performed`, `Test cancelled`, `Test
   canceled`, `Cancelled` or `Canceled`, and every word of its name after the
@@ -209,8 +226,13 @@ Run `go test ./cmd/bean-import-labcorp ./cmd/bean`. Tests exercise mixed
 metadata, page breaks, bounded/private extraction, output failures, storage,
 repeat imports, amendments and byte-identical export of both report versions.
 
-A test name may end in a number only when it is two words and the first is a
-numbered test: Interleukin, CA, Cyfra or Factor (`Interleukin 6`, `CA 19-9`).
-Any other name that ends in a number, or holds High, Low, Abnormal, Critical,
-Panic or Alert after its first word, is refused: the value may sit in the name,
-one space after it. Add a family here when a real report needs it.
+A word of a test name after the first may not look like a reading: a value
+(a number, `3+`, `0-5`, `1:40`, `Negative`, `Trace` and the other results
+above), a spelled-out flag (High, Low, Abnormal, Critical, Panic, Alert), a
+number with a comma or a range of decimals, a word that ends in `+`, has `:`
+between digits or starts with `-` and a digit. Such a name is refused: the
+value, and its flag, may sit in the name, one space after it (`Glucose 101
+H`). The one exception is a numbered test of two words: `Interleukin` or
+`Factor` and one or two digits, `CA 125`, `CA 15-3`, `CA 19-9`, `CA 27.29`,
+`CA 72-4`, and `Cyfra 21-1`. So `Beta 2 Microglobulin` and `Factor 101` are
+refused. Add a family or a number here when a real report needs it.
