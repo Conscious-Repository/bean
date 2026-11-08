@@ -1,7 +1,9 @@
 package core
 
 import (
+	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -84,6 +86,60 @@ func TestInputPurgedAnySystemAndReadyRef(t *testing.T) {
 	fresh := `{"type":"csv.file","value":{"blob":"x"},"source":{"system":"csv","adapter":"t@1","ref":"hmac-sha256:` + strings.Repeat("0", 64) + `"}}`
 	if p, err := s.InputPurged([]byte(fresh)); err != nil || p {
 		t.Errorf("unpurged ref: %v %v", p, err)
+	}
+}
+
+// CheckPartial refuses what Append refuses on the record itself, and
+// writes nothing either way.
+func TestCheckPartialFollowsAppend(t *testing.T) {
+	s, _ := initStore(t)
+	value := map[string]any{"blob": "sha256:" + strings.Repeat("c", 64)}
+	line := func(system string, extra map[string]any) []byte {
+		obj := map[string]any{"type": "csv.file", "value": value, "times": map[string]any{"observed": nil},
+			"blobs":  []any{map[string]any{"hash": value["blob"], "role": "raw-export", "media_type": "text/csv"}},
+			"source": map[string]any{"system": system, "adapter": "t@1", "ref_input": RefInputTuple(system, "csv.file", nil, value, 0)}}
+		for k, v := range extra {
+			obj[k] = v
+		}
+		return Canonical(obj)
+	}
+	objects := func() int {
+		n := 0
+		filepath.WalkDir(s.path("objects"), func(_ string, d fs.DirEntry, _ error) error {
+			if d != nil && !d.IsDir() {
+				n++
+			}
+			return nil
+		})
+		return n
+	}
+	before := objects()
+	for name, bad := range map[string][]byte{
+		"long system":   line(strings.Repeat("s", 65), nil),
+		"envelope":      line("csv", map[string]any{"id": "x"}),
+		"blob unlisted": line("csv", map[string]any{"blobs": []any{}}),
+		"bad times":     line("csv", map[string]any{"times": map[string]any{}}),
+		"not json":      []byte("{"),
+	} {
+		if err := s.CheckPartial(bad); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+		if _, err := s.Append(strings.NewReader(string(bad) + "\n")); err == nil {
+			t.Errorf("%s: Append accepts what CheckPartial refuses", name)
+		}
+	}
+	if n := objects(); n != before {
+		t.Errorf("refused lines wrote %d files", n-before)
+	}
+	good := line("csv", nil)
+	if err := s.CheckPartial(good); err != nil {
+		t.Fatal(err)
+	}
+	if n := objects(); n != before {
+		t.Errorf("CheckPartial wrote %d files", n-before)
+	}
+	if r, err := s.Append(strings.NewReader(string(good) + "\n")); err != nil || r.Added != 1 {
+		t.Errorf("append: %+v %v", r, err)
 	}
 }
 

@@ -68,17 +68,33 @@ A report that cannot be read for sure is refused, never guessed:
   and only when a value follows it on the row. With nothing after it, it may
   be the value of a compressed row (`eGFR  90`): refused. `Interleukin 10`
   keeps its number.
-- A line with a tab, form feed, vertical tab or no-break space. Columns are
-  read from spaces only, and these hide where a column starts. The form feed
-  that `pdftotext` puts at the start of each page has no width and is read.
-- A result with no value whose name ends in a number (`Glucose 101`,
-  `Vitamin D <5.0`) or a result word (`Negative`, `Reactive`, `Detected` and
-  a few more). The value may sit in the name, one space after it or under a
-  header whose columns are further right. A lab code the list names was taken
-  off the name before this check.
-- A column header, or an indented line with text in the result column, after
-  `Disclaimer`, `Icon Legend` or `Performing Labs`. The results end there, so
-  a result after them would be lost.
+- A line with a byte outside printable ASCII (0x20 to 0x7E): a tab, a
+  Unicode space, an invisible mark, an accented letter, a lone CR. Columns
+  are read from spaces, one byte each; any other character can hide where a
+  column starts or shift it. Three things are allowed: the form feed that
+  `pdftotext` puts at the start of each page (it has no width), CRLF line
+  ends, and any character in a page header line (the copyright line with ©
+  and ®, the patient's name) or in the patient details after the end of the
+  results. Nothing in those is read as a result. The specimen id, fasting
+  field and lab names read from them must still be ASCII. So a comment with
+  `®`, `µ` or `≥` is refused.
+- A result with no value, unless the first line under it starts with `Test
+  not performed`, `Not performed`, `Test cancelled`, `Test canceled`,
+  `Cancelled` or `Canceled`. Even then, it is refused when a word of its name
+  after the first may be a value: it starts with a digit, `<`, `>`, `=` or
+  `+`, or with `-` and a digit; it holds `/`, or `:` between digits; it is a
+  flag (`H`, `L`, `A`, `High`, `Low`, `Abnormal`, `Critical`, `Panic`) or a
+  result word (`Negative`, `Trace`, `Clear`, `Immune`, `TNP` and a few more).
+  The value may sit in the name, one space after it or under a header whose
+  columns are further right. A lab code the list names was taken off the name
+  before this check. `Vitamin A` and `Interleukin 10` with no value are
+  refused too.
+- After `Disclaimer`, `Icon Legend` or `Performing Labs`, where the results
+  end: a column header; an indented line (1 to 19 spaces) of two or more
+  columns that is not a lab list line (`01: ...`) or a page header line; an
+  indented line of one column with a word that may be a value; and a line
+  indented 20 or more under such an indented line. A result there would be
+  lost. A lab address wrapped onto an indented line is refused too.
 
 Not settled without a real report: a note line in the result column can still
 read as a result. Test with your own report before you rely on it.
@@ -102,9 +118,11 @@ bean appends the archive, checks retention, appends the readings and checks
 again. This is not a transaction: a failure while readings are written can
 leave some of them, and the same command again adds only what is missing.
 Errors say which step failed: validation (nothing written), storage (an
-encrypted copy may remain, no record), archive or retention (no reading), or
+encrypted copy may remain, no record), archive (an encrypted copy may remain, no
+reading), retention (no reading), or
 readings (some may be written). A purged archive is checked before the file is
-stored: nothing is written, not even the encrypted copy. A concurrent writer can
+stored, and so are the checks Append makes of the archive record: if either
+fails, nothing is written, not even the encrypted copy. A concurrent writer can
 still change the log between checks.
 
 Export via `bean export` yields the original plaintext bytes. Verify their digest

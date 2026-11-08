@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -482,5 +483,44 @@ func TestImportChangedSaysWhy(t *testing.T) {
 	c.NewType, c.Reason = "lab.ldl", "the type differs"
 	if msg := reportChanged([]core.Changed{c}, "run bean import csv -corrections").Error(); strings.Contains(msg, "then run") || !strings.Contains(msg, "cannot write either") {
 		t.Errorf("with a reason: %s", msg)
+	}
+}
+
+// A signal stops the importer's whole process group: a child it started,
+// as the Labcorp importer starts pdftotext, does not run on.
+func TestImportSignalKillsImporterGroup(t *testing.T) {
+	bin := t.TempDir()
+	os.WriteFile(filepath.Join(bin, "bean-import-forks"), []byte("#!/bin/sh\nsleep 30 &\necho $! > \"$CHILD_PID\"\nwait\n"), 0o755)
+	dir := t.TempDir()
+	run(t, dir, "", "init")
+	pidFile := filepath.Join(t.TempDir(), "child")
+	f := filepath.Join(t.TempDir(), "report.txt")
+	os.WriteFile(f, []byte("SYNTHETIC glucose 101\n"), 0o600)
+	cmd := exec.Command(os.Args[0], "import", "forks", f)
+	cmd.Env = append(os.Environ(), "BEAN_TEST_MAIN=1", "BEAN_DIR="+dir, "BEAN_NOW=", "TMPDIR="+t.TempDir(), "CHILD_PID="+pidFile,
+		"PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	pid := 0
+	for deadline := time.Now().Add(5 * time.Second); pid == 0 && time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		if b, _ := os.ReadFile(pidFile); strings.HasSuffix(string(b), "\n") {
+			pid, _ = strconv.Atoi(strings.TrimSpace(string(b)))
+		}
+	}
+	if pid <= 0 {
+		cmd.Process.Kill()
+		t.Fatal("the importer did not start its child")
+	}
+	defer syscall.Kill(pid, syscall.SIGKILL)
+	cmd.Process.Signal(syscall.SIGTERM)
+	cmd.Wait()
+	if c := cmd.ProcessState.ExitCode(); c != 128+int(syscall.SIGTERM) {
+		t.Errorf("exit %d", c)
+	}
+	for deadline := time.Now().Add(3 * time.Second); syscall.Kill(pid, 0) != syscall.ESRCH; time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the importer's child runs on after bean was stopped")
+		}
 	}
 }
