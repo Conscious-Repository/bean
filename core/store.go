@@ -663,17 +663,27 @@ func (s *Store) GC() (records, blobs int, err error) {
 	for t := range due {
 		copyOf[t] = true
 	}
+	// A copy's bytes hash to the record it copies, so it holds that record's
+	// content. Its files are erased with it only when the record is one of
+	// the person's that the person deleted: a stranger can write a tombstone
+	// about itself and a "copy" whose bytes hash to an id never stored, which
+	// names any blob, and that must erase nothing but itself.
 	var copies []string
+	own := map[string]bool{} // copies whose files go with them
 	for _, p := range copiesOf(l.Files, copyOf) {
 		v, _ := Parse(l.Files[p])
 		obj, _ := v.(map[string]any)
 		subject, _ := obj["subject"].(string)
-		if id := recordFileID(p, l.Files[p]); due[id] || erased[id][subject] {
+		id := recordFileID(p, l.Files[p])
+		if due[id] || erased[id][subject] {
 			copies = append(copies, p)
+			own[p] = l.ID != "" && subject == l.ID && (due[id] || erased[id][l.ID])
 		}
 	}
 	for _, p := range copies {
-		candidates = append(candidates, namedBlobs(l.Files[p])...)
+		if own[p] {
+			candidates = append(candidates, namedBlobs(l.Files[p])...)
+		}
 		delete(l.Files, p)
 	}
 	// Blobs go first, while the hidden record still names them. A failure
@@ -696,11 +706,13 @@ func (s *Store) GC() (records, blobs int, err error) {
 		delete(l.Hidden, t)
 		records++
 	}
-	for _, p := range copies { // counted as records: each is a copy of one
+	for _, p := range copies {
 		if err := os.Remove(s.path(p)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return records, blobs, err
 		}
-		records++
+		if own[p] { // a copy of the person's deleted record counts as that record
+			records++
+		}
 	}
 	if err := s.writeHolds(l.Holds); err != nil {
 		return records, blobs, err
