@@ -38,7 +38,7 @@ func TestCLIImportAppleKeepsExport(t *testing.T) {
 	if code != 0 || !strings.Contains(out, "kept apple-health.export") || !strings.Contains(out, "added 0, skipped 0") {
 		t.Fatalf("import: %d\n%s\n%s", code, out, errs)
 	}
-	if out, _, code := runPath(t, dir, path, "import", "apple-health", src); code != 0 || !strings.Contains(out, "already kept") {
+	if out, _, code := runPath(t, dir, path, "import", "apple-health", src); code != 0 || !strings.Contains(out, "already kept") || !strings.Contains(out, "added 0, skipped 0") {
 		t.Errorf("retry: %d %s", code, out)
 	}
 	js, _, _ := run(t, dir, "", "ls", "-type", "apple-health.export", "-json")

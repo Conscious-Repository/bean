@@ -421,6 +421,7 @@ Rules:
 4. `<occurrence>` is an integer that starts at 0.
 5. In one adapter run, two readings are identical when their arrays, without the occurrence, have equal canonical bytes.
 6. The first identical reading gets occurrence 0. The next gets 1, in source order.
+   A native id names one reading. Two different readings with the same native id in one run are a source error: the occurrence would tell them apart only by their order. An adapter SHOULD refuse such a run and name the lines. The reference CSV importer does.
 7. Do not use the file hash. Do not use the row position.
 8. When the source has a native id, an adapter MUST keep the HMAC input the same across adapter versions for the same source reading. A tuple input changes when a parser fix changes the value. Section 9.7 tells how to handle that case.
 9. Write `source.ref` as `hmac-sha256:` followed by 64 lowercase hex digits. DEFAULT.
@@ -814,17 +815,17 @@ Names that start with `.` under `objects/` and `blobs/` are not part of the log:
 
 Sync from replica A (source) to replica B (destination) is a set union with one exception.
 
-1. Compute the valid set of A and of B (section 6).
-2. Collect the valid tombstones of A and of B.
+1. Compute the valid set of the union of A's and B's record files (section 6). Judge B's files by their bytes on disk, not a cache.
+2. Collect the valid tombstones of that union. A tombstone that only A's own view finds valid does not count. When the head key alone halts the local identity in the union (8.2), judge it without the records that halt it; otherwise none of its tombstones would count.
 3. For each record file in A that B does not have, `bean.seal` files first:
    1. If the file fails a step from 1 to 15 of 3.8, do not copy it. A file with an unknown `v` stops at step 14 and passes.
-   2. If a valid tombstone of A or B names it, apply 7.5. Do not copy it.
+   2. If a valid tombstone of A or B names it, apply 7.5. Do not copy it. This holds for a record this build cannot judge too, when the tombstone's subject is the record's `subject`.
    3. If B hides it under a hold, do not copy it.
    4. Otherwise copy it.
    5. If B holds a file for that id that fails a step from 1 to 15 of 3.8 and the file in A passes, replace B's file.
 4. For each blob in A that B does not have, or that B has with a stored hash that does not match its path:
    1. If the SHA-256 of A's bytes does not match the path, do not copy it.
-   2. If only purged or hidden record files name it, do not copy it. A record file names a blob in `blobs[].hash` or `value.blob`, valid or not.
+   2. If only purged or hidden record files name it, do not copy it. A record file names a blob in `blobs[].hash` or `value.blob`, valid or not. If a purged or hidden record file of the union names it, copy it only when a live record of the local identity or of a paired agent names it, by the rule of 7.9 step 2. Any record can name any blob.
    3. Otherwise copy it. If B has a corrupt copy, replace it atomically with A's verified bytes.
 5. Compute the valid set of B again. Apply 7.6 to new tombstones.
 
@@ -853,7 +854,7 @@ When a replica first finds a valid tombstone T for a target that it stores, also
 2. Otherwise hide the target at once, if it is not hidden yet: move it to `local/hidden/`. Hidden records are still input to the local verifier (6.2) and never sync.
 3. Record the receipt time in `local/holds.json` as `{"<T id>": {"target": "<target id>", "received": "<UTC time>"}}`.
 4. A replica MUST NOT erase a hidden target on a timer.
-5. `bean gc` erases a hidden target when a still-valid tombstone for it has a hold at least 7 days old, and drops every hold of that target. It then erases each blob that an erased target names, when no remaining record file names it. It never erases a blob that no erased record named. If the local identity is too new (8.2) or frozen (5.7), or any seal set is incomplete (5.4), `gc` erases nothing. Error: `too new: <id>`, `compromised: <id>` or `incomplete seals: <ids>`. Validity can change after an update or a fork, and erasure cannot be undone. Another too-new identity does not stop `gc`. Its records are never valid (8.2), and a tombstone whose target it wrote or is about is held (6.7). So it can only hold a tombstone of another identity, never make one erase.
+5. `bean gc` erases a hidden target when a still-valid tombstone for it has a hold at least 7 days old, and drops every hold of that target. It then erases each blob that an erased target names, when no remaining record file names it. It never erases a blob that no erased record named. A file whose name is not a record path keeps no blob. `gc` erases such a file when its bytes give the id of a target it erases, or of a target that a valid tombstone of the file's subject names and that is not stored here. Only when the file's subject is the local identity, and the target is one it erases or one that a valid tombstone of the local identity names, does `gc` also erase the blobs the file names, as for that target. Any other such file is erased alone. If the local identity is too new (8.2) or frozen (5.7), or any seal set is incomplete (5.4), `gc` erases nothing. Error: `too new: <id>`, `compromised: <id>` or `incomplete seals: <ids>`. Validity can change after an update or a fork, and erasure cannot be undone. Another too-new identity does not stop `gc`. Its records are never valid (8.2), and a tombstone whose target it wrote or is about is held (6.7). So it can only hold a tombstone of another identity, never make one erase.
 6. `bean verify` reports each hidden target as `hidden pending gc: <id>` (a warning), unless its author or subject is too new (8.2).
 
 A lost `local/holds.json` starts each hold again. Erasure is then later, never earlier.
@@ -870,11 +871,13 @@ The hold length is 7 days. DEFAULT. Nothing is erased without the person running
 
 `bean purge <id>` does these steps:
 
-1. Check that the local identity is the subject of the target.
+1. Check that the local identity is the subject of the target. The target can be a record this build cannot judge: a tombstone can name any id.
 2. Write a tombstone signed by the head key. The tombstone names only the target id. It MUST NOT carry the target's `source` or dedupe ref (15).
 3. Add the target dedupe ref to `local/purged-refs.jsonl`.
-4. Erase the target at once.
-5. Erase each blob that the target names, when no remaining record file names it.
+4. Erase each blob that the target names, when no remaining record file names it. A file whose name is not a record path is not a record file: it keeps no blob.
+5. Erase the target at once, and each file under another name whose bytes give the target's id (a sync tool's conflict copy).
+
+Blobs go before the target. A failure between the two then leaves the target and its tombstone, and 7.6 hides it. The other order leaves a blob that no record names.
 
 The tombstone stays in the log forever.
 A program MUST NOT tombstone a genesis, a succession or a tombstone.
@@ -892,14 +895,15 @@ A replica that never had the target, or that lost this file, does not know the r
 
 `bean export <dir>` writes a plaintext copy of the log for exit.
 
-1. Write each record file that is not purged or hidden to `<dir>/records/<64 hex>.json`. Use the stored bytes. This includes records of an unknown version and records of a too-new identity: an export needs no judgment of them.
-2. Decrypt each blob that an exported record names. Write the plaintext to `<dir>/blobs/<64 hex of the blob id>`. If a blob is not available, continue, and add its id to `missing_blobs` in the manifest (sorted). One file MUST NOT stop an exit.
-3. Write `<dir>/manifest.json` with the canonical bytes of `{"spec": "bean-v0", "identity": <id>, "records": <count>, "blobs": [{"id": <blob id>, "plaintext_sha256": <hex>, "media_type": <string>}]}`. Sort `blobs` by `id`. The `spec` string names the export format. It does not change with the software version.
+1. Write each record file that is not purged or hidden to `<dir>/records/<64 hex>.json`. A record this build cannot judge counts as purged when a valid tombstone of its subject names it (6.7 holds that tombstone). Use the stored bytes. This includes records of an unknown version and records of a too-new identity: an export needs no judgment of them.
+2. Decrypt each blob that an exported record of the local identity or of an agent it paired names, and each blob that no record file names. Write the plaintext to `<dir>/blobs/<64 hex of the blob id>`. A blob that only another author's records name is not decrypted. A record that this build cannot judge (an unknown version, a too-new identity) counts as the local identity's only when 8.2 would trust its `kid`: the head key of the chain, or a recovery key that a chain node commits to. A retired key does not count: it is the key a thief holds. It counts as a paired agent's only when its `kid` is its `author`. For a too-new identity, a pairing counts when the identity's `agent.pair` record has such a `kid` and no other such record supersedes it. When the head key alone halts the local identity (8.2), judge this step and step 1 without the records that halt it. If a blob is not available, continue. If a record of the local identity or of a paired agent names it, add its id to `missing_blobs` in the manifest (sorted); otherwise count it in `missing_blobs_of_others`. One file MUST NOT stop an exit.
+3. Write the stored bytes of each record file that fails a step from 1 to 15 of 3.8 to `<dir>/invalid/<its path>`, and list them in `invalid_records` as `{"path", "error"}`. A file whose id is hidden, or is the target of any tombstone in the log, is not written: list it in `withheld_records` as `{"path", "reason"}`. The id is the one in its path, or, for a file whose name is not a record path (a sync tool's conflict copy), the id its bytes give (4.2). List blobs that no record names in `unreferenced_blobs`, and stored blobs not decrypted in `not_exported_blobs` as `{"id", "reason"}`.
+4. Write `<dir>/manifest.json` with the canonical bytes of `{"spec": "bean-v0", "identity": <id>, "records": <count>, "blobs": [{"id": <blob id>, "plaintext_sha256": <hex>, "media_type": <string>}]}`, plus the lists above when they are not empty. Sort `blobs` by `id`. The `spec` string names the export format. It does not change with the software version.
 
 After it writes, the command fails with `too new: <id>` if the local identity is too new, or with `blob missing: <id>` if a blob is missing that the local identity or an agent it paired names. A blob that another author names does not fail it: anyone can name an absent blob.
 The export is not encrypted. The CLI MUST say this before it writes.
-`bean import-export <dir>` reverses the export for a log with the same identity secret.
-It encrypts each blob again. The deterministic encryption gives the same blob ids. The reference CLI refuses symbolic links, special file entries, record exports over 16 MiB, and plaintext blob exports over 256 MiB. It confines file reads to the selected export directory. These are CLI resource limits, not core validity rules.
+`bean import-export <dir>` reverses the export for a log with the same identity secret. It reads `manifest.json` first and refuses an export of another identity. It needs only the `identity` field and reads the file one token at a time. It applies 7.4 steps 2 and 3.2 to the union of the log and the export, so a record the person deleted does not come back. A blob that a deleted record names is not imported, unless a live record of the local identity or of a paired agent names it, by the rule of step 2.
+It encrypts each blob again. The deterministic encryption gives the same blob ids. The reference CLI refuses symbolic links, special file entries, record exports over 16 MiB, a manifest over 4 GiB, one manifest token over 1 MiB or nesting deeper than 16, and plaintext blob exports over 256 MiB. It confines file reads to the selected export directory. These are CLI resource limits, not core validity rules.
 
 ### 7.10 Caches
 
@@ -1003,16 +1007,16 @@ The adapter writes the HMAC input array (4.8) as `source.ref_input`.
 - that triple is a purged ref (7.8), or
 - an earlier line of the same input has that triple.
 
-If the writer's records with that triple never had the `value` of the new record, the source changed the reading. A lab's corrected report, an older report, a parser bug and two sources that share an id all look like this, so a program MUST NOT replace the value by itself and MUST NOT skip it in silence. `bean append` MUST skip it, name it on standard error, and exit 1 after the rest of the input.
+If the writer's records with that triple never had the `type`, `value` and `times.observed` of the new record, or no current record of the triple has its `type`, the source changed the reading. A lab's corrected report, an older report, a parser bug and two sources that share an id all look like this, so a program MUST NOT replace the value by itself and MUST NOT skip it in silence. `bean append` MUST skip it, name it on standard error, and exit 1 after the rest of the input.
 
-`bean append -corrections` is the person's word that the input is newer and right. It writes the new record with a `supersedes` ref to every current record of that triple, when the type is the same and the value is not empty (`{"n": null}`). Otherwise it reports the reading as before. A value that the triple has had is always skipped, so an old report cannot bring its value back. In one input, the first line for a triple decides.
+`bean append -corrections` is the person's word that the input is newer and right. It writes the new record with a `supersedes` ref to every current record of that triple, when a current record has the type, the observed time is the same and the value is not empty (`{"n": null}`). Otherwise it reports the reading as before: a different observed time may be another reading under the same id, as when two files number their rows alike. A value that the triple has had with that type and time, under a type a current record has, is always skipped, so an old report cannot bring its value back. A record of another type or time is never skipped in silence, even with the same value. In one input, the first line for a triple decides; a later line with the same triple and the same type, value and time is skipped, and one with another is an error that stops the input.
 
-`bean append` reports the count of added and skipped records, and how many of the added records are new values. DEFAULT.
+`bean append` reports the count of added and skipped records, and how many of the added records are new values. Skipped counts every line not written: one this section says to skip, and each one named on standard error. DEFAULT.
 
 ### 9.6 Unknown values
 
 An adapter MUST write null when the source has no value for a time.
-An adapter MUST put an unparseable time in `context.raw_time` and set `times.observed` to null.
+An adapter MUST put an unparseable time in `context.raw_time` and set `times.observed` to null, or refuse the input. A tuple ref (4.8) does not hold `context.raw_time`, so readings that differ only in an unparseable time get refs by their order, and a re-export with one row more moves them. An adapter whose ref is a tuple SHOULD refuse. The reference CSV importer refuses with `-blob`.
 An adapter MUST NOT invent values.
 
 ### 9.7 Parser fixes
@@ -1193,7 +1197,7 @@ Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <
 `bean-import-<source> [flags] <file>`
 
 - Output: JSONL partial records (9.2) on standard output.
-- `bean-import-csv -type <type> -system <system> -blob <blob id> [-unit <unit>] <file.csv>` reads a header row. It uses column `value`, optional column `time` (a time of 3.5; any other text goes to `context.raw_time`) and optional column `id` (native id). Get `<blob id>` from `bean blob put <file.csv>` first.
+- `bean-import-csv -type <type> -system <system> -blob <blob id> [-unit <unit>] <file.csv>` reads a header row. It uses column `value`, optional column `time` (a time of 3.5; with `-blob` any other text refuses the file, without it the text goes to `context.raw_time`) and optional column `id` (native id, once per file). Get `<blob id>` from `bean blob put <file.csv>` first.
 
 Test clock: the reference CLI reads the current time from `$BEAN_NOW` (RFC 3339) when it is set. Tests use it for holds and `times.imported`. DEFAULT.
 

@@ -227,11 +227,8 @@ func main() {
 		if err != nil {
 			fail(err)
 		}
-		if len(res.Changed) > 0 {
-			for _, c := range res.Changed {
-				fmt.Fprintf(os.Stderr, "changed: %s %s: the log has %s, this input says %s\n", c.ID[7:19], safe(c.Type), safe(c.Old), safe(c.New))
-			}
-			fail(fmt.Errorf("%d readings have a new value, and nothing was written for them. Check that this input is newer and right, then run append -corrections", len(res.Changed)))
+		if err := reportChanged(res.Changed, "run append -corrections"); err != nil {
+			fail(err)
 		}
 	case "blob":
 		if len(rest) != 2 {
@@ -239,7 +236,7 @@ func main() {
 		}
 		switch rest[0] {
 		case "put":
-			data, err := os.ReadFile(rest[1])
+			data, err := readBlobFile(rest[1])
 			if err != nil {
 				fail(err)
 			}
@@ -287,11 +284,30 @@ func main() {
 		if err := pf.Parse(rest); err != nil || pf.NArg() != 1 {
 			usage()
 		}
-		tid, err := s.Purge(pf.Arg(0), *reason)
+		res, err := s.PurgeAll(pf.Arg(0), *reason)
 		if err != nil {
 			fail(err)
 		}
-		fmt.Println("purged, tombstone", tid)
+		fmt.Println("purged, tombstone", res.Tombstone)
+		// A file that another record names stays (C25), and is still readable.
+		// Names counts only records that purge can reach; Others the deleted
+		// records waiting for gc, records about someone else, and damaged files.
+		for _, k := range res.Kept {
+			if k.Names > 0 {
+				rec := "records name"
+				if k.Names == 1 {
+					rec = "record names"
+				}
+				fmt.Printf("the file %s is kept: %d other %s it. Purge those too to erase it\n", k.ID, k.Names, rec)
+			}
+			if k.Others > 0 {
+				rec := "files name"
+				if k.Others == 1 {
+					rec = "file names"
+				}
+				fmt.Printf("the file %s is kept: %d other %s it that purge cannot reach: deleted and waiting for gc, about someone else, or damaged\n", k.ID, k.Others, rec)
+			}
+		}
 	case "gc":
 		r, b, err := s.GC()
 		if err != nil {
@@ -318,13 +334,35 @@ func main() {
 		if res.Replaced > 0 {
 			fmt.Printf("replaced %d bad copies\n", res.Replaced)
 		}
+		if res.BadRecords > 0 || res.BadBlobs > 0 {
+			fail(fmt.Errorf("skipped %d bad record files, %d bad blobs in %s; run bean -dir %s verify", res.BadRecords, res.BadBlobs, rest[0], rest[0]))
+		}
 	case "export":
 		if len(rest) != 1 {
 			usage()
 		}
 		fmt.Fprintln(os.Stderr, "bean: the export is not encrypted")
-		r, b, err := s.Export(rest[0])
-		fmt.Printf("exported %d records, %d blobs (plaintext)\n", r, b)
+		res, err := s.ExportAll(rest[0])
+		if res.Written {
+			// The export ran to its end; an error after this is about what it
+			// could not read, and everything else is in the folder.
+			fmt.Printf("exported %d records, %d blobs (plaintext)\n", res.Records, res.Blobs)
+			if n := len(res.Unreferenced); n > 0 {
+				fmt.Printf("blobs that no record names, such as one from blob put: %d\n", n)
+			}
+			if n := len(res.Invalid); n > 0 {
+				fmt.Fprintf(os.Stderr, "bean: %d record files fail their checks. manifest.json lists them (invalid_records), and %s holds a copy of each as it is. Run bean verify\n", n, filepath.Join(rest[0], "invalid"))
+			}
+			if n := len(res.NotExported); n > 0 {
+				fmt.Fprintf(os.Stderr, "bean: %d stored files were not decrypted. manifest.json lists each one with the reason (not_exported_blobs)\n", n)
+			}
+			if n := len(res.Withheld); n > 0 {
+				fmt.Fprintf(os.Stderr, "bean: %d damaged record files were left out because a deletion names them. manifest.json lists them (withheld_records)\n", n)
+			}
+			if n := res.MissingOthers; n > 0 {
+				fmt.Fprintf(os.Stderr, "bean: %d files that only other people's records name are not in this log (missing_blobs_of_others)\n", n)
+			}
+		}
 		if err != nil {
 			fail(err)
 		}
@@ -335,14 +373,44 @@ func main() {
 		if len(rest) != 1 {
 			usage()
 		}
-		r, b, err := s.ImportExport(rest[0])
+		res, err := s.ImportExportAll(rest[0])
 		if err != nil {
 			fail(err)
 		}
-		fmt.Printf("added %d records, %d blobs\n", r, b)
+		fmt.Printf("added %d records, %d blobs, refused %d purged\n", res.Records, res.Blobs, res.Refused)
 	default:
 		usage()
 	}
+}
+
+// reportChanged prints one changed: line per reading that has a new value and
+// was not written, and returns the error that the command fails with. A
+// reading that -corrections cannot write either says why, and the error does
+// not send the person to -corrections for it. fix names the step that writes
+// the others.
+func reportChanged(changed []core.Changed, fix string) error {
+	if len(changed) == 0 {
+		return nil
+	}
+	ask, refused := 0, 0
+	for _, c := range changed {
+		line := fmt.Sprintf("changed: %s %s: the log has %s, this input says %s", c.ID[7:19], safe(c.Type), safe(c.Old), safe(c.New))
+		if c.Reason != "" {
+			line += " (type " + safe(c.NewType) + "): not written, because " + safe(c.Reason)
+			refused++
+		} else {
+			ask++
+		}
+		fmt.Fprintln(os.Stderr, line)
+	}
+	var parts []string
+	if ask > 0 {
+		parts = append(parts, fmt.Sprintf("%d readings have a new value, and nothing was written for them. Check that this input is newer and right, then %s", ask, fix))
+	}
+	if refused > 0 {
+		parts = append(parts, fmt.Sprintf("%d readings were not written, and -corrections cannot write them either: each changed: line says why", refused))
+	}
+	return errors.New(strings.Join(parts, ". "))
 }
 
 // needsLog lists the commands that only make sense in a folder that holds

@@ -136,6 +136,7 @@ func TestParseReport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	checkRoundTrip(t, fixture(), rep)
 	if rep.Specimen != "000-000-0000-0" || rep.Collected != "01/02/2025 0815" || rep.Reported != "01/09/2025" || rep.Fasting != "Yes" {
 		t.Errorf("header = %+v", rep)
 	}

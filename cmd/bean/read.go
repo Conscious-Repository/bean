@@ -34,6 +34,13 @@ func parseInterspersed(fs *flag.FlagSet, args []string) ([]string, error) {
 	}
 }
 
+// badArg reports an argument that the command cannot read, such as a bad
+// time, and exits 2 like any other usage error.
+func badArg(err error) {
+	fmt.Fprintf(os.Stderr, "bean: %s\n", safe(err.Error()))
+	usage()
+}
+
 // parseBound reads a -since or -until value as bean add -at does.
 func parseBound(s string) (time.Time, error) {
 	if s == "" {
@@ -61,10 +68,10 @@ func cmdList(s *core.Store, args []string) {
 	}
 	f := core.Filter{Type: *typ, Author: *author, All: *all}
 	if f.Since, err = parseBound(*since); err != nil {
-		fail(err)
+		badArg(err)
 	}
 	if f.Until, err = parseBound(*until); err != nil {
-		fail(err)
+		badArg(err)
 	}
 	switch {
 	case f.Author == "me":
@@ -185,7 +192,7 @@ func cmdAdd(s *core.Store, args []string) {
 	}
 	if *at != "" {
 		if o.Start, o.Precision, err = core.ParseWhen(*at, time.Local); err != nil {
-			fail(err)
+			badArg(err)
 		}
 	}
 	o.About, o.Corrects = *about, *corrects
@@ -248,6 +255,34 @@ func readImage(path string) ([]byte, string, error) {
 
 const maxPhoto = 25 << 20
 
+// maxBlobPut is the largest file blob put stores: the most import-export
+// reads back (core ops.go maxImportBlobBytes), so every export of the log
+// can be read again. The format has no limit (DECISIONS 183, 210).
+const maxBlobPut = 256 << 20
+
+// readBlobFile reads a file for blob put, at most maxBlobPut bytes.
+func readBlobFile(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	tooLarge := fmt.Errorf("%s is larger than %d MiB, the most that import-export reads back", path, maxBlobPut>>20)
+	if fi, err := f.Stat(); err != nil {
+		return nil, err
+	} else if fi.Mode().IsRegular() && fi.Size() > maxBlobPut {
+		return nil, tooLarge
+	}
+	data, err := io.ReadAll(io.LimitReader(f, maxBlobPut+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxBlobPut {
+		return nil, tooLarge
+	}
+	return data, nil
+}
+
 // whenText is the observed start cut to its precision, or "-".
 func whenText(r *core.Record) string {
 	obs, ok := r.Observed.(map[string]any)
@@ -269,6 +304,26 @@ func whenText(r *core.Record) string {
 	return start
 }
 
+// blobText is a one-line view of a {"blob": id} value. SPEC 3.4 uses that
+// shape for a series, with its unit, and for a large payload such as a
+// kept lab report, without one. bean knows no series format (SPEC 9.4), so
+// only a value with a unit is called a series; anything else is a file,
+// with the media type its record states.
+func blobText(r *core.Record) string {
+	b, _ := r.Value["blob"].(string)
+	short := strings.TrimPrefix(b, "sha256:")
+	short = short[:min(12, len(short))]
+	if u, ok := r.Value["unit"].(string); ok && u != "" {
+		return "series " + short + " " + u
+	}
+	for _, ref := range r.Blobs {
+		if ref.Hash == b && ref.MediaType != "" {
+			return "file " + ref.MediaType + " " + short
+		}
+	}
+	return "file " + short
+}
+
 // valueText is a one-line view of value and context.note.
 func valueText(r *core.Record) string {
 	v := r.Value
@@ -287,9 +342,7 @@ func valueText(r *core.Record) string {
 	case v["b"] != nil:
 		out = fmt.Sprint(v["b"])
 	case v["blob"] != nil:
-		b, _ := v["blob"].(string)
-		b = strings.TrimPrefix(b, "sha256:")
-		out = "series " + b[:min(12, len(b))]
+		out = blobText(r)
 	case r.Type == "bean.genesis" || r.Type == "bean.succession":
 		out = r.ValueKey()
 	case r.Type == "agent.pair" || r.Type == "device.pair":

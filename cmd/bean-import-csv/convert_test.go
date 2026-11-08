@@ -59,23 +59,41 @@ func FuzzConvert(f *testing.F) {
 	f.Add("\ufeffvalue,x\nNaN,\"q\"\"\"\n")
 	f.Add("value\n1e999\n0x10\n")
 	f.Fuzz(func(t *testing.T, in string) {
-		var out bytes.Buffer
-		if err := convert(strings.NewReader(in), &out, options{typ: "x", system: "csv", precision: "second"}); err != nil {
-			return
-		}
-		for _, l := range strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n") {
-			if l == "" {
-				continue
-			}
-			v, err := core.Parse([]byte(l))
-			if err != nil {
-				t.Fatalf("output not parseable: %q: %v", l, err)
-			}
-			if string(core.Canonical(v)) != l {
-				t.Fatalf("output not canonical: %q", l)
-			}
+		for _, blob := range []string{"", keepBlob} { // standalone, and strict as under bean import
+			fuzzConvertOnce(t, in, blob)
 		}
 	})
+}
+
+// fuzzConvertOnce checks one mode. With -blob, no value that looks like a
+// number is text, and no time is left unread in context.raw_time.
+func fuzzConvertOnce(t *testing.T, in, blob string) {
+	var out bytes.Buffer
+	if err := convert(strings.NewReader(in), &out, options{typ: "x", system: "csv", precision: "second", blob: blob}); err != nil {
+		return
+	}
+	for _, l := range strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n") {
+		if l == "" {
+			continue
+		}
+		v, err := core.Parse([]byte(l))
+		if err != nil {
+			t.Fatalf("output not parseable: %q: %v", l, err)
+		}
+		if string(core.Canonical(v)) != l {
+			t.Fatalf("output not canonical: %q", l)
+		}
+		if blob == "" {
+			continue
+		}
+		rec := v.(map[string]any)
+		if s, ok := rec["value"].(map[string]any)["s"].(string); ok && decimal.MatchString(s) {
+			t.Fatalf("strict: a number kept as text: %q", l)
+		}
+		if ctx, ok := rec["context"].(map[string]any); ok && ctx["raw_time"] != nil {
+			t.Fatalf("strict: an unread time: %q", l)
+		}
+	}
 }
 
 // A fuzz finding: 1e17 parses, but SPEC 4.1 cannot carry an integer

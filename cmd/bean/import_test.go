@@ -5,10 +5,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
+
+	"github.com/Conscious-Repository/bean/core"
 )
 
 // These replace the Python helper's tests: bean import keeps the file
@@ -28,7 +33,7 @@ func importerOnPath(t *testing.T) string {
 	labcorpOnce.Do(func() {
 		labcorpDir, labcorpErr = os.MkdirTemp("", "bean-import-bin-*")
 		if labcorpErr == nil {
-			for _, name := range []string{"bean-import-labcorp", "bean-import-apple-health"} {
+			for _, name := range []string{"bean-import-labcorp", "bean-import-apple-health", "bean-import-csv"} {
 				out, err := exec.Command("go", "build", "-o", filepath.Join(labcorpDir, name), "../"+name).CombinedOutput()
 				if err != nil {
 					labcorpErr = &buildError{string(out)}
@@ -137,7 +142,7 @@ func TestCLIImportKeepsFileFirst(t *testing.T) {
 	}
 
 	// After the person purges the kept report, a reimport does not quietly
-	// add readings without it.
+	// add readings without it, and does not store the file again.
 	js, _, _ := run(t, dir, "", "ls", "-type", "lab.report", "-json")
 	for _, id := range recordIDs(js) {
 		if _, errs, code := run(t, dir, "", "purge", id); code != 0 {
@@ -147,8 +152,11 @@ func TestCLIImportKeepsFileFirst(t *testing.T) {
 	other := filepath.Join(t.TempDir(), "other.txt")
 	os.WriteFile(other, []byte(labReport("99")), 0o600)
 	_, errs, code = runPath(t, dir, path, "import", "labcorp", other)
-	if code != 1 || !strings.Contains(errs, "does not keep the file") {
+	if code != 1 || !strings.Contains(errs, "you deleted this file before") || !strings.Contains(errs, "nothing was written") {
 		t.Errorf("after purge: %d %s", code, errs)
+	}
+	if n := countFiles(t, filepath.Join(dir, "blobs")); n != 0 {
+		t.Errorf("%d blobs left after purging every report", n)
 	}
 }
 
@@ -199,8 +207,11 @@ func TestCLIImportNeedsArchiveFirst(t *testing.T) {
 	f := filepath.Join(t.TempDir(), "f.txt")
 	os.WriteFile(f, []byte("x"), 0o600)
 	_, errs, code := runPath(t, dir, bin+string(os.PathListSeparator)+os.Getenv("PATH"), "import", "fake", f)
-	if code != 1 || !strings.Contains(errs, "did not start with a record of the file") || !strings.Contains(errs, "no reading was written") {
+	if code != 1 || !strings.Contains(errs, "did not start with a record of the file") || !strings.Contains(errs, "nothing was written") {
 		t.Errorf("fake: %d %s", code, errs)
+	}
+	if n := countFiles(t, filepath.Join(dir, "blobs")); n != 0 {
+		t.Errorf("%d blobs stored for an importer that keeps no file", n)
 	}
 	if ls, _, _ := run(t, dir, "", "ls"); strings.Contains(ls, "lab.x") {
 		t.Errorf("reading written:\n%s", ls)
@@ -260,7 +271,7 @@ func TestCLIImportOtherSubjectDoesNotCount(t *testing.T) {
 		t.Fatalf("append: %d %s", code, errs)
 	}
 	run(t, dir, "", "purge", rec["id"].(string))
-	if _, errs, code := runPath(t, dir, path, "import", "labcorp", report); code != 1 || !strings.Contains(errs, "does not keep the file") {
+	if _, errs, code := runPath(t, dir, path, "import", "labcorp", report); code != 1 || !strings.Contains(errs, "you deleted this file before") {
 		t.Errorf("reimport: %d %s", code, errs)
 	}
 }
@@ -320,5 +331,196 @@ func TestCLIImportCorruptBlobRefused(t *testing.T) {
 	}
 	if js, _, _ := run(t, dir, "", "ls", "-type", "lab.report", "-json"); strings.TrimSpace(js) != "" {
 		t.Errorf("archive written: %s", js)
+	}
+}
+
+// Regression tests from the audit of 028a3a5. Synthetic data only. Each one
+// failed before its fix.
+
+// Purging the record that keeps a file erases the file at once, because no
+// reading names the blob, and a later import of it stores nothing.
+func TestCLIImportPurgeErasesFile(t *testing.T) {
+	path := importerOnPath(t)
+	for _, tc := range []struct{ source, typ string }{
+		{"labcorp", "lab.report"},
+		{"apple-health", "apple-health.export"},
+	} {
+		t.Run(tc.source, func(t *testing.T) {
+			dir := t.TempDir()
+			run(t, dir, "", "init")
+			src := filepath.Join(t.TempDir(), "file")
+			args := []string{"import", tc.source}
+			if tc.source == "labcorp" {
+				os.WriteFile(src, []byte(labReport("101")), 0o600)
+				args = append(args, "-tz", "America/Chicago")
+			} else {
+				appleZip(t, src, appleXML)
+				args = append(args, "-records")
+			}
+			args = append(args, src)
+			out, errs, code := runPath(t, dir, path, args...)
+			if code != 0 || strings.Contains(out, "added 0") {
+				t.Fatalf("import: %d %s %s", code, out, errs)
+			}
+			bid := regexp.MustCompile(`sha256:[0-9a-f]{64}`).FindString(out)
+			js, _, _ := run(t, dir, "", "ls", "-type", tc.typ, "-json")
+			for _, id := range recordIDs(js) {
+				if _, errs, code := run(t, dir, "", "purge", id); code != 0 {
+					t.Fatalf("purge: %s", errs)
+				}
+			}
+			if got, _, code := run(t, dir, "", "blob", "get", bid); code == 0 {
+				t.Errorf("purged file still readable: %d bytes", len(got))
+			}
+			if _, err := toolReadBlob(core.Open(dir), core.Filter{}, bid, 0); err == nil {
+				t.Error("MCP read_blob serves the purged file")
+			}
+			_, errs, code = runPath(t, dir, path, args...)
+			if code != 1 || !strings.Contains(errs, "you deleted this file before") {
+				t.Errorf("reimport: %d %s", code, errs)
+			}
+			if n := countFiles(t, filepath.Join(dir, "blobs")); n != 0 {
+				t.Errorf("reimport stored the purged file again: %d blobs", n)
+			}
+			if out, _, code := run(t, dir, "", "verify"); code != 0 {
+				t.Errorf("verify: %d %s", code, out)
+			}
+		})
+	}
+}
+
+// bean import csv keeps the file as csv.file, then the readings.
+func TestCLIImportCSV(t *testing.T) {
+	path := importerOnPath(t)
+	dir := t.TempDir()
+	run(t, dir, "", "init")
+	src := filepath.Join(t.TempDir(), "hrv.csv")
+	os.WriteFile(src, []byte("time,value,id\n2026-10-20T03:00:00Z,42.5,r1\n2026-10-21T03:00:00Z,40,r2\n"), 0o600)
+	args := []string{"import", "csv", "-type", "hrv.rmssd", "-unit", "ms", src}
+	out, errs, code := runPath(t, dir, path, args...)
+	if code != 0 || !strings.Contains(out, "kept csv.file sha256:") || !strings.Contains(out, "added 2, skipped 0") {
+		t.Fatalf("import: %d\n%s\n%s", code, out, errs)
+	}
+	if out, _, code := runPath(t, dir, path, args...); code != 0 || !strings.Contains(out, "already kept") || !strings.Contains(out, "added 0, skipped 2") {
+		t.Errorf("retry: %d %s", code, out)
+	}
+	if ls, _, _ := run(t, dir, "", "ls", "-type", "hrv.rmssd"); strings.Count(ls, "hrv.rmssd") != 2 {
+		t.Errorf("ls:\n%s", ls)
+	}
+	// A refused CSV leaves no blob.
+	bad := filepath.Join(t.TempDir(), "bad.csv")
+	os.WriteFile(bad, []byte("time,reading\n1,2\n"), 0o600)
+	before := countFiles(t, filepath.Join(dir, "blobs"))
+	if _, errs, code := runPath(t, dir, path, "import", "csv", "-type", "x", bad); code != 1 || !strings.Contains(errs, "nothing was written") {
+		t.Errorf("bad csv: %d %s", code, errs)
+	}
+	if after := countFiles(t, filepath.Join(dir, "blobs")); after != before {
+		t.Errorf("blobs %d -> %d", before, after)
+	}
+}
+
+// An interrupted or terminated import removes its plaintext copy and stops
+// the importer.
+func TestCLIImportSignalRemovesSnapshot(t *testing.T) {
+	for _, s := range []syscall.Signal{syscall.SIGINT, syscall.SIGTERM} {
+		t.Run(s.String(), func(t *testing.T) {
+			bin := t.TempDir()
+			os.WriteFile(filepath.Join(bin, "bean-import-slow"), []byte("#!/bin/sh\nsleep 30\n"), 0o755)
+			dir := t.TempDir()
+			run(t, dir, "", "init")
+			tmp := t.TempDir()
+			f := filepath.Join(t.TempDir(), "report.txt")
+			os.WriteFile(f, []byte("SYNTHETIC PATIENT Doe, Jane DOB 01/01/1990 glucose 101\n"), 0o600)
+			cmd := exec.Command(os.Args[0], "import", "slow", f)
+			cmd.Env = append(os.Environ(), "BEAN_TEST_MAIN=1", "BEAN_DIR="+dir, "BEAN_NOW=", "TMPDIR="+tmp,
+				"PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+			if err := cmd.Start(); err != nil {
+				t.Fatal(err)
+			}
+			deadline := time.Now().Add(5 * time.Second)
+			for {
+				if m, _ := filepath.Glob(filepath.Join(tmp, "bean-import-*", "out")); len(m) > 0 || time.Now().After(deadline) {
+					break
+				}
+				time.Sleep(20 * time.Millisecond)
+			}
+			cmd.Process.Signal(s)
+			start := time.Now()
+			cmd.Wait()
+			if time.Since(start) > 5*time.Second {
+				t.Error("bean waited for the importer")
+			}
+			if left, _ := filepath.Glob(filepath.Join(tmp, "bean-import-*")); len(left) > 0 {
+				t.Errorf("left after %s: %v", s, left)
+			}
+		})
+	}
+}
+
+// The importer's output goes to a bounded private file, not to memory.
+func TestImporterOutputCapped(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "bean-import-big")
+	os.WriteFile(bin, []byte("#!/bin/sh\nhead -c 3000000 /dev/zero\n"), 0o755)
+	dir := t.TempDir()
+	old := importerOutputLimit
+	importerOutputLimit = 1 << 20
+	defer func() { importerOutputLimit = old }()
+	if _, _, err := runImporter(bin, "sha256:"+strings.Repeat("0", 64), nil, "x", dir); err == nil || !strings.Contains(err.Error(), "more than") {
+		t.Errorf("err %v", err)
+	}
+	if info, err := os.Stat(filepath.Join(dir, "out")); err != nil || info.Size() > 1<<20 {
+		t.Errorf("spool: %v %v", info, err)
+	}
+}
+
+// A reading that -corrections cannot write either says why, and does not
+// send the person back to -corrections.
+func TestImportChangedSaysWhy(t *testing.T) {
+	c := core.Changed{ID: "sha256:" + strings.Repeat("a", 64), Type: "lab.glucose", Old: "90", New: "120"}
+	if msg := reportChanged([]core.Changed{c}, "run bean import csv -corrections").Error(); !strings.Contains(msg, "bean import csv -corrections") {
+		t.Errorf("without a reason: %s", msg)
+	}
+	c.NewType, c.Reason = "lab.ldl", "the type differs"
+	if msg := reportChanged([]core.Changed{c}, "run bean import csv -corrections").Error(); strings.Contains(msg, "then run") || !strings.Contains(msg, "cannot write them either") {
+		t.Errorf("with a reason: %s", msg)
+	}
+}
+
+// A signal stops the importer's whole process group: a child it started,
+// as the Labcorp importer starts pdftotext, does not run on.
+func TestImportSignalKillsImporterGroup(t *testing.T) {
+	bin := t.TempDir()
+	os.WriteFile(filepath.Join(bin, "bean-import-forks"), []byte("#!/bin/sh\nsleep 30 &\necho $! > \"$CHILD_PID\"\nwait\n"), 0o755)
+	dir := t.TempDir()
+	run(t, dir, "", "init")
+	pidFile := filepath.Join(t.TempDir(), "child")
+	f := filepath.Join(t.TempDir(), "report.txt")
+	os.WriteFile(f, []byte("SYNTHETIC glucose 101\n"), 0o600)
+	cmd := exec.Command(os.Args[0], "import", "forks", f)
+	cmd.Env = append(os.Environ(), "BEAN_TEST_MAIN=1", "BEAN_DIR="+dir, "BEAN_NOW=", "TMPDIR="+t.TempDir(), "CHILD_PID="+pidFile,
+		"PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	pid := 0
+	for deadline := time.Now().Add(5 * time.Second); pid == 0 && time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		if b, _ := os.ReadFile(pidFile); strings.HasSuffix(string(b), "\n") {
+			pid, _ = strconv.Atoi(strings.TrimSpace(string(b)))
+		}
+	}
+	if pid <= 0 {
+		cmd.Process.Kill()
+		t.Fatal("the importer did not start its child")
+	}
+	defer syscall.Kill(pid, syscall.SIGKILL)
+	cmd.Process.Signal(syscall.SIGTERM)
+	cmd.Wait()
+	if c := cmd.ProcessState.ExitCode(); c != 128+int(syscall.SIGTERM) {
+		t.Errorf("exit %d", c)
+	}
+	for deadline := time.Now().Add(3 * time.Second); syscall.Kill(pid, 0) != syscall.ESRCH; time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the importer's child runs on after bean was stopped")
+		}
 	}
 }

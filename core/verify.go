@@ -144,6 +144,12 @@ type Report struct {
 	// the identity's record, whatever its author field says: no step checks
 	// its key (DECISIONS 187).
 	OnChain map[string]bool
+	// GateKeys: identity -> the keys that the gate of 8.2 (K1) trusts: the
+	// head key of its chain, and the recovery keys that chain nodes commit to
+	// (as Commitment strings). They are taken before too-new identities are
+	// dropped. A record this build cannot judge unlocks files only when one
+	// of them signed it (DECISIONS 217). It changes no verdict.
+	GateKeys map[string]map[string]bool
 	// What readers show for a frozen identity (DECISIONS 191). None of this
 	// changes Valid, Errors or the verify output.
 	Kept           map[string]bool     // corrections that are "frozen", but every branch kept them
@@ -211,7 +217,8 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 	unknown := rp.checkFiles(files, proven) // step 1
 	rp.Unknown = unknown
 	trees := rp.buildTrees(sortedKeys(rp.Records)) // steps 2 and 3
-	rp.gate(unknown, trees)                        // 8.2
+	rp.GateKeys = gateKeys(trees)
+	rp.gate(unknown, trees) // 8.2
 	ids := rp.dropTooNew(trees)
 	position := rp.freeze(trees)                 // steps 4 and 5
 	sealedBy := sealSets(rp, ids)                // step 5b
@@ -230,9 +237,10 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 // person who restored from a stale backup and kept everything would see old
 // values come back, deleted records return, and new claims of a key that a
 // thief may hold. So readers follow what every branch at the fork agreed on,
-// and a deletion stays in effect on doubt only if a branch seals it or an older
-// key signed it: otherwise one signature with the key at the fork or a key below
-// it, which a thief may hold, could hide the whole log. A hidden record is not lost. The
+// and a deletion stays in effect on doubt only if an older key signed it, or the
+// key at the fork signed it and a branch seals it: otherwise one signature with
+// the key at the fork or a key below it, which a thief may hold, could hide the
+// whole log. A hidden record is not lost. The
 // verify output still says what the rule says.
 func (rp *Report) frozenView(ids []string, trees map[string]*tree, position map[string]map[string]int) {
 	forked := false
@@ -291,7 +299,10 @@ func (rp *Report) frozenView(ids []string, trees map[string]*tree, position map[
 		frozen := rp.Errors[id] == "frozen"
 		switch {
 		case r.Type == "bean.tombstone":
-			if t := rp.Records[r.Targets("purges")[0]]; frozen && t != nil && !t.IsIdentity() && t.Type != "bean.tombstone" && t.Subject == r.Subject && (p < head || count(r.Author, id) > 0) {
+			// A branch seals the records of the key at the fork, which it retires.
+			// Its seal says nothing of a record of a key below the fork: anyone with
+			// the words can list their own tombstones there (DECISIONS 196, 206).
+			if t := rp.Records[r.Targets("purges")[0]]; frozen && t != nil && !t.IsIdentity() && t.Type != "bean.tombstone" && t.Subject == r.Subject && (p < head || (p == head && count(r.Author, id) > 0)) {
 				rp.DeletedInDoubt[t.ID] = true
 			}
 		case r.IsDestructive():
@@ -437,6 +448,33 @@ func (rp *Report) buildTrees(ids []string) map[string]*tree {
 	return trees
 }
 
+// gateKeys returns, per identity, the head key of its chain and the
+// commitment of every recovery key that a chain node names. Only the
+// person's current key and the seed holder have them. A retired key is not
+// one of them: it is the key a thief holds.
+func gateKeys(trees map[string]*tree) map[string]map[string]bool {
+	out := map[string]map[string]bool{}
+	for gid, t := range trees {
+		m := map[string]bool{t.chain[len(t.chain)-1].ValueKey(): true}
+		for _, x := range t.chain {
+			m[x.Recovery()] = true
+		}
+		delete(m, "")
+		out[gid] = m
+	}
+	return out
+}
+
+// gateTrusts reports whether the gate of 8.2 trusts kid for identity id.
+// recovery is true for a recovery key, false for the head key.
+func (rp *Report) gateTrusts(id, kid string) (trusted, recovery bool) {
+	m := rp.GateKeys[id]
+	if m[Commitment(kid)] {
+		return true, true
+	}
+	return m[kid], false
+}
+
 // path holds the keys and commitments of the nodes from a genesis to the
 // node that the walk is at (5.8).
 type path struct{ used, commits, recs map[string]int }
@@ -476,7 +514,6 @@ func (p path) check(s, par *Record) error {
 func (rp *Report) gate(unknown []*Record, trees map[string]*tree) {
 	tooNew := map[string]bool{}
 	byRecovery := map[string]bool{} // halted by a record of a recovery key or a genesis
-	commits := map[string]map[string]bool{}
 	var ungated []*Record
 	for _, r := range unknown {
 		rp.Skipped++
@@ -490,21 +527,16 @@ func (rp *Report) gate(unknown []*Record, trees map[string]*tree) {
 			}
 			continue
 		}
-		t, ok := trees[r.Author]
-		if !ok {
+		if _, ok := trees[r.Author]; !ok {
 			continue
 		}
-		if commits[r.Author] == nil {
-			commits[r.Author] = map[string]bool{}
-			for _, x := range t.chain {
-				commits[r.Author][x.Recovery()] = true
-			}
-		}
+		// The same keys decide which unjudged records unlock files.
+		trusted, recovery := rp.gateTrusts(r.Author, r.Kid)
 		switch {
-		case commits[r.Author][Commitment(r.Kid)]:
+		case trusted && recovery:
 			tooNew[r.Author] = true
 			byRecovery[r.Author] = true
-		case t.chain[len(t.chain)-1].ValueKey() == r.Kid:
+		case trusted:
 			tooNew[r.Author] = true
 			rp.HeadHalt[r.Author] = append(rp.HeadHalt[r.Author], r.ID)
 		default:

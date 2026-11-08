@@ -127,7 +127,9 @@ bean ls -type 'lab.*'
 
 bean keeps the PDF first, encrypted, as a `lab.report` record, and checks that it reads back. Then you get one record for each result, with the value, unit, flag, reference interval, panel and lab comments. Your name, birth date and patient ids are not copied; comments the lab wrote are, and the PDF keeps everything. `-tz` is the time zone where the sample was taken; without it, only the day is recorded. Import the same file again and nothing is added. If a later report changes a value, for example a final result replaces `Pending`, the new PDF is kept, but `bean import` names the reading, writes nothing for it, and exits 1. If the report is newer and right, run it again with `-corrections`.
 
-The importer refuses a report it cannot read for sure, and then nothing is written: two results with one type, or a result whose value may have run into its name. It needs `pdftotext` (`brew install poppler`) and reads only the Labcorp patient-report layout. See [the importer notes](cmd/bean-import-labcorp/README.md).
+Each reading names the PDF by its SHA-256, not as a blob, so `bean purge` of the `lab.report` erases the PDF, and a later import of it writes nothing. Readings from importers before 0.2.0 still name the PDF; purge them too to erase it.
+
+The importer refuses a report it cannot read for sure, and then nothing is written: two results with one type, a test name that runs into the result column, or a result row before the column header. It needs `pdftotext` (`brew install poppler`) and reads only the Labcorp patient-report layout. See [the importer notes](cmd/bean-import-labcorp/README.md).
 
 ### Apple Health
 
@@ -138,7 +140,7 @@ bean import apple-health export.zip              # keeps the export, encrypted
 bean import apple-health -records export.zip     # also one record per reading
 ```
 
-The export has no sample ids, so bean cannot tell a changed reading in a later export from a new one. Nothing is summed per day. See [the importer notes](cmd/bean-import-apple-health/README.md).
+The export has no sample ids, so bean cannot tell a changed reading in a later export from a new one. Nothing is summed per day. Apple writes a percentage as a fraction, so walking double support 0.272 is stored with unit `1`: it means 27.2%. Blood pressure and food readings sit in Correlations; they stay in the file and are not read. `bean purge` of the `apple-health.export` erases the file. See [the importer notes](cmd/bean-import-apple-health/README.md).
 
 ### A CSV file
 
@@ -169,7 +171,7 @@ Add it to your client as an MCP server that uses stdio. Most clients take a JSON
 "bean": {"command": "/Users/you/go/bin/bean", "args": ["-dir", "/Users/you/health", "mcp", "-write", "-label", "assistant"]}
 ```
 
-Then tell the assistant what happened, for example "had ramen with extra broth around 1" or "took 400 mg magnesium". You can also ask questions: "is my resting heart rate going up this month?" The assistant logs your words with the correct type and time. It puts a calorie or sodium estimate in a separate record that points to the meal. Your words do not change. Its records show as `[assistant]` in `bean ls`. Use a different `-label` for each assistant. The assistant can log only the types in the vocabulary and in your own `vocabulary.md`, if you have one.
+Then tell the assistant what happened, for example "had ramen with extra broth around 1" or "took 400 mg magnesium". You can also ask questions: "is my resting heart rate going up this month?" The assistant logs your words with the correct type and time. It puts a calorie or sodium estimate in a separate record that points to the meal. Your words do not change. Its records show as `[assistant]` in `bean ls`. One machine has one agent key, so every assistant on it signs as the same agent, under one label. Pick a label that fits them all, such as `assistant`. bean refuses a second label for that key: it would show one assistant's records under another's name. To tell two assistants apart, run one on another machine ([below](#run-an-agent-on-another-machine)). The assistant can log only the types in the vocabulary and in your own `vocabulary.md`, if you have one.
 
 Without `-write`, the server can only read. With `-write`, the assistant signs with its own **agent key**, not your key. An agent can add records about you. It cannot correct or delete your records, and it cannot sign as you. The server sends the records it returns to the AI provider. Use a local model if that is a problem for you.
 

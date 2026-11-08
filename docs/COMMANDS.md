@@ -18,9 +18,10 @@ bean [-dir <folder>] <command> [arguments]
 |---|---|
 | 0 | Success. For `verify`: no errors. |
 | 1 | The command failed, or `verify` found errors. |
-| 2 | Usage error: unknown command, bad flag or bad argument. |
+| 2 | Usage error: unknown command, bad flag or bad argument, for example a time that `ls -since`, `ls -until` or `add -at` cannot read. |
 | 3 | Your identity has a record of a newer format version than this `bean` knows. Reads stop, and `export` writes every file first. Update `bean`, or if you did not write that record, run `bean rotate`. Another identity that is too new only gets its `too new` line. |
 | 4 | Your identity is frozen: two rotations were made from the same point. Reads still print, and warn you. Writes stop. Run `bean migrate`. |
+| 128 + n | `import` was stopped by signal n and removed its private copy of the file: 129 for SIGHUP, 130 for SIGINT (Ctrl-C), 131 for SIGQUIT, 143 for SIGTERM (`kill`). |
 
 | Environment variable | Meaning |
 |---|---|
@@ -56,7 +57,7 @@ Adds one record about you. Prints its id.
 | Flag | Meaning |
 |---|---|
 | `-unit <unit>` | Unit of a number, for example `kg`, `L`, `mg`, `{score}`. |
-| `-at <time>` | When it happened. Default: now, to the minute. |
+| `-at <time>` | When it happened. Default: now, to the minute. A time it cannot read exits 2 and writes nothing. |
 | `-note <text>` | Free text. Stored in `context.note`. |
 | `-about <id>` | The record that this one comments on. |
 | `-corrects <id>` | Your earlier record that this one replaces, for example a wrong value. `ls` then shows only the new one. You can correct only records that you wrote. |
@@ -65,28 +66,33 @@ Adds one record about you. Prints its id.
 
 ### `append [-agent]`
 
-Reads records from stdin, one JSON object per line, as an importer writes them. Signs and stores each one. Prints `added <n>, skipped <m>`. A record that is already in the log, or that you deleted, is skipped, so you can import the same file again safely. `-agent` signs with the agent key.
+Reads records from stdin, one JSON object per line, as an importer writes them. Signs and stores each one. Prints `added <n>, skipped <m>`. A record that is already in the log, or that you deleted, is skipped, so you can import the same file again safely. `skipped` counts every line not written: already in the log, deleted, a repeat of an earlier line of the same input, a correction whose target is not in the log, and each reading named on a `changed:` line (below). When there is a `changed:` line, `append` exits 1. `-agent` signs with the agent key.
 
 ### `blob put <file>`
 
-Encrypts and stores a file, for example the PDF an import came from. Prints the blob id. Give that id to an importer with `-blob`.
+Encrypts and stores a file, for example the PDF an import came from. Prints the blob id. Give that id to an importer with `-blob`. The file can be up to 256 MiB, the most that `import-export` reads back, so every export of the log can be read again. A larger file is refused with exit 1.
 
 ### `import <source> [importer flags] [-corrections] <file>`
 
 Keeps a provider file, then adds its readings. Runs `bean-import-<source>`, found next to `bean` or on `PATH`, for example `bean import labcorp -tz America/Chicago report.pdf`. In order, and it stops at the first failure:
 
-1. It copies the file privately, at most 256 MiB, and runs the importer on the copy. If the importer refuses it, nothing is written.
-2. It stores the copy, encrypted, and reads it back. The bytes must match.
-3. It adds the importer's first record, the one that keeps the file (`lab.report`), and checks that the log keeps it: a current record of yours, about you, that names the blob and the file's SHA-256, and a blob that still reads back as the file. This check proves every record file, as `verify` does, because the object cache vouches for a file by its size and time. A file you purged before is not kept again, and its readings are not added.
-4. It adds the readings, then checks the file record again.
+1. It copies the file privately, at most 256 MiB, works out the id the encrypted copy will have, and runs the importer on the copy. The importer's output goes to a private file, at most 1 GiB of readings plus 1 MiB. If the importer refuses the file, nothing is written.
+2. It checks the importer's first record: it must keep this file (`lab.report`, `apple-health.export`, `csv.file`) and carry `source.ref_input`, not a ready-made `source.ref` or a `source.supersedes_ref`. It must pass the checks `append` makes of a record: its fields, its size, your key. If it does not, or you deleted that record before with `purge`, nothing is written, not even the file. A file you deleted stays deleted under any `-system`, on a copy whose `local/purged-refs.jsonl` remembers the deletion: a copy that only received the deletion by sync, and never held the record, stores the file again. A file kept under another archive type is not caught.
+3. It stores the copy, encrypted, and reads it back. The bytes must match.
+4. It adds the first record and checks that the log keeps it: a current record of yours, about you, that names the blob and the file's SHA-256, and a blob that still reads back as the file. This check proves every record file, as `verify` does, because the object cache vouches for a file by its size and time.
+5. It adds the readings, then checks the file record again.
 
-The error says what was written. A failure in step 4 can leave some readings; run the same command again, it adds only what is missing. A changed reading works as in `append`: nothing is written for it, the command exits 1, and `-corrections` writes it.
+The error says what was written. A failure in step 5 can leave some readings; run the same command again, it adds only what is missing. Ctrl-C, `kill`, a closed terminal (SIGHUP) or SIGQUIT stops the importer and every process it started, such as `pdftotext`, also one still running after the importer exited, and removes the private copy; the exit code is 128 plus the signal number. A process the importer started that keeps its output open after it exits fails the import after one second, and is stopped. The importer runs in a process group of its own, so a SIGKILL to bean's group (`timeout -s KILL`, a job runner cancelling a step) does not reach it, and bean, killed, can neither stop it nor remove the private copy, which stays in the temporary folder until it is cleaned. On Linux the kernel then kills the importer, but not processes it started. On macOS nothing does: the importer runs to its end, within its own limits (30 seconds for `pdftotext` in `bean-import-labcorp`). Stop bean with a signal it can catch. When the import worked, the importer's last message comes last, after its name, with control characters shown as `\xNN`. When it failed, only the error is printed. A changed reading works as in `append`: nothing is written for it, the command exits 1, and `-corrections` writes it. A reading that `-corrections` still does not write has another type or no value under a ref the log has: give each source its own `-system`.
+
+Readings name the file by its SHA-256 (`context.report_sha256`, `export_sha256`, `file_sha256`), not as a blob. So `purge` of the record that keeps the file erases the file. Readings from importers before `bean-import-labcorp@0.2.0`, `bean-import-apple-health@0.2.0` and `bean-import-csv@0.6.0` still name the blob, and the file stays until you purge them too.
 
 ## Read
 
 ### `ls [flags]`
 
 Lists current records in time order: when, type, value, who wrote it if not you, and the first 12 hex digits of the id. A corrected record shows only its newest version. Deleted records never show.
+
+A record that keeps a file, such as `lab.report` or `apple-health.export`, shows its value as `file <media type> <blob id start>`. A value in a blob with a unit shows as `series <blob id start> <unit>`. A time that `-since` or `-until` cannot read exits 2.
 
 | Flag | Meaning |
 |---|---|
@@ -107,7 +113,7 @@ Writes the decrypted file to stdout: `bean blob get <id> > report.pdf`.
 
 ### `append`, changed readings
 
-If an input gives a new value for a reading you already have, `append` writes nothing for it, prints a `changed:` line, and exits 1. bean cannot tell a lab's corrected report from an older report, a parser bug, or two sources that share an id. If the input is newer and right, run `append -corrections`: the new value replaces the old one as a correction, and the output says `1 of them new values`. It refuses a different type or an empty value: for two sources that share ids, give each its own `-system`. A value the reading has had is always skipped, so an old report cannot bring it back.
+If an input gives a new value for a reading you already have, `append` writes nothing for it, prints a `changed:` line, and exits 1. bean cannot tell a lab's corrected report from an older report, a parser bug, or two sources that share an id. If the input is newer and right, run `append -corrections`: the new value replaces the old one as a correction, and the output says `1 of them new values`. It refuses a different type or an empty value, with or without the flag. Then the `changed:` line names the input's type and says why, for example `(type lab.ldl): not written, because its type differs`, and the error does not send you to `-corrections`. For two sources that share ids, give each its own `-system`. A value the reading has had is always skipped, so an old report cannot bring it back, but only with the reading's own type and time: a reading of another type or time under the same id is a `changed:` line even when its value is the same, and `-corrections` does not write it. Two files that number their rows alike under one `-system` give this; give each its own `-system`. Two lines of one input with the same id and another reading stop the input with an error.
 
 ### `verify`
 
@@ -138,10 +144,10 @@ Runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdin
 | `query_records` | Records by type and time. |
 | `stats` | Count, minimum, maximum, mean, median and spread of one type, by day, week or month if asked. Readings by different authors or in different units are in separate `groups`. |
 | `get_record` | One non-deleted, valid record, including superseded history, its status and replies. Blob IDs are metadata. |
-| `read_blob` | Only blobs of current records; superseded-only history does not grant content access. Text is returned; for binary files only size. |
+| `read_blob` | Only blobs of current records of yours or of a paired agent; superseded-only history and a stranger's record do not grant content access. Text is returned; for binary files only size. |
 | `log_entry` | With `-write` only. Adds a record signed by the agent key, of a type from the vocabulary only: the built-in one plus `vocabulary.md` in the bean folder, if it exists (cmd/bean/vocabulary.md, "Your own types"). It can also comment on a record (`about`) or replace one of the agent's own records (`corrects`). |
 
-With `-write`, the first start makes the agent key of this machine and, on your own machine, trusts it. `-label` names that agent (default: `agent@<computer name>`).
+With `-write`, the first start makes the agent key of this machine and, on your own machine, trusts it. `-label` names that agent (default: `agent@<computer name>`). Without `-label`, a key that already exists keeps its name. A label that differs from the key's pairing is refused with exit 1, as in `agent init`.
 
 ### `agent init [-label <name>] [-identity <id>]`
 
@@ -150,24 +156,45 @@ Makes the agent key of this machine. Prints the agent key and its npub.
 - On your own machine it also trusts the key (writes an `agent.pair` record).
 - On a copy without your key, for example a cloud server, it prints the `bean agent pair` command to run on your own machine.
 - In a folder with copied records but no identity, it takes the only identity there. Use `-identity` if there are several.
+- If the key is already paired, it prints that pairing. A different `-label` is refused with exit 1, and the error names the label the key has. One machine has one agent key, and every assistant on it signs with it: a second name would show one assistant's records under another's name.
+- If you unpaired the key, it refuses. Run `agent pair` to trust it again.
 
 ### `agent pair <npub> [-label <name>]`
 
 Run on your own machine. Records that you trust this agent key to write about you. `bean ls` then shows its records with the label.
 
+If the key is already paired, the same label or no `-label` prints that pairing. A different label is refused with exit 1 and changes nothing: bean does not rename an agent, because every record it wrote would then show the new name. A key you unpaired gets a new pairing.
+
 ## Copies and keys
 
 ### `sync <folder>`
 
-Copies to this log every record and file that the other folder has and this one does not. It checks each file first, and replaces a stored copy that fails the checks. It does not copy a record that a valid deletion names. Run it both ways to make two copies the same. Prints `copied <r> records, <b> blobs, refused <p> purged`. Sync only from your own copies.
+Copies to this log every record and file that the other folder has and this one does not. It checks each file first, and replaces a stored copy that fails the checks. It reads this log's files from disk, not from the cache, so it also repairs a file that was changed in place. It does not copy a record that a valid deletion names. It judges each deletion on the files of both folders together, not on what the other folder says: a copy that has not seen your rotation takes the old key's deletions for valid. Run it both ways to make two copies the same. Prints `copied <r> records, <b> blobs, refused <p> purged`. Sync only from your own copies.
+
+- The other folder must hold a log (`local/identity` or `objects/`). If it does not, `sync` fails with `no log in <folder>`, so a typo does not look like a sync with nothing to copy.
+- A record file of the other folder that fails its checks is not copied, nor a file that this log needs whose hash is wrong. Then `sync` copies the rest, prints `skipped <n> bad record files, <m> bad blobs in <folder>`, and exits 1. Run `bean verify` in that folder. A stranger's broken file there has the same effect.
+- It copies only the files that a record names. A file from `blob put` that no record names stays where it is; `export` writes it.
 
 ### `export <folder>`
 
-Writes a plaintext copy of every record and file into an empty or new folder, with a `manifest.json`. The export is not encrypted.
+Writes a plaintext copy of every record and file into an empty or new folder, with a `manifest.json`. The export is not encrypted. Prints `exported <r> records, <b> blobs (plaintext)` when it ran to its end. Into a folder that is not empty it fails at once and writes nothing.
+
+| In the export | What it holds |
+|---|---|
+| `records/` | Every record file that passes its checks, also of a newer format. Deleted records stay behind. |
+| `blobs/` | Your stored files, decrypted. |
+| `invalid/<path>` | Each record file that fails its checks, as it is. `export` prints how many, and exits 0: nothing is left behind. Run `bean verify`. A damaged copy of a deleted record stays behind: a tombstone names its id, or the record is hidden. A file under another name, such as a sync tool's conflict copy (`<name>.sync-conflict-….json`, `<name> (conflicted copy).json`, `<name> 2.json`), stands for the id its bytes give. |
+| `manifest.json` | The identity, the counts and each blob's SHA-256. Also, if any: `missing_blobs` (named by a record of yours or of a paired agent, but not here), `missing_blobs_of_others` (how many absent files only other records name; anyone can name any id), `unreferenced_blobs` (no record names them, for example from `blob put`; they are in `blobs/` too), `not_exported_blobs` (stored here, each with its reason), `invalid_records`, and `withheld_records` (damaged copies of deleted records). |
+
+A file is decrypted only if a record of yours or of a paired agent names it, and that record is valid, kept or in doubt. A record that this bean cannot judge (a newer format, or an identity with records from a newer bean) counts only if your current key or a recovery key from your words signed it, or, for a paired agent, the agent's own key. Its author field alone proves nothing, and a key you retired is the key a thief holds. A pairing of such an identity counts by the same rule. A stranger's record, or one that is not valid, can name any file, also one you deleted: such a file is listed in `not_exported_blobs` and not written. The export fails at the end if a file of yours is missing, or if your identity has records from a newer bean. Everything else is in the folder by then.
 
 ### `import-export <folder>`
 
-Reads an export into a log that has the same identity secret.
+Reads an export into a log of the same identity. Prints `added <r> records, <b> blobs, refused <p> purged`.
+
+- It reads `manifest.json` first, one token at a time, and keeps only the identity, so a large log's export reads back. A single value over 1 MiB, or nesting deeper than 16, is refused. An export of another identity fails with `export of identity <id>, this log is <id>`, and a folder without the file is `not an export`.
+- It follows the rule of `sync`: a record that a valid deletion names is refused, so an older export does not bring back what you purged since. Nor does it bring back a file that a deleted record names, unless a live record of yours or of a paired agent names it too. A stranger's record does not count.
+- It does not read `invalid/`.
 
 ### `rotate [-list] [-seal-all] [-no-seal <id>]... [-nostr new|<file>]`
 
@@ -196,11 +223,11 @@ Starts a new identity from a frozen log. On any other log it refuses: run `rotat
 
 ### `purge [-reason <text>] <id>`
 
-Deletes a record about you. Writes a tombstone that every copy obeys, and erases the record here at once. The tombstone does not keep the import ref of the record. `local/purged-refs.jsonl` does, so a later import of the same data adds nothing on this copy, but it does on a copy without that file. You cannot purge identity records or other tombstones.
+Deletes a record about you. Writes a tombstone that every copy obeys, and erases the record here at once. `sync` and `import-export` refuse the record after that, also from an older copy or export. Its files are erased too, unless another record names them. Then `purge` prints `the file <id> is kept: <n> other records name it`, and the file is still readable. Purge those records too to erase it. It counts only records it can reach. Other files that keep it are counted on a second line: a deleted record waiting for `gc`, a record about someone else, or a damaged file. A file under another name, such as a sync tool's conflict copy, is not a record: it keeps no file, and `purge` erases a copy of the record with it. A record of a newer format, which this bean cannot judge, can be purged too. `export` writes a kept file only if a valid record of yours or of a paired agent names it. Files are erased before the record: if purge fails in between, the record and its tombstone stay, the next command hides the record, and `gc` erases it after the hold. The tombstone does not keep the import ref of the record. `local/purged-refs.jsonl` does, so a later import of the same data adds nothing on this copy, but it does on a copy without that file. You cannot purge identity records or other tombstones.
 
 ### `gc`
 
-Erases records that a deletion from another copy hid at least 7 days ago, and the files that only those records used. Nothing is erased without `gc` or `purge`. It refuses while your identity has records from a newer bean or is frozen, or a rotation's seal parts are missing (`incomplete seals`).
+Erases records that a deletion from another copy hid at least 7 days ago, and the files that only those records used. It also erases a file under another name, such as a sync tool's conflict copy, of a record that it erases or that is erased already. Only a copy of your own deleted record counts as a record, and only it takes the files it names along; any other copy is removed alone. It erases the files first, so a failure leaves the hidden record for the next `gc`. Nothing is erased without `gc` or `purge`. It refuses while your identity has records from a newer bean or is frozen, or a rotation's seal parts are missing (`incomplete seals`).
 
 ## Other
 
@@ -216,18 +243,37 @@ Importers read one source format and write records to stdout. They never sign an
 
 Reads a Labcorp patient report, which is also what Superpower gives you. Needs `pdftotext` (`brew install poppler`), or the text it makes. One record per result: type `lab.<test name>`, value and unit, and the flag, reference interval, panel, lab and comments. Your name, birth date and patient ids are not copied.
 
-It refuses a report it cannot read for sure: two specimens, two results that map to one type, or a result with no value whose name ends in a number. A two-digit number at the end of a name is a lab code only if the report's list of performing labs names it, so `Interleukin 10` stays `lab.interleukin-10`. The same reading listed in two panels is one result.
+It reads the report by a grammar (`cmd/bean-import-labcorp/README.md`, DECISIONS 222 and 224): every line must be a kind it knows, or the report is refused and the error names the line. Nothing is skipped because it looks unimportant.
 
-- `-blob`: the blob id of the PDF, from `bean blob put`. With it, the first record is a `lab.report` that keeps the PDF. `bean import` passes it.
+- Lines: page header lines, matched whole (your name with `DOB:` and `Patient Report`, the copyright line, `All Rights Reserved ...`, `Date Created and Stored ... Page n of m`); field lines, every token a known `Label: value` (`Specimen ID`, `Date Collected`, `Date Reported`, `Fasting`, `Patient ID` and a few more); panel headings, one token at the margin; the column header, exactly `Test`, `Current Result and Flag`, `Previous Result and Date`, `Units`, `Reference Interval`, the same columns on every page; result rows, a name at `Test` that does not end in `:` and each other token in the column band its start is in, and not within two columns of where a band starts; every token of a row or value line must be in a field of the result (a third token in the result column or a second unit is refused); a value line under a row with nothing after its name; comment lines, one token of text (or `Note:` and one more) left of the result column; `Please note` rows and their text. After `Disclaimer`, `Icon Legend` or `Performing Labs` only page header and field lines, lab list lines (`01: BN - Labcorp ..., ...`), one token of text at the margin, and `Patient Details` with lines that line up with its columns.
+- Values: a number with an optional `<`, `>`, `<=`, `>=`; `1+` to `4+`; a range like `0-5`; a titer like `1:40`; or one of a short list of results (`Negative`, `Positive`, `Non Reactive`, `Not Detected`, `Trace`, `Clear` and a few more). Flags: `H`, `L`, `A`, `High`, `Low`, `Abnormal`, `Critical`, `Panic`, `Alert`. A flag is never a value: a flag alone in the result column is refused, since the value may sit in the name, so `Abnormal` as a result is refused too. Anything else in the result column is refused, a free-text result or `1,234` too. Units are one word with a letter, `%` or `/`, so a range in the units column (`9-20`) is refused.
+- Fields: the specimen id, collection date and time, report date and fasting are read from fields only, and every one in the report must agree. Two specimens or two collection days are refused.
+- Characters: a line it reads holds printable ASCII only. A tab, a Unicode space, an invisible mark or an accented letter is refused, in a name, a value or a comment. The form feed that `pdftotext` puts at the start of a page is read. Your name in its header line, the copyright line (© and ®), the ordering physician and the patient's and physician's columns of the patient details may hold accents, but no control or invisible character.
+- A result with no value: taken only when the first line under it says `Test not performed`, `Not performed`, `Test cancelled` or `Cancelled` (or `canceled`), and every word of its name after the first is letters and hyphens and not a value or a flag. So `Glucose 101`, `Lipoprotein (a)` and `Vitamin A` with no value are refused, with or without a comment.
+
+A word of a name after the first may not look like a value or flag (`Glucose 101`, `Urine Glucose 3+`, `ANA Titer 1:160`, `HCV Ab Reactive`, `Beta 2 Microglobulin`), except in a numbered test: `Interleukin` or `Factor` and one or two digits, `CA 125`, `CA 15-3`, `CA 19-9`, `CA 27.29`, `CA 72-4`, `Cyfra 21-1`. A two-digit number at the end of a name is a lab code only if the report's list of performing labs names it, so `Interleukin 10` stays `lab.interleukin-10`; if the list names lab 10, it is refused. Without a list it can read whole, any number in the code column is refused: it may be the value. Two results that map to one type are refused, and so is a test whose type would be `lab.report`; the same reading listed in two panels is one result only when its value, flag, unit, range, lab and comment all match.
+
+The shapes come from a synthetic report. A real one may hold a line the grammar does not know yet; it is refused by line number, so try yours before you rely on it.
+
+- `-blob`: the blob id of the PDF, from `bean blob put`. With it, the first record is a `lab.report` that keeps the PDF, and each reading has its SHA-256 in `context.report_sha256`. `bean import` passes it.
 - `-tz`: the time zone where the sample was taken, for example `America/Chicago`. Without it, only the day is recorded, because the report does not say the zone.
 
 ### `bean-import-apple-health -blob <id> [-records [-types <t>,...]] <export.zip | export.xml>`
 
-Reads an Apple Health export. By default it writes one `apple-health.export` record that keeps the file, with counts per type. With `-records` it also writes one record per reading of 16 supported types, or of the `-types` you name. Your name, birth date, source and device names are not copied; the file keeps them. Run it as `bean import apple-health [-records] export.zip`.
+Reads an Apple Health export. By default it writes one `apple-health.export` record that keeps the file, with counts per type. With `-records` it also writes one record per reading of 16 supported types, or of the `-types` you name. Apple writes a percentage as a fraction with unit `%`, for the `*Percentage` types and walking steadiness alike. Those readings say unit `1` (0.272 is 27.2%) and keep `context.source_unit: "%"`; a value outside 0..1, or another unit, is refused. Unit `%` on any other type is refused, and so is a quantity with no unit. Blood pressure and food are Correlations: they are counted and kept in the file, and a selected reading inside one is refused. Your name, birth date, source and device names are not copied; the file keeps them. Run it as `bean import apple-health [-records] export.zip`.
 
 ### `bean-import-csv -type <type> [-unit <unit>] [-system <name>] [-blob <id>] [-precision <p>] <file.csv>`
 
-Reads a CSV file with a header row. Column `value` is required. Column `time` (RFC 3339) and column `id` (the source's id for the row) are optional. Other columns go into `context`. One type per file.
+Reads a CSV file with a header row. Column `value` is required. Column `time` (RFC 3339) and column `id` (the source's id for the row) are optional. Each non-empty cell of another column goes into `context` as text, under the column's name in lower case. One type per file. With `-blob` the first record is a `csv.file` that keeps the file, at most 256 MiB, and each reading has its SHA-256 in `context.file_sha256`; a column of that name is refused. Run it as `bean import csv -type <type> [-unit <unit>] file.csv`.
+
+It refuses the file, names the line, and writes nothing when:
+
+- a row has more or fewer fields than the header. An unquoted `1,234` or `72,5` is two fields; put such a number in quotes, and it is kept as text.
+- two column names are the same ignoring letter case and spaces at either end (`Value` and `value `), or a column is named `raw_time`.
+- two rows have the same `id`. One id names one reading. Across files, a row whose id another file already used under the same `-system` is a `changed:` line when its time differs.
+- with `-blob` (so under `bean import`): a `time` that is not RFC 3339 with an offset, or a `value` written as a number that cannot be stored exactly: more digits than a float keeps (`0.30000000000000001`), a nonzero number that would be 0 (`1e-400`), or one too large (`1e17`, `9007199254740993`). An empty `time` is no time and is taken.
+
+Without `-blob` it keeps its older behaviour for those two: an unread time goes to `context.raw_time`, and an inexact number stays text.
 
 ## Files in a log folder
 

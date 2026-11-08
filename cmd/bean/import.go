@@ -11,21 +11,41 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
+	"sync"
+	"syscall"
+	"time"
 
 	"github.com/Conscious-Repository/bean/core"
 )
 
 // bean import <source> [importer flags] [-corrections] <file> keeps the raw
 // file first, then its readings. It runs bean-import-<source>, which never
-// signs: this command stores the file, checks it reads back, appends the
-// importer's archive record, checks that the log keeps it, and only then
-// appends the readings. Each step that can fail says what was written.
+// signs. Blob ids are deterministic, so this command knows the file's id
+// before it stores anything. It checks the importer's first record, the one
+// that keeps the file, and that the person did not purge it, before it
+// stores the file. Then it stores the file, checks it reads back, appends
+// that record, checks that the log keeps it, and only then appends the
+// readings. Each step that can fail says what was written.
 
 // maxImportFile bounds the private copy of a source file.
 const maxImportFile = 256 << 20
+
+// maxImporterOutput bounds what an importer writes: 1 GiB of readings, the
+// Apple Health importer's own limit, and 1 MiB for the record of the file.
+// The output goes to a private file, not to memory.
+const maxImporterOutput = 1<<30 + 1<<20
+
+// importerOutputLimit is maxImporterOutput; a test lowers it.
+var importerOutputLimit int64 = maxImporterOutput
+
+// maxImporterStderr is how much of the importer's stderr is kept: its last
+// line is the message.
+const maxImporterStderr = 64 << 10
 
 var sourceName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
@@ -54,11 +74,8 @@ func cmdImport(s *core.Store, args []string) {
 	if err != nil {
 		fail(err)
 	}
-	if len(out.changed) > 0 {
-		for _, c := range out.changed {
-			fmt.Fprintf(os.Stderr, "changed: %s %s: the log has %s, this file says %s\n", c.ID[7:19], safe(c.Type), safe(c.Old), safe(c.New))
-		}
-		fail(fmt.Errorf("%d readings have a new value, and nothing was written for them. The file is kept. Check that it is newer and right, then run bean import %s -corrections", len(out.changed), source))
+	if err := reportChanged(out.changed, "run bean import "+source+" -corrections"); err != nil {
+		fail(fmt.Errorf("the file is kept. %w", err))
 	}
 }
 
@@ -87,8 +104,9 @@ type importResult struct {
 func phaseError(phase string, err error) error {
 	msg := map[string]string{
 		"validation": "the file was not accepted, and nothing was written",
+		"purged":     "you deleted this file before (bean purge), and nothing was written",
 		"storage":    "the file could not be stored and read back; an encrypted copy may remain, but no record was written",
-		"archive":    "the record that keeps the file was not added; no reading was written",
+		"archive":    "the record that keeps the file was not added, and an encrypted copy of the file may remain; no reading was written",
 		"retention":  "the log does not keep the file (it may have been deleted with bean purge); no reading was written",
 		"readings":   "some readings may be written; run the same command again, it adds only what is missing",
 	}[phase]
@@ -101,42 +119,86 @@ func runImport(s *core.Store, bin, file string, args []string, corrections bool)
 	if err != nil {
 		return res, err
 	}
+	// Deferred calls run last first: the folder goes, then the trap stops.
+	// A signal between the two still finds the folder removed.
+	defer removeOnSignal(dir)()
 	defer os.RemoveAll(dir)
 	// One private snapshot: the importer, the hash and the stored blob all see
 	// the same bytes, whatever happens to the file meanwhile.
-	data, err := snapshot(file, filepath.Join(dir, "source"))
+	snap := filepath.Join(dir, "source")
+	data, err := snapshot(file, snap)
 	if err != nil {
 		return res, phaseError("validation", err)
 	}
 	sum := sha256.Sum256(data)
 	digest := hex.EncodeToString(sum[:])
-	snap := filepath.Join(dir, "source")
-	// Validate before any write.
-	if _, _, err := runImporter(bin, "sha256:"+strings.Repeat("0", 64), args, snap); err != nil {
+	bid, err := s.BlobIDOf(data)
+	if err != nil {
 		return res, phaseError("validation", err)
 	}
-	bid, err := s.PutBlob(data)
+	out, note, err := runImporter(bin, bid, args, snap, dir)
+	if err != nil {
+		return res, phaseError("validation", err)
+	}
+	defer out.Close()
+	// Check the record that keeps the file before anything is written: an
+	// importer that keeps no file, or a file the person deleted, leaves
+	// nothing behind.
+	rd := bufio.NewReaderSize(out, 64<<10)
+	first, err := firstLine(rd)
+	if err != nil {
+		return res, phaseError("validation", err)
+	}
+	var archive struct {
+		Type   string         `json:"type"`
+		Value  map[string]any `json:"value"`
+		Source map[string]any `json:"source"`
+		Blobs  []struct {
+			Hash string `json:"hash"`
+		} `json:"blobs"`
+	}
+	listed := false
+	if json.Unmarshal(first, &archive) == nil {
+		for _, b := range archive.Blobs {
+			listed = listed || b.Hash == bid
+		}
+	}
+	if !listed || archive.Type == "" || archive.Value["blob"] != bid {
+		return res, phaseError("validation", errors.New("the importer did not start with a record of the file"))
+	}
+	// The purge check computes the ref from ref_input. A ready-made ref
+	// cannot be checked under another system, so refuse it.
+	if _, ok := archive.Source["ref_input"].([]any); !ok {
+		return res, phaseError("validation", errors.New("the record of the file has no source.ref_input"))
+	}
+	if _, has := archive.Source["ref"]; has {
+		return res, phaseError("validation", errors.New("the record of the file carries a ready-made source.ref"))
+	}
+	// Append skips a line whose supersedes_ref names nothing: the file would
+	// be stored with no record naming it.
+	if _, has := archive.Source["supersedes_ref"]; has {
+		return res, phaseError("validation", errors.New("the record of the file carries source.supersedes_ref"))
+	}
+	purged, err := s.InputPurged(first)
+	if err != nil {
+		return res, phaseError("validation", err)
+	}
+	if purged {
+		return res, phaseError("purged", errors.New(archive.Type+" "+bid))
+	}
+	// Append's own checks of the record (its fields, its size, the key) run
+	// now too. Once the file is stored, a refusal would leave it there with
+	// no record naming it, and gc erases only what a record named.
+	if err := s.CheckPartial(first); err != nil {
+		return res, phaseError("validation", err)
+	}
+	stored, err := s.PutBlob(data)
 	if err != nil {
 		return res, phaseError("storage", err)
 	}
 	back, err := s.GetBlob(bid)
-	if err != nil || !bytes.Equal(back, data) {
+	if stored != bid || err != nil || !bytes.Equal(back, data) {
 		return res, phaseError("storage", errors.New("the stored copy does not read back the same"))
-	}
-	out, note, err := runImporter(bin, bid, args, snap)
-	if err != nil {
-		return res, phaseError("validation", err)
-	}
-	if note != "" {
-		res.lines = append(res.lines, note)
-	}
-	first, rest, _ := bytes.Cut(out, []byte("\n"))
-	var archive struct {
-		Type  string         `json:"type"`
-		Value map[string]any `json:"value"`
-	}
-	if json.Unmarshal(first, &archive) != nil || archive.Value["blob"] != bid {
-		return res, phaseError("archive", errors.New("the importer did not start with a record of the file"))
 	}
 	a, err := s.Append(bytes.NewReader(append(first, '\n')))
 	if err != nil {
@@ -154,7 +216,7 @@ func runImport(s *core.Store, bin, file string, args []string, corrections bool)
 	if corrections {
 		appendFn = s.AppendCorrections
 	}
-	r, err := appendFn(bytes.NewReader(rest))
+	r, err := appendFn(rd)
 	line := fmt.Sprintf("added %d, skipped %d", r.Added, r.Skipped)
 	if r.Corrected > 0 {
 		line += fmt.Sprintf(", %d of them new values for readings you already had", r.Corrected)
@@ -167,7 +229,82 @@ func runImport(s *core.Store, bin, file string, args []string, corrections bool)
 	if err := kept(s, archive.Type, bid, digest); err != nil {
 		return res, phaseError("retention", err)
 	}
+	// The importer's own last line comes only now, made safe and named, so
+	// it can neither fake a line of bean's nor speak for a failed import.
+	if note != "" {
+		name := filepath.Base(bin)
+		if note = safe(note); !strings.HasPrefix(note, name+": ") {
+			note = name + ": " + note
+		}
+		res.lines = append(res.lines, note)
+	}
 	return res, nil
+}
+
+// firstLine reads the importer's first line, at most one record long.
+func firstLine(rd *bufio.Reader) ([]byte, error) {
+	var line []byte
+	for {
+		chunk, err := rd.ReadSlice('\n')
+		line = append(line, chunk...)
+		if len(line) > core.MaxRecordSize {
+			return nil, errors.New("the importer's first record is too large")
+		}
+		if err == bufio.ErrBufferFull {
+			continue
+		}
+		if err != nil && err != io.EOF {
+			return nil, err
+		}
+		return bytes.TrimSuffix(line, []byte("\n")), nil
+	}
+}
+
+// running is the importer process, so a signal can stop it too.
+var running struct {
+	sync.Mutex
+	p *os.Process
+}
+
+// importSignals stop bean import: Ctrl-C, kill, a closed terminal or ssh
+// session, and Ctrl-\.
+var importSignals = []os.Signal{syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT}
+
+// removeOnSignal removes the private folder, which holds a plaintext copy of
+// the file, when bean import gets one of importSignals. A deferred RemoveAll
+// does not run then. It exits 128 plus the signal number, as a shell does.
+// The returned function stops the trap.
+func removeOnSignal(dir string) func() {
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, importSignals...)
+	done := make(chan struct{})
+	go func() {
+		select {
+		case got := <-sig:
+			running.Lock()
+			if running.p != nil {
+				// The importer leads its own process group, so pdftotext and any
+				// other child it started die with it, also after the importer
+				// itself has exited and Wait has reaped it: a child that keeps
+				// its output open holds Wait. The group id stays taken while the
+				// group has a member, so the kill reaches no other process.
+				syscall.Kill(-running.p.Pid, syscall.SIGKILL)
+				running.p.Kill()
+			}
+			os.RemoveAll(dir)
+			fmt.Fprintf(os.Stderr, "bean: stopped by %s; the private copy of the file is removed. Run the same command again: it adds only what is missing\n", got)
+			code := 1
+			if n, ok := got.(syscall.Signal); ok {
+				code = 128 + int(n)
+			}
+			os.Exit(code)
+		case <-done:
+		}
+	}()
+	return func() {
+		signal.Stop(sig)
+		close(done)
+	}
 }
 
 // snapshot copies a regular file, at most maxImportFile bytes, and returns it.
@@ -197,21 +334,99 @@ func snapshot(src, dst string) ([]byte, error) {
 	return data, os.WriteFile(dst, data, 0o600)
 }
 
-// runImporter runs the importer and returns its output, all of it or
-// nothing, and the last line it wrote to stderr.
-func runImporter(bin, blob string, args []string, file string) ([]byte, string, error) {
-	cmd := exec.Command(bin, append(append([]string{"-blob", blob}, args...), file)...)
-	var out, errb bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errb
-	err := cmd.Run()
-	msg := lastLine(errb.String())
+// runImporter runs the importer with its temporary files in dir, writes its
+// output to a private file in dir, at most maxImporterOutput bytes, and
+// returns that file at its start and the last line it wrote to stderr.
+func runImporter(bin, blob string, args []string, file, dir string) (*os.File, string, error) {
+	f, err := os.OpenFile(filepath.Join(dir, "out"), os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
+		return nil, "", err
+	}
+	cmd := exec.Command(bin, append(append([]string{"-blob", blob}, args...), file)...)
+	// The importer's own temporary copies land in the private folder too.
+	cmd.Env = append(os.Environ(), "TMPDIR="+dir)
+	// Its own process group: a signal to bean stops the whole group, and
+	// Ctrl-C at the terminal reaches only bean, which then stops it. On
+	// Linux the kernel also kills it when bean dies (importerAttr).
+	cmd.SysProcAttr = importerAttr()
+	// A process the importer started may keep its output open after the
+	// importer exits. Wait gives up after a second, and the import fails.
+	cmd.WaitDelay = time.Second
+	stdout := &capped{w: f, left: importerOutputLimit}
+	stderr := &tail{max: maxImporterStderr}
+	cmd.Stdout, cmd.Stderr = stdout, stderr
+	// The parent-death signal follows the thread that started the importer:
+	// keep this goroutine on it until the importer is done.
+	runtime.LockOSThread()
+	running.Lock()
+	err = cmd.Start()
+	if err == nil {
+		running.p = cmd.Process
+	}
+	running.Unlock()
+	if err == nil {
+		err = cmd.Wait()
+	}
+	running.Lock()
+	if errors.Is(err, exec.ErrWaitDelay) {
+		// A member of the group still holds the output, so the group id is
+		// still taken: stop it.
+		syscall.Kill(-running.p.Pid, syscall.SIGKILL)
+	}
+	running.p = nil
+	running.Unlock()
+	runtime.UnlockOSThread()
+	msg := lastLine(string(stderr.b))
+	if errors.Is(err, exec.ErrWaitDelay) {
+		msg = "the importer exited, but a process it started kept its output open"
+	}
+	if stdout.over {
+		f.Close()
+		return nil, "", fmt.Errorf("the importer wrote more than %d MiB", importerOutputLimit>>20)
+	}
+	if err != nil {
+		f.Close()
 		if msg == "" {
 			msg = err.Error()
 		}
 		return nil, "", errors.New(msg)
 	}
-	return out.Bytes(), msg, nil
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		f.Close()
+		return nil, "", err
+	}
+	return f, msg, nil
+}
+
+// capped writes at most left bytes, then fails, which stops the importer.
+type capped struct {
+	w    io.Writer
+	left int64
+	over bool
+}
+
+func (c *capped) Write(p []byte) (int, error) {
+	if int64(len(p)) > c.left {
+		c.over = true
+		return 0, errors.New("importer output exceeds limit")
+	}
+	n, err := c.w.Write(p)
+	c.left -= int64(n)
+	return n, err
+}
+
+// tail keeps the last max bytes written to it.
+type tail struct {
+	b   []byte
+	max int
+}
+
+func (t *tail) Write(p []byte) (int, error) {
+	t.b = append(t.b, p...)
+	if len(t.b) > t.max {
+		t.b = append(t.b[:0], t.b[len(t.b)-t.max:]...)
+	}
+	return len(p), nil
 }
 
 func lastLine(s string) string {

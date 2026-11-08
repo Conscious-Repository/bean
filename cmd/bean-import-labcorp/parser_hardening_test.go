@@ -1,7 +1,6 @@
 package main
 
 import (
-	"reflect"
 	"strings"
 	"testing"
 )
@@ -33,18 +32,27 @@ func TestWrappedValueSurvivesRepeatedPageHeader(t *testing.T) {
 	}
 }
 
-func TestFailedFillDoesNotMutateResult(t *testing.T) {
-	cols, ok := headerColumns(header())
+// cells leaves out a token it puts in no field: a third token in the result
+// column, a second unit, a second reference interval. Only the rebuild check
+// (whole) refuses those rows, so this test fails if the check goes.
+func TestRebuildRefusesUnreadToken(t *testing.T) {
+	for label, l := range map[string]string{
+		"third result token": pad(pad(pad(pad("", 6)+"Glucose", 57)+"100", 68)+"High", 75) + "H",
+		// Within alignedWithin of the column name, so only whole() can refuse.
+		"second unit":     pad(pad(pad(pad(pad("", 6)+"Glucose", 57)+"100", 140)+"g", 143)+"x", 160) + "70-99",
+		"second interval": pad(pad(pad(pad(pad("", 6)+"Glucose", 57)+"100", 140)+"mg/dL", 158)+"7", 161) + "5",
+		"value line":      row("Glucose", "01", "-", "", "", "") + "\n" + pad(pad(pad(pad("", 57)+"100", 68)+"High", 75)+"L", 140) + "mg/dL",
+	} {
+		t.Run(label, func(t *testing.T) {
+			mustRefuse(t, ambiguityReport(l), "is in no field of the result")
+		})
+	}
+	cols, ok := parseHeader(tokens(header()))
 	if !ok {
 		t.Fatal("fixture header")
 	}
-	before := Result{Name: "Glucose", Ref: "original reference"}
-	got := before
-	// Three tokens in the current-result region overflow value/flag slots.
-	if got.fill([]token{{57, "100"}, {68, "High"}, {75, "unexpected"}}, cols) {
-		t.Fatal("accepted ambiguous result columns")
-	}
-	if !reflect.DeepEqual(got, before) {
-		t.Fatalf("failed parse mutated row: %+v", got)
+	got, err := cols.cells([]token{{57, "100"}, {68, "High"}, {140, "mg/dL"}, {160, "70-99"}})
+	if err != nil || got.value != "100" || got.flag != "High" || got.units != "mg/dL" || got.ref != "70-99" {
+		t.Fatalf("cells %+v: %v", got, err)
 	}
 }

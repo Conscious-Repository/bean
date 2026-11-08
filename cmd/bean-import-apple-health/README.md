@@ -15,12 +15,15 @@ bean import apple-health export.zip
 ```
 
 `bean import` snapshots the original file privately, validates it before writing
-anything to Bean, stores the exact input as an encrypted blob, checks plaintext
-readback, then appends one `apple-health.export` claim. Its value references that
-blob; context records original-file SHA-256, byte length, per-type record counts,
-activity-summary count and `assurance=unsigned-export`. It checks that the archive
+anything to Bean, checks that the archive claim was not purged, stores the exact
+input as an encrypted blob, checks plaintext readback, then appends one
+`apple-health.export` claim. Its value references that blob; context records
+original-file SHA-256, byte length, per-type record counts, activity-summary
+count, Correlation counts and `assurance=unsigned-export`. It checks that the archive
 claim about the owner survived append/dedupe; an owner-authored claim about
-another subject cannot satisfy this check. Identical bytes retry as `added 0, skipped 1`.
+another subject cannot satisfy this check. Identical bytes retry as
+`already kept apple-health.export <blob id>` and `added 0, skipped 0` (the
+archive claim is not counted among the readings).
 A changed export is a separate snapshot, not a replacement or extra measurement.
 No numerical values are summed. Archive entries cannot be mistaken for steps.
 
@@ -60,7 +63,28 @@ for exact names. Unknown types and other sections (including activity summaries)
 remain in the original blob; unmapped Record types are counted. These are not
 promised to cover every Apple Health export type.
 
-Readings retain the original quantity/unit or category constant, start/end offset
+Apple writes blood pressure and food as a `Correlation` element holding its
+Records. They are counted (`correlation_count`, `correlation_record_count`, and
+in `record_count` and `record_types`) and kept in the blob. No reading is made
+of them. With `-records`, a selected type inside a Correlation is refused
+rather than dropped; none of the 16 supported types is expected there.
+
+Apple's percent unit `%` is a fraction in 0..1. It is used by the `*Percentage`
+types (walking double support, walking asymmetry) and by walking steadiness,
+the three percent types of the `metrics` table. Their readings store unit `1`,
+so 0.272 means 27.2%, and keep `context.source_unit: "%"`. A value outside
+0..1 is refused, and so is a percent type with another unit. Unit `%` on any
+other type is refused: a step count of 0.5 of 1 is no reading. Every quantity
+needs a unit; one without is refused, since 70 kg and 70 lb differ. Category
+readings have none. The ref is computed from the
+value as Apple wrote it, so a reading that 0.1.x stored with unit `%` is reported
+as changed on the next import; `-corrections` replaces it.
+
+Readings do not list the blob. Each names the export by `context.export_sha256`,
+so purging the `apple-health.export` erases the file. Readings from 0.1.x list
+the blob; the file stays until they are purged too.
+
+Readings retain the original quantity/unit (except the percentage unit above) or category constant, start/end offset
 and creation time separately. The adapter performs no clinical interpretation,
 unit conversion, sleep-stage inference or source-priority aggregation. Category
 values remain opaque text. Numbers must retain the same decimal value when serialized canonically (up to
@@ -93,12 +117,18 @@ signature authenticates adoption, not Apple or device origin, accuracy or subjec
 Inputs must be regular files up to 256 MiB; symlinks and special files are rejected
 without waiting for FIFO writers. Decompressed export.xml is limited to
 256 MiB, ZIP declared contents to 512 MiB, members to 4096, Record elements to
-2 million, XML depth to 32 and attributes per element to 64 KiB. ZIP member paths,
+2 million, XML depth to 32 and attributes per element to 64 KiB. The 64 KiB
+is counted after `encoding/xml` has built the element, so the input is also
+read through a bound: more than 1 MiB after a `<` without another `<` (one
+tag with its attributes, a comment, or text) is refused before the decoder
+holds it. A tag holds no `<`, so a `>` inside a quoted value cannot reset the
+bound. This keeps an element of millions of attributes to tens of MiB. ZIP member paths,
 symlinks and ambiguous export.xml members are rejected. No files are extracted;
 DTD entities are not fetched or expanded; this is not full DTD validation.
 Repeated DOCTYPE and misplaced/repeated XML declarations are rejected. Complete XML EOF and the selected export.xml member CRC are
 checked. Other ZIP members are preserved without interpreting their contents. Temporary snapshots/output are private and removed on ordinary exit;
-process death can leave local temporary files. Optional reading JSONL is limited
+process death can leave local temporary files. Under `bean import` they go in
+its private folder, which it removes also on Ctrl-C or `kill`. Optional reading JSONL is limited
 to 1 GiB in its private spool, in addition to source snapshot space. An overflow
 fails before stdout; use archive-only mode or select fewer types with `-types`.
 `bean import` validates before any Bean writes, so this failure does not
@@ -112,9 +142,11 @@ import; `bean verify` reports it. These steps are not a transaction against
 concurrent writers or later external mutation.
 
 A crash after blob storage can leave an encrypted orphan blob. Retry is safe.
-Purged archive refs are not resurrected; `bean import` reports failure if append
-cannot retain the archive, before adding readings. Re-storing a purged source
-can still leave an encrypted orphan blob; `bean import` never deletes blobs. A multi-record append is not a transaction: a Bean
+Purged archive refs are not resurrected: `bean import` checks the archive claim
+before it stores the file, so a purged source is not stored again. It reports
+failure if append cannot retain the archive, before adding readings. `bean
+import` never deletes blobs. It spools importer output to a private file of at
+most 1 GiB plus 1 MiB, not to memory. A multi-record append is not a transaction: a Bean
 signing/storage failure may retain a prefix, and retry dedupes that prefix.
 
 `bean export` recovers the original file bytes without this importer. Verify their

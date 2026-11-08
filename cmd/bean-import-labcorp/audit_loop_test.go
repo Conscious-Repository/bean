@@ -38,16 +38,22 @@ func TestShortPendingCommentIsNotAResult(t *testing.T) {
 	}
 }
 
+// A long reference interval is one token and is kept. A free-text result is
+// not a value the grammar knows (DECISIONS 222): it is refused, not lost.
 func TestLongAlignedResultsAreNotSilentlyLost(t *testing.T) {
-	value := "No clinically significant antibodies detected"
 	ref := "Negative: less than 10; Positive: greater than 20"
-	text := strings.Join([]string{"Specimen ID: SYNTHETIC-A", "Date Collected: 01/02/2025", "Basic Panel", header(), row("Antibody Screen", "", value, "", "", ref)}, "\n")
-	rep, err := parseReport(text)
+	report := func(value string) string {
+		return strings.Join([]string{"Specimen ID: SYNTHETIC-A", "Date Collected: 01/02/2025", "Basic Panel", header(), row("Antibody Screen", "", value, "", "", ref)}, "\n")
+	}
+	rep, err := parseReport(report("Not Detected"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rep.Results[0].Value != value || rep.Results[0].Ref != ref {
+	if rep.Results[0].Value != "Not Detected" || rep.Results[0].Ref != ref {
 		t.Fatalf("aligned text lost: %+v", rep.Results[0])
+	}
+	if _, err := parseReport(report("No clinically significant antibodies detected")); err == nil || !strings.Contains(err.Error(), "not a number or a result") {
+		t.Fatalf("free-text result: %v", err)
 	}
 }
 
@@ -107,7 +113,12 @@ func TestCLITextSourceBlobMedia(t *testing.T) {
 		if err := json.Unmarshal(line, &row); err != nil {
 			t.Fatal(err)
 		}
-		for _, blob := range row["blobs"].([]any) {
+		blobs, _ := row["blobs"].([]any)
+		// Only the lab.report lists the file, so purging it erases the file.
+		if (row["type"] == "lab.report") != (len(blobs) == 1) {
+			t.Fatalf("%s lists blobs %v", row["type"], blobs)
+		}
+		for _, blob := range blobs {
 			if blob.(map[string]any)["media_type"] != "text/plain" {
 				t.Fatalf("text mislabeled in %s", row["type"])
 			}
@@ -133,8 +144,12 @@ func TestReportResultCountBound(t *testing.T) {
 	for _, count := range []int{10000, 10001} {
 		var b strings.Builder
 		b.WriteString(prefix)
-		for i := 0; i < count; i++ {
+		for i, n := 0, 0; n < count; i++ {
+			if valueLike(letters(i)) {
+				continue // "Synthetic low" is refused: a flag in a name
+			}
 			b.WriteString(row("Synthetic "+letters(i), "", "1", "", "", "") + "\n")
+			n++
 		}
 		text := b.String()
 		rep, err := parseReport(text)

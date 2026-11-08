@@ -332,12 +332,13 @@ func TestReauditChangedReadingIsReported(t *testing.T) {
 	if got := reList(t, s, "lab.potassium"); len(got) != 1 || got[0].Value["n"] != 5.9 {
 		t.Errorf("after the refusals: %+v", got)
 	}
-	// In one input, the first line decides.
+	// In one input, two lines with one ref and two readings stop the input at
+	// the second: one of them would be lost (DECISIONS 228).
 	s2, _, _ := initWithWords(t)
 	s2.Append(strings.NewReader(labLine(`{"n":1}`)))
-	r, _ = s2.AppendCorrections(strings.NewReader(labLine(`{"n":2}`) + labLine(`{"n":3}`)))
-	if r.Added != 1 || r.Skipped != 1 {
-		t.Errorf("one input: %+v", r)
+	r, err = s2.AppendCorrections(strings.NewReader(labLine(`{"n":2}`) + labLine(`{"n":3}`)))
+	if r.Added != 1 || err == nil || !strings.Contains(err.Error(), "line 2: another line of this input has the same source id") {
+		t.Errorf("one input: %+v %v", r, err)
 	}
 	// A correction made by hand stays in effect when the file comes again, and
 	// a parser fix by ref still finds its target.
@@ -453,7 +454,7 @@ func TestReauditExportPastMissingBlob(t *testing.T) {
 		t.Errorf("a stranger's absent blob: %d records, %v", n, err)
 	}
 	m, _ := os.ReadFile(filepath.Join(dir, "manifest.json"))
-	if !strings.Contains(string(m), "missing_blobs") {
+	if !strings.Contains(string(m), `"missing_blobs_of_others":1`) {
 		t.Errorf("manifest: %s", m)
 	}
 	// One of the person's own blobs: all else goes out, then it fails.

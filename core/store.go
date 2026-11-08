@@ -251,56 +251,99 @@ func refLine(subject, system, ref string) string {
 	return string(Canonical([]any{subject, system, ref}))
 }
 
+// addPurgedRef adds the ref of one purged record.
 func (s *Store) addPurgedRef(r *Record) error {
-	if r == nil || r.Source.Ref == "" {
-		return nil
-	}
-	line := refLine(r.Subject, r.Source.System, r.Source.Ref)
-	have, err := s.readPurgedRefs()
+	p, err := s.openPurgedRefs()
 	if err != nil {
 		return err
 	}
-	if have[line] {
-		return nil
-	}
-	return appendLineSync(s.path(filePurgedRef), line)
+	p.add(r)
+	return p.flush()
 }
 
-// removePurgedRef forgets the ref of a target whose tombstone became invalid,
-// unless another deletion may need the line. A line names only a ref, and one
-// ref can belong to several records. A record that is hidden can be checked.
-// One that is erased cannot, so a tombstone with an absent target keeps the line:
-// a re-import that is skipped says nothing wrong, and a deleted reading that
-// comes back cannot be unseen.
-func (s *Store) removePurgedRef(r *Record, rp *Report, hidden map[string]bool) error {
-	if r == nil || r.Source.Ref == "" {
-		return nil
-	}
+// purgedRefs is local/purged-refs.jsonl in memory. A load or a sync can change
+// many lines: it reads the file once and writes it once, so a stranger's
+// thousands of deletions cost one write, not one read and one flush each.
+type purgedRefs struct {
+	s       *Store
+	have    map[string]bool
+	changed bool
+	// For remove, built once: the subjects with a tombstone whose target is
+	// absent, and the ids of the records with each line.
+	absent map[string]bool
+	byLine map[string][]string
+}
+
+func (s *Store) openPurgedRefs() (*purgedRefs, error) {
 	have, err := s.readPurgedRefs()
 	if err != nil {
-		return err
+		return nil, err
+	}
+	return &purgedRefs{s: s, have: have}, nil
+}
+
+func (p *purgedRefs) add(r *Record) {
+	if r == nil || r.Source.Ref == "" {
+		return
+	}
+	if line := refLine(r.Subject, r.Source.System, r.Source.Ref); !p.have[line] {
+		p.have[line] = true
+		p.changed = true
+	}
+}
+
+// remove forgets the ref of a target whose tombstone became invalid, unless
+// another deletion may need the line. A line names only a ref, and one ref can
+// belong to several records. A record that is hidden can be checked. One that
+// is erased cannot, so a tombstone with an absent target keeps the line: a
+// re-import that is skipped says nothing wrong, and a deleted reading that
+// comes back cannot be unseen.
+func (p *purgedRefs) remove(r *Record, rp *Report, hidden map[string]bool) {
+	if r == nil || r.Source.Ref == "" {
+		return
 	}
 	line := refLine(r.Subject, r.Source.System, r.Source.Ref)
-	if !have[line] {
+	if !p.have[line] {
+		return
+	}
+	if p.byLine == nil {
+		p.absent, p.byLine = map[string]bool{}, map[string][]string{}
+		for id, o := range rp.Records {
+			if o.Type == "bean.tombstone" && rp.Records[o.Targets("purges")[0]] == nil {
+				p.absent[o.Subject] = true
+			}
+			if o.Source.Ref != "" {
+				k := refLine(o.Subject, o.Source.System, o.Source.Ref)
+				p.byLine[k] = append(p.byLine[k], id)
+			}
+		}
+	}
+	if p.absent[r.Subject] {
+		return
+	}
+	for _, id := range p.byLine[line] {
+		if id != r.ID && hidden[id] {
+			return
+		}
+	}
+	delete(p.have, line)
+	p.changed = true
+}
+
+// flush writes the file if a line changed.
+func (p *purgedRefs) flush() error {
+	if p == nil || !p.changed {
 		return nil
 	}
-	for id, o := range rp.Records {
-		if o.Subject != r.Subject {
-			continue
-		}
-		if o.Type == "bean.tombstone" && rp.Records[o.Targets("purges")[0]] == nil {
-			return nil
-		}
-		if id != r.ID && hidden[id] && refLine(o.Subject, o.Source.System, o.Source.Ref) == line {
-			return nil
-		}
-	}
-	delete(have, line)
 	var b strings.Builder
-	for _, x := range sortedKeys(have) {
+	for _, x := range sortedKeys(p.have) {
 		b.WriteString(x + "\n")
 	}
-	return writeFileAtomic(s.path(filePurgedRef), []byte(b.String()), 0o600)
+	if err := writeFileAtomic(p.s.path(filePurgedRef), []byte(b.String()), 0o600); err != nil {
+		return err
+	}
+	p.changed = false
+	return nil
 }
 
 // Loaded is a replica after the hold rules ran.
@@ -396,8 +439,20 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 		}
 	}
 	changed := false
+	// local/purged-refs.jsonl is read at most once and written at most once.
+	var refs *purgedRefs
+	openRefs := func() (*purgedRefs, error) {
+		if refs == nil {
+			var err error
+			refs, err = s.openPurgedRefs()
+			return refs, err
+		}
+		return refs, nil
+	}
 	// New valid purges: hide the target. The tombstone that purges it
 	// gets its own hold, also when an earlier tombstone hid the target.
+	// Every purged target present keeps its ref line, so a crash between the
+	// hide and the write of the line loses nothing.
 	for target, tid := range rp.Purged {
 		if _, ok := files[PathOf(target)]; !ok {
 			continue
@@ -406,6 +461,11 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 			holds[tid] = Hold{Target: target, Received: s.nowString()}
 			changed = true
 		}
+		p, err := openRefs()
+		if err != nil {
+			return nil, err
+		}
+		p.add(rp.Records[target])
 		if hidden[target] {
 			continue
 		}
@@ -417,13 +477,11 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 			return nil, err
 		}
 		hidden[target] = true
-		if err := s.addPurgedRef(rp.Records[target]); err != nil {
-			return nil, err
-		}
 	}
 	// Restores: a hidden target comes back only when every tombstone that
 	// hid it is judged invalid. A tombstone that is unresolved, held, too
 	// new or missing keeps it hidden (fail closed).
+	var restore []string
 	for target := range hidden {
 		if _, still := rp.Purged[target]; still {
 			continue
@@ -431,6 +489,32 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 		if _, exists := files[PathOf(target)]; !exists || heldHidden(holds, rp, target) {
 			continue
 		}
+		restore = append(restore, target)
+	}
+	sort.Strings(restore)
+	// The deletion was undone, so a new import must not skip these readings.
+	// The ref lines go before any target moves back: a crash after the moves
+	// left the lines for good, since no later load restores the target again.
+	if len(restore) > 0 {
+		after := map[string]bool{}
+		for t := range hidden {
+			after[t] = true
+		}
+		for _, t := range restore {
+			delete(after, t)
+		}
+		p, err := openRefs()
+		if err != nil {
+			return nil, err
+		}
+		for _, t := range restore {
+			p.remove(rp.Records[t], rp, after)
+		}
+	}
+	if err := refs.flush(); err != nil {
+		return nil, err
+	}
+	for _, target := range restore {
 		if err := os.MkdirAll(filepath.Dir(s.path(PathOf(target))), 0o700); err != nil {
 			return nil, err
 		}
@@ -438,10 +522,6 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 			return nil, err
 		}
 		delete(hidden, target)
-		// The deletion was undone, so a new import must not skip this reading.
-		if err := s.removePurgedRef(rp.Records[target], rp, hidden); err != nil {
-			return nil, err
-		}
 		for tid, h := range holds {
 			if h.Target == target {
 				delete(holds, tid)
@@ -543,37 +623,101 @@ func (s *Store) GC() (records, blobs int, err error) {
 		return 0, 0, errors.New("incomplete seals: " + strings.Join(l.Report.Incomplete, ", ") + ": sync the missing seal parts before gc")
 	}
 	cutoff := s.Now().UTC().Add(-HoldDays * 24 * time.Hour)
-	var candidates []string
+	var candidates, targets []string
+	due := map[string]bool{}
 	for tid, h := range l.Holds {
 		recv, perr := time.Parse("2006-01-02T15:04:05Z", h.Received)
-		if perr != nil || recv.After(cutoff) {
+		if perr != nil || recv.After(cutoff) || due[h.Target] {
 			continue
 		}
 		if _, purged := l.Report.Purged[h.Target]; !purged || !l.Report.Valid[tid] || !l.Hidden[h.Target] {
 			continue
 		}
+		due[h.Target] = true
+		targets = append(targets, h.Target)
 		if r := l.Report.Records[h.Target]; r != nil {
 			for _, b := range r.Blobs {
 				candidates = append(candidates, b.Hash)
 			}
 		}
-		if err := os.Remove(hiddenPath(s.Dir, h.Target)); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return 0, 0, err
+	}
+	sort.Strings(targets)
+	for _, t := range targets {
+		delete(l.Files, PathOf(t))
+	}
+	// A file with a bad path is not a record. A copy of a target erased now
+	// goes with it, and so does a copy of a record that is erased already: a
+	// valid tombstone about its subject names it, and the record file is gone
+	// (DECISIONS 218).
+	erased := map[string]map[string]bool{} // erased target -> subjects of its valid tombstones
+	copyOf := map[string]bool{}
+	for tid, r := range l.Report.Records {
+		if t := r.Targets("purges"); r.Type == "bean.tombstone" && l.Report.Valid[tid] && l.Files[PathOf(t[0])] == nil {
+			if erased[t[0]] == nil {
+				erased[t[0]] = map[string]bool{}
+			}
+			erased[t[0]][r.Subject] = true
+			copyOf[t[0]] = true
 		}
-		for t, o := range l.Holds {
-			if o.Target == h.Target {
-				delete(l.Holds, t)
+	}
+	for t := range due {
+		copyOf[t] = true
+	}
+	// A copy's bytes hash to the record it copies, so it holds that record's
+	// content. Its files are erased with it only when the record is one of
+	// the person's that the person deleted: a stranger can write a tombstone
+	// about itself and a "copy" whose bytes hash to an id never stored, which
+	// names any blob, and that must erase nothing but itself.
+	var copies []string
+	own := map[string]bool{} // copies whose files go with them
+	for _, p := range copiesOf(l.Files, copyOf) {
+		v, _ := Parse(l.Files[p])
+		obj, _ := v.(map[string]any)
+		subject, _ := obj["subject"].(string)
+		id := recordFileID(p, l.Files[p])
+		if due[id] || erased[id][subject] {
+			copies = append(copies, p)
+			own[p] = l.ID != "" && subject == l.ID && (due[id] || erased[id][l.ID])
+		}
+	}
+	for _, p := range copies {
+		if own[p] {
+			candidates = append(candidates, namedBlobs(l.Files[p])...)
+		}
+		delete(l.Files, p)
+	}
+	// Blobs go first, while the hidden record still names them. A failure
+	// after this leaves a hidden record whose blobs are gone, and the next gc
+	// erases it. The other order left a blob that no record names, which gc
+	// never erases and export writes out (DECISIONS 212).
+	blobs, err = s.eraseBlobsOf(l.Files, candidates)
+	if err != nil {
+		return 0, blobs, err
+	}
+	for _, t := range targets {
+		if err := os.Remove(hiddenPath(s.Dir, t)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return records, blobs, err
+		}
+		for tid, o := range l.Holds {
+			if o.Target == t {
+				delete(l.Holds, tid)
 			}
 		}
-		delete(l.Files, PathOf(h.Target))
-		delete(l.Hidden, h.Target)
+		delete(l.Hidden, t)
 		records++
 	}
-	if err := s.writeHolds(l.Holds); err != nil {
-		return 0, 0, err
+	for _, p := range copies {
+		if err := os.Remove(s.path(p)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return records, blobs, err
+		}
+		if own[p] { // a copy of the person's deleted record counts as that record
+			records++
+		}
 	}
-	blobs, err = s.eraseBlobsOf(l.Files, candidates)
-	return records, blobs, err
+	if err := s.writeHolds(l.Holds); err != nil {
+		return records, blobs, err
+	}
+	return records, blobs, nil
 }
 
 // eraseBlobsOf erases the candidate blobs (the blobs of records that were
@@ -581,10 +725,22 @@ func (s *Store) GC() (records, blobs int, err error) {
 // and 7.7 step 5 as changed by C25). A record file counts whether or not
 // it is valid now: validity can come back (a sync, a newer bean), erased
 // bytes cannot. A file that does not parse counts when it contains the
-// blob id at all. A blob that no record ever named is never erased.
+// blob id at all, but only at a record path. A blob that no record ever
+// named is never erased.
 func (s *Store) eraseBlobsOf(files map[string][]byte, candidates []string) (int, error) {
+	n, _, err := s.eraseBlobs(files, candidates, nil)
+	return n, err
+}
+
+// eraseBlobs is eraseBlobsOf. With reach, it also returns each candidate that
+// is kept and stored, with the number of record files that name it: in Names
+// those for which reach is true, in Others the rest. A file whose path is not
+// a record path (a sync tool's conflict copy) is not a record: it keeps
+// nothing (DECISIONS 218).
+func (s *Store) eraseBlobs(files map[string][]byte, candidates []string, reach func(path string) bool) (int, map[string]KeptBlob, error) {
+	kept := map[string]KeptBlob{}
 	if len(candidates) == 0 {
-		return 0, nil
+		return 0, kept, nil
 	}
 	want := map[string]bool{}
 	for _, c := range candidates {
@@ -592,12 +748,33 @@ func (s *Store) eraseBlobsOf(files map[string][]byte, candidates []string) (int,
 			want[c] = true
 		}
 	}
-	for _, data := range files {
-		if len(want) == 0 {
+	isCandidate := func(h string) bool { _, k := kept[h]; return want[h] || k }
+	for p, data := range files {
+		if reach == nil && len(want) == 0 {
 			break
 		}
+		if !pathPattern.MatchString(p) {
+			continue
+		}
+		seen := map[string]bool{}
 		for _, h := range namedBlobs(data) {
+			if reach != nil && !seen[h] && isCandidate(h) {
+				k := kept[h]
+				k.ID = h
+				if reach(p) {
+					k.Names++
+				} else {
+					k.Others++
+				}
+				kept[h] = k
+			}
+			seen[h] = true
 			delete(want, h)
+		}
+	}
+	for id := range kept {
+		if _, err := os.Lstat(s.path(BlobPathOf(id))); err != nil {
+			delete(kept, id) // not stored here: nothing is kept
 		}
 	}
 	n := 0
@@ -607,11 +784,11 @@ func (s *Store) eraseBlobsOf(files map[string][]byte, candidates []string) (int,
 			continue
 		}
 		if err != nil {
-			return n, err
+			return n, kept, err
 		}
 		n++
 	}
-	return n, nil
+	return n, kept, nil
 }
 
 // namedBlobs returns the blob ids that a record file names, without

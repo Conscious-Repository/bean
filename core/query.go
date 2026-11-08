@@ -76,13 +76,24 @@ func (l *Loaded) Current(id string) bool {
 	if r == nil || !l.Visible(id) || IsCoreType(r.Type) {
 		return false
 	}
-	if len(l.Report.Superseded[id]) > 0 || l.Report.KeptSuperseded[id] {
+	if l.supersededForReaders(id) || l.Report.KeptSuperseded[id] {
 		return false
 	}
 	// A duplicate shows when its primary cannot: a reading must not vanish
 	// behind a record that a freeze put in doubt.
 	primary, dup := l.Report.Duplicates[id]
 	return !dup || !l.Visible(primary)
+}
+
+// supersededForReaders reports a record that a correction a reader can show
+// replaces. A reading must not vanish because its correction is hidden too.
+func (l *Loaded) supersededForReaders(id string) bool {
+	for _, c := range l.Report.Superseded[id] {
+		if l.Visible(c) {
+			return true
+		}
+	}
+	return false
 }
 
 // isSetup reports pairing claims: configuration, not things that happened.
@@ -121,28 +132,7 @@ func (s *Store) List(f Filter) ([]*Record, *Loaded, error) {
 
 // Resolve finds the record whose id is id, or the one record whose hex
 // starts with a prefix of at least 6 digits. Hidden records resolve too.
-func (l *Loaded) Resolve(id string) (*Record, error) {
-	hexPart := strings.TrimPrefix(id, "sha256:")
-	if r, ok := l.Report.Records["sha256:"+hexPart]; ok {
-		return r, nil
-	}
-	if len(hexPart) < 6 || !isLowerHex(hexPart, len(hexPart)) {
-		return nil, errors.New("input missing: " + id)
-	}
-	var found *Record
-	for rid, r := range l.Report.Records {
-		if strings.HasPrefix(rid[7:], hexPart) {
-			if found != nil {
-				return nil, errors.New("ambiguous id: " + id)
-			}
-			found = r
-		}
-	}
-	if found == nil {
-		return nil, errors.New("input missing: " + id)
-	}
-	return found, nil
-}
+func (l *Loaded) Resolve(id string) (*Record, error) { return resolveIn(l.Report.Records, id) }
 
 // Replies returns the valid records that name id with any ref, sorted by
 // id: comments and attestations (about), corrections (supersedes) and
@@ -193,6 +183,8 @@ func (l *Loaded) Status(id string) string {
 		return "purged by " + rp.Purged[id]
 	case !rp.Valid[id]:
 		return "not valid"
+	case len(rp.Superseded[id]) > 0 && !l.supersededForReaders(id):
+		return "valid; readers show it, because its correction " + rp.Superseded[id][0] + " is not shown: " + l.Status(rp.Superseded[id][0])
 	case len(rp.Superseded[id]) > 0:
 		return "superseded by " + rp.Superseded[id][0]
 	case rp.Duplicates[id] != "":

@@ -73,7 +73,7 @@ func TestTwoResultsOneTypeRefused(t *testing.T) {
 func TestValueSwallowedByNameRefused(t *testing.T) {
 	long := pad("", 6) + strings.Repeat("Long Test Name ", 3) + "Overrun 90"
 	_, err := parseReport(ambiguityReport(long))
-	if err == nil || !strings.Contains(err.Error(), "ends in a number") {
+	if err == nil || !strings.Contains(err.Error(), "runs into the result column") {
 		t.Errorf("err %v", err)
 	}
 	// A test the lab did not perform, with its comment, still parses.

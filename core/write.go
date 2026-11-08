@@ -2,6 +2,8 @@ package core
 
 import (
 	"math"
+	"math/big"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -149,4 +151,28 @@ func CheckValue(v any) error {
 // keep any other number as text.
 func ExactNumber(f float64) bool {
 	return !math.IsNaN(f) && !math.IsInf(f, 0) && numberInRange(f)
+}
+
+// SameDecimal reports whether n, written as canonical JSON, has the same
+// decimal value as raw, the number as a source printed it. A source's
+// "0.30000000000000001" or "1e-400" reads as a float64 that prints as another
+// decimal; an importer refuses it, or keeps raw as text, rather than store a
+// number the source did not write. raw is at most 256 bytes, with an exponent
+// of at most 1000 either way, so the comparison is bounded.
+func SameDecimal(raw string, n float64) bool {
+	if len(raw) > 256 {
+		return false
+	}
+	if i := strings.IndexAny(raw, "eE"); i >= 0 {
+		exponent, err := strconv.ParseInt(raw[i+1:], 10, 32)
+		if err != nil || exponent < -1000 || exponent > 1000 {
+			return false
+		}
+	}
+	source, ok := new(big.Rat).SetString(raw)
+	if !ok {
+		return false
+	}
+	emitted, ok := new(big.Rat).SetString(string(Canonical(n)))
+	return ok && source.Cmp(emitted) == 0
 }

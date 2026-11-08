@@ -14,7 +14,9 @@
 //   - native id: the specimen id and the test name. The specimen id never
 //     leaves the adapter except inside the HMAC input.
 //   - context: test, panel, flag, reference_interval, performing_lab,
-//     lab_comment, report_note, reported, fasting.
+//     lab_comment, report_note, reported, fasting, and with -blob the
+//     report_sha256 of the kept file. A reading does not list the file in
+//     blobs, so purging the lab.report erases the file (C25).
 //   - times.observed: "Date Collected" from the specimen details. The report
 //     says "Local" without a zone, so the day is all that is known unless
 //     -tz names the zone; then the minute is used.
@@ -26,6 +28,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -44,7 +48,7 @@ import (
 )
 
 const (
-	version = "bean-import-labcorp@0.1.4"
+	version = "bean-import-labcorp@0.3.0"
 	system  = "labcorp"
 )
 
@@ -77,7 +81,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "bean-import-labcorp: %s\n", err)
 		os.Exit(1)
 	}
-	records := rep.records(*blob, loc)
+	digest := ""
+	if *blob != "" {
+		sum := sha256.Sum256(raw)
+		digest = hex.EncodeToString(sum[:])
+	}
+	records := rep.records(digest, loc)
 	missing := 0
 	for _, rec := range records {
 		if v := rec["value"].(map[string]any); v["n"] == nil && v["s"] == nil {
@@ -88,11 +97,6 @@ func main() {
 		if !regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(*blob) {
 			fmt.Fprintln(os.Stderr, "bean-import-labcorp: invalid blob reference")
 			os.Exit(2)
-		}
-		for _, rec := range records {
-			for _, attachment := range rec["blobs"].([]any) {
-				attachment.(map[string]any)["media_type"] = reportMedia(raw)
-			}
 		}
 		records = append([]map[string]any{archiveRecord(raw, *blob)}, records...)
 	}
@@ -209,318 +213,8 @@ func (b *boundedText) Write(p []byte) (int, error) {
 	return b.Buffer.Write(p)
 }
 
-// Result is one row of the report.
-type Result struct {
-	Name, Panel, LabCode string
-	Value, Flag, Units   string
-	Ref, Previous        string
-	Comment              []string
-}
-
-// Report is the parsed report.
-type Report struct {
-	Specimen  string
-	Collected string // "MM/DD/YYYY" or "MM/DD/YYYY HHMM"
-	Reported  string // "MM/DD/YYYY"
-	Fasting   string
-	Labs      map[string]string // "01" -> "Labcorp San Diego"
-	Notes     []string          // report-level notes ("Please note" sections)
-	Results   []*Result
-}
-
-var (
-	reSpecimen    = regexp.MustCompile(`Specimen ID:\s*(\S+)`)
-	reCollected   = regexp.MustCompile(`Date Collected:\s*(\d\d/\d\d/\d{4})(?:\s+(\d{4})\s+Local)?(?:\s|$)`)
-	reReported    = regexp.MustCompile(`Date Reported:\s*(\d\d/\d\d/\d{4})`)
-	reFasting     = regexp.MustCompile(`Fasting:\s*(\S.*?)\s*$`)
-	reLab         = regexp.MustCompile(`^(\d\d):\s*\S+\s*-\s*([^,]+),`)
-	reCode        = regexp.MustCompile(`\s+(\d\d)$`)
-	reNumber      = regexp.MustCompile(`^-?\d+(\.\d+)?$`)
-	reBoilerplate = []*regexp.Regexp{
-		regexp.MustCompile(`^\s*©`),
-		regexp.MustCompile(`^All Rights Reserved`),
-		regexp.MustCompile(`DOB:`),
-		regexp.MustCompile(`^\s*Patient ID:.*Account Number:`),
-		regexp.MustCompile(`^\s*Specimen ID:.*Ordering Physician`),
-		regexp.MustCompile(`Date Created and Stored`),
-		regexp.MustCompile(`^\s+Date Collected:\s*\S+\s*$`),
-	}
-)
-
-type token struct {
-	start int
-	text  string
-}
-
-// tokens splits a layout line at runs of two or more spaces.
-func tokens(line string) []token {
-	var out []token
-	i := 0
-	for i < len(line) {
-		for i < len(line) && line[i] == ' ' {
-			i++
-		}
-		if i >= len(line) {
-			break
-		}
-		j := i
-		for j < len(line) && !(line[j] == ' ' && (j+1 >= len(line) || line[j+1] == ' ')) {
-			j++
-		}
-		out = append(out, token{i, line[i:j]})
-		i = j
-	}
-	return out
-}
-
-func indent(line string) int { return len(line) - len(strings.TrimLeft(line, " ")) }
-
-// columns are the start positions from the "Test  Current Result..." header.
-type columns struct{ current, previous, units, ref int }
-
-func headerColumns(line string) (columns, bool) {
-	c := strings.Index(line, "Current Result")
-	p := strings.Index(line, "Previous Result")
-	u := strings.Index(line, "Units")
-	r := strings.Index(line, "Reference Interval")
-	if c < 0 || p <= c || u <= p || r <= u {
-		return columns{}, false
-	}
-	return columns{current: c, previous: p, units: u, ref: r}, true
-}
-
-// fill assigns value tokens to the result. It reports false when the
-// tokens do not look like a result row (a comment line).
-func (r *Result) fill(toks []token, c columns) bool {
-	next := *r
-	if !next.fillTokens(toks, c) {
-		return false
-	}
-	*r = next
-	return true
-}
-
-func (r *Result) fillTokens(toks []token, c columns) bool {
-	for _, t := range toks {
-		// Comments start left of the result column. Text length cannot distinguish
-		// a comment from a legitimate long categorical result or reference range.
-		if t.start < c.current-4 {
-			return false
-		}
-	}
-	var right []token
-	for _, t := range toks {
-		switch {
-		case t.start < c.previous-4:
-			if r.Value == "" {
-				r.Value = t.text
-			} else if r.Flag == "" {
-				r.Flag = t.text
-			} else {
-				return false
-			}
-		case t.start < c.units-10:
-			r.Previous = strings.TrimSpace(r.Previous + " " + t.text)
-		default:
-			right = append(right, t)
-		}
-	}
-	// Use the observed header spacing: pdftotext can compress the layout.
-	var units, ref []string
-	for _, t := range right {
-		if t.start >= (c.units+c.ref)/2 {
-			ref = append(ref, t.text)
-		} else {
-			units = append(units, t.text)
-		}
-	}
-	r.Units, r.Ref = strings.Join(units, " "), strings.Join(ref, " ")
-	return true
-}
-
-func parseReport(text string) (*Report, error) {
-	if strings.Count(text, "\n") >= maxReportLines {
-		return nil, errors.New("report exceeds line limit")
-	}
-	rep := &Report{Labs: map[string]string{}}
-	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
-	for _, l := range lines {
-		specimenMatches := reSpecimen.FindAllStringSubmatch(l, -1)
-		if len(specimenMatches) != strings.Count(l, "Specimen ID:") {
-			return nil, errors.New("malformed specimen identifier label")
-		}
-		for _, m := range specimenMatches {
-			// The established native ID joins specimen and test with '/'. Test
-			// names may contain that character; specimen IDs must not.
-			if strings.Contains(m[1], "/") {
-				return nil, errors.New("ambiguous specimen identifier")
-			}
-			if rep.Specimen != "" && rep.Specimen != m[1] {
-				return nil, errors.New("conflicting specimen identifiers")
-			}
-			rep.Specimen = m[1]
-		}
-		collectedMatches := reCollected.FindAllStringSubmatch(l, -1)
-		if len(collectedMatches) != strings.Count(l, "Date Collected:") {
-			return nil, errors.New("malformed collection date label")
-		}
-		for _, m := range collectedMatches {
-			collected := strings.TrimSpace(m[1] + " " + m[2])
-			if rep.Collected != "" && (rep.Collected[:10] != m[1] ||
-				(len(rep.Collected) > 10 && m[2] != "" && rep.Collected != collected)) {
-				return nil, errors.New("conflicting collection dates or times")
-			}
-			if rep.Collected == "" || m[2] != "" {
-				rep.Collected = collected // the specimen details line has the time
-			}
-		}
-		if m := reReported.FindStringSubmatch(l); m != nil {
-			rep.Reported = m[1]
-		}
-		if m := reFasting.FindStringSubmatch(l); m != nil && rep.Fasting == "" {
-			rep.Fasting = m[1]
-		}
-		if m := reLab.FindStringSubmatch(strings.TrimSpace(l)); m != nil {
-			rep.Labs[m[1]] = strings.TrimSpace(m[2])
-		}
-	}
-	if rep.Specimen == "" || rep.Collected == "" {
-		return nil, fmt.Errorf("not a Labcorp patient report: no specimen id or collection date")
-	}
-
-	var (
-		cols      columns
-		inResults bool
-		panel     string
-		cur       *Result // the row whose value line or comment comes next
-		note      *Result // a "Please note" pseudo-row collecting text
-		wantValue bool
-	)
-	addComment := func(s string) {
-		s = strings.Join(strings.Fields(s), " ")
-		if s == "" {
-			return
-		}
-		switch {
-		case note != nil && (cur == nil || cur.Panel != note.Panel):
-			rep.Notes = append(rep.Notes, s)
-		case cur != nil:
-			cur.Comment = append(cur.Comment, s)
-		}
-	}
-lines:
-	for _, l := range lines {
-		l = strings.TrimRight(l, " \t\f")
-		if c, ok := headerColumns(l); ok {
-			cols, inResults = c, true
-			continue
-		}
-		if strings.Contains(l, "Current Result") && strings.Contains(l, "Previous Result") &&
-			strings.Contains(l, "Units") && strings.Contains(l, "Reference Interval") {
-			return nil, errors.New("unsupported result column order")
-		}
-		if !inResults {
-			if strings.TrimSpace(l) != "" && indent(l) == 0 {
-				panel = l // the first panel heading comes before the first header
-			}
-			continue
-		}
-		for _, re := range reBoilerplate {
-			if re.MatchString(l) {
-				continue lines
-			}
-		}
-		if strings.TrimSpace(l) == "" {
-			continue
-		}
-		if indent(l) == 0 {
-			if strings.HasPrefix(l, "Disclaimer") || strings.HasPrefix(l, "Icon Legend") || strings.HasPrefix(l, "Performing Labs") {
-				break
-			}
-			p := strings.TrimSuffix(l, " (Cont.)")
-			if p != panel {
-				note = nil
-				wantValue = false
-			}
-			panel = p
-			continue
-		}
-		toks := tokens(l)
-		if wantValue && indent(l) >= 20 {
-			if cur.fill(toks, cols) {
-				wantValue = false
-				continue
-			}
-			if len(toks) > 0 && toks[0].start >= cols.current-4 {
-				return nil, errors.New("ambiguous wrapped result columns")
-			}
-		}
-		if indent(l) < 20 {
-			// A row: name, optional lab code, then the value or nothing.
-			name, code := toks[0].text, ""
-			if m := reCode.FindStringSubmatch(name); m != nil && rep.labCode(m[1]) {
-				name, code = strings.TrimSpace(name[:len(name)-len(m[0])]), m[1]
-			}
-			rest := toks[1:]
-			// A lab code sits left of the result column; a two-digit value
-			// ("eGFR  90") sits under it.
-			if len(rest) > 0 && code == "" && len(rest[0].text) == 2 && rest[0].start < cols.current-6 && strings.Trim(rest[0].text, "0123456789") == "" && rep.labCode(rest[0].text) {
-				code, rest = rest[0].text, rest[1:]
-			}
-			if strings.EqualFold(strings.TrimSuffix(name, ":"), "please note") {
-				note = &Result{Panel: panel}
-				for _, t := range rest {
-					addComment(t.text)
-				}
-				continue
-			}
-			note = nil
-			if len(rep.Results) >= maxReportResults {
-				return nil, errors.New("report exceeds result limit")
-			}
-			cur = &Result{Name: name, Panel: panel, LabCode: code}
-			rep.Results = append(rep.Results, cur)
-			wantValue = len(rest) == 0
-			if !wantValue && !cur.fill(rest, cols) {
-				return nil, errors.New("ambiguous result columns")
-			}
-			continue
-		}
-		addComment(l)
-	}
-	if len(rep.Results) == 0 {
-		return nil, fmt.Errorf("no results found")
-	}
-	// Refuse what cannot be read for sure. A wrong value in a health record is
-	// worse than no import: the person can fix a report, not a silent error.
-	// The same test listed twice with the same reading, as when two panels
-	// share it, is one reading. Two different readings for one type are not.
-	types := map[string]*Result{}
-	kept := rep.Results[:0]
-	for _, r := range rep.Results {
-		t := slug(r.Name)
-		if prev, ok := types[t]; ok {
-			if prev.Name == r.Name && prev.Value == r.Value && prev.Flag == r.Flag && prev.Units == r.Units && prev.Ref == r.Ref {
-				continue
-			}
-			return nil, fmt.Errorf("two results, %q and %q, map to one type lab.%s", prev.Name, r.Name, t)
-		}
-		types[t] = r
-		kept = append(kept, r)
-		if r.Value == "" && len(r.Comment) == 0 && reTrailingNumber.MatchString(r.Name) {
-			return nil, fmt.Errorf("result %q has no value, and its name ends in a number that may be the value", r.Name)
-		}
-	}
-	rep.Results = kept
-	return rep, nil
-}
-
-var reTrailingNumber = regexp.MustCompile(`\s[<>]?-?\d+(\.\d+)?$`)
-
-// labCode reports whether a two-digit token can be a lab code: one that the
-// report's list of performing labs names. Without that list, any two digits.
-// "Interleukin 10" keeps its number when no lab 10 performed a test.
-func (rep *Report) labCode(c string) bool { return len(rep.Labs) == 0 || rep.Labs[c] != "" }
+// reNumber is a value stored as a number; any other value stays text.
+var reNumber = regexp.MustCompile(`^-?\d+(\.\d+)?$`)
 
 func slug(s string) string {
 	var b strings.Builder
@@ -585,7 +279,10 @@ func uniqueLocalTime(t time.Time, printed string) bool {
 	return true
 }
 
-func (rep *Report) records(blob string, loc *time.Location) []map[string]any {
+// records are the readings. reportSHA is the plaintext SHA-256 of the kept
+// report, or empty when it is not kept. A reading names the report by that
+// digest, not in blobs: then purging the lab.report erases the file.
+func (rep *Report) records(reportSHA string, loc *time.Location) []map[string]any {
 	observed, rawTime := rep.observed(loc)
 	reportNote := strings.Join(rep.Notes, " ")
 	occurrence := map[string]int{}
@@ -612,7 +309,7 @@ func (rep *Report) records(blob string, loc *time.Location) []map[string]any {
 			"flag": r.Flag, "reference_interval": r.Ref, "previous_result": r.Previous,
 			"performing_lab": rep.Labs[r.LabCode], "reported": rep.Reported, "fasting": rep.Fasting,
 			"raw_time": rawTime, "lab_comment": strings.Join(r.Comment, " "),
-			"report_note": reportNote,
+			"report_note": reportNote, "report_sha256": reportSHA,
 		} {
 			if v != "" {
 				ctx[k] = v
@@ -629,9 +326,6 @@ func (rep *Report) records(blob string, loc *time.Location) []map[string]any {
 		occurrence[native]++
 		if observed == nil {
 			rec["times"] = map[string]any{"observed": nil}
-		}
-		if blob != "" {
-			rec["blobs"] = []any{map[string]any{"hash": blob, "role": "raw-export", "media_type": "application/pdf"}}
 		}
 		out = append(out, rec)
 	}

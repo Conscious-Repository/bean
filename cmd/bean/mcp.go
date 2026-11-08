@@ -123,7 +123,7 @@ var mcpTools = []mcpTool{
 	},
 	{
 		Name:        "read_blob",
-		Description: "Return decrypted text only for a blob named by a current (non-superseded, non-duplicate) record. Historical get_record may show blob IDs without granting this tool access to their content. Binary blobs return only their size.",
+		Description: "Return decrypted text only for a blob named by a current (non-superseded, non-duplicate) record of the person or a paired agent. Historical get_record may show blob IDs without granting this tool access to their content. Binary blobs return only their size.",
 		InputSchema: schema(map[string]any{
 			"id":             strProp("Blob id (sha256:...)."),
 			"include_others": othersProp,
@@ -220,7 +220,7 @@ func cmdMCP(s *core.Store, args []string) {
 	fs.SetOutput(io.Discard)
 	write := fs.Bool("write", false, "add log_entry, signed by this machine's agent key")
 	host, _ := os.Hostname()
-	label := fs.String("label", "agent@"+host, "label for the agent key if one is made now")
+	label := fs.String("label", "", "label for the agent key (default agent@<computer name> when one is made now)")
 	if err := fs.Parse(args); err != nil || fs.NArg() != 0 {
 		usage()
 	}
@@ -229,8 +229,14 @@ func cmdMCP(s *core.Store, args []string) {
 	}
 	if *write {
 		// Make the agent key on first use. On the person's own machine this
-		// also writes the agent.pair claim. Nothing goes to stdout.
-		if _, _, err := s.AgentInit("", *label); err != nil {
+		// also writes the agent.pair claim. Nothing goes to stdout. A label
+		// that differs from the key's pairing is refused (DECISIONS 209);
+		// without -label an existing key keeps its name.
+		lbl := *label
+		if _, err := s.ReadAgent(); lbl == "" && errors.Is(err, core.ErrNoAgent) {
+			lbl = "agent@" + host
+		}
+		if _, _, err := s.AgentInit("", lbl); err != nil {
 			fail(err)
 		}
 	}
@@ -699,9 +705,12 @@ func toolReadBlob(s *core.Store, f core.Filter, id string, max int) (any, error)
 	if l.IsTooNew() {
 		return nil, l.TooNewError()
 	}
+	// Only a current record of the person or a paired agent unlocks a blob. A
+	// stranger can name any blob, also one the person deleted.
 	mediaType, named := "", false
+	labels := l.AgentLabels()
 	for rid, r := range l.Report.Records {
-		if !l.Current(rid) || !inScope(r, f) {
+		if !l.Current(rid) || !inScope(r, f) || (r.Author != l.ID && labels[r.Author] == "") {
 			continue
 		}
 		for _, b := range r.Blobs {

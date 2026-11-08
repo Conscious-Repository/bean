@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/big"
 	"os"
 	"path"
 	"regexp"
@@ -29,7 +28,7 @@ import (
 	"github.com/Conscious-Repository/bean/core"
 )
 
-const version = "bean-import-apple-health@0.1.2"
+const version = "bean-import-apple-health@0.2.0"
 const system = "apple-health-xml"
 const maxInput int64 = 256 << 20
 const maxXML int64 = 256 << 20
@@ -40,29 +39,42 @@ type options struct {
 	blob    string
 	records bool
 	types   string
-}
-type metric struct {
-	slug     string
-	category bool
+	digest  string // plaintext SHA-256 of the input, set by convertFile
 }
 
+// A metric is a quantity, a category or a percent. A quantity needs a unit.
+// A percent is a quantity that Apple writes as a fraction with unit "%";
+// unit "%" on any other type is refused.
+type metric struct {
+	slug string
+	kind kind
+}
+
+type kind int
+
+const (
+	quantity kind = iota
+	category
+	percent
+)
+
 var metrics = map[string]metric{
-	"HKQuantityTypeIdentifierHeight":                         {"height", false},
-	"HKQuantityTypeIdentifierBodyMass":                       {"body-mass", false},
-	"HKQuantityTypeIdentifierStepCount":                      {"steps", false},
-	"HKQuantityTypeIdentifierDistanceWalkingRunning":         {"distance-walking-running", false},
-	"HKQuantityTypeIdentifierBasalEnergyBurned":              {"basal-energy", false},
-	"HKQuantityTypeIdentifierActiveEnergyBurned":             {"active-energy", false},
-	"HKQuantityTypeIdentifierFlightsClimbed":                 {"flights-climbed", false},
-	"HKQuantityTypeIdentifierHeadphoneAudioExposure":         {"headphone-audio-exposure", false},
-	"HKQuantityTypeIdentifierWalkingDoubleSupportPercentage": {"walking-double-support", false},
-	"HKQuantityTypeIdentifierWalkingSpeed":                   {"walking-speed", false},
-	"HKQuantityTypeIdentifierWalkingStepLength":              {"walking-step-length", false},
-	"HKQuantityTypeIdentifierWalkingAsymmetryPercentage":     {"walking-asymmetry", false},
-	"HKDataTypeSleepDurationGoal":                            {"sleep-duration-goal", false},
-	"HKQuantityTypeIdentifierAppleWalkingSteadiness":         {"walking-steadiness", false},
-	"HKCategoryTypeIdentifierSleepAnalysis":                  {"sleep-analysis", true},
-	"HKCategoryTypeIdentifierHeadphoneAudioExposureEvent":    {"headphone-audio-exposure-event", true},
+	"HKQuantityTypeIdentifierHeight":                         {"height", quantity},
+	"HKQuantityTypeIdentifierBodyMass":                       {"body-mass", quantity},
+	"HKQuantityTypeIdentifierStepCount":                      {"steps", quantity},
+	"HKQuantityTypeIdentifierDistanceWalkingRunning":         {"distance-walking-running", quantity},
+	"HKQuantityTypeIdentifierBasalEnergyBurned":              {"basal-energy", quantity},
+	"HKQuantityTypeIdentifierActiveEnergyBurned":             {"active-energy", quantity},
+	"HKQuantityTypeIdentifierFlightsClimbed":                 {"flights-climbed", quantity},
+	"HKQuantityTypeIdentifierHeadphoneAudioExposure":         {"headphone-audio-exposure", quantity},
+	"HKQuantityTypeIdentifierWalkingDoubleSupportPercentage": {"walking-double-support", percent},
+	"HKQuantityTypeIdentifierWalkingSpeed":                   {"walking-speed", quantity},
+	"HKQuantityTypeIdentifierWalkingStepLength":              {"walking-step-length", quantity},
+	"HKQuantityTypeIdentifierWalkingAsymmetryPercentage":     {"walking-asymmetry", percent},
+	"HKDataTypeSleepDurationGoal":                            {"sleep-duration-goal", quantity},
+	"HKQuantityTypeIdentifierAppleWalkingSteadiness":         {"walking-steadiness", percent},
+	"HKCategoryTypeIdentifierSleepAnalysis":                  {"sleep-analysis", category},
+	"HKCategoryTypeIdentifierHeadphoneAudioExposureEvent":    {"headphone-audio-exposure-event", category},
 }
 var blobPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 var decimal = regexp.MustCompile(`^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$`)
@@ -190,6 +202,7 @@ func convertFileBounded(input string, out io.Writer, o options, outputLimit int6
 	defer rows.Close()
 	writer := bufio.NewWriter(&limitedOutput{writer: rows, remaining: outputLimit})
 	limited := &io.LimitedReader{R: reader, N: maxXML + 1}
+	o.digest = hex.EncodeToString(hash.Sum(nil))
 	summary, err := parseExport(limited, writer, o, selected)
 	if err != nil {
 		return err
@@ -200,7 +213,7 @@ func convertFileBounded(input string, out io.Writer, o options, outputLimit int6
 	if err = writer.Flush(); err != nil {
 		return err
 	}
-	summary["sha256"] = hex.EncodeToString(hash.Sum(nil))
+	summary["sha256"] = o.digest
 	summary["bytes"] = int(n)
 	summary["assurance"] = "unsigned-export"
 	summary["sample_identity"] = "not-provided"
@@ -237,8 +250,46 @@ func (w *limitedOutput) Write(p []byte) (int, error) {
 	return n, err
 }
 
+// maxTag bounds the bytes between two '>': one tag with its attributes, a
+// comment, or text. encoding/xml builds a whole element, every attribute of
+// it, before parseExport can count them, so the 64 KiB attribute bound alone
+// let one element cost many times its size in memory.
+const maxTag = 1 << 20
+
+var errTag = errors.New("XML tag or text exceeds 1 MiB without '<'")
+
+// tagBound fails the read once more than maxTag bytes pass without a '<'.
+type tagBound struct {
+	r   io.Reader
+	run int
+	err error
+}
+
+func (t *tagBound) Read(p []byte) (int, error) {
+	if t.err != nil {
+		return 0, t.err
+	}
+	n, err := t.r.Read(p)
+	for i, b := range p[:n] {
+		// A run starts at '<': a tag holds no other '<' (encoding/xml
+		// refuses one in an attribute value), but it may hold '>' in a
+		// quoted value, so a reset on '>' could be kept at zero.
+		if b == '<' {
+			t.run = 0
+			continue
+		}
+		t.run++
+		if t.run > maxTag {
+			t.err = errTag
+			return i, errTag
+		}
+	}
+	return n, err
+}
+
 func parseExport(in io.Reader, out io.Writer, o options, selected map[string]bool) (map[string]any, error) {
-	d := xml.NewDecoder(in)
+	bound := &tagBound{r: in}
+	d := xml.NewDecoder(bound)
 	counts := map[string]any{}
 	occurrences := map[[32]byte]int{}
 	depth := 0
@@ -247,6 +298,11 @@ func parseExport(in io.Reader, out io.Writer, o options, selected map[string]boo
 	records := 0
 	activities := 0
 	unmapped := 0
+	// Apple writes blood pressure and food as a Correlation that holds its
+	// Records. They are counted, kept in the file, and never read as readings.
+	inCorrelation := false
+	correlations := 0
+	correlated := 0
 	for {
 		offset := d.InputOffset()
 		token, err := d.Token()
@@ -254,6 +310,9 @@ func parseExport(in io.Reader, out io.Writer, o options, selected map[string]boo
 			break
 		}
 		if err != nil {
+			if bound.err != nil {
+				return nil, bound.err
+			}
 			return nil, errors.New("invalid or truncated XML/ZIP contents")
 		}
 		switch t := token.(type) {
@@ -283,9 +342,14 @@ func parseExport(in io.Reader, out io.Writer, o options, selected map[string]boo
 				}
 				attrs[a.Name.Local] = a.Value
 			}
+			if depth == 2 && t.Name.Local == "Correlation" {
+				inCorrelation = true
+				correlations++
+			}
 			if t.Name.Local == "Record" {
-				if depth != 2 {
-					return nil, errors.New("record must be a HealthData child")
+				nested := depth == 3 && inCorrelation
+				if depth != 2 && !nested {
+					return nil, errors.New("record must be a HealthData or Correlation child")
 				}
 				records++
 				if records > maxRecords {
@@ -301,12 +365,19 @@ func parseExport(in io.Reader, out io.Writer, o options, selected map[string]boo
 					return nil, errors.New("too many record types")
 				}
 				m, known := metrics[typ]
+				want := known && o.records && (len(selected) == 0 || selected[m.slug])
+				if nested {
+					correlated++
+					if want {
+						return nil, fmt.Errorf("record %d: a selected reading sits inside a Correlation, which this importer does not read", records)
+					}
+				}
 				if !known {
 					unmapped++
 					continue
 				}
-				if o.records && (len(selected) == 0 || selected[m.slug]) {
-					rec, e := reading(attrs, m, records, o.blob, occurrences)
+				if want {
+					rec, e := reading(attrs, m, records, o.digest, occurrences)
 					if e != nil {
 						return nil, fmt.Errorf("record %d: %w", records, e)
 					}
@@ -320,6 +391,9 @@ func parseExport(in io.Reader, out io.Writer, o options, selected map[string]boo
 			}
 		case xml.EndElement:
 			depth--
+			if depth == 1 {
+				inCorrelation = false
+			}
 		case xml.CharData:
 			if strings.TrimSpace(string(t)) != "" {
 				return nil, errors.New("unexpected XML text")
@@ -342,16 +416,20 @@ func parseExport(in io.Reader, out io.Writer, o options, selected map[string]boo
 	if roots != 1 || depth != 0 {
 		return nil, errors.New("incomplete HealthData document")
 	}
-	return map[string]any{"record_count": records, "record_types": counts, "activity_summary_count": activities, "unmapped_record_count": unmapped}, nil
+	return map[string]any{"record_count": records, "record_types": counts, "activity_summary_count": activities, "unmapped_record_count": unmapped,
+		"correlation_count": correlations, "correlation_record_count": correlated}, nil
 }
 
-func reading(a map[string]string, m metric, index int, blob string, occ map[[32]byte]int) (map[string]any, error) {
+// reading is one record. digest is the plaintext SHA-256 of the export: a
+// reading names the export by it, not in blobs, so purging the
+// apple-health.export erases the file.
+func reading(a map[string]string, m metric, index int, digest string, occ map[[32]byte]int) (map[string]any, error) {
 	value := map[string]any{}
 	raw, exists := a["value"]
 	if !exists || raw == "" {
 		return nil, errors.New("missing reading value")
 	}
-	if m.category {
+	if m.kind == category {
 		// Categories are opaque Apple constants, never interpreted as quantities.
 		if len(raw) > 256 || !strings.HasPrefix(raw, "HKCategoryValue") {
 			return nil, errors.New("unsupported category value")
@@ -364,7 +442,7 @@ func reading(a map[string]string, m metric, index int, blob string, occ map[[32]
 			mantissa = raw[:exponent]
 		}
 		underflow := n == 0 && strings.Trim(mantissa, "+-.0") != ""
-		if !decimal.MatchString(raw) || err != nil || !core.ExactNumber(n) || underflow || (!strings.ContainsAny(raw, ".eE") && math.Abs(n) >= 1<<53) || !sameDecimal(raw, n) {
+		if !decimal.MatchString(raw) || err != nil || !core.ExactNumber(n) || underflow || (!strings.ContainsAny(raw, ".eE") && math.Abs(n) >= 1<<53) || !core.SameDecimal(raw, n) {
 			return nil, errors.New("invalid or inexact numeric value")
 		}
 		value["n"] = n
@@ -374,6 +452,27 @@ func reading(a map[string]string, m metric, index int, blob string, occ map[[32]
 			return nil, errors.New("oversized unit")
 		}
 		value["unit"] = u
+	} else if m.kind != category {
+		// A number without its unit is not a reading: 70 kg and 70 lb differ.
+		return nil, errors.New("quantity without a unit")
+	}
+	// The ref keeps the value as Apple wrote it, so a reading that an older
+	// version stored with unit "%" is reported as changed, not added again.
+	source := value
+	switch {
+	case m.kind == percent:
+		// Apple writes a percentage as a fraction with unit "%": 0.272 is
+		// 27.2%. Store unit "1", which says what the number is. Anything
+		// else is refused.
+		n, _ := value["n"].(float64)
+		if value["unit"] != "%" || n < 0 || n > 1 {
+			return nil, errors.New("percentage is not a fraction with unit %")
+		}
+		value = map[string]any{"n": n, "unit": "1"}
+	case value["unit"] == "%":
+		// Unit "%" on a type that is not a percent says the export is not
+		// what this importer reads; a fraction of steps is no reading.
+		return nil, errors.New("unit % on a type that is not a percentage")
 	}
 	start, err := appleTime(a["startDate"])
 	if err != nil {
@@ -388,10 +487,16 @@ func reading(a map[string]string, m metric, index int, blob string, occ map[[32]
 	}
 	observed := map[string]any{"start": start.Format(time.RFC3339), "end": end.Format(time.RFC3339), "precision": "second"}
 	typ := "apple-health." + m.slug
-	key := sha256.Sum256(core.Canonical([]any{typ, observed, value}))
+	key := sha256.Sum256(core.Canonical([]any{typ, observed, source}))
 	count := occ[key]
 	occ[key] = count + 1
 	context := map[string]any{"apple_type": a["type"], "source_record_index": index, "assurance": "unsigned-export", "identity_basis": "tuple-occurrence"}
+	if digest != "" {
+		context["export_sha256"] = digest
+	}
+	if source["unit"] != value["unit"] {
+		context["source_unit"] = source["unit"]
+	}
 	if a["creationDate"] != "" {
 		created, e := appleTime(a["creationDate"])
 		if e != nil {
@@ -400,29 +505,7 @@ func reading(a map[string]string, m metric, index int, blob string, occ map[[32]
 		context["source_created"] = created.Format(time.RFC3339)
 	}
 	return map[string]any{"type": typ, "value": value, "times": map[string]any{"observed": observed}, "context": context,
-		"source": map[string]any{"system": system, "adapter": version, "ref_input": core.RefInputTuple(system, typ, observed, value, count)},
-		"blobs":  []any{map[string]any{"hash": blob, "role": "raw-export", "media_type": "application/octet-stream"}}}, nil
-}
-
-// Compare source and emitted decimal values, not the binary fraction behind a
-// float (ordinary 0.1 must remain usable). Bound rational parsing explicitly:
-// even a short zero with a huge exponent could otherwise allocate excessively.
-func sameDecimal(raw string, n float64) bool {
-	if len(raw) > 256 {
-		return false
-	}
-	if i := strings.IndexAny(raw, "eE"); i >= 0 {
-		exponent, err := strconv.ParseInt(raw[i+1:], 10, 32)
-		if err != nil || exponent < -1000 || exponent > 1000 {
-			return false
-		}
-	}
-	source, ok := new(big.Rat).SetString(raw)
-	if !ok {
-		return false
-	}
-	emitted, ok := new(big.Rat).SetString(string(core.Canonical(n)))
-	return ok && source.Cmp(emitted) == 0
+		"source": map[string]any{"system": system, "adapter": version, "ref_input": core.RefInputTuple(system, typ, observed, source, count)}}, nil
 }
 
 func appleTime(s string) (time.Time, error) {
