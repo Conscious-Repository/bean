@@ -208,3 +208,9 @@ Purging the `lab.report` erases the file, unless another record still names it.
 Run `go test ./cmd/bean-import-labcorp ./cmd/bean`. Tests exercise mixed
 metadata, page breaks, bounded/private extraction, output failures, storage,
 repeat imports, amendments and byte-identical export of both report versions.
+
+A test name may end in a number only when it is two words and the first is a
+numbered test: Interleukin, CA, Cyfra or Factor (`Interleukin 6`, `CA 19-9`).
+Any other name that ends in a number, or holds High, Low, Abnormal, Critical,
+Panic or Alert after its first word, is refused: the value may sit in the name,
+one space after it. Add a family here when a real report needs it.

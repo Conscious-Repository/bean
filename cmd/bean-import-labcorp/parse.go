@@ -877,12 +877,48 @@ func (p *parser) finish() (*Report, error) {
 				return nil, fmt.Errorf("result %q has no value, and a word of its name may be the value", r.Name)
 			}
 		}
+		// A value one space after the name joins it ("Glucose 101"), and the
+		// result column may then hold a word the grammar takes. A name may end
+		// in a number only as a known numbered test, and holds no flag word.
+		if err := nameHidesValue(r.Name); err != nil {
+			return nil, err
+		}
 	}
 	rep.Results = kept
 	return rep, nil
 }
 
 var reNameWord = regexp.MustCompile(`^[A-Za-z][A-Za-z-]*$`)
+
+// numberedTests are the tests whose name is a word and a number, such as
+// Interleukin 6 or CA 125. Any other name that ends in a number is refused:
+// the number may be the value, one space after the name.
+var numberedTests = map[string]bool{"interleukin": true, "ca": true, "cyfra": true, "factor": true}
+
+// wordFlags are the flags spelled out. One letter (A, H, L) is a flag only in
+// the result column: Vitamin A and Hepatitis A are names.
+var wordFlags = map[string]bool{"high": true, "low": true, "abnormal": true, "critical": true, "panic": true, "alert": true}
+
+var reBareNumber = regexp.MustCompile(`^[<>]?=?\d+([.,]\d+)?(-\d+([.,]\d+)?)?$`)
+
+// nameHidesValue refuses a name that may hold a reading: a last word that is
+// a number, unless the name is a numbered test, or a flag word after the
+// first word.
+func nameHidesValue(name string) error {
+	f := strings.Fields(name)
+	if len(f) < 2 {
+		return nil
+	}
+	for _, w := range f[1:] {
+		if wordFlags[strings.ToLower(w)] {
+			return fmt.Errorf("result %q has a flag in its name; the value may be in the name too", name)
+		}
+	}
+	if last := f[len(f)-1]; reBareNumber.MatchString(last) && !(len(f) == 2 && numberedTests[strings.ToLower(f[0])]) {
+		return fmt.Errorf("result %q ends in a number that may be its value", name)
+	}
+	return nil
+}
 
 // nameMayHoldValue reports whether a word of a name, after the first, is
 // anything but letters and hyphens, or is a flag or a result.

@@ -144,8 +144,12 @@ func TestReportResultCountBound(t *testing.T) {
 	for _, count := range []int{10000, 10001} {
 		var b strings.Builder
 		b.WriteString(prefix)
-		for i := 0; i < count; i++ {
+		for i, n := 0, 0; n < count; i++ {
+			if wordFlags[letters(i)] {
+				continue // "Synthetic low" is refused: a flag in a name
+			}
 			b.WriteString(row("Synthetic "+letters(i), "", "1", "", "", "") + "\n")
+			n++
 		}
 		text := b.String()
 		rep, err := parseReport(text)
