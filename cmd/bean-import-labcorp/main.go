@@ -232,9 +232,12 @@ func slug(s string) string {
 }
 
 // observed is the collection time: minute precision in loc when the
-// report gives a time and loc is known, else the day in UTC.
+// report gives a time and loc is known, else the day in UTC. When the
+// report says the collection time was not on the requisition, the time it
+// prints may be another one (receipt), so only the day is recorded and the
+// printed time is kept as raw_time.
 func (rep *Report) observed(loc *time.Location) (map[string]any, string) {
-	if loc != nil {
+	if loc != nil && !rep.collectionTimeUnsure() {
 		if t, err := time.ParseInLocation("01/02/2006 1504", rep.Collected, loc); err == nil && uniqueLocalTime(t, rep.Collected) {
 			start := t.Format(time.RFC3339)
 			if _, ok := core.ParseTime(start); ok {
@@ -251,6 +254,17 @@ func (rep *Report) observed(loc *time.Location) (map[string]any, string) {
 		return nil, rep.Collected
 	}
 	return map[string]any{"start": start, "precision": "day"}, rep.Collected
+}
+
+// collectionTimeUnsure reports a report note that says the collection date
+// or time was not given, as Labcorp prints when it used the receipt date.
+func (rep *Report) collectionTimeUnsure() bool {
+	for _, n := range rep.Notes {
+		if strings.Contains(strings.ToLower(n), "time of collection was not indicated") {
+			return true
+		}
+	}
+	return false
 }
 
 // A zone alone cannot identify a nonexistent or repeated DST wall-clock minute.

@@ -52,7 +52,9 @@ func TestLongAlignedResultsAreNotSilentlyLost(t *testing.T) {
 	if rep.Results[0].Value != "Not Detected" || rep.Results[0].Ref != ref {
 		t.Fatalf("aligned text lost: %+v", rep.Results[0])
 	}
-	if _, err := parseReport(report("No clinically significant antibodies detected")); err == nil || !strings.Contains(err.Error(), "not a number or a result") {
+	// Refused either as a text it does not know or, since it runs into the
+	// next column, as a token across two columns.
+	if _, err := parseReport(report("No clinically significant antibodies detected")); err == nil || !strings.Contains(err.Error(), "not a number or a result") && !strings.Contains(err.Error(), "runs across two columns") {
 		t.Fatalf("free-text result: %v", err)
 	}
 }

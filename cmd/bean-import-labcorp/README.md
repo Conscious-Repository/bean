@@ -58,7 +58,8 @@ Lines that may appear anywhere:
 - A page header or footer line, matched whole: `<name>  DOB: MM/DD/YYYY
   Patient Report`; `©YYYY Laboratory Corporation of America® Holdings`,
   optionally followed by `This document contains private and confidential
-  health information.`; `All Rights Reserved - Enterprise Report Version
+  health information` (with `protected by state and federal law` and a full
+  stop, or without); `All Rights Reserved - Enterprise Report Version
   2.00`, optionally followed by `If you have received this document in error
   please call NNN-NNN-NNNN`; and, indented, `Date Created and Stored MM/DD/YY
   HHMM <zone> Final Report Page N of M`. Text that only contains `DOB:` or
@@ -67,7 +68,11 @@ Lines that may appear anywhere:
   after the colon: `Patient ID`, `Age`, `Account Number`, `Specimen ID`,
   `Sex`, `Ordering Physician`, `Date Collected` (`MM/DD/YYYY`, optionally
   `HHMM Local`), `Date Received`, `Date Reported` (`MM/DD/YYYY`, optionally
-  `HHMM <zone>`), `Fasting` (`Yes` or `No`) and `Ordered Items`. Only fields
+  `HHMM <zone>`), `Date Received` and `Date Entered` (optionally `HHMM Local`
+  or `HHMM <zone>`), `Fasting` (`Yes`, `No` or `Not Given`), `Ordered Items`,
+  `Control ID` and `Alternate Control Number` (which may be empty). The
+  `Ordered Items` list may wrap onto the margin lines after it, up to a blank
+  line; those lines are not read. Only fields
   are read for the specimen id, collection date and time, report date and
   fasting, and every one of them in the report must agree: two specimen ids,
   two collection days or times, two report days or two fasting answers are
@@ -79,11 +84,15 @@ or the header. An indented line there is refused: a row has no columns yet.
 
 The column header is exactly five tokens, `Test`, `Current Result and Flag`,
 `Previous Result and Date`, `Units`, `Reference Interval`, with `Test`
-indented. Every header in the report must give the same columns, so a page
-laid out further right or compressed differently is refused. A line that
-starts with `Test` and is not that header is refused. Each column is a band
-that starts two columns left of its header name and ends where the next one
-starts. Columns are counted in characters.
+indented. Each header sets the columns of the rows under it: on a real
+report they move by a few characters from page to page. A line that starts
+with `Test` and is not that header is refused. Each column is a band. The
+result band starts two columns left of its name, where values are printed
+from; the other bands meet halfway between one name's end and the next
+name's start, since Labcorp centers units and reference intervals under
+their names. A token belongs to the band it lies in, and a token that runs
+across where two bands meet is refused: its column is not sure. Columns are
+counted in characters.
 
 In the results:
 
@@ -97,13 +106,12 @@ In the results:
   lab code. Every other token goes to the band its start is in: the result
   band holds a value and an optional flag, or a flag alone, which leaves the
   row with no value; the previous band a value, an optional flag and a date;
-  the units band one word with a letter, `%` or `/`; the reference band one
-  token. A token in the Test band that is not a code, a units token with a
-  space or without a letter, `%` or `/` (`9-20`, `>59`), or a result or flag
-  outside the grammar below is refused. A token that starts within two
-  columns of where a band starts, on either side, is refused: a reference
-  interval one column left of its band would be read as the unit, a previous
-  result two columns left of its band as the current flag.
+  the units band one unit; the reference band one token. A unit starts with
+  a letter or `%`, holds a `/` or `%` or is a known bare unit (`fL`, `pg`),
+  and no part of it is a result word (`Negative/Trace`); a number may be part
+  of it (`mL/min/1.73`). A token in the Test band that is not a code, a unit
+  this rule does not take (`9-20`, `>59`, `Yellow`, `<5/hpf`), or a result or
+  flag outside the grammar below is refused.
 - Every token of a row or value line must be in a field of the result read
   from it. The parser lays out the name, code, value, flag, previous result,
   units and range it kept, each at the column it read it from, and the line
@@ -112,15 +120,21 @@ In the results:
 - `Please note` or `Please Note:` with an optional lab code and nothing else:
   its text follows as comment lines. In the panel of the result above it, the
   text is that result's comment; otherwise it is a report note.
-- A value line: only under a row with nothing after its name and code, with
-  only blank, page header, field, column header or `(Cont.)` lines between.
-  All its tokens are in the result, previous, units and reference bands, read
-  as on a row. A value line anywhere else (units under a row that has a
-  value, a value under a `Please note`, a value before its name) is refused.
-- A comment line: it starts right of where names start and left of the
-  result band, under a result of the same panel or a `Please note`, and is
-  one token of text, or `Note:` and one more token. Anything with more
-  columns is refused.
+- A line that starts between the test column and the comment column, 40
+  columns right of `Test`, is refused: a wrapped test name would sit there,
+  and the reading above would be stored under half its name. Labcorp prints
+  its comments 43 columns right of `Test` on every page.
+- From the comment column on, under a row with nothing after its name and
+  code, a line whose tokens all read whole as that row's values is its value
+  line (a range alone is one too, for a test not performed). Any other line
+  from the comment column on is a comment of the result above it, in any
+  number of columns: the lab's notes, its table of risk categories, the text
+  of a `Please note`. No row starts there, so no reading is lost to a
+  comment. A row whose values do not read whole then has no value, which is
+  refused unless the lab says the test was not performed.
+- No comment starts in the units or reference column: a line that starts
+  there and is not a row's values is refused, since a unit or range would be
+  lost.
 
 A value is a number with an optional `<`, `>`, `<=` or `>=` (`101`, `-2.0`,
 `<0.5`); a dipstick grade `1+` to `4+`; a count range such as `0-5`; a titer
@@ -140,7 +154,9 @@ significant antibodies detected`) or a number with a thousands comma
 After `Disclaimer`, `Icon Legend` or `Performing Labs`, each a line of its
 own at the margin, the results end. Then only these pass: page header and
 field lines; another end heading; a lab list line (`01: BN - Labcorp
-Burlington, 1447 York Court, ...`); one token of text at the margin; and
+Burlington, 1447 York Court, ...`); one token of text at the margin; the
+Icon Legend line (`Out of Reference Range`, `Critical or Alert`, whose icons
+do not come through); and
 `Patient Details` (optionally with `Physician Details` and `Specimen Details`
 on the same line) and the lines under it. A line of the patient details has
 at most one token per heading column, each starting within two columns of its
@@ -237,9 +253,14 @@ H`). The one exception is a numbered test of two words: `Interleukin` or
 `CA 72-4`, and `Cyfra 21-1`. So `Beta 2 Microglobulin` and `Factor 101` are
 refused. Add a family or a number here when a real report needs it.
 
-The first line under a result must read as a lab comment: a not-performed
-phrase, a line with a colon, a line that ends a sentence, or a full line of
-40 characters or more. A short fragment there may be the rest of a wrapped
-test name, and is refused. Units and reference intervals start within 4
-columns of their column names. A result with a value under a "Test not
-performed" line is refused.
+A result with a value under a "Test not performed" line is refused.
+
+When a note of the report says the date or time of collection was not
+indicated on the requisition, the time the report prints may be the receipt
+time. Then only the collection day is recorded, and the printed time is kept
+as `raw_time`.
+
+The shapes come from a real report: `testdata/real-layout.txt` is its
+layout, column for column, with every name, id, date, value, flag and
+comment replaced (DECISIONS 230). Another report may still hold a line the
+grammar does not know; it is refused by line number.

@@ -39,12 +39,18 @@ func TestRebuildRefusesUnreadToken(t *testing.T) {
 	for label, l := range map[string]string{
 		"third result token": pad(pad(pad(pad("", 6)+"Glucose", 57)+"100", 68)+"High", 75) + "H",
 		// Within alignedWithin of the column name, so only whole() can refuse.
-		"second unit":     pad(pad(pad(pad(pad("", 6)+"Glucose", 57)+"100", 140)+"g", 143)+"x", 160) + "70-99",
+		"second unit":     pad(pad(pad(pad(pad("", 6)+"Glucose", 57)+"100", 140)+"%", 143)+"x", 160) + "70-99",
 		"second interval": pad(pad(pad(pad(pad("", 6)+"Glucose", 57)+"100", 140)+"mg/dL", 158)+"7", 161) + "5",
 		"value line":      row("Glucose", "01", "-", "", "", "") + "\n" + pad(pad(pad(pad("", 57)+"100", 68)+"High", 75)+"L", 140) + "mg/dL",
 	} {
 		t.Run(label, func(t *testing.T) {
-			mustRefuse(t, ambiguityReport(l), "is in no field of the result")
+			// A value line that does not read whole is a comment, so the row
+			// above it has no value; a row line is refused by the rebuild.
+			want := "is in no field of the result"
+			if label == "value line" {
+				want = "has no value"
+			}
+			mustRefuse(t, ambiguityReport(l), want)
 		})
 	}
 	cols, ok := parseHeader(tokens(header()))

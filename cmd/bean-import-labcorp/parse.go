@@ -1,12 +1,13 @@
 package main
 
-// The report is read by a grammar (DECISIONS 222). Every line of the
-// extracted text is one known kind, or the report is refused with the line
-// number. Results are read by column: each token belongs to the column whose
-// band holds its start, a token within two columns of a band's start is
-// refused, and every token of a result line must be in a field of the result
-// read from it (whole). A wrong lab value in a health record is worse than no import, and the
-// person keeps the file, so anything the grammar does not know is refused.
+// The report is read by a grammar (DECISIONS 222, fitted to a real report in
+// 230). Every line of the extracted text is one known kind, or the report is
+// refused with the line number. Results are read by column: each header sets
+// the columns of the rows under it, a token belongs to the band it lies in,
+// a token across two bands is refused, and every token of a result line must
+// be in a field of the result read from it (whole). A wrong lab value in a
+// health record is worse than no import, and the person keeps the file, so
+// anything the grammar does not know is refused.
 //
 // Line kinds, in the order they are tried:
 //
@@ -19,16 +20,18 @@ package main
 //     fields are read for the specimen, dates and fasting, and every one of
 //     them must agree
 //   - before the first column header: a panel heading (one token at the
-//     margin), or the column header
-//   - in the results: the column header again (the same columns), an end
-//     heading, a panel heading (one token at the margin that ends left of the
-//     result column), a result row (a name at the Test column), a "Please
-//     note" row, a value line (only under a row with nothing after its name),
-//     a comment line (one token, or "Note:" and one token, in the comment
-//     band under a result)
+//     margin), the margin lines an "Ordered Items:" field wraps onto, or the
+//     column header
+//   - in the results, by where the line starts: at the margin, a column
+//     header, an end heading or a panel heading; at the Test column, a result
+//     row or a "Please note" row; between the Test column and the comment
+//     column, nothing (a wrapped name would sit there); from the comment
+//     column on, the values of a row that had none, else a comment, unless
+//     it starts in the units or reference column
 //   - after "Disclaimer", "Icon Legend" or "Performing Labs": a lab list
 //     line ("01: BN - Labcorp ..., ..."), one token of text at the margin,
-//     an end heading, or "Patient Details" and its column-aligned lines
+//     the legend line, an end heading, or "Patient Details" and its
+//     column-aligned lines
 //
 // Anything else is refused.
 
@@ -190,47 +193,55 @@ func parseHeader(toks []token) (columns, bool) {
 	return c, c[0] >= 2
 }
 
-// alignedWithin is how far right of its header name a units or reference
-// token may start. The lab prints both left-aligned under the name.
-const alignedWithin = 4
+// bounds are where each column's band starts. The result column starts
+// slack columns left of its name, as values are printed from there. Labcorp
+// centers units and reference intervals under their names, and right-aligns
+// numbers, so the other bands meet halfway between one name's end and the
+// next name's start (DECISIONS 230).
+func (c columns) bounds() [5]int {
+	var b [5]int
+	b[1] = c[1] - slack
+	for i := 2; i < len(c); i++ {
+		end := c[i-1] + len(headerNames[i-1])
+		b[i] = (end + c[i] + 1) / 2
+	}
+	return b
+}
 
-// band says which column a token starting at col is in: 0 Test, 1 Current
-// Result and Flag, 2 Previous Result and Date, 3 Units, 4 Reference
-// Interval. Each band starts slack columns left of its header name.
+// band says which column a column position is in: 0 Test, 1 Current Result
+// and Flag, 2 Previous Result and Date, 3 Units, 4 Reference Interval.
 func (c columns) band(col int) int {
-	for b := 4; b >= 1; b-- {
-		if col >= c[b]-slack {
-			return b
+	b := c.bounds()
+	for i := 4; i >= 1; i-- {
+		if col >= b[i] {
+			return i
 		}
 	}
 	return 0
 }
 
-// edge is how far from the start of a band a token must start, on either
-// side, for its band to be sure: a reference interval one column left of
-// its band would be read as the unit, a previous result two columns left of
-// its band as the current flag.
-const edge = 2
-
-// onEdge returns a token that starts within edge columns of where a band
-// starts.
-func (c columns) onEdge(toks []token) (token, bool) {
-	for _, t := range toks {
-		for b := 1; b < len(c); b++ {
-			if s := c[b] - slack; t.start >= s-edge && t.start < s+edge {
-				return t, true
-			}
-		}
+// tokenBand is the band of a token, which must lie in one band: a token that
+// runs across where two columns meet has moved, and its column is not sure.
+func (c columns) tokenBand(t token) (int, error) {
+	first, last := c.band(t.start), c.band(t.start+utf8.RuneCountInString(t.text)-1)
+	if first != last {
+		return 0, fmt.Errorf("%q runs across two columns, so its column cannot be read for sure", t.text)
 	}
-	return token{}, false
+	return first, nil
 }
 
 // nameAt reports whether col is where a test name starts.
 func (c columns) nameAt(col int) bool { return col >= c[0]-1 && col <= c[0]+1 }
 
-// commentAt reports whether col is in the comment band: right of where a
-// name starts, left of the result column.
-func (c columns) commentAt(col int) bool { return col >= c[0]+2 && col < c[1]-slack }
+// commentLead is how far right of the test column a comment may start.
+// Labcorp prints comments 43 columns right of it on every page, while the
+// result column moves. A line between the test column and there is refused:
+// a wrapped test name would sit there, and the reading above would be stored
+// under half its name.
+const commentLead = 40
+
+// commentFrom is the first column a comment may start in.
+func (c columns) commentFrom() int { return c[0] + commentLead }
 
 // Values.
 
@@ -238,9 +249,9 @@ var (
 	reNumberValue  = regexp.MustCompile(`^(?:<=|>=|<|>)?-?\d+(?:\.\d+)?$`)
 	reValuePattern = regexp.MustCompile(`^(?:[1-4]\+|\d+-\d+|[<>]?1:\d+)$`)
 	reDate         = regexp.MustCompile(`^\d\d/\d\d/\d{4}$`)
-	// A unit is one word with a letter, '%' or '/', so a reference interval
-	// (9-20, >59, <=0.5) is never a unit.
-	reUnits = regexp.MustCompile(`^[!-~]*[A-Za-z%/][!-~]*$`)
+	// A unit is one word that starts with a letter or '%' (so a reference
+	// interval such as 9-20, >59 or <5/hpf is never one).
+	reUnits = regexp.MustCompile(`^[A-Za-z%][!-~]*$`)
 )
 
 // resultTexts are the categorical results the result column may hold, in
@@ -302,22 +313,17 @@ func (c columns) cells(toks []token) (cells, error) {
 	out := cells{at: [4]int{-1, -1, -1, -1}}
 	var cur []token
 	for _, t := range toks {
-		switch c.band(t.start) {
+		b, err := c.tokenBand(t)
+		if err != nil {
+			return out, err
+		}
+		switch b {
 		case 0:
 			return out, fmt.Errorf("%q sits in the test column, where only a name and a lab code go", t.text)
 		case 1:
 			cur = append(cur, t)
 		case 2:
 			out.prev = append(out.prev, t)
-		case 3, 4:
-			// Units and reference intervals are left-aligned under their
-			// header names. A token further right has moved from another
-			// column (a reference read as the unit, a unit as the reference).
-			if t.start > c[c.band(t.start)]+alignedWithin {
-				return out, fmt.Errorf("%q starts %d columns right of its column's name; units and reference intervals start under it", t.text, t.start-c[c.band(t.start)])
-			}
-		}
-		switch c.band(t.start) {
 		case 3:
 			if out.at[atUnits] < 0 {
 				out.units, out.at[atUnits] = t.text, t.start
@@ -345,14 +351,34 @@ func (c columns) cells(toks []token) (cells, error) {
 	switch {
 	case len(out.prev) > 0 && !isPrevious(joinTokens(out.prev)):
 		return out, errors.New("the previous result column does not hold a result and its date")
-	case out.units != "" && !reUnits.MatchString(out.units):
-		return out, fmt.Errorf("%q in the units column is not one word with a letter, %% or /", out.units)
+	case out.units != "" && !unitOK(out.units):
+		return out, fmt.Errorf("%q in the units column is not a unit this importer knows: one word with a / or %%, or a known unit", out.units)
 	case out.units == "" && out.ref != "" && reNumberValue.MatchString(out.value) && !strings.ContainsAny(out.ref, "0123456789"):
 		return out, fmt.Errorf("%q in the reference column holds no number for a numeric result with no unit: a unit may have moved there", out.ref)
 	case out.units != "" && (isValue(out.units) || isFlag(out.units)):
 		return out, fmt.Errorf("%q in the units column is a result or a flag, not a unit: a column may have moved", out.units)
 	}
 	return out, nil
+}
+
+// bareUnits are the units with no '/' or '%' in them that a report may
+// print. Any other word in the units column is refused: a reference word
+// such as "Yellow" there has moved from its column.
+var bareUnits = map[string]bool{"fL": true, "pg": true, "%": true, "Ratio": true, "ratio": true}
+
+// unitOK reports whether u is a unit: it starts with a letter or '%', holds
+// a '/' or '%' or is a known bare unit, and no part of it is a result word or
+// a flag ("Negative/Trace" is a reference, not a unit).
+func unitOK(u string) bool {
+	if !reUnits.MatchString(u) || isValue(u) || isFlag(u) {
+		return false
+	}
+	for _, part := range strings.Split(u, "/") {
+		if resultTexts[strings.ToLower(part)] || len(part) > 1 && flagWords[strings.ToLower(part)] {
+			return false // a number may be part of a unit (mL/min/1.73), and L is a litre (mmol/L)
+		}
+	}
+	return strings.ContainsAny(u, "/%") || bareUnits[u]
 }
 
 func joinTokens(toks []token) string {
@@ -411,10 +437,13 @@ var fieldSpecs = []fieldSpec{
 	{"Sex", regexp.MustCompile(`^[A-Za-z]+$`)},
 	{"Ordering Physician", nil},
 	{"Date Collected", regexp.MustCompile(`^(\d\d/\d\d/\d{4})(?: (\d{4}) Local)?$`)},
-	{"Date Received", regexp.MustCompile(`^\d\d/\d\d/\d{4}(?: \d{4} Local)?$`)},
+	{"Date Received", regexp.MustCompile(`^\d\d/\d\d/\d{4}(?: \d{4} (?:Local|[A-Z]{2,4}))?$`)},
+	{"Date Entered", regexp.MustCompile(`^\d\d/\d\d/\d{4}(?: \d{4} (?:Local|[A-Z]{2,4}))?$`)},
 	{"Date Reported", regexp.MustCompile(`^(\d\d/\d\d/\d{4})(?: \d{4} [A-Z]{2,4})?$`)},
-	{"Fasting", regexp.MustCompile(`^(?:Yes|No)$`)},
+	{"Fasting", regexp.MustCompile(`^(?:Yes|No|Not Given)$`)},
 	{"Ordered Items", regexp.MustCompile(`^[ -~]+$`)},
+	{"Control ID", regexp.MustCompile(`^[!-~]+$`)},
+	{"Alternate Control Number", regexp.MustCompile(`^[!-~]*$`)},
 }
 
 // fieldLabel returns the field whose label and colon start s, or nil.
@@ -435,7 +464,7 @@ func parseField(s string) (*fieldSpec, []string) {
 		return nil, nil
 	}
 	v, ok := strings.CutPrefix(s[len(f.label)+1:], " ")
-	if !ok {
+	if !ok && s != f.label+":" {
 		return nil, nil
 	}
 	if f.value == nil {
@@ -454,15 +483,15 @@ func parseField(s string) (*fieldSpec, []string) {
 // Page boilerplate.
 
 var (
-	reDOB        = regexp.MustCompile(`^DOB: \d\d/\d\d/\d{4}$`)
-	reCopyright  = regexp.MustCompile(`^©\d{4} Laboratory Corporation of America® Holdings$`)
-	reRightsCall = regexp.MustCompile(`^If you have received this document in error please call \d{3}-\d{3}-\d{4}$`)
-	reCreated    = regexp.MustCompile(`^Date Created and Stored \d\d/\d\d/\d\d \d{4} [A-Z]{2,4} Final Report Page \d{1,4} of \d{1,4}$`)
+	reDOB          = regexp.MustCompile(`^DOB: \d\d/\d\d/\d{4}$`)
+	reCopyright    = regexp.MustCompile(`^©\d{4} Laboratory Corporation of America® Holdings$`)
+	reRightsCall   = regexp.MustCompile(`^If you have received this document in error please call \d{3}-\d{3}-\d{4}$`)
+	reConfidential = regexp.MustCompile(`^This document contains private and confidential health information(?: protected by state and federal law)?\.?$`)
+	reCreated      = regexp.MustCompile(`^Date Created and Stored \d\d/\d\d/\d\d \d{4} [A-Z]{2,4} Final Report Page \d{1,4} of \d{1,4}$`)
 )
 
 const (
-	confidential = "This document contains private and confidential health information."
-	rightsLine   = "All Rights Reserved - Enterprise Report Version 2.00"
+	rightsLine = "All Rights Reserved - Enterprise Report Version 2.00"
 )
 
 // boilerplate reports whether a line is one of the page header and footer
@@ -473,7 +502,7 @@ func boilerplate(toks []token) bool {
 	case len(toks) == 3 && first.start == 0 && safeText(first.text) && reDOB.MatchString(toks[1].text) && toks[2].text == "Patient Report":
 		return true // the patient's name; it is not read
 	case first.start == 0 && reCopyright.MatchString(first.text):
-		return len(toks) == 1 || len(toks) == 2 && toks[1].text == confidential
+		return len(toks) == 1 || len(toks) == 2 && reConfidential.MatchString(toks[1].text)
 	case first.start == 0 && first.text == rightsLine:
 		return len(toks) == 1 || len(toks) == 2 && reRightsCall.MatchString(toks[1].text)
 	case len(toks) == 1 && first.start > 0 && reCreated.MatchString(first.text):
@@ -485,6 +514,10 @@ func boilerplate(toks []token) bool {
 // End of the results.
 
 var endHeadings = map[string]bool{"Disclaimer": true, "Icon Legend": true, "Performing Labs": true}
+
+// legendItems are the words of the Icon Legend line; its icons do not come
+// through pdftotext.
+var legendItems = map[string]bool{"Out of Reference Range": true, "Critical or Alert": true}
 
 var (
 	reLab     = regexp.MustCompile(`^(\d\d): [A-Z0-9]{2,3} - ([^,]+), [ -~]+$`)
@@ -532,6 +565,7 @@ type parser struct {
 	cur     *Result // the result a comment belongs to
 	note    *string // the panel of a "Please note" row whose text comes next
 	pending *Result // a row with nothing after its name, waiting for its value line
+	ordered bool    // the Ordered Items field wraps onto the margin lines after it
 }
 
 func parseReport(text string) (*Report, error) {
@@ -549,6 +583,7 @@ func parseReport(text string) (*Report, error) {
 
 func (p *parser) line(n int, l string) error {
 	if l == "" {
+		p.ordered = false
 		return nil
 	}
 	if len(l) > maxLineBytes {
@@ -595,6 +630,9 @@ func (p *parser) fieldLine(toks []token) (bool, error) {
 	for _, f := range fields {
 		if err := p.readField(f.f.label, f.m); err != nil {
 			return true, err
+		}
+		if f.f.label == "Ordered Items" && p.region == beforeHeader {
+			p.ordered = true
 		}
 	}
 	return true, nil
@@ -656,6 +694,8 @@ func (p *parser) beforeHeader(n int, l string, toks []token) error {
 	switch {
 	case err != nil:
 		return err
+	case ok && p.ordered:
+		return nil // the list of ordered tests goes on; it is not read
 	case ok && endHeadings[toks[0].text]:
 		p.region, p.ended = afterEnd, toks[0].text
 	case ok && (endsInReading(toks[0].text) || nameHidesValue(toks[0].text) != nil):
@@ -675,11 +715,9 @@ func (p *parser) header(n int, l string, toks []token) error {
 	if !ok {
 		return fmt.Errorf("line %d: unsupported result column header: it must name %s, in that order", n, strings.Join(headerNames[:], ", "))
 	}
-	if p.region == beforeHeader {
-		p.cols, p.colsAt, p.region = c, n, inResults
-	} else if c != p.cols {
-		return fmt.Errorf("line %d: a column header with other columns than the one at line %d; every header must give the same columns", n, p.colsAt)
-	}
+	// Each header sets the columns of the rows under it: Labcorp's columns
+	// move by a few characters from one page or panel to the next.
+	p.cols, p.colsAt, p.region = c, n, inResults
 	return nil
 }
 
@@ -728,28 +766,35 @@ func (p *parser) results(n int, l string, toks []token) error {
 		}
 		return nil
 	}
-	if t, ok := c.onEdge(toks); ok {
-		return fmt.Errorf("line %d: %q starts within %d columns of where a column starts, so its column cannot be read for sure", n, t.text, edge)
-	}
 	switch {
 	case c.nameAt(first.start):
 		return p.row(n, l, toks)
-	case c.commentAt(first.start):
-		return p.comment(n, toks)
-	case c.band(first.start) > 0:
-		if p.pending == nil {
-			return fmt.Errorf("line %d holds results, but the line above it is not a row waiting for them", n)
-		}
-		v, err := c.cells(toks)
-		if err != nil {
-			return fmt.Errorf("line %d: %v", n, err)
-		}
-		r := p.pending
-		r.fill(v, n)
-		p.pending = nil
-		return whole(n, l, r)
+	case first.start < c[0]:
+		return fmt.Errorf("line %d starts left of the test column", n)
+	case first.start < c.commentFrom():
+		return fmt.Errorf("line %d starts between the test column and the comment column: it may be the rest of a wrapped test name, so the reading above it cannot be read for sure", n)
 	}
-	return fmt.Errorf("line %d starts left of the test column", n)
+	// From the comment column on: the values of a row that had none on its
+	// own line, else a comment. A line that does not read as values whole
+	// is a comment, and the row above then has no value, which is refused
+	// unless the lab says the test was not performed.
+	if r := p.pending; r != nil {
+		p.pending = nil
+		if v, err := c.cells(toks); err == nil {
+			try := *r
+			try.fill(v, n)
+			if whole(n, l, &try) == nil {
+				*r = try
+				return nil
+			}
+		}
+	}
+	// No comment starts in the units or reference column: a line that does
+	// is the units of a row above it, or a moved column.
+	if first.start >= c.bounds()[3] {
+		return fmt.Errorf("line %d starts in the units or reference column but is not the values of the row above, so a unit or range would be lost", n)
+	}
+	return p.comment(n, toks)
 }
 
 func (p *parser) row(n int, l string, toks []token) error {
@@ -761,6 +806,11 @@ func (p *parser) row(n int, l string, toks []token) error {
 		return fmt.Errorf("line %d: a test name runs into the result column, so its value cannot be read for sure", n)
 	}
 	rest, code := toks[1:], token{}
+	if len(rest) > 0 {
+		if _, err := c.tokenBand(rest[0]); err != nil {
+			return fmt.Errorf("line %d: %v", n, err)
+		}
+	}
 	if len(rest) > 0 && c.band(rest[0].start) == 0 {
 		if !twoDigits(rest[0].text) {
 			return fmt.Errorf("line %d: %q in the test column is not a lab code", n, rest[0].text)
@@ -802,13 +852,10 @@ func twoDigits(s string) bool {
 	return len(s) == 2 && s[0] >= '0' && s[0] <= '9' && s[1] >= '0' && s[1] <= '9'
 }
 
-// comment reads a comment line: one token of text, or "Note:" and one more
-// (the fixture's "Note:     Values greater than ..."). More columns may be
-// a row or a value, and are refused.
+// comment reads a comment line: text from the comment column on, in any
+// number of columns, such as a lab's note or its table of risk categories.
+// No row starts there, so no reading is lost to a comment.
 func (p *parser) comment(n int, toks []token) error {
-	if len(toks) > 2 || len(toks) == 2 && toks[0].text != "Note:" {
-		return fmt.Errorf("line %d in the comment column is not one column of text: a row or a value there would be lost", n)
-	}
 	p.pending = nil
 	parts := make([]string, len(toks))
 	for i, t := range toks {
@@ -818,12 +865,6 @@ func (p *parser) comment(n int, toks []token) error {
 	switch {
 	case p.note != nil && (p.cur == nil || p.cur.Panel != *p.note):
 		p.rep.Notes = append(p.rep.Notes, s)
-	case p.cur != nil && len(p.cur.Comment) == 0 && !commentShaped(s):
-		// A short line right under a row may be the rest of a wrapped test
-		// name ("Hemoglobin" / "A1c (Glycated)"): the reading would be stored
-		// under the wrong test. A lab's comment says why a test was not
-		// performed, starts with Note:, ends a sentence, or fills the line.
-		return fmt.Errorf("line %d: %q under %q may be the rest of its name, not a comment", n, s, p.cur.Name)
 	case p.cur != nil:
 		p.cur.Comment = append(p.cur.Comment, s)
 	default:
@@ -861,6 +902,9 @@ func (p *parser) afterEnd(n int, l string, toks []token) error {
 		p.rep.Labs[m[1]] = name
 		return nil
 	}
+	if p.ended == "Icon Legend" && allLegend(toks) {
+		return nil
+	}
 	if cols, ok := detailsHeading(toks); ok {
 		p.region, p.ended, p.details = inDetails, first.text, cols
 		return nil
@@ -879,6 +923,15 @@ func (p *parser) afterEnd(n int, l string, toks []token) error {
 		return fmt.Errorf("line %d after %q ends in a reading (%q), so it may be a result row at the margin", n, p.ended, first.text)
 	}
 	return nil
+}
+
+func allLegend(toks []token) bool {
+	for _, t := range toks {
+		if !legendItems[t.text] {
+			return false
+		}
+	}
+	return true
 }
 
 // reAddress is the end of a lab's address line ("Burlington, NC 27215"):
@@ -1079,12 +1132,6 @@ func nameMayHoldValue(name string) bool {
 		}
 	}
 	return false
-}
-
-// commentShaped reports whether the first line under a result reads as a lab
-// comment rather than the second line of a wrapped test name.
-func commentShaped(s string) bool {
-	return notPerformed(s) || strings.Contains(s, ":") || strings.HasSuffix(s, ".") || len(s) >= 40
 }
 
 // notPerformedPhrases are how a lab says it has no value for a test. The

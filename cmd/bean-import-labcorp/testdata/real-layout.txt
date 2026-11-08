@@ -1,0 +1,370 @@
+Doe, Jordan Alexis                                     DOB: 01/01/1990                  Patient Report
+Patient ID: 0000000000000001                           Age: 35                          Account Number: 00000000
+Specimen ID: 000-000-0000-0                            Sex: Male                        Ordering Physician: A PHYSICN
+
+
+Date Collected: 01/02/2025                       Date Received: 01/03/2025          Date Reported: 01/09/2025                                            Fasting: Not Given
+
+
+Ordered Items: CBC With Differential/Platelet; Comp. Metabolic Panel (14); Lipid Panel; Iron and TIBC; FSH and LH;
+Testosterone,Free and Total; Lipoprotein (a); C-Reactive Protein, Cardiac; Homocyst(e)ine; Estradiol; Vitamin D, 25-Hydroxy;
+Cortisol; Prolactin; Thyroid Cascade Profile; Prostate-Specific Ag; Thyroxine (T4) Free, Direct; Hemoglobin A1c; Uric Acid; GGT;
+Apolipoprotein B; Creatine Kinase,Total; Triiodothyronine (T3), Free; Vitamin B12; Progesterone; Insulin; Ferritin; Please note
+
+                                                                                                                                                     Date Collected: 01/02/2025
+
+CBC With Differential/Platelet
+      Test                                              Current Result and Flag             Previous Result and Date                       Units               Reference Interval
+      WBC    01
+                                                          9.9                                                                           x10E3/uL                    3.4-10.8
+      RBC 01                                             0.57                                                                           x10E6/uL                   4.14-5.80
+      Hemoglobin 01                                      80.9                                                                              g/dL                    13.0-17.7
+      Hematocrit 01                                      00.4               High                                                             %                     37.5-51.0
+      MCV    01
+                                                          78                                                                                 fL                       79-97
+      MCH 01                                             17.4                                                                                pg                    26.6-33.0
+      MCHC 01                                            61.0               Low                                                            g/dL                    31.5-35.7
+      RDW    01
+                                                         81.6                                                                                %                     11.6-15.4
+      Platelets 01                                       134                                                                            x10E3/uL                    150-450
+      Neutrophils       01
+                                                          99                                                                                 %                     Not Estab.
+      Lymphs 01                                           17                                                                                 %                     Not Estab.
+      Monocytes        01
+                                                           7                                                                                 %                     Not Estab.
+      Eos 01                                               9                High                                                             %                     Not Estab.
+      Basos 01                                             1                                                                                 %                     Not Estab.
+      Neutrophils (Absolute)       01
+                                                          6.3                                                                           x10E3/uL                     1.4-7.0
+      Lymphs (Absolute) 01                                8.2                                                                           x10E3/uL                     0.7-3.1
+      Monocytes(Absolute) 01                              3.9                                                                           x10E3/uL                     0.1-0.9
+      Eos (Absolute) 01                                   3.6                                                                           x10E3/uL                     0.0-0.4
+      Baso (Absolute) 01                                  3.8                                                                           x10E3/uL                     0.0-0.2
+      Immature Granulocytes         01
+                                                           3                Low                                                              %                     Not Estab.
+      Immature Grans (Abs) 01                             3.3                                                                           x10E3/uL                     0.0-0.1
+
+Comp. Metabolic Panel (14)
+      Test                                              Current Result and Flag             Previous Result and Date                       Units               Reference Interval
+      Glucose     01
+                                                                                                                                                                      70-99
+                                                 Test not performed. Synth eti cc ommentt extf orthe layo utfixtur
+                                                 synth etic comm ent textfo rthelayout.
+      BUN 01                                              88                High                                                          mg/dL                       6-20
+      Creatinine 01                                      8.80                                                                             mg/dL                    0.76-1.27
+      eGFR                                                73                                                                          mL/min/1.73                      >59
+      BUN/Creatinine Ratio                                83                                                                                                          9-20
+      Sodium 01                                          801                                                                             mmol/L                     134-144
+      Potassium 01                                                                                                                                                   3.5-5.2
+                                                 Test not performed. Synth eti cc ommentt extf orthe layo utfixtur
+                                                 synth etic comm ent textfo rthelayout.
+      Chloride 01                                         79                                                                             mmol/L                      96-106
+
+
+                                                                                                       Date Created and Stored 01/09/25 1710 ET Final Report Page 1 of 6
+
+©2025 Laboratory Corporation of America® Holdings                                 This document contains private and confidential health information protected by state and federal law.
+All Rights Reserved - Enterprise Report Version 2.00                              If you have received this document in error please call 800-000-0000
+Doe, Jordan Alexis                                     DOB: 01/01/1990                   Patient Report
+Patient ID: 0000000000000001                           Age: 35                           Account Number: 00000000
+Specimen ID: 000-000-0000-0                            Sex: Male                         Ordering Physician: A PHYSICN
+
+                                                                                                                                                      Date Collected: 01/02/2025
+
+Comp. Metabolic Panel (14) (Cont.)
+      Carbon Dioxide, Total 01                            84                                                                              mmol/L                       20-29
+      Calcium     01
+                                                          7.7                                                                              mg/dL                     8.7-10.2
+      Protein, Total 01                                   4.6                                                                               g/dL                      6.0-8.5
+      Albumin 01                                          0.5               High                                                            g/dL                      4.3-5.2
+      Globulin, Total                                     1.9                                                                               g/dL                      1.5-4.5
+      Bilirubin, Total 01                                1.8                                                                               mg/dL                      0.0-1.2
+      Alkaline Phosphatase        01
+                                                          29                                                                                 IU/L                     44-121
+      AST (SGOT) 01                                       19                                                                                 IU/L                      0-40
+      ALT (SGPT) 01                                       63                                                                                 IU/L                      0-44
+
+Lipid Panel
+      Test                                              Current Result and Flag              Previous Result and Date                       Units               Reference Interval
+      Cholesterol, Total 01                              847                                                                               mg/dL                     100-199
+      Triglycerides    01
+                                                          22                                                                               mg/dL                       0-149
+      HDL Cholesterol 01                                  26                                                                               mg/dL                        >39
+      VLDL Cholesterol Cal                                86                High                                                           mg/dL                       5-40
+      LDL Chol Calc (NIH)                                836                                                                               mg/dL                       0-99
+
+Iron and TIBC
+      Test                                              Current Result and Flag              Previous Result and Date                       Units               Reference Interval
+      Iron Bind.Cap.(TIBC)                               126                                                                               ug/dL                     250-450
+      UIBC 01                                            881                                                                               ug/dL                     111-343
+      Iron   01
+                                                         898                                                                               ug/dL                      38-169
+      Iron Saturation                                     94                                                                                  %                        15-55
+
+FSH and LH
+      Test                                              Current Result and Flag              Previous Result and Date                       Units               Reference Interval
+      LH 01                                               4.4               Low                                                           mIU/mL                      1.7-8.6
+      FSH    01
+                                                          1.4                                                                             mIU/mL                     1.5-12.4
+
+Testosterone,Free and Total
+      Test                                              Current Result and Flag              Previous Result and Date                       Units               Reference Interval
+      Testosterone      01
+                                                         729                                                                               ng/dL                     264-916
+                                                 Synth etic commentte xtforthe la youtf ix t ureonlysyn th
+                                                 synthet iccommen ttext (FOR <63) thelayo 87 utf 67 ixtur eon.
+                                                 Syntheti, cc.om. MENT 1384,831;8828-8846. TEXT: 15610836.
+      Free Testosterone(Direct) 02                       89.8               High                                                           pg/mL                     9.3-26.5
+
+Lipoprotein (a)
+      Test                                              Current Result and Flag              Previous Result and Date                       Units               Reference Interval
+      Lipoprotein (a)       02
+                                                         83.6                                                                              nmol/L                      <75.0
+                                                                    Note:     Synthe ticcomm entt ex tfort he 49.3 layo/U tfi
+                                                                              syntheti cc ommenttextf orth elayou tfi XTU,
+                                                                              syn thet ic commentte xtfo rthelay outf ixtureo
+                                                                              sy nth-Eticcomme nttextforth ela yo utf
+
+
+                                                                                                        Date Created and Stored 01/09/25 1710 ET Final Report Page 2 of 6
+
+©2025 Laboratory Corporation of America® Holdings                                  This document contains private and confidential health information protected by state and federal law.
+All Rights Reserved - Enterprise Report Version 2.00                               If you have received this document in error please call 800-000-0000
+Doe, Jordan Alexis                                     DOB: 01/01/1990                     Patient Report
+Patient ID: 0000000000000001                           Age: 35                             Account Number: 00000000
+Specimen ID: 000-000-0000-0                            Sex: Male                           Ordering Physician: A PHYSICN
+
+                                                                                                                                                        Date Collected: 01/02/2025
+
+Lipoprotein (a) (Cont.)
+                                                                              synthetic co mmentte xtforth el Ay(o) utfixt
+                                                                              syntheticco.
+
+
+C-Reactive Protein, Cardiac
+      Test                                              Current Result and Flag                Previous Result and Date                       Units               Reference Interval
+      C-Reactive Protein, Cardiac        01
+                                                         3.47                                                                                 mg/L                    0.00-3.00
+                                                                                  Syntheti Ccom men Ttextf Orthelayoutfix Tureo
+                                                                                                      Low                 <1.00
+                                                                                                      Average       1.00 - 3.00
+                                                                                                      High                >3.00
+
+
+Homocyst(e)ine
+      Test                                              Current Result and Flag                Previous Result and Date                       Units               Reference Interval
+      Homocyst(e)ine        01
+                                                         11.0                                                                                umol/L                    0.0-14.5
+
+Estradiol
+      Test                                              Current Result and Flag                Previous Result and Date                       Units               Reference Interval
+      Estradiol   01
+                                                         10.1                                                                                pg/mL                     7.6-42.6
+                                                 Synth ETICC ommenttextf
+
+
+Vitamin D, 25-Hydroxy
+      Test                                              Current Result and Flag                Previous Result and Date                       Units               Reference Interval
+      Vitamin D, 25-Hydroxy 01                           67.0                                                                                ng/mL                    30.0-100.0
+                                                 Synthet I ccommentte xtf orth elayout fi xtu Reonlysyn th
+                                                 Syntheti cco mm Enttextfo Rthelay outfixtu reonlysyn th e
+                                                 synth et iccom 19-ME nttextf O rthe layo 13 ut/fI (8,1).
+                                                 Syn Theticcom Menttex tfor th el ayoutfi xtureo nlysynt H
+                                                 syntheticcomm en t textf orthela 18 you 17 tf/iX (1).
+                                                 8. SYN (Theticcom me Nttextfo). 1383. Rthelay outfixtur
+                                                    synthet icc ommentt ext F. Orthelayou TF: Ixt
+                                                    Syntheti Ccommentt Extfo.
+                                                 1. Synthe TI, Ccommen TT, Extforth-Elayout FI, xt ur.
+                                                    Syntheticc, ommenttex, tfo rthelayout fi xtureon L
+                                                    syntheticc: om Menttextf Orthela youtfixt ureonlys
+                                                    synthetic. COMM. 1388 Ent; 72(4):8788-63.
+
+
+Cortisol
+      Test                                              Current Result and Flag                Previous Result and Date                       Units               Reference Interval
+      Cortisol   01
+                                                         81.2                                                                                ug/dL                     6.2-19.4
+                                                                    Please Note: Syn theticcom menttext for thelayou tfi
+                                                                     synt heti cc omm en TT extforthel. Ay outf ix t UR
+                                                                     syntheticc omment tex:         Syntheti CC: 1.6-88.7
+
+
+Prolactin
+      Test                                              Current Result and Flag                Previous Result and Date                       Units               Reference Interval
+      Prolactin   01
+                                                          4.5                                                                                ng/mL                     3.6-31.5
+
+
+
+
+                                                                                                          Date Created and Stored 01/09/25 1710 ET Final Report Page 3 of 6
+
+©2025 Laboratory Corporation of America® Holdings                                    This document contains private and confidential health information protected by state and federal law.
+All Rights Reserved - Enterprise Report Version 2.00                                 If you have received this document in error please call 800-000-0000
+Doe, Jordan Alexis                                     DOB: 01/01/1990                   Patient Report
+Patient ID: 0000000000000001                           Age: 35                           Account Number: 00000000
+Specimen ID: 000-000-0000-0                            Sex: Male                         Ordering Physician: A PHYSICN
+
+                                                                                                                                                      Date Collected: 01/02/2025
+
+Thyroid Cascade Profile
+      Test                                              Current Result and Flag              Previous Result and Date                       Units               Reference Interval
+      TSH    01
+                                                        8.873                                                                             uIU/mL                   0.450-4.500
+                                                 Sy ntheticc ommentt extforth. Elayoutfix tureonl ysy ntheticco. Mm
+                                                 synt heticcomm, Enttextfo Rthelayoutfixt ur eonl ys Yntheticcom
+                                                 Syntheticcomme ntte xtfo rthelayo ut fixt ureonlys ynth eticco MME
+                                                 synthe.
+
+
+Prostate-Specific Ag
+      Test                                              Current Result and Flag              Previous Result and Date                       Units               Reference Interval
+      Prostate Specific Ag 01                             3.9               High                                                           ng/mL                      0.0-4.0
+                                                 Synth ETICC ommenttextf.
+                                                 Synthetic co mme Nttextfo Rthelayout Fixtureonly, Synth ETI ccomme
+                                                 syntheti cco mmentt ex tforthelayou tfixtu reonl ysynthe
+                                                 syntheticcomm. Ent TEX tforthe layoutfixtu reonlysynt he ti ccommen
+                                                 SYN theti 3.1 cc/oM me nttextf orthelay ou t fixtureonl ysyntheticco
+                                                 SYN theti 3.1 cc/oM me nttextf.
+                                                 Synthe ticcomme ntte xtforthel ayout fixture on lysy ntheti cc omme
+                                                 syntheticcommen. Ttextfo rthela yo utfixtureon ly syntheti ccomment
+                                                 sy nth eticcomm en ttextfo rt helayoutf ixtureo.
+
+
+Thyroxine (T4) Free, Direct
+      Test                                              Current Result and Flag              Previous Result and Date                       Units               Reference Interval
+      T4,Free(Direct) 01                                 8.09               Low                                                            ng/dL                    0.82-1.77
+
+Hemoglobin A1c
+      Test                                              Current Result and Flag              Previous Result and Date                       Units               Reference Interval
+      Hemoglobin A1c 01                                   9.0                                                                                 %                       4.8-5.6
+      Please Note:     01
+
+                                                            Prediabetes: 5.7 - 6.4
+                                                            Syntheti: >2.0
+                                                            Syntheti ccommen tte xtfort hela youtfixt: <4.3
+
+
+Uric Acid
+      Test                                              Current Result and Flag              Previous Result and Date                       Units               Reference Interval
+      Uric Acid   01
+                                                          0.4                                                                              mg/dL                      3.8-8.4
+                                                                                  Syntheticco mmentt ext fort helayout: <2.3
+
+
+GGT
+      Test                                              Current Result and Flag              Previous Result and Date                       Units               Reference Interval
+      GGT    01
+                                                          16                                                                                 IU/L                      0-65
+
+Apolipoprotein B
+      Test                                              Current Result and Flag              Previous Result and Date                       Units               Reference Interval
+      Apolipoprotein B      01
+                                                          47                                                                               mg/dL                        <90
+                                                                                                        Desirable                          < 90
+                                                                                                        Borderline High                90 - 99
+                                                                                                        High                          100 - 130
+
+
+                                                                                                        Date Created and Stored 01/09/25 1710 ET Final Report Page 4 of 6
+
+©2025 Laboratory Corporation of America® Holdings                                  This document contains private and confidential health information protected by state and federal law.
+All Rights Reserved - Enterprise Report Version 2.00                               If you have received this document in error please call 800-000-0000
+Doe, Jordan Alexis                                     DOB: 01/01/1990                     Patient Report
+Patient ID: 0000000000000001                           Age: 35                             Account Number: 00000000
+Specimen ID: 000-000-0000-0                            Sex: Male                           Ordering Physician: A PHYSICN
+
+                                                                                                                                                        Date Collected: 01/02/2025
+
+Apolipoprotein B (Cont.)
+                                                                                                  Very High                >130
+                                                                              --------------------------------------------------
+                                                                                   SYNTH ETIC               SYNTHETICCO MMENTT
+                                                                                    SYNTHETI                   SYN T (he/tI)
+                                                                                 Very High Risk        <53 (sy nthetic comm <43)
+                                                                                 High Risk             <90
+                                                                                 Moderate Risk         <90
+
+
+Creatine Kinase,Total
+      Test                                                 Current Result and Flag             Previous Result and Date                       Units               Reference Interval
+      Creatine Kinase,Total       01
+                                                            871                                                                                U/L                      49-439
+
+Triiodothyronine (T3), Free
+      Test                                                 Current Result and Flag             Previous Result and Date                       Units               Reference Interval
+      Triiodothyronine (T3), Free       01
+                                                            6.9                                                                              pg/mL                      2.0-4.4
+
+Vitamin B12
+      Test                                                 Current Result and Flag             Previous Result and Date                       Units               Reference Interval
+      Vitamin B12    01
+                                                            070                                                                              pg/mL                    232-1245
+
+Progesterone
+      Test                                                 Current Result and Flag             Previous Result and Date                       Units               Reference Interval
+      Progesterone        01
+                                                            3.0                High                                                          ng/mL                      0.0-0.5
+
+Insulin
+      Test                                                 Current Result and Flag             Previous Result and Date                       Units               Reference Interval
+      Insulin   01
+                                                            6.8                                                                             uIU/mL                     2.6-24.9
+
+Ferritin
+      Test                                                 Current Result and Flag             Previous Result and Date                       Units               Reference Interval
+      Ferritin 01                                           822                                                                              ng/mL                      30-400
+
+Please note
+      Test                                                 Current Result and Flag             Previous Result and Date                       Units               Reference Interval
+      Please note    01
+
+                                                 Syn thet icc/om ment te xtforthela you tfi xtureonly sy nth
+                                                 syntheticco mm enttextf or thela you tfixtur eon. Lys ynth et
+                                                 synthet ic com menttext for thel ay out fixtureonl ysyn th eti
+                                                 syntheti.
+
+Disclaimer
+Syn Theticco Mmentt ex tforth ela you tfix tureon lysy ntheticco mm Enttext fo rth elay 9 outfi xture onlys yn theticcomm enttext forthelayou tfix tu
+synth eti ccomme nt tex tforthe. Layoutf ixtu reonlys ynthe tic commentt extf ort Helayout Fixtur eonlysy.
+
+Icon Legend
+  Out of Reference Range               Critical or Alert
+
+
+
+                                                                                                          Date Created and Stored 01/09/25 1710 ET Final Report Page 5 of 6
+
+©2025 Laboratory Corporation of America® Holdings                                    This document contains private and confidential health information protected by state and federal law.
+All Rights Reserved - Enterprise Report Version 2.00                                 If you have received this document in error please call 800-000-0000
+Doe, Jordan Alexis                                     DOB: 01/01/1990                 Patient Report
+Patient ID: 0000000000000001                           Age: 35                         Account Number: 00000000
+Specimen ID: 000-000-0000-0                            Sex: Male                       Ordering Physician: A PHYSICN
+
+
+Performing Labs
+01: SO - Labcorp San Diego, 13112 Evening Creek Dr So Ste 200, San Diego, CA 92128-4108 Dir: A Director, Jr, MDxx
+02: BN - Labcorp Burlington, 1447 York Court, Burlington, NC 27215-3361 Dir: B Director, MDxxxxx
+For inquiries, the physician may contact Branch: 800-000-0000 Lab: 800-000-0000
+
+
+
+Patient Details                                              Physician Details                                       Specimen Details
+Doe, Jordan Alexis                                           A PHYSICN                                               Specimen ID: 000-000-0000-0
+                                                             Alex Smithe, MD                                         Control ID: 00000000001
+                                                             100 Main Streetway, Springfield, IL, 6270               Alternate Control Number:
+Phone:                                                                                                               Date Collected: 01/02/2025 0815 Local
+Date of Birth: 01/01/1990                                    Phone: 800-000-0000                                     Date Received: 01/03/2025 0000 ET
+Age: 35                                                      Account Number: 00000000                                Date Entered: 01/03/2025 0420 ET
+Sex: Male                                                    Physician ID:                                           Date Reported: 01/09/2025 1708 ET
+Patient ID: 0000000000000001                                 NPI: 0000000000
+Alternate Patient ID:
+
+
+
+
+                                                                                                      Date Created and Stored 01/09/25 1710 ET Final Report Page 6 of 6
+
+©2025 Laboratory Corporation of America® Holdings                                This document contains private and confidential health information protected by state and federal law.
+All Rights Reserved - Enterprise Report Version 2.00                             If you have received this document in error please call 800-000-0000
+
