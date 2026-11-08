@@ -20,7 +20,7 @@ Exchange and comparison are programs that write ordinary signed claims. They cha
 
 ## Next: the first shareable loop (by 2026-11-15)
 
-**Done means:** a person who has never used bean clones the repo and runs one script on a synthetic Labcorp report. The script does three things. It imports the report, keeping the PDF. It compares the total cholesterol reading with NHANES 2017–2018. It writes a share bundle. On a second machine, without a bean log, they check every signature in the bundle and get the same percentile from an independent implementation. Benjamin runs the same steps on his own report, privately. No real health data enters the repository.
+**Done means:** a person who has never used bean clones the repo and runs one script on a synthetic Labcorp report. The script does three things. It imports the report, keeping the PDF. It compares the total cholesterol reading with NHANES 2017–2018. It writes a share bundle. On a second machine, without a bean log, they check every signature in the bundle and get the same percentile from an independent implementation. The first user runs the same steps on their own report, privately. No real health data enters the repository.
 
 In order. Each step is done only when its test passes.
 
