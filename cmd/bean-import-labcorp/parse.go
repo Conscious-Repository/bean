@@ -190,6 +190,10 @@ func parseHeader(toks []token) (columns, bool) {
 	return c, c[0] >= 2
 }
 
+// alignedWithin is how far right of its header name a units or reference
+// token may start. The lab prints both left-aligned under the name.
+const alignedWithin = 4
+
 // band says which column a token starting at col is in: 0 Test, 1 Current
 // Result and Flag, 2 Previous Result and Date, 3 Units, 4 Reference
 // Interval. Each band starts slack columns left of its header name.
@@ -305,6 +309,15 @@ func (c columns) cells(toks []token) (cells, error) {
 			cur = append(cur, t)
 		case 2:
 			out.prev = append(out.prev, t)
+		case 3, 4:
+			// Units and reference intervals are left-aligned under their
+			// header names. A token further right has moved from another
+			// column (a reference read as the unit, a unit as the reference).
+			if t.start > c[c.band(t.start)]+alignedWithin {
+				return out, fmt.Errorf("%q starts %d columns right of its column's name; units and reference intervals start under it", t.text, t.start-c[c.band(t.start)])
+			}
+		}
+		switch c.band(t.start) {
 		case 3:
 			if out.at[atUnits] < 0 {
 				out.units, out.at[atUnits] = t.text, t.start
@@ -334,6 +347,8 @@ func (c columns) cells(toks []token) (cells, error) {
 		return out, errors.New("the previous result column does not hold a result and its date")
 	case out.units != "" && !reUnits.MatchString(out.units):
 		return out, fmt.Errorf("%q in the units column is not one word with a letter, %% or /", out.units)
+	case out.units == "" && out.ref != "" && reNumberValue.MatchString(out.value) && !strings.ContainsAny(out.ref, "0123456789"):
+		return out, fmt.Errorf("%q in the reference column holds no number for a numeric result with no unit: a unit may have moved there", out.ref)
 	case out.units != "" && (isValue(out.units) || isFlag(out.units)):
 		return out, fmt.Errorf("%q in the units column is a result or a flag, not a unit: a column may have moved", out.units)
 	}
@@ -643,6 +658,8 @@ func (p *parser) beforeHeader(n int, l string, toks []token) error {
 		return err
 	case ok && endHeadings[toks[0].text]:
 		p.region, p.ended = afterEnd, toks[0].text
+	case ok && (endsInReading(toks[0].text) || nameHidesValue(toks[0].text) != nil):
+		return fmt.Errorf("line %d before the column header may be a result row at the margin (%q), with no columns to be read by", n, toks[0].text)
 	case ok:
 		p.panel = toks[0].text // the first panel heading comes before the first header
 	case toks[0].start > 0:
@@ -801,11 +818,12 @@ func (p *parser) comment(n int, toks []token) error {
 	switch {
 	case p.note != nil && (p.cur == nil || p.cur.Panel != *p.note):
 		p.rep.Notes = append(p.rep.Notes, s)
-	case p.cur != nil && len(p.cur.Comment) == 0 && len(toks) == 1 && !strings.Contains(s, " "):
-		// One word right under a row may be the rest of a wrapped test name
-		// ("Hemoglobin" / "A1c"): the reading would be stored under the wrong
-		// test. A lab's comment is a sentence.
-		return fmt.Errorf("line %d: one word under %q may be the rest of its name", n, p.cur.Name)
+	case p.cur != nil && len(p.cur.Comment) == 0 && !commentShaped(s):
+		// A short line right under a row may be the rest of a wrapped test
+		// name ("Hemoglobin" / "A1c (Glycated)"): the reading would be stored
+		// under the wrong test. A lab's comment says why a test was not
+		// performed, starts with Note:, ends a sentence, or fills the line.
+		return fmt.Errorf("line %d: %q under %q may be the rest of its name, not a comment", n, s, p.cur.Name)
 	case p.cur != nil:
 		p.cur.Comment = append(p.cur.Comment, s)
 	default:
@@ -829,6 +847,9 @@ func (p *parser) afterEnd(n int, l string, toks []token) error {
 			return fmt.Errorf("line %d holds a character outside printable ASCII, so its columns cannot be read for sure", n)
 		}
 		m := reLab.FindStringSubmatch(l)
+		if m == nil && len(toks) > 1 {
+			return fmt.Errorf("line %d after %q starts like a lab line but holds columns: a result there would be lost", n, p.ended)
+		}
 		if m == nil {
 			p.rep.LabsTorn = true // a lab line it cannot read: lab codes come from the code column only
 			return nil
@@ -854,7 +875,29 @@ func (p *parser) afterEnd(n int, l string, toks []token) error {
 	if !ok {
 		return fmt.Errorf("line %d after %q is not a lab list, disclaimer or legend line (one column of text at the margin), so a result there would be lost", n, p.ended)
 	}
+	if endsInReading(first.text) && !reAddress.MatchString(first.text) {
+		return fmt.Errorf("line %d after %q ends in a reading (%q), so it may be a result row at the margin", n, p.ended, first.text)
+	}
 	return nil
+}
+
+// reAddress is the end of a lab's address line ("Burlington, NC 27215"):
+// a ZIP code ends it, not a reading.
+var reAddress = regexp.MustCompile(`, [A-Z]{2} \d{5}(-\d{4})?$`)
+
+// endsInReading reports text at the margin that ends like a result row: its
+// last word is a value, or a flag right after a value ("Glucose 101 High",
+// "HIV-1/2 Ab Reactive"). Legend text such as "Critical or Alert" does not.
+func endsInReading(text string) bool {
+	f := strings.Fields(text)
+	if len(f) < 2 {
+		return false
+	}
+	last := f[len(f)-1]
+	if isValue(last) || reBareNumber.MatchString(last) {
+		return true
+	}
+	return isFlag(last) && len(f) >= 3 && (isValue(f[len(f)-2]) || reBareNumber.MatchString(f[len(f)-2]))
 }
 
 // detailsLine reads a line of the patient details: each token starts at
@@ -959,6 +1002,9 @@ func (p *parser) finish() (*Report, error) {
 		// A row with no value is taken only when the lab says why, in the
 		// first line under it, and no word of its name after the first may be
 		// a value: the value may sit in the name, one space after it.
+		if r.Value != "" && len(r.Comment) > 0 && notPerformed(r.Comment[0]) {
+			return nil, fmt.Errorf("result %q has a value, and the line under it says the test was not performed: a column may have moved", r.Name)
+		}
 		if r.Value == "" {
 			if len(r.Comment) == 0 || !notPerformed(r.Comment[0]) {
 				return nil, fmt.Errorf("result %q has no value, and no line under it says the test was not performed", r.Name)
@@ -1033,6 +1079,12 @@ func nameMayHoldValue(name string) bool {
 		}
 	}
 	return false
+}
+
+// commentShaped reports whether the first line under a result reads as a lab
+// comment rather than the second line of a wrapped test name.
+func commentShaped(s string) bool {
+	return notPerformed(s) || strings.Contains(s, ":") || strings.HasSuffix(s, ".") || len(s) >= 40
 }
 
 // notPerformedPhrases are how a lab says it has no value for a test. The

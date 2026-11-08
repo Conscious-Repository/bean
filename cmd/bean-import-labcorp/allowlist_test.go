@@ -77,7 +77,7 @@ func TestNoValueNeedsNotPerformed(t *testing.T) {
 		if c != "" {
 			rows = append(rows, comment(c))
 		}
-		if _, err := parseReport(ambiguityReport(rows...)); err == nil || !strings.Contains(err.Error(), "not performed") {
+		if _, err := parseReport(ambiguityReport(rows...)); err == nil || !strings.Contains(err.Error(), "not performed") && !strings.Contains(err.Error(), "may be the rest of its name") {
 			t.Errorf("%q: %v", c, err)
 		}
 	}

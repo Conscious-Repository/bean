@@ -236,3 +236,10 @@ H`). The one exception is a numbered test of two words: `Interleukin` or
 `Factor` and one or two digits, `CA 125`, `CA 15-3`, `CA 19-9`, `CA 27.29`,
 `CA 72-4`, and `Cyfra 21-1`. So `Beta 2 Microglobulin` and `Factor 101` are
 refused. Add a family or a number here when a real report needs it.
+
+The first line under a result must read as a lab comment: a not-performed
+phrase, a line with a colon, a line that ends a sentence, or a full line of
+40 characters or more. A short fragment there may be the rest of a wrapped
+test name, and is refused. Units and reference intervals start within 4
+columns of their column names. A result with a value under a "Test not
+performed" line is refused.
