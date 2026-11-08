@@ -334,6 +334,8 @@ func (c columns) cells(toks []token) (cells, error) {
 		return out, errors.New("the previous result column does not hold a result and its date")
 	case out.units != "" && !reUnits.MatchString(out.units):
 		return out, fmt.Errorf("%q in the units column is not one word with a letter, %% or /", out.units)
+	case out.units != "" && (isValue(out.units) || isFlag(out.units)):
+		return out, fmt.Errorf("%q in the units column is a result or a flag, not a unit: a column may have moved", out.units)
 	}
 	return out, nil
 }
@@ -701,6 +703,9 @@ func (p *parser) results(n int, l string, toks []token) error {
 		if utf8.RuneCountInString(first.text) > c[1]-slack {
 			return fmt.Errorf("line %d: a panel heading runs into the result column", n)
 		}
+		if err := nameHidesValue(strings.TrimSuffix(first.text, " (Cont.)")); err != nil {
+			return fmt.Errorf("line %d at the margin may be a row with its value in the name, not a panel heading: %v", n, err)
+		}
 		if panel := strings.TrimSuffix(first.text, " (Cont.)"); panel != p.panel {
 			p.panel, p.cur, p.note, p.pending = panel, nil, nil, nil
 		}
@@ -796,6 +801,11 @@ func (p *parser) comment(n int, toks []token) error {
 	switch {
 	case p.note != nil && (p.cur == nil || p.cur.Panel != *p.note):
 		p.rep.Notes = append(p.rep.Notes, s)
+	case p.cur != nil && len(p.cur.Comment) == 0 && len(toks) == 1 && !strings.Contains(s, " "):
+		// One word right under a row may be the rest of a wrapped test name
+		// ("Hemoglobin" / "A1c"): the reading would be stored under the wrong
+		// test. A lab's comment is a sentence.
+		return fmt.Errorf("line %d: one word under %q may be the rest of its name", n, p.cur.Name)
 	case p.cur != nil:
 		p.cur.Comment = append(p.cur.Comment, s)
 	default:
@@ -912,6 +922,8 @@ func (p *parser) finish() (*Report, error) {
 			return nil, fmt.Errorf("line %d: result %q has %q in the lab code column; without a list of performing labs that reads whole, it may be the value", r.row, r.Name, code)
 		case code != "" && rep.Labs[code] == "":
 			return nil, fmt.Errorf("line %d: result %q has %q in the lab code column, and the list of performing labs does not name it", r.row, r.Name, code)
+		case code != "" && numberedTests[strings.ToLower(r.Name)] != nil:
+			return nil, fmt.Errorf("line %d: result %q has %q in the lab code column; it may be the test's number", r.row, r.Name, code)
 		case code != "" && named:
 			return nil, fmt.Errorf("line %d: result %q has a lab code at the end of its name and another in the code column", r.row, r.Name)
 		case code != "":
