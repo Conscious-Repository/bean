@@ -38,66 +38,141 @@ collection site's timezone; without it the observation has day precision. A
 nonexistent or repeated local minute during a clock change also retains day
 precision and the printed time, rather than choosing an unsupported instant.
 
-Conflicting specimen IDs or collection dates/times are rejected instead of mixing
-reports. Repeated headers from the same report remain valid, including wrapped
-values across pages. Failed column parsing cannot partially change a result.
-Short text in the comment column stays a comment; long aligned categorical
-results and reference ranges are preserved. Ambiguous populated result columns
-fail validation instead of becoming missing values. Column separation follows
-the header spacing, including compressed Poppler output. Nonzero numbers that
-underflow or change decimal value when converted to the record number
-representation remain text. Numeric tokens longer than 256 characters also
-remain text. Reordered table headers, including repeated headers, and malformed
-collection-date labels fail explicitly. Specimen IDs containing a slash are
-rejected to keep the existing specimen/test identity unambiguous. Unsupported report
-layouts can still need a new fixture and adapter update.
+Nonzero numbers that underflow or change decimal value when converted to the
+record number representation remain text, as do numeric tokens longer than 256
+characters. Specimen IDs containing a slash are rejected to keep the
+specimen/test identity unambiguous. Unsupported report layouts need a new
+fixture and an adapter update.
 
-A report that cannot be read for sure is refused, never guessed:
+## How a report is read
 
-- Two results that map to one `lab.<test>` type. The same test listed twice,
-  as when two panels share it, is one result only when its value, flag, unit,
-  range, previous result, lab code and comment all match.
-- A test name that ends within 4 columns of the header's "Current Result":
-  the value, a flag or a categorical result may have run into the name. Where
-  the name ends decides, so a comment under the row changes nothing.
-- An indented line before the first column header: a row there has no
-  columns to be read by.
-- A two-digit number at the end of a name is a lab code only when the
-  report's Performing Labs list names it. Without a list, or with a list line
-  it cannot read, only a two-digit token in the code column is a lab code,
-  and only when a value follows it on the row. With nothing after it, it may
-  be the value of a compressed row (`eGFR  90`): refused. `Interleukin 10`
-  keeps its number.
-- A line with a byte outside printable ASCII (0x20 to 0x7E): a tab, a
-  Unicode space, an invisible mark, an accented letter, a lone CR. Columns
-  are read from spaces, one byte each; any other character can hide where a
-  column starts or shift it. Three things are allowed: the form feed that
-  `pdftotext` puts at the start of each page (it has no width), CRLF line
-  ends, and any character in a page header line (the copyright line with ©
-  and ®, the patient's name) or in the patient details after the end of the
-  results. Nothing in those is read as a result. The specimen id, fasting
-  field and lab names read from them must still be ASCII. So a comment with
-  `®`, `µ` or `≥` is refused.
-- A result with no value, unless the first line under it starts with `Test
-  not performed`, `Not performed`, `Test cancelled`, `Test canceled`,
-  `Cancelled` or `Canceled`. Even then, it is refused when a word of its name
-  after the first may be a value: it starts with a digit, `<`, `>`, `=` or
-  `+`, or with `-` and a digit; it holds `/`, or `:` between digits; it is a
-  flag (`H`, `L`, `A`, `High`, `Low`, `Abnormal`, `Critical`, `Panic`) or a
-  result word (`Negative`, `Trace`, `Clear`, `Immune`, `TNP` and a few more).
-  The value may sit in the name, one space after it or under a header whose
-  columns are further right. A lab code the list names was taken off the name
-  before this check. `Vitamin A` and `Interleukin 10` with no value are
-  refused too.
-- After `Disclaimer`, `Icon Legend` or `Performing Labs`, where the results
-  end: a column header; an indented line (1 to 19 spaces) of two or more
-  columns that is not a lab list line (`01: ...`) or a page header line; an
-  indented line of one column with a word that may be a value; and a line
-  indented 20 or more under such an indented line. A result there would be
-  lost. A lab address wrapped onto an indented line is refused too.
+Since 0.3.0 the report is read by a grammar (docs/DECISIONS.md 222). Every
+line of the extracted text must be one of the kinds below, or the report is
+refused, and the error names the line. Nothing is skipped because it looks
+unimportant. A line is split into tokens at runs of two or more spaces; a
+token's column is where it starts.
 
-Not settled without a real report: a note line in the result column can still
-read as a result. Test with your own report before you rely on it.
+Lines that may appear anywhere:
+
+- A blank line.
+- A page header or footer line, matched whole: `<name>  DOB: MM/DD/YYYY
+  Patient Report`; `©YYYY Laboratory Corporation of America® Holdings`,
+  optionally followed by `This document contains private and confidential
+  health information.`; `All Rights Reserved - Enterprise Report Version
+  2.00`, optionally followed by `If you have received this document in error
+  please call NNN-NNN-NNNN`; and, indented, `Date Created and Stored MM/DD/YY
+  HHMM <zone> Final Report Page N of M`. Text that only contains `DOB:` or
+  `Date Created` is not boilerplate.
+- A field line: every token is a known field, `Label: value`, with one space
+  after the colon: `Patient ID`, `Age`, `Account Number`, `Specimen ID`,
+  `Sex`, `Ordering Physician`, `Date Collected` (`MM/DD/YYYY`, optionally
+  `HHMM Local`), `Date Received`, `Date Reported` (`MM/DD/YYYY`, optionally
+  `HHMM <zone>`), `Fasting` (`Yes` or `No`) and `Ordered Items`. Only fields
+  are read for the specimen id, collection date and time, report date and
+  fasting, and every one of them in the report must agree: two specimen ids,
+  two collection days or times, two report days or two fasting answers are
+  refused. A field at the margin or in the patient details that does not have
+  its shape (`Date Collected: 01/02/20250`) is refused.
+
+Before the first column header: a panel heading (one token at the margin)
+or the header. An indented line there is refused: a row has no columns yet.
+
+The column header is exactly five tokens, `Test`, `Current Result and Flag`,
+`Previous Result and Date`, `Units`, `Reference Interval`, with `Test`
+indented. Every header in the report must give the same columns, so a page
+laid out further right or compressed differently is refused. A line that
+starts with `Test` and is not that header is refused. Each column is a band
+that starts two columns left of its header name and ends where the next one
+starts. Columns are counted in characters.
+
+In the results:
+
+- A panel heading: one token at the margin that ends left of the result
+  column. `<panel> (Cont.)` continues the panel. Any other line at the margin
+  is refused.
+- A result row: the name starts at `Test` (give or take one column) and ends
+  at least 4 columns before `Current Result`, or the report is refused: the
+  value may have run into the name. A second token in the Test band must be
+  a two-digit lab code. Every other token goes to the band its start is in:
+  the result band holds a value and an optional flag, the previous band a
+  value, an optional flag and a date, the units band one word, the reference
+  band one token. A token in the Test band that is not a code, a third token
+  in the result band, a second in the units or reference band, a units token
+  with a space, or a result or flag outside the grammar below is refused.
+- `Please note` or `Please Note:` with an optional lab code and nothing else:
+  its text follows as comment lines. In the panel of the result above it, the
+  text is that result's comment; otherwise it is a report note.
+- A value line: only under a row with nothing after its name and code, with
+  only blank, page header, field, column header or `(Cont.)` lines between.
+  All its tokens are in the result, previous, units and reference bands, read
+  as on a row. A value line anywhere else (units under a row that has a
+  value, a value under a `Please note`, a value before its name) is refused.
+- A comment line: it starts right of where names start and left of the
+  result band, under a result of the same panel or a `Please note`, and is
+  one token of text, or `Note:` and one more token. Anything with more
+  columns is refused.
+
+A value is a number with an optional `<`, `>`, `<=` or `>=` (`101`, `-2.0`,
+`<0.5`); a dipstick grade `1+` to `4+`; a count range such as `0-5`; a titer
+such as `1:40`; or one of `Negative`, `Positive`, `Reactive`, `Non Reactive`,
+`Nonreactive`, `Non-Reactive`, `Detected`, `Not Detected`, `Normal`,
+`Abnormal`, `Borderline`, `Equivocal`, `Indeterminate`, `Inconclusive`,
+`Pending`, `Immune`, `Trace`, `Clear`, `Cloudy`, `Hazy`, `Turbid`, `Present`,
+`Absent`, `None`, `TNP`, `QNS`, in any letter case. A flag is `H`, `L`, `A`,
+`High`, `Low`, `Abnormal`, `Critical`, `Panic` or `Alert`. Anything else in
+the result band is refused, so a free-text result (`No clinically
+significant antibodies detected`) or a number with a thousands comma
+(`1,234`) refuses the report. The lists can grow from real reports.
+
+After `Disclaimer`, `Icon Legend` or `Performing Labs`, each a line of its
+own at the margin, the results end. Then only these pass: page header and
+field lines; another end heading; a lab list line (`01: BN - Labcorp
+Burlington, 1447 York Court, ...`); one token of text at the margin; and
+`Patient Details` (optionally with `Physician Details` and `Specimen Details`
+on the same line) and the lines under it. A line of the patient details has
+at most one token per heading column, each starting within two columns of its
+heading. The patient's and physician's columns may hold any text a name can,
+accents too; the specimen column holds fields only. A column header, an
+indented line, or a line of two tokens at the margin is refused: a result
+there would be lost. A lab line that starts `NN: ` but does not have that
+shape (wrapped across two lines) is not refused, but then lab codes come from
+the code column only (below).
+
+Characters: a line that is read is printable ASCII (0x20 to 0x7E). A tab, a
+Unicode space, an invisible mark, an accented letter or a lone CR is refused,
+because it can hide where a column starts or shift it. The form feed that
+`pdftotext` puts at the start of each page and CRLF line ends are allowed.
+Only these may hold more: the patient's name in its header line, the
+copyright line (© and ®), the ordering physician's name, and the patient's
+and physician's columns of the patient details; even there a control
+character, a space other than ' ' or an invisible format character is
+refused. So a comment with `®`, `µ` or `≥` is refused. A line longer than
+16 KiB is refused.
+
+Then:
+
+- Lab codes. With a Performing Labs list that reads whole, a code is one the
+  list names: a code in the code column it does not name is refused, and two
+  digits at the end of a name are taken off as the code only when the list
+  names them, so `Interleukin 10` keeps its number. Without a list, or with a
+  lab line it cannot read, only a token in the code column is a code, and only
+  when result columns follow it on the row: with nothing after it, it may be
+  the value of a compressed row (`eGFR  90`), and the report is refused.
+- Two results that map to one `lab.<test>` type are refused. The same test
+  listed twice, as when two panels share it, is one result only when its
+  value, flag, unit, range, previous result, lab code and comment all match.
+- A result with no value is taken only when the first comment line under it
+  starts with `Test not performed`, `Not performed`, `Test cancelled`, `Test
+  canceled`, `Cancelled` or `Canceled`, and every word of its name after the
+  first is letters and hyphens and not a value or flag. So `Glucose 101`,
+  `Glucose (H)`, `Lipoprotein (a)`, `Vitamin A` and `Appearance Clear` with no
+  value are refused. A name word of letters is taken as part of the name:
+  `Nitrite Neg` with no value and `Test not performed` under it is read as a
+  test of that name that was not performed.
+
+Not settled without a real report: the field, boilerplate and disclaimer
+shapes come from the synthetic fixture. Test with your own report before you
+rely on it; a refusal names the line, so the grammar can grow.
 
 ## Privacy, limits and failure
 

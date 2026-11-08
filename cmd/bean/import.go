@@ -14,9 +14,11 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/Conscious-Repository/bean/core"
 )
@@ -282,11 +284,11 @@ func removeOnSignal(dir string) func() {
 			running.Lock()
 			if running.p != nil {
 				// The importer leads its own process group, so pdftotext and any
-				// other child it started die with it. Signal 0 fails once Wait
-				// has reaped the leader, so a reused id is not hit.
-				if running.p.Signal(syscall.Signal(0)) == nil {
-					syscall.Kill(-running.p.Pid, syscall.SIGKILL)
-				}
+				// other child it started die with it, also after the importer
+				// itself has exited and Wait has reaped it: a child that keeps
+				// its output open holds Wait. The group id stays taken while the
+				// group has a member, so the kill reaches no other process.
+				syscall.Kill(-running.p.Pid, syscall.SIGKILL)
 				running.p.Kill()
 			}
 			os.RemoveAll(dir)
@@ -344,11 +346,18 @@ func runImporter(bin, blob string, args []string, file, dir string) (*os.File, s
 	// The importer's own temporary copies land in the private folder too.
 	cmd.Env = append(os.Environ(), "TMPDIR="+dir)
 	// Its own process group: a signal to bean stops the whole group, and
-	// Ctrl-C at the terminal reaches only bean, which then stops it.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// Ctrl-C at the terminal reaches only bean, which then stops it. On
+	// Linux the kernel also kills it when bean dies (importerAttr).
+	cmd.SysProcAttr = importerAttr()
+	// A process the importer started may keep its output open after the
+	// importer exits. Wait gives up after a second, and the import fails.
+	cmd.WaitDelay = time.Second
 	stdout := &capped{w: f, left: importerOutputLimit}
 	stderr := &tail{max: maxImporterStderr}
 	cmd.Stdout, cmd.Stderr = stdout, stderr
+	// The parent-death signal follows the thread that started the importer:
+	// keep this goroutine on it until the importer is done.
+	runtime.LockOSThread()
 	running.Lock()
 	err = cmd.Start()
 	if err == nil {
@@ -359,9 +368,18 @@ func runImporter(bin, blob string, args []string, file, dir string) (*os.File, s
 		err = cmd.Wait()
 	}
 	running.Lock()
+	if errors.Is(err, exec.ErrWaitDelay) {
+		// A member of the group still holds the output, so the group id is
+		// still taken: stop it.
+		syscall.Kill(-running.p.Pid, syscall.SIGKILL)
+	}
 	running.p = nil
 	running.Unlock()
+	runtime.UnlockOSThread()
 	msg := lastLine(string(stderr.b))
+	if errors.Is(err, exec.ErrWaitDelay) {
+		msg = "the importer exited, but a process it started kept its output open"
+	}
 	if stdout.over {
 		f.Close()
 		return nil, "", fmt.Errorf("the importer wrote more than %d MiB", importerOutputLimit>>20)

@@ -91,8 +91,13 @@ func TestNoValueNeedsNotPerformed(t *testing.T) {
 			t.Errorf("%q: %v", name, err)
 		}
 	}
-	// The first word is the test, whatever it is; "(a)" and "Ab" are words.
-	for _, name := range []string{"Lipoprotein (a)", "HCV Ab", "eGFR If NonAfricn Am", "1,25-Dihydroxy"} {
+	// The first word is the test, whatever it is; the others are letters and
+	// hyphens only (DECISIONS 222), so "Lipoprotein (a)" with no value is
+	// refused now: "(a)" could be "(H)".
+	if _, err := parseReport(ambiguityReport(sodium, pad("", 6)+"Lipoprotein (a)", comment("Test not performed."))); err == nil || !strings.Contains(err.Error(), "may be the value") {
+		t.Errorf("Lipoprotein (a): %v", err)
+	}
+	for _, name := range []string{"HCV Ab", "eGFR If NonAfricn Am", "1,25-Dihydroxy"} {
 		if _, err := parseReport(ambiguityReport(sodium, pad("", 6)+name, comment("Test not performed."))); err != nil {
 			t.Errorf("%q: %v", name, err)
 		}
@@ -110,6 +115,10 @@ func TestAfterEndOnlyListsAndSentences(t *testing.T) {
 		{pad("", 6) + "LDL Cholesterol", vals("190", "", "", "")}, // a value under it
 		{pad("", 6) + "LDL Cholesterol", "", comment("x")},        // a comment under it
 		{"    1447 York Court, Burlington, NC 27215"},             // a wrapped address: refused too
+		// Text after the end is one column at the margin (DECISIONS 222):
+		// an indented line sits where a row or a comment would.
+		{"   See the Icon Legend for flags."},
+		{pad("", 6) + "Flags", "Next sentence at the margin."},
 	} {
 		if _, err := parseReport(end(tail...)); err == nil || !strings.Contains(err.Error(), "would be lost") {
 			t.Errorf("%q: %v", tail, err)
@@ -117,8 +126,7 @@ func TestAfterEndOnlyListsAndSentences(t *testing.T) {
 	}
 	for _, tail := range [][]string{
 		{"The Previous Result is listed for the most recent test."},
-		{"   See the Icon Legend for flags."},
-		{pad("", 6) + "Flags", "Next sentence at the margin."},
+		{"Flags", "Next sentence at the margin."},
 		{"01: BN - Labcorp Burlington, 1447 York Court  Dir: A Person, MD"},
 		{pad("", 150) + "Date Collected: 10/19/2026"},
 	} {

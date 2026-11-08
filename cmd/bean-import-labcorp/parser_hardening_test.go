@@ -1,7 +1,6 @@
 package main
 
 import (
-	"reflect"
 	"strings"
 	"testing"
 )
@@ -33,18 +32,18 @@ func TestWrappedValueSurvivesRepeatedPageHeader(t *testing.T) {
 	}
 }
 
-func TestFailedFillDoesNotMutateResult(t *testing.T) {
-	cols, ok := headerColumns(header())
+// A third token in the result column is refused. The grammar reads a row's
+// cells before it makes the result, so a refused row changes nothing.
+func TestThirdResultColumnTokenRefused(t *testing.T) {
+	cols, ok := parseHeader(tokens(header()))
 	if !ok {
 		t.Fatal("fixture header")
 	}
-	before := Result{Name: "Glucose", Ref: "original reference"}
-	got := before
-	// Three tokens in the current-result region overflow value/flag slots.
-	if got.fill([]token{{57, "100"}, {68, "High"}, {75, "unexpected"}}, cols) {
+	if _, err := cols.cells([]token{{57, "100"}, {68, "High"}, {75, "unexpected"}}); err == nil {
 		t.Fatal("accepted ambiguous result columns")
 	}
-	if !reflect.DeepEqual(got, before) {
-		t.Fatalf("failed parse mutated row: %+v", got)
+	got, err := cols.cells([]token{{57, "100"}, {68, "High"}, {140, "mg/dL"}, {160, "70-99"}})
+	if err != nil || got.value != "100" || got.flag != "High" || got.units != "mg/dL" || got.ref != "70-99" {
+		t.Fatalf("cells %+v: %v", got, err)
 	}
 }

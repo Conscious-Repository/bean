@@ -38,16 +38,22 @@ func TestShortPendingCommentIsNotAResult(t *testing.T) {
 	}
 }
 
+// A long reference interval is one token and is kept. A free-text result is
+// not a value the grammar knows (DECISIONS 222): it is refused, not lost.
 func TestLongAlignedResultsAreNotSilentlyLost(t *testing.T) {
-	value := "No clinically significant antibodies detected"
 	ref := "Negative: less than 10; Positive: greater than 20"
-	text := strings.Join([]string{"Specimen ID: SYNTHETIC-A", "Date Collected: 01/02/2025", "Basic Panel", header(), row("Antibody Screen", "", value, "", "", ref)}, "\n")
-	rep, err := parseReport(text)
+	report := func(value string) string {
+		return strings.Join([]string{"Specimen ID: SYNTHETIC-A", "Date Collected: 01/02/2025", "Basic Panel", header(), row("Antibody Screen", "", value, "", "", ref)}, "\n")
+	}
+	rep, err := parseReport(report("Not Detected"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rep.Results[0].Value != value || rep.Results[0].Ref != ref {
+	if rep.Results[0].Value != "Not Detected" || rep.Results[0].Ref != ref {
 		t.Fatalf("aligned text lost: %+v", rep.Results[0])
+	}
+	if _, err := parseReport(report("No clinically significant antibodies detected")); err == nil || !strings.Contains(err.Error(), "not a number or a result") {
+		t.Fatalf("free-text result: %v", err)
 	}
 }
 
