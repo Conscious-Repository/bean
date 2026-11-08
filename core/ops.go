@@ -324,11 +324,14 @@ type PurgeResult struct {
 	Kept []KeptBlob
 }
 
-// KeptBlob is a blob that purge kept, and the number of other record files
-// that name it.
+// KeptBlob is a blob that purge kept. Names counts the other records that
+// name it and that purge can reach. Others counts the other record files that
+// name it and that purge cannot reach: deleted records waiting for gc,
+// records about someone else, and files that fail their checks.
 type KeptBlob struct {
-	ID    string
-	Names int
+	ID     string
+	Names  int
+	Others int
 }
 
 // PurgeAll is Purge with the full result.
@@ -346,7 +349,11 @@ func (s *Store) PurgeAll(id, reason string) (PurgeResult, error) {
 	if l.Local == nil {
 		return res, ErrNotInitialized
 	}
-	target, err := l.Resolve(id)
+	// A record this build cannot judge is the person's to delete too: a
+	// tombstone may name any id (step 10 holds it), and such a record can
+	// keep a file (DECISIONS 217).
+	all := l.allRecords()
+	target, err := resolveIn(all, id)
 	if err != nil {
 		return res, err
 	}
@@ -354,7 +361,7 @@ func (s *Store) PurgeAll(id, reason string) (PurgeResult, error) {
 	if target.IsIdentity() || target.Type == "bean.tombstone" {
 		return res, ErrBadTarget
 	}
-	if target.Subject != l.Local.Identity {
+	if subjectOf(target) != l.Local.Identity {
 		return res, ErrNotSubject
 	}
 	if err := l.canWrite(writer{signer: l.Local.Signer, author: l.Local.Identity}); err != nil {
@@ -380,25 +387,104 @@ func (s *Store) PurgeAll(id, reason string) (PurgeResult, error) {
 	// failure in between then leaves the record and its tombstone, so the next
 	// load hides it and gc erases it. The other order left a blob that no
 	// record names, which gc never erases and export writes out.
+	// A file with a bad path is not a record and keeps no blob. A copy of the
+	// target under another name (a sync tool's conflict copy) goes with it.
 	delete(l.Files, PathOf(id))
-	var candidates []string
+	paths := []string{s.path(PathOf(id)), hiddenPath(s.Dir, id)}
+	for _, p := range copiesOf(l.Files, map[string]bool{id: true}) {
+		delete(l.Files, p)
+		paths = append(paths, s.path(p))
+	}
+	candidates := namedBlobs(target.Bytes)
 	for _, b := range target.Blobs {
 		candidates = append(candidates, b.Hash)
 	}
-	_, kept, err := s.eraseBlobs(l.Files, candidates, true)
+	// Only a record that purge can reach is worth naming: one about the person
+	// that is not deleted already. The rest still keep the file.
+	gone := l.Report.unjudgedPurged()
+	reach := func(p string) bool {
+		rid := recordFileID(p, nil)
+		r := all[rid]
+		_, purged := l.Report.Purged[rid]
+		return r != nil && !purged && !l.Hidden[rid] && !gone[rid] && !r.IsIdentity() && r.Type != "bean.tombstone" && subjectOf(r) == l.Local.Identity
+	}
+	_, kept, err := s.eraseBlobs(l.Files, candidates, reach)
 	if err != nil {
 		return res, err
 	}
-	for _, p := range []string{s.path(PathOf(id)), hiddenPath(s.Dir, id)} {
+	for _, p := range paths {
 		if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return res, err
 		}
 	}
 	res.Tombstone = tid
 	for _, h := range sortedKeys(kept) {
-		res.Kept = append(res.Kept, KeptBlob{ID: h, Names: kept[h]})
+		res.Kept = append(res.Kept, kept[h])
 	}
 	return res, nil
+}
+
+// resolveIn is Resolve over records.
+func resolveIn(records map[string]*Record, id string) (*Record, error) {
+	hexPart := strings.TrimPrefix(id, "sha256:")
+	if r, ok := records["sha256:"+hexPart]; ok {
+		return r, nil
+	}
+	if len(hexPart) < 6 || !isLowerHex(hexPart, len(hexPart)) {
+		return nil, errors.New("input missing: " + id)
+	}
+	var found *Record
+	for rid, r := range records {
+		if strings.HasPrefix(rid[7:], hexPart) {
+			if found != nil {
+				return nil, errors.New("ambiguous id: " + id)
+			}
+			found = r
+		}
+	}
+	if found == nil {
+		return nil, errors.New("input missing: " + id)
+	}
+	return found, nil
+}
+
+// subjectOf is the subject of r. The fields of a newer format are not read,
+// so its subject is the string in the file.
+func subjectOf(r *Record) string {
+	if r.V != 0 {
+		s, _ := r.Raw["subject"].(string)
+		return s
+	}
+	return r.Subject
+}
+
+// recordFileID is the id that a file of objects/ stands for: the id in its
+// path, or, for a file whose name is not a record path (a sync tool's
+// conflict copy), the id computed from its bytes. It is "" when there is
+// none. The id field of a file with a bad path is not trusted.
+func recordFileID(p string, data []byte) string {
+	if m := pathPattern.FindStringSubmatch(p); m != nil {
+		return "sha256:" + m[1] + m[2]
+	}
+	v, err := Parse(data)
+	obj, ok := v.(map[string]any)
+	if err != nil || !ok {
+		return ""
+	}
+	return RecordID(obj)
+}
+
+// copiesOf returns the paths of files with a bad path whose bytes stand
+// for one of ids, sorted.
+func copiesOf(files map[string][]byte, ids map[string]bool) []string {
+	var out []string
+	for p, data := range files {
+		if !pathPattern.MatchString(p) && ids[recordFileID(p, data)] {
+			out = append(out, p)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // SyncResult is the output of Sync.
@@ -465,7 +551,8 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 			proven[p] = true
 		}
 	}
-	u := verifyFiles(union, proven)
+	u := pastHeadHalt(verifyFiles(union, proven), union, proven, b.ID)
+	gone := u.unjudgedPurged()
 	tombsOf := map[string][]string{} // target -> tombstones in the union
 	for _, id := range sortedKeys(u.Records) {
 		if r := u.Records[id]; r.Type == "bean.tombstone" {
@@ -514,7 +601,7 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 		if b.Hidden[id] {
 			continue // 3.3
 		}
-		if _, purged := u.Purged[id]; purged { // 3.2 and 7.5
+		if _, purged := u.Purged[id]; purged || gone[id] { // 3.2 and 7.5
 			refs.add(fr.Record)
 			res.Refused++
 			continue
@@ -542,15 +629,17 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 	// stranger's record does not bring back a purged photo (DECISIONS 213).
 	named := map[string]bool{}
 	ofDeleted, ofOwnLive := map[string]bool{}, map[string]bool{}
-	unlocks := blobUnlocker(b2.ID, b2.Report, b2.AgentLabels())
+	bv := b2.blobView()
+	unlocks := blobUnlocker(b2.ID, bv.Report, bv.fileLabels())
 	recs := b2.allRecords()
+	gone2 := bv.Report.unjudgedPurged()
 	for p, data := range b2.Files {
 		m := pathPattern.FindStringSubmatch(p)
 		if m == nil {
 			continue
 		}
 		id := "sha256:" + m[1] + m[2]
-		if _, purged := b2.Report.Purged[id]; purged || b2.Hidden[id] {
+		if _, purged := bv.Report.Purged[id]; purged || bv.Hidden[id] || gone2[id] {
 			for _, h := range namedBlobs(data) {
 				ofDeleted[h] = true
 			}
@@ -569,7 +658,7 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 			continue
 		}
 		id := "sha256:" + m[1] + m[2]
-		if _, purged := u.Purged[id]; purged || b.Hidden[id] || (a.Hidden[id] && !undone(id)) {
+		if _, purged := u.Purged[id]; purged || gone[id] || b.Hidden[id] || (a.Hidden[id] && !undone(id)) {
 			for _, h := range namedBlobs(data) {
 				ofDeleted[h] = true
 			}
@@ -680,8 +769,10 @@ type ExportResult struct {
 	// MissingOthers counts absent blobs that only other records name. Anyone
 	// can name any number of them, so they are not listed.
 	MissingOthers int
-	// Withheld: record files that fail their checks and whose id a tombstone
-	// names. They are a damaged copy of a deleted record, so they stay behind.
+	// Withheld: record files that fail their checks and whose id is hidden or
+	// named by a tombstone. For a file with a bad path (a sync tool's conflict
+	// copy), the id is the one its bytes give. They are a damaged copy of a
+	// deleted record, so they stay behind.
 	Withheld []string
 	Written  bool // the manifest was written: the export ran to its end
 }
@@ -702,12 +793,46 @@ func (l *Loaded) allRecords() map[string]*Record {
 	return all
 }
 
+// unjudgedPurged returns the ids of records this build cannot judge (a newer
+// format, a too-new identity) that a valid tombstone about their subject
+// names. Step 10 holds such a tombstone, since its target is not a record it
+// judges, but the person deleted the record all the same: sync, import-export
+// and export leave it out (DECISIONS 217). It changes no verdict.
+func (rp *Report) unjudgedPurged() map[string]bool {
+	out := map[string]bool{}
+	var unjudged map[string]*Record
+	for tid, r := range rp.Records {
+		if r.Type != "bean.tombstone" || !rp.Valid[tid] {
+			continue
+		}
+		t := r.Targets("purges")[0]
+		if rp.Records[t] != nil {
+			continue
+		}
+		if unjudged == nil {
+			unjudged = map[string]*Record{}
+			for id, x := range rp.Dropped {
+				unjudged[id] = x
+			}
+			for _, x := range rp.Unknown {
+				unjudged[x.ID] = x
+			}
+		}
+		if x := unjudged[t]; x != nil && !x.IsIdentity() && x.Type != "bean.tombstone" && subjectOf(x) == r.Subject {
+			out[t] = true
+		}
+	}
+	return out
+}
+
 // blobUnlocker returns whether a record may decrypt the blobs it names. The
 // person (owner) or a paired agent (labels) signed it, and it is valid, kept
 // or in doubt in vr, or vr cannot judge it (a newer format, a too-new
 // identity). The author field of a record that vr cannot judge is only a
-// string, so its key must be a key of the person's tree, or the paired
-// agent's own key (DECISIONS 211).
+// string. So the person's such record unlocks only when the gate of 8.2
+// trusts its key: the head key, or a recovery key a chain node commits to. A
+// retired key is the key a thief holds (DECISIONS 217). A paired agent's
+// unlocks only with the agent's own key (DECISIONS 211).
 func blobUnlocker(owner string, vr *Report, labels map[string]string) func(*Record) bool {
 	return func(r *Record) bool {
 		if r.Author != owner && labels[r.Author] == "" {
@@ -715,12 +840,71 @@ func blobUnlocker(owner string, vr *Report, labels map[string]string) func(*Reco
 		}
 		if vr.Records[r.ID] == nil {
 			if r.Author == owner {
-				return vr.signedByTree(owner, r.Kid)
+				trusted, _ := vr.gateTrusts(owner, r.Kid)
+				return trusted
 			}
 			return r.Kid == r.Author
 		}
 		return (vr.Valid[r.ID] || vr.Kept[r.ID] || vr.InDoubt(r.ID)) && !vr.OffTree(r)
 	}
+}
+
+// blobView is the view of l that judges deletions and files. A halt by the
+// head key alone is set aside, as rotate does: without that, every record of
+// the person is unjudged, and only the head key's would unlock. A halt by a
+// recovery key is not set aside: only an update can go past the seed holder.
+func (l *Loaded) blobView() *Loaded {
+	if l.IsTooNew() && len(l.Report.HeadHalt[l.ID]) > 0 {
+		return l.past(l.ID)
+	}
+	return l
+}
+
+// pastHeadHalt is blobView for the union that sync and import-export judge:
+// when the head key alone halts identity id there, u is judged again without
+// the records that halt it. Without that, no deletion of the person counts,
+// and a stale copy brings a purged record back.
+func pastHeadHalt(u *Report, union map[string][]byte, proven map[string]bool, id string) *Report {
+	if id == "" || !contains(u.TooNew, id) || len(u.HeadHalt[id]) == 0 {
+		return u
+	}
+	return verifyFiles(overlay(union, u.HeadHalt[id], nil), proven)
+}
+
+// fileLabels is AgentLabels, plus, for a too-new identity, the agents that
+// its records this build cannot judge pair. Such a pairing counts only when
+// the gate trusts its key, and when no other such record of the person
+// supersedes it (DECISIONS 217).
+func (l *Loaded) fileLabels() map[string]string {
+	out := l.AgentLabels()
+	if !l.IsTooNew() {
+		return out
+	}
+	var pairs []*Record
+	superseded := map[string]bool{}
+	for _, r := range l.Report.Dropped {
+		if r.Author != l.ID || r.Subject != l.ID {
+			continue
+		}
+		if trusted, _ := l.Report.gateTrusts(l.ID, r.Kid); !trusted {
+			continue
+		}
+		for _, t := range r.Targets("supersedes") {
+			superseded[t] = true
+		}
+		if r.Type == "agent.pair" && r.ValueKey() != "" {
+			pairs = append(pairs, r)
+		}
+	}
+	for _, r := range pairs {
+		label, _ := r.Value["label"].(string)
+		st, _ := r.Value["status"].(string)
+		if superseded[r.ID] || st == "unpaired" || out[r.ValueKey()] != "" {
+			continue
+		}
+		out[r.ValueKey()] = shownLabel(label)
+	}
+	return out
 }
 
 // Export writes a plaintext copy (7.9). dir must be empty or absent.
@@ -752,11 +936,8 @@ func (s *Store) ExportAll(dir string) (ExportResult, error) {
 	all := l.allRecords()
 	// A halt by the head key alone can be set aside to judge deletions. Without
 	// that view, a record could be left out on a tombstone that is not valid.
-	view := l
-	if l.IsTooNew() && len(l.Report.HeadHalt[l.ID]) > 0 {
-		view = l.past(l.ID)
-	}
-	labels := view.AgentLabels()
+	view := l.blobView()
+	labels := view.fileLabels()
 	unlocks := blobUnlocker(l.ID, view.Report, labels)
 	type wanted struct {
 		mediaType string
@@ -764,9 +945,10 @@ func (s *Store) ExportAll(dir string) (ExportResult, error) {
 	}
 	want := map[string]*wanted{}
 	other := map[string]string{} // blob -> reason, for blobs that no record unlocks
+	gone := view.Report.unjudgedPurged()
 	for _, id := range sortedKeys(all) {
 		r := all[id]
-		if _, purged := view.Report.Purged[id]; purged || view.Hidden[id] {
+		if _, purged := view.Report.Purged[id]; purged || view.Hidden[id] || gone[id] {
 			continue
 		}
 		if err := writeFileAtomic(filepath.Join(dir, "records", id[7:]+".json"), r.Bytes, 0o600); err != nil {
@@ -802,7 +984,9 @@ func (s *Store) ExportAll(dir string) (ExportResult, error) {
 	// Record files that fail their checks go out as they are, beside the rest.
 	// A deleted one stays behind: hidden, or named by any tombstone of the log,
 	// held or not valid included. A damaged copy of a purged record cannot be
-	// judged, and its id is in the tombstone.
+	// judged, and its id is in the tombstone. A file with a bad path, such as
+	// a sync tool's conflict copy, stands for the id of its bytes
+	// (DECISIONS 218).
 	tombed := map[string]bool{}
 	for _, src := range []map[string]*Record{l.Report.Records, l.Report.Dropped} {
 		for _, r := range src {
@@ -818,13 +1002,9 @@ func (s *Store) ExportAll(dir string) (ExportResult, error) {
 		if strings.HasPrefix(p, "sha256:") {
 			continue
 		}
-		if m := pathPattern.FindStringSubmatch(p); m != nil {
-			if pid := "sha256:" + m[1] + m[2]; l.Hidden[pid] {
-				continue
-			} else if tombed[pid] {
-				res.Withheld = append(res.Withheld, p)
-				continue
-			}
+		if pid := recordFileID(p, l.Files[p]); pid != "" && (l.Hidden[pid] || tombed[pid] || gone[pid]) {
+			res.Withheld = append(res.Withheld, p)
+			continue
 		}
 		invalid[p] = e
 	}
@@ -1067,17 +1247,18 @@ func (s *Store) ImportExportAll(dir string) (ImportResult, error) {
 	}
 	// Deletions are judged on the union, as in Sync.
 	union := overlay(l.Files, nil, incoming)
-	u := verifyFiles(union, nil)
+	u := pastHeadHalt(verifyFiles(union, nil), union, nil, l.ID)
+	gone := u.unjudgedPurged()
 	deleted := func(id string) bool {
 		_, purged := u.Purged[id]
-		return purged || l.Hidden[id]
+		return purged || gone[id] || l.Hidden[id]
 	}
 	// A blob that a deleted record names comes back only when a live record of
 	// the person or a paired agent names it. Any record can name any id, so a
 	// stranger's live record does not bring back a purged photo.
 	ul := *l
 	ul.Files, ul.Report = union, u
-	unlocks := blobUnlocker(l.ID, u, ul.AgentLabels())
+	unlocks := blobUnlocker(l.ID, u, ul.fileLabels()) // u is judged past a head-key halt
 	recs := ul.allRecords()
 	ofDeleted, ofOwnLive := map[string]bool{}, map[string]bool{}
 	for p, data := range union {
@@ -1129,7 +1310,7 @@ func (s *Store) ImportExportAll(dir string) (ImportResult, error) {
 			continue // hidden records too (3.3)
 		}
 		r := checked[p]
-		if _, purged := u.Purged[r.ID]; purged { // 3.2 and 7.5
+		if _, purged := u.Purged[r.ID]; purged || gone[r.ID] { // 3.2 and 7.5
 			refs.add(r)
 			res.Refused++
 			continue
@@ -1146,14 +1327,62 @@ func (s *Store) ImportExportAll(dir string) (ImportResult, error) {
 }
 
 // maxManifestBytes bounds the manifest that import-export reads. It is read
-// as a stream, so memory does not grow with it; the bound only stops a
-// folder that never ends. One blob entry is under 200 bytes.
+// one bounded token at a time, so a long list costs no memory; the bound
+// only stops a folder that never ends. One blob entry is under 200 bytes.
 const maxManifestBytes int64 = 4 << 30
 
+// maxManifestToken bounds what the decoder reads for one token. A decoder
+// holds a whole token in memory, so one long string would cost its full size
+// (DECISIONS 218). An export writes ids, media types, paths and short
+// reasons, all far below it.
+const maxManifestToken = 1 << 20
+
+// maxManifestDepth bounds the nesting of the manifest. An export nests three
+// deep, and a decoder keeps one entry per open bracket.
+const maxManifestDepth = 16
+
+var errManifestToken = errors.New("too large: a token of manifest.json")
+
+// tokenBudget is a reader that fails after left bytes. The caller sets left
+// before each token.
+type tokenBudget struct {
+	r    io.Reader
+	left int
+}
+
+func (b *tokenBudget) Read(p []byte) (int, error) {
+	if b.left <= 0 {
+		return 0, errManifestToken
+	}
+	if len(p) > b.left {
+		p = p[:b.left]
+	}
+	n, err := b.r.Read(p)
+	b.left -= n
+	return n, err
+}
+
+// manifestTokens reads the tokens of a manifest with a bound on each.
+type manifestTokens struct {
+	dec    *json.Decoder
+	budget *tokenBudget
+}
+
+func (m manifestTokens) next() (json.Token, error) {
+	m.budget.left = maxManifestToken
+	return m.dec.Token()
+}
+
+func (m manifestTokens) more() bool {
+	m.budget.left = maxManifestToken
+	return m.dec.More()
+}
+
 // readManifestIdentity returns the identity of an export's manifest.json. It
-// reads the file as a stream and keeps only that field: the lists of a log
-// with many blobs do not fit any small cap, and nothing else is needed. The
-// manifest must be one JSON object with exactly one "identity" string.
+// reads the file one bounded token at a time and keeps only that field: the
+// lists of a log with many blobs do not fit any small cap, and nothing else
+// is needed. The manifest must be one JSON object with exactly one
+// "identity" string.
 func readManifestIdentity(root *os.Root) (string, error) {
 	bad := errors.New("bad field: manifest.json identity")
 	f, err := root.Open("manifest.json")
@@ -1171,36 +1400,45 @@ func readManifestIdentity(root *os.Root) (string, error) {
 	if info.Size() > maxManifestBytes {
 		return "", errors.New("too large: manifest.json")
 	}
-	dec := json.NewDecoder(bufio.NewReader(io.LimitReader(f, maxManifestBytes)))
+	budget := &tokenBudget{r: bufio.NewReader(io.LimitReader(f, maxManifestBytes))}
+	dec := json.NewDecoder(budget)
 	dec.UseNumber()
-	if t, err := dec.Token(); err != nil || t != json.Delim('{') {
+	m := manifestTokens{dec, budget}
+	// fail keeps the cause when a token was too long.
+	fail := func(err error) (string, error) {
+		if errors.Is(err, errManifestToken) {
+			return "", errManifestToken
+		}
 		return "", bad
 	}
+	if t, err := m.next(); err != nil || t != json.Delim('{') {
+		return fail(err)
+	}
 	who, seen := "", false
-	for dec.More() {
-		t, err := dec.Token()
+	for m.more() {
+		t, err := m.next()
 		key, ok := t.(string)
 		if err != nil || !ok {
-			return "", bad
+			return fail(err)
 		}
 		if key != "identity" {
-			if err := skipJSONValue(dec); err != nil {
-				return "", bad
+			if err := skipJSONValue(m); err != nil {
+				return fail(err)
 			}
 			continue
 		}
-		v, err := dec.Token()
+		v, err := m.next()
 		s, ok := v.(string)
 		if err != nil || !ok || seen {
-			return "", bad
+			return fail(err)
 		}
 		who, seen = s, true
 	}
-	if t, err := dec.Token(); err != nil || t != json.Delim('}') {
-		return "", bad
+	if t, err := m.next(); err != nil || t != json.Delim('}') {
+		return fail(err)
 	}
-	if _, err := dec.Token(); err != io.EOF {
-		return "", bad // more after the object
+	if _, err := m.next(); err != io.EOF {
+		return fail(err) // more after the object
 	}
 	if !IsID(who) {
 		return "", bad
@@ -1208,11 +1446,11 @@ func readManifestIdentity(root *os.Root) (string, error) {
 	return who, nil
 }
 
-// skipJSONValue reads one value of dec without keeping it.
-func skipJSONValue(dec *json.Decoder) error {
+// skipJSONValue reads one value of m without keeping it.
+func skipJSONValue(m manifestTokens) error {
 	depth := 0
 	for {
-		t, err := dec.Token()
+		t, err := m.next()
 		if err != nil {
 			return err
 		}
@@ -1224,6 +1462,9 @@ func skipJSONValue(dec *json.Decoder) error {
 		}
 		if depth == 0 {
 			return nil
+		}
+		if depth > maxManifestDepth {
+			return errors.New("too deep: manifest.json")
 		}
 	}
 }

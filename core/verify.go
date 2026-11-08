@@ -144,12 +144,12 @@ type Report struct {
 	// the identity's record, whatever its author field says: no step checks
 	// its key (DECISIONS 187).
 	OnChain map[string]bool
-	// TreeKeys: identity -> the signing keys of its tree nodes and the
-	// recovery keys they commit to (as Commitment strings), taken before
-	// too-new identities are dropped. Export uses it to tell whether a record
-	// this build cannot judge was signed by a key of its author. It changes no
-	// verdict.
-	TreeKeys map[string]map[string]bool
+	// GateKeys: identity -> the keys that the gate of 8.2 (K1) trusts: the
+	// head key of its chain, and the recovery keys that chain nodes commit to
+	// (as Commitment strings). They are taken before too-new identities are
+	// dropped. A record this build cannot judge unlocks files only when one
+	// of them signed it (DECISIONS 217). It changes no verdict.
+	GateKeys map[string]map[string]bool
 	// What readers show for a frozen identity (DECISIONS 191). None of this
 	// changes Valid, Errors or the verify output.
 	Kept           map[string]bool     // corrections that are "frozen", but every branch kept them
@@ -217,7 +217,7 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 	unknown := rp.checkFiles(files, proven) // step 1
 	rp.Unknown = unknown
 	trees := rp.buildTrees(sortedKeys(rp.Records)) // steps 2 and 3
-	rp.TreeKeys = treeKeys(trees)
+	rp.GateKeys = gateKeys(trees)
 	rp.gate(unknown, trees) // 8.2
 	ids := rp.dropTooNew(trees)
 	position := rp.freeze(trees)                 // steps 4 and 5
@@ -448,16 +448,16 @@ func (rp *Report) buildTrees(ids []string) map[string]*tree {
 	return trees
 }
 
-// treeKeys returns, per identity, the signing key of every tree node and the
-// commitment of every recovery key a node names. A walk accepted each node
-// from its parent, so only the person or the seed holder made them.
-func treeKeys(trees map[string]*tree) map[string]map[string]bool {
+// gateKeys returns, per identity, the head key of its chain and the
+// commitment of every recovery key that a chain node names. Only the
+// person's current key and the seed holder have them. A retired key is not
+// one of them: it is the key a thief holds.
+func gateKeys(trees map[string]*tree) map[string]map[string]bool {
 	out := map[string]map[string]bool{}
 	for gid, t := range trees {
-		m := map[string]bool{}
-		for _, n := range t.nodes {
-			m[n.ValueKey()] = true
-			m[n.Recovery()] = true
+		m := map[string]bool{t.chain[len(t.chain)-1].ValueKey(): true}
+		for _, x := range t.chain {
+			m[x.Recovery()] = true
 		}
 		delete(m, "")
 		out[gid] = m
@@ -465,11 +465,14 @@ func treeKeys(trees map[string]*tree) map[string]map[string]bool {
 	return out
 }
 
-// signedByTree reports whether kid is a signing key of a node of identity
-// id's tree, or a recovery key that a node commits to.
-func (rp *Report) signedByTree(id, kid string) bool {
-	m := rp.TreeKeys[id]
-	return m[kid] || m[Commitment(kid)]
+// gateTrusts reports whether the gate of 8.2 trusts kid for identity id.
+// recovery is true for a recovery key, false for the head key.
+func (rp *Report) gateTrusts(id, kid string) (trusted, recovery bool) {
+	m := rp.GateKeys[id]
+	if m[Commitment(kid)] {
+		return true, true
+	}
+	return m[kid], false
 }
 
 // path holds the keys and commitments of the nodes from a genesis to the
@@ -511,7 +514,6 @@ func (p path) check(s, par *Record) error {
 func (rp *Report) gate(unknown []*Record, trees map[string]*tree) {
 	tooNew := map[string]bool{}
 	byRecovery := map[string]bool{} // halted by a record of a recovery key or a genesis
-	commits := map[string]map[string]bool{}
 	var ungated []*Record
 	for _, r := range unknown {
 		rp.Skipped++
@@ -525,21 +527,16 @@ func (rp *Report) gate(unknown []*Record, trees map[string]*tree) {
 			}
 			continue
 		}
-		t, ok := trees[r.Author]
-		if !ok {
+		if _, ok := trees[r.Author]; !ok {
 			continue
 		}
-		if commits[r.Author] == nil {
-			commits[r.Author] = map[string]bool{}
-			for _, x := range t.chain {
-				commits[r.Author][x.Recovery()] = true
-			}
-		}
+		// The same keys decide which unjudged records unlock files.
+		trusted, recovery := rp.gateTrusts(r.Author, r.Kid)
 		switch {
-		case commits[r.Author][Commitment(r.Kid)]:
+		case trusted && recovery:
 			tooNew[r.Author] = true
 			byRecovery[r.Author] = true
-		case t.chain[len(t.chain)-1].ValueKey() == r.Kid:
+		case trusted:
 			tooNew[r.Author] = true
 			rp.HeadHalt[r.Author] = append(rp.HeadHalt[r.Author], r.ID)
 		default:

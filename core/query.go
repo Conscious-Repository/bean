@@ -132,28 +132,7 @@ func (s *Store) List(f Filter) ([]*Record, *Loaded, error) {
 
 // Resolve finds the record whose id is id, or the one record whose hex
 // starts with a prefix of at least 6 digits. Hidden records resolve too.
-func (l *Loaded) Resolve(id string) (*Record, error) {
-	hexPart := strings.TrimPrefix(id, "sha256:")
-	if r, ok := l.Report.Records["sha256:"+hexPart]; ok {
-		return r, nil
-	}
-	if len(hexPart) < 6 || !isLowerHex(hexPart, len(hexPart)) {
-		return nil, errors.New("input missing: " + id)
-	}
-	var found *Record
-	for rid, r := range l.Report.Records {
-		if strings.HasPrefix(rid[7:], hexPart) {
-			if found != nil {
-				return nil, errors.New("ambiguous id: " + id)
-			}
-			found = r
-		}
-	}
-	if found == nil {
-		return nil, errors.New("input missing: " + id)
-	}
-	return found, nil
-}
+func (l *Loaded) Resolve(id string) (*Record, error) { return resolveIn(l.Report.Records, id) }
 
 // Replies returns the valid records that name id with any ref, sorted by
 // id: comments and attestations (about), corrections (supersedes) and

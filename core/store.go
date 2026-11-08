@@ -645,6 +645,37 @@ func (s *Store) GC() (records, blobs int, err error) {
 	for _, t := range targets {
 		delete(l.Files, PathOf(t))
 	}
+	// A file with a bad path is not a record. A copy of a target erased now
+	// goes with it, and so does a copy of a record that is erased already: a
+	// valid tombstone about its subject names it, and the record file is gone
+	// (DECISIONS 218).
+	erased := map[string]map[string]bool{} // erased target -> subjects of its valid tombstones
+	copyOf := map[string]bool{}
+	for tid, r := range l.Report.Records {
+		if t := r.Targets("purges"); r.Type == "bean.tombstone" && l.Report.Valid[tid] && l.Files[PathOf(t[0])] == nil {
+			if erased[t[0]] == nil {
+				erased[t[0]] = map[string]bool{}
+			}
+			erased[t[0]][r.Subject] = true
+			copyOf[t[0]] = true
+		}
+	}
+	for t := range due {
+		copyOf[t] = true
+	}
+	var copies []string
+	for _, p := range copiesOf(l.Files, copyOf) {
+		v, _ := Parse(l.Files[p])
+		obj, _ := v.(map[string]any)
+		subject, _ := obj["subject"].(string)
+		if id := recordFileID(p, l.Files[p]); due[id] || erased[id][subject] {
+			copies = append(copies, p)
+		}
+	}
+	for _, p := range copies {
+		candidates = append(candidates, namedBlobs(l.Files[p])...)
+		delete(l.Files, p)
+	}
 	// Blobs go first, while the hidden record still names them. A failure
 	// after this leaves a hidden record whose blobs are gone, and the next gc
 	// erases it. The other order left a blob that no record names, which gc
@@ -665,6 +696,12 @@ func (s *Store) GC() (records, blobs int, err error) {
 		delete(l.Hidden, t)
 		records++
 	}
+	for _, p := range copies { // counted as records: each is a copy of one
+		if err := os.Remove(s.path(p)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return records, blobs, err
+		}
+		records++
+	}
 	if err := s.writeHolds(l.Holds); err != nil {
 		return records, blobs, err
 	}
@@ -676,16 +713,20 @@ func (s *Store) GC() (records, blobs int, err error) {
 // and 7.7 step 5 as changed by C25). A record file counts whether or not
 // it is valid now: validity can come back (a sync, a newer bean), erased
 // bytes cannot. A file that does not parse counts when it contains the
-// blob id at all. A blob that no record ever named is never erased.
+// blob id at all, but only at a record path. A blob that no record ever
+// named is never erased.
 func (s *Store) eraseBlobsOf(files map[string][]byte, candidates []string) (int, error) {
-	n, _, err := s.eraseBlobs(files, candidates, false)
+	n, _, err := s.eraseBlobs(files, candidates, nil)
 	return n, err
 }
 
-// eraseBlobs is eraseBlobsOf. With count, it also returns each candidate that
-// is kept and stored, with the number of record files that name it.
-func (s *Store) eraseBlobs(files map[string][]byte, candidates []string, count bool) (int, map[string]int, error) {
-	kept := map[string]int{}
+// eraseBlobs is eraseBlobsOf. With reach, it also returns each candidate that
+// is kept and stored, with the number of record files that name it: in Names
+// those for which reach is true, in Others the rest. A file whose path is not
+// a record path (a sync tool's conflict copy) is not a record: it keeps
+// nothing (DECISIONS 218).
+func (s *Store) eraseBlobs(files map[string][]byte, candidates []string, reach func(path string) bool) (int, map[string]KeptBlob, error) {
+	kept := map[string]KeptBlob{}
 	if len(candidates) == 0 {
 		return 0, kept, nil
 	}
@@ -695,14 +736,25 @@ func (s *Store) eraseBlobs(files map[string][]byte, candidates []string, count b
 			want[c] = true
 		}
 	}
-	for _, data := range files {
-		if !count && len(want) == 0 {
+	isCandidate := func(h string) bool { _, k := kept[h]; return want[h] || k }
+	for p, data := range files {
+		if reach == nil && len(want) == 0 {
 			break
+		}
+		if !pathPattern.MatchString(p) {
+			continue
 		}
 		seen := map[string]bool{}
 		for _, h := range namedBlobs(data) {
-			if count && !seen[h] && (want[h] || kept[h] > 0) {
-				kept[h]++
+			if reach != nil && !seen[h] && isCandidate(h) {
+				k := kept[h]
+				k.ID = h
+				if reach(p) {
+					k.Names++
+				} else {
+					k.Others++
+				}
+				kept[h] = k
 			}
 			seen[h] = true
 			delete(want, h)

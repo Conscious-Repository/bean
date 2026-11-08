@@ -290,12 +290,23 @@ func main() {
 		}
 		fmt.Println("purged, tombstone", res.Tombstone)
 		// A file that another record names stays (C25), and is still readable.
+		// Names counts only records that purge can reach; Others the deleted
+		// records waiting for gc, records about someone else, and damaged files.
 		for _, k := range res.Kept {
-			rec := "records name"
-			if k.Names == 1 {
-				rec = "record names"
+			if k.Names > 0 {
+				rec := "records name"
+				if k.Names == 1 {
+					rec = "record names"
+				}
+				fmt.Printf("the file %s is kept: %d other %s it. Purge those too to erase it\n", k.ID, k.Names, rec)
 			}
-			fmt.Printf("the file %s is kept: %d other %s it. Purge those too to erase it\n", k.ID, k.Names, rec)
+			if k.Others > 0 {
+				rec := "files name"
+				if k.Others == 1 {
+					rec = "file names"
+				}
+				fmt.Printf("the file %s is kept: %d other %s it that purge cannot reach: deleted and waiting for gc, about someone else, or damaged\n", k.ID, k.Others, rec)
+			}
 		}
 	case "gc":
 		r, b, err := s.GC()
