@@ -824,7 +824,7 @@ Sync from replica A (source) to replica B (destination) is a set union with one 
    5. If B holds a file for that id that fails a step from 1 to 15 of 3.8 and the file in A passes, replace B's file.
 4. For each blob in A that B does not have, or that B has with a stored hash that does not match its path:
    1. If the SHA-256 of A's bytes does not match the path, do not copy it.
-   2. If only purged or hidden record files name it, do not copy it. A record file names a blob in `blobs[].hash` or `value.blob`, valid or not.
+   2. If only purged or hidden record files name it, do not copy it. A record file names a blob in `blobs[].hash` or `value.blob`, valid or not. If a purged or hidden record file of the union names it, copy it only when a live record of the local identity or of a paired agent names it, by the rule of 7.9 step 2. Any record can name any blob.
    3. Otherwise copy it. If B has a corrupt copy, replace it atomically with A's verified bytes.
 5. Compute the valid set of B again. Apply 7.6 to new tombstones.
 
@@ -873,8 +873,10 @@ The hold length is 7 days. DEFAULT. Nothing is erased without the person running
 1. Check that the local identity is the subject of the target.
 2. Write a tombstone signed by the head key. The tombstone names only the target id. It MUST NOT carry the target's `source` or dedupe ref (15).
 3. Add the target dedupe ref to `local/purged-refs.jsonl`.
-4. Erase the target at once.
-5. Erase each blob that the target names, when no remaining record file names it.
+4. Erase each blob that the target names, when no remaining record file names it.
+5. Erase the target at once.
+
+Blobs go before the target. A failure between the two then leaves the target and its tombstone, and 7.6 hides it. The other order leaves a blob that no record names.
 
 The tombstone stays in the log forever.
 A program MUST NOT tombstone a genesis, a succession or a tombstone.
@@ -893,14 +895,14 @@ A replica that never had the target, or that lost this file, does not know the r
 `bean export <dir>` writes a plaintext copy of the log for exit.
 
 1. Write each record file that is not purged or hidden to `<dir>/records/<64 hex>.json`. Use the stored bytes. This includes records of an unknown version and records of a too-new identity: an export needs no judgment of them.
-2. Decrypt each blob that an exported record of the local identity or of an agent it paired names, and each blob that no record file names. Write the plaintext to `<dir>/blobs/<64 hex of the blob id>`. A blob that only another author's records name is not decrypted. If a blob is not available, continue, and add its id to `missing_blobs` in the manifest (sorted). One file MUST NOT stop an exit.
-3. Write the stored bytes of each record file that fails a step from 1 to 15 of 3.8 to `<dir>/invalid/<its path>`, and list them in `invalid_records` as `{"path", "error"}`. List blobs that no record names in `unreferenced_blobs`, and blobs not decrypted in `not_exported_blobs` as `{"id", "reason"}`.
+2. Decrypt each blob that an exported record of the local identity or of an agent it paired names, and each blob that no record file names. Write the plaintext to `<dir>/blobs/<64 hex of the blob id>`. A blob that only another author's records name is not decrypted. A record that this build cannot judge (an unknown version, a too-new identity) counts as the local identity's only when its `kid` is a key of a node of that identity's tree or a recovery key a node commits to, and as a paired agent's only when its `kid` is its `author`. If a blob is not available, continue. If a record of the local identity or of a paired agent names it, add its id to `missing_blobs` in the manifest (sorted); otherwise count it in `missing_blobs_of_others`. One file MUST NOT stop an exit.
+3. Write the stored bytes of each record file that fails a step from 1 to 15 of 3.8 to `<dir>/invalid/<its path>`, and list them in `invalid_records` as `{"path", "error"}`. A file whose path id is hidden, or is the target of any tombstone in the log, is not written: list it in `withheld_records` as `{"path", "reason"}`. List blobs that no record names in `unreferenced_blobs`, and stored blobs not decrypted in `not_exported_blobs` as `{"id", "reason"}`.
 4. Write `<dir>/manifest.json` with the canonical bytes of `{"spec": "bean-v0", "identity": <id>, "records": <count>, "blobs": [{"id": <blob id>, "plaintext_sha256": <hex>, "media_type": <string>}]}`, plus the lists above when they are not empty. Sort `blobs` by `id`. The `spec` string names the export format. It does not change with the software version.
 
 After it writes, the command fails with `too new: <id>` if the local identity is too new, or with `blob missing: <id>` if a blob is missing that the local identity or an agent it paired names. A blob that another author names does not fail it: anyone can name an absent blob.
 The export is not encrypted. The CLI MUST say this before it writes.
-`bean import-export <dir>` reverses the export for a log with the same identity secret. It reads `manifest.json` first and refuses an export of another identity. It applies 7.4 steps 2 and 3.2 to the union of the log and the export, so a record the person deleted does not come back.
-It encrypts each blob again. The deterministic encryption gives the same blob ids. The reference CLI refuses symbolic links, special file entries, record exports over 16 MiB, and plaintext blob exports over 256 MiB. It confines file reads to the selected export directory. These are CLI resource limits, not core validity rules.
+`bean import-export <dir>` reverses the export for a log with the same identity secret. It reads `manifest.json` first and refuses an export of another identity. It needs only the `identity` field and reads the file as a stream. It applies 7.4 steps 2 and 3.2 to the union of the log and the export, so a record the person deleted does not come back. A blob that a deleted record names is not imported, unless a live record of the local identity or of a paired agent names it, by the rule of step 2.
+It encrypts each blob again. The deterministic encryption gives the same blob ids. The reference CLI refuses symbolic links, special file entries, record exports over 16 MiB, a manifest over 4 GiB, and plaintext blob exports over 256 MiB. It confines file reads to the selected export directory. These are CLI resource limits, not core validity rules.
 
 ### 7.10 Caches
 

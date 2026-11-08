@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash"
@@ -311,62 +312,93 @@ func inputRef(src map[string]any, key string, dedupeKey []byte, lineNo int) (str
 // Purge writes a tombstone for id (or a 6+ hex prefix of it) and erases
 // the target at once (7.7).
 func (s *Store) Purge(id, reason string) (string, error) {
+	res, err := s.PurgeAll(id, reason)
+	return res.Tombstone, err
+}
+
+// PurgeResult is the output of PurgeAll.
+type PurgeResult struct {
+	Tombstone string
+	// Kept: the target's stored blobs that other record files name, by id.
+	// Purge does not erase them (C25), so the files are still readable.
+	Kept []KeptBlob
+}
+
+// KeptBlob is a blob that purge kept, and the number of other record files
+// that name it.
+type KeptBlob struct {
+	ID    string
+	Names int
+}
+
+// PurgeAll is Purge with the full result.
+func (s *Store) PurgeAll(id, reason string) (PurgeResult, error) {
+	var res PurgeResult
 	unlock, err := s.lock()
 	if err != nil {
-		return "", err
+		return res, err
 	}
 	defer unlock()
 	l, err := s.load(false)
 	if err != nil {
-		return "", err
+		return res, err
 	}
 	if l.Local == nil {
-		return "", ErrNotInitialized
+		return res, ErrNotInitialized
 	}
 	target, err := l.Resolve(id)
 	if err != nil {
-		return "", err
+		return res, err
 	}
 	id = target.ID
 	if target.IsIdentity() || target.Type == "bean.tombstone" {
-		return "", ErrBadTarget
+		return res, ErrBadTarget
 	}
 	if target.Subject != l.Local.Identity {
-		return "", ErrNotSubject
+		return res, ErrNotSubject
 	}
 	if err := l.canWrite(writer{signer: l.Local.Signer, author: l.Local.Identity}); err != nil {
-		return "", err
+		return res, err
 	}
 	t := NewTombstone(l.Local.Identity, l.Local.Signer.Public(), id, reason, Adapter, s.nowString())
 	tid, bytes, err := SignRecord(t, l.Local.Signer)
 	if err != nil {
-		return "", err
+		return res, err
 	}
 	if fr := CheckFile(PathOf(tid), bytes); fr.Err != nil {
-		return "", fr.Err
+		return res, fr.Err
 	}
 	if _, err := writeIfAbsent(s.path(PathOf(tid)), bytes, 0o600); err != nil {
-		return "", err
+		return res, err
 	}
 	if err := s.addPurgedRef(target); err != nil {
-		return "", err
+		return res, err
 	}
-	for _, p := range []string{s.path(PathOf(id)), hiddenPath(s.Dir, id)} {
-		if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return "", err
-		}
-	}
-	// A local purge erases at once: there is nothing to hold. Erase the target's own blobs, unless another record file names them
-	// (C25). Never erase any other blob here.
+	// A local purge erases at once: there is nothing to hold. Erase the
+	// target's own blobs, unless another record file names them (C25). Never
+	// erase any other blob here. The blobs go before the record file: a
+	// failure in between then leaves the record and its tombstone, so the next
+	// load hides it and gc erases it. The other order left a blob that no
+	// record names, which gc never erases and export writes out.
 	delete(l.Files, PathOf(id))
 	var candidates []string
 	for _, b := range target.Blobs {
 		candidates = append(candidates, b.Hash)
 	}
-	if _, err := s.eraseBlobsOf(l.Files, candidates); err != nil {
-		return "", err
+	_, kept, err := s.eraseBlobs(l.Files, candidates, true)
+	if err != nil {
+		return res, err
 	}
-	return tid, nil
+	for _, p := range []string{s.path(PathOf(id)), hiddenPath(s.Dir, id)} {
+		if err := os.Remove(p); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return res, err
+		}
+	}
+	res.Tombstone = tid
+	for _, h := range sortedKeys(kept) {
+		res.Kept = append(res.Kept, KeptBlob{ID: h, Names: kept[h]})
+	}
+	return res, nil
 }
 
 // SyncResult is the output of Sync.
@@ -505,7 +537,13 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 	if err != nil {
 		return res, err
 	}
+	// A blob that a deleted record names is copied only when a live record of
+	// the person or a paired agent names it: any record can name any id, so a
+	// stranger's record does not bring back a purged photo (DECISIONS 213).
 	named := map[string]bool{}
+	ofDeleted, ofOwnLive := map[string]bool{}, map[string]bool{}
+	unlocks := blobUnlocker(b2.ID, b2.Report, b2.AgentLabels())
+	recs := b2.allRecords()
 	for p, data := range b2.Files {
 		m := pathPattern.FindStringSubmatch(p)
 		if m == nil {
@@ -513,10 +551,33 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 		}
 		id := "sha256:" + m[1] + m[2]
 		if _, purged := b2.Report.Purged[id]; purged || b2.Hidden[id] {
+			for _, h := range namedBlobs(data) {
+				ofDeleted[h] = true
+			}
 			continue
 		}
+		own := recs[id] != nil && unlocks(recs[id])
 		for _, h := range namedBlobs(data) {
 			named[h] = true
+			ofOwnLive[h] = ofOwnLive[h] || own
+		}
+	}
+	// A purged record erased here is still in the source: judge the union.
+	for p, data := range union {
+		m := pathPattern.FindStringSubmatch(p)
+		if m == nil {
+			continue
+		}
+		id := "sha256:" + m[1] + m[2]
+		if _, purged := u.Purged[id]; purged || b.Hidden[id] || (a.Hidden[id] && !undone(id)) {
+			for _, h := range namedBlobs(data) {
+				ofDeleted[h] = true
+			}
+		}
+	}
+	for h := range ofDeleted {
+		if !ofOwnLive[h] {
+			delete(named, h)
 		}
 	}
 	blobFiles, _, err := listShards(src.Dir, dirBlobs)
@@ -613,8 +674,53 @@ type ExportResult struct {
 	// the person's or a paired agent's, or that is not valid, can name any
 	// blob, also one the person deleted.
 	NotExported map[string]string
-	Missing     []string // blobs named by a record that are not here or do not read
-	Written     bool     // the manifest was written: the export ran to its end
+	// Missing: blobs that a record of the person or a paired agent names and
+	// that are not here or do not read.
+	Missing []string
+	// MissingOthers counts absent blobs that only other records name. Anyone
+	// can name any number of them, so they are not listed.
+	MissingOthers int
+	// Withheld: record files that fail their checks and whose id a tombstone
+	// names. They are a damaged copy of a deleted record, so they stay behind.
+	Withheld []string
+	Written  bool // the manifest was written: the export ran to its end
+}
+
+// allRecords returns every record file that passes steps 1 to 15, by id: the
+// judged ones, those of too-new identities, and those of an unknown version.
+func (l *Loaded) allRecords() map[string]*Record {
+	all := map[string]*Record{}
+	for id, r := range l.Report.Records {
+		all[id] = r
+	}
+	for id, r := range l.Report.Dropped {
+		all[id] = r
+	}
+	for _, r := range l.Report.Unknown {
+		all[r.ID] = r
+	}
+	return all
+}
+
+// blobUnlocker returns whether a record may decrypt the blobs it names. The
+// person (owner) or a paired agent (labels) signed it, and it is valid, kept
+// or in doubt in vr, or vr cannot judge it (a newer format, a too-new
+// identity). The author field of a record that vr cannot judge is only a
+// string, so its key must be a key of the person's tree, or the paired
+// agent's own key (DECISIONS 211).
+func blobUnlocker(owner string, vr *Report, labels map[string]string) func(*Record) bool {
+	return func(r *Record) bool {
+		if r.Author != owner && labels[r.Author] == "" {
+			return false
+		}
+		if vr.Records[r.ID] == nil {
+			if r.Author == owner {
+				return vr.signedByTree(owner, r.Kid)
+			}
+			return r.Kid == r.Author
+		}
+		return (vr.Valid[r.ID] || vr.Kept[r.ID] || vr.InDoubt(r.ID)) && !vr.OffTree(r)
+	}
 }
 
 // Export writes a plaintext copy (7.9). dir must be empty or absent.
@@ -643,16 +749,7 @@ func (s *Store) ExportAll(dir string) (ExportResult, error) {
 	}
 	// Every record file goes out, also of a too-new identity and of a newer
 	// format: an export needs no judgment of them, and it is the way out.
-	all := map[string]*Record{}
-	for id, r := range l.Report.Records {
-		all[id] = r
-	}
-	for id, r := range l.Report.Dropped {
-		all[id] = r
-	}
-	for _, r := range l.Report.Unknown {
-		all[r.ID] = r
-	}
+	all := l.allRecords()
 	// A halt by the head key alone can be set aside to judge deletions. Without
 	// that view, a record could be left out on a tombstone that is not valid.
 	view := l
@@ -660,19 +757,7 @@ func (s *Store) ExportAll(dir string) (ExportResult, error) {
 		view = l.past(l.ID)
 	}
 	labels := view.AgentLabels()
-	// unlocks: a record that may decrypt the blobs it names. The person or a
-	// paired agent signed it, and it is valid, kept or in doubt, or this build
-	// cannot judge it (a newer format, a too-new identity).
-	unlocks := func(r *Record) bool {
-		if r.Author != l.ID && labels[r.Author] == "" {
-			return false
-		}
-		vr := view.Report
-		if vr.Records[r.ID] == nil {
-			return true
-		}
-		return (vr.Valid[r.ID] || vr.Kept[r.ID] || vr.InDoubt(r.ID)) && !vr.OffTree(r)
-	}
+	unlocks := blobUnlocker(l.ID, view.Report, labels)
 	type wanted struct {
 		mediaType string
 		own       bool // a record that unlocks names it
@@ -708,22 +793,42 @@ func (s *Store) ExportAll(dir string) (ExportResult, error) {
 				other[bl.Hash] = "named only by a record that is not valid"
 				if r.Author != l.ID && labels[r.Author] == "" {
 					other[bl.Hash] = "named only by a record that is not yours or a paired agent's"
+				} else if view.Report.Records[r.ID] == nil {
+					other[bl.Hash] = "named only by a record this build cannot judge, signed by a key that is not yours or a paired agent's"
 				}
 			}
 		}
 	}
 	// Record files that fail their checks go out as they are, beside the rest.
-	// A deleted one stays behind.
+	// A deleted one stays behind: hidden, or named by any tombstone of the log,
+	// held or not valid included. A damaged copy of a purged record cannot be
+	// judged, and its id is in the tombstone.
+	tombed := map[string]bool{}
+	for _, src := range []map[string]*Record{l.Report.Records, l.Report.Dropped} {
+		for _, r := range src {
+			if r.Type == "bean.tombstone" {
+				for _, t := range r.Targets("purges") {
+					tombed[t] = true
+				}
+			}
+		}
+	}
 	invalid := map[string]string{} // path -> error
 	for p, e := range l.Report.Errors {
 		if strings.HasPrefix(p, "sha256:") {
 			continue
 		}
-		if m := pathPattern.FindStringSubmatch(p); m != nil && l.Hidden["sha256:"+m[1]+m[2]] {
-			continue
+		if m := pathPattern.FindStringSubmatch(p); m != nil {
+			if pid := "sha256:" + m[1] + m[2]; l.Hidden[pid] {
+				continue
+			} else if tombed[pid] {
+				res.Withheld = append(res.Withheld, p)
+				continue
+			}
 		}
 		invalid[p] = e
 	}
+	sort.Strings(res.Withheld)
 	for _, p := range sortedKeys(invalid) {
 		res.Invalid = append(res.Invalid, p)
 		data, ok := l.Files[p]
@@ -779,8 +884,14 @@ func (s *Store) ExportAll(dir string) (ExportResult, error) {
 	for _, id := range sortedKeys(want) {
 		w := want[id]
 		if _, err := os.Lstat(s.path(BlobPathOf(id))); errors.Is(err, os.ErrNotExist) || !IsID(id) {
-			missing[id] = true // any stranger can name an absent blob
-			if w.own && missingErr == nil {
+			// Any stranger can name any number of absent blobs: only the
+			// person's and paired agents' are listed, the rest counted.
+			if !w.own {
+				res.MissingOthers++
+				continue
+			}
+			missing[id] = true
+			if missingErr == nil {
 				missingErr = errors.New("blob missing: " + id)
 			}
 			continue
@@ -812,10 +923,15 @@ func (s *Store) ExportAll(dir string) (ExportResult, error) {
 		}
 		res.Unreferenced = append(res.Unreferenced, id)
 	}
+	// Only files stored here are "not exported": a record can name any id.
 	for id, why := range other {
-		if _, done := blobSet[id]; !done && !missing[id] {
-			res.NotExported[id] = why
+		if _, done := blobSet[id]; done || missing[id] || !IsID(id) {
+			continue
 		}
+		if _, err := os.Lstat(s.path(BlobPathOf(id))); err != nil {
+			continue
+		}
+		res.NotExported[id] = why
 	}
 	res.Missing = sortedKeys(missing)
 	var list []any
@@ -836,6 +952,16 @@ func (s *Store) ExportAll(dir string) (ExportResult, error) {
 	}
 	if len(res.Missing) > 0 {
 		man["missing_blobs"] = strs(res.Missing)
+	}
+	if res.MissingOthers > 0 {
+		man["missing_blobs_of_others"] = float64(res.MissingOthers)
+	}
+	if len(res.Withheld) > 0 {
+		var m []any
+		for _, p := range res.Withheld {
+			m = append(m, map[string]any{"path": p, "reason": "deleted: a tombstone names this id"})
+		}
+		man["withheld_records"] = m
 	}
 	if len(res.Unreferenced) > 0 {
 		man["unreferenced_blobs"] = strs(res.Unreferenced)
@@ -899,18 +1025,12 @@ func (s *Store) ImportExportAll(dir string) (ImportResult, error) {
 	defer root.Close()
 	// An export says whose it is. Another identity's blobs do not decrypt
 	// here, and its records are not this log's.
-	mb, err := readExportFile(root, "manifest.json", MaxSuccessionSize)
+	who, err := readManifestIdentity(root)
 	if errors.Is(err, os.ErrNotExist) {
 		return res, errors.New("not an export: no manifest.json in " + dir)
 	}
 	if err != nil {
 		return res, err
-	}
-	mv, err := Parse(mb)
-	man, _ := mv.(map[string]any)
-	who, _ := man["identity"].(string)
-	if err != nil || man == nil || !IsID(who) {
-		return res, errors.New("bad field: manifest.json identity")
 	}
 	if who != local.Identity {
 		return res, fmt.Errorf("export of identity %s, this log is %s", who, local.Identity)
@@ -952,22 +1072,34 @@ func (s *Store) ImportExportAll(dir string) (ImportResult, error) {
 		_, purged := u.Purged[id]
 		return purged || l.Hidden[id]
 	}
-	named, namedAny := map[string]bool{}, map[string]bool{}
+	// A blob that a deleted record names comes back only when a live record of
+	// the person or a paired agent names it. Any record can name any id, so a
+	// stranger's live record does not bring back a purged photo.
+	ul := *l
+	ul.Files, ul.Report = union, u
+	unlocks := blobUnlocker(l.ID, u, ul.AgentLabels())
+	recs := ul.allRecords()
+	ofDeleted, ofOwnLive := map[string]bool{}, map[string]bool{}
 	for p, data := range union {
 		m := pathPattern.FindStringSubmatch(p)
 		if m == nil {
 			continue
 		}
-		del := deleted("sha256:" + m[1] + m[2])
+		id := "sha256:" + m[1] + m[2]
+		del := deleted(id)
+		own := false
+		if r := recs[id]; r != nil && !del {
+			own = unlocks(r)
+		}
 		for _, h := range namedBlobs(data) {
-			namedAny[h] = true
-			named[h] = named[h] || !del
+			ofDeleted[h] = ofDeleted[h] || del
+			ofOwnLive[h] = ofOwnLive[h] || own
 		}
 	}
 	for _, e := range blobEntries {
 		id := "sha256:" + e.Name()
-		if namedAny[id] && !named[id] {
-			continue // only deleted records name it
+		if ofDeleted[id] && !ofOwnLive[id] {
+			continue // a deleted record names it, and no live record of the person
 		}
 		pt, err := readExportFile(root, "blobs/"+e.Name(), maxImportBlobBytes)
 		if err != nil {
@@ -1011,6 +1143,89 @@ func (s *Store) ImportExportAll(dir string) (ImportResult, error) {
 		}
 	}
 	return res, refs.flush()
+}
+
+// maxManifestBytes bounds the manifest that import-export reads. It is read
+// as a stream, so memory does not grow with it; the bound only stops a
+// folder that never ends. One blob entry is under 200 bytes.
+const maxManifestBytes int64 = 4 << 30
+
+// readManifestIdentity returns the identity of an export's manifest.json. It
+// reads the file as a stream and keeps only that field: the lists of a log
+// with many blobs do not fit any small cap, and nothing else is needed. The
+// manifest must be one JSON object with exactly one "identity" string.
+func readManifestIdentity(root *os.Root) (string, error) {
+	bad := errors.New("bad field: manifest.json identity")
+	f, err := root.Open("manifest.json")
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return "", err
+	}
+	if !info.Mode().IsRegular() {
+		return "", errors.New("bad path: manifest.json")
+	}
+	if info.Size() > maxManifestBytes {
+		return "", errors.New("too large: manifest.json")
+	}
+	dec := json.NewDecoder(bufio.NewReader(io.LimitReader(f, maxManifestBytes)))
+	dec.UseNumber()
+	if t, err := dec.Token(); err != nil || t != json.Delim('{') {
+		return "", bad
+	}
+	who, seen := "", false
+	for dec.More() {
+		t, err := dec.Token()
+		key, ok := t.(string)
+		if err != nil || !ok {
+			return "", bad
+		}
+		if key != "identity" {
+			if err := skipJSONValue(dec); err != nil {
+				return "", bad
+			}
+			continue
+		}
+		v, err := dec.Token()
+		s, ok := v.(string)
+		if err != nil || !ok || seen {
+			return "", bad
+		}
+		who, seen = s, true
+	}
+	if t, err := dec.Token(); err != nil || t != json.Delim('}') {
+		return "", bad
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return "", bad // more after the object
+	}
+	if !IsID(who) {
+		return "", bad
+	}
+	return who, nil
+}
+
+// skipJSONValue reads one value of dec without keeping it.
+func skipJSONValue(dec *json.Decoder) error {
+	depth := 0
+	for {
+		t, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		switch t {
+		case json.Delim('{'), json.Delim('['):
+			depth++
+		case json.Delim('}'), json.Delim(']'):
+			depth--
+		}
+		if depth == 0 {
+			return nil
+		}
+	}
 }
 
 // The reference import command supports 256 MiB raw blobs. The core

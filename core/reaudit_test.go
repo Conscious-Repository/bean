@@ -453,7 +453,7 @@ func TestReauditExportPastMissingBlob(t *testing.T) {
 		t.Errorf("a stranger's absent blob: %d records, %v", n, err)
 	}
 	m, _ := os.ReadFile(filepath.Join(dir, "manifest.json"))
-	if !strings.Contains(string(m), "missing_blobs") {
+	if !strings.Contains(string(m), `"missing_blobs_of_others":1`) {
 		t.Errorf("manifest: %s", m)
 	}
 	// One of the person's own blobs: all else goes out, then it fails.
