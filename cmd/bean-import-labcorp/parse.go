@@ -78,6 +78,7 @@ type Report struct {
 	Specimen  string
 	Collected string // "MM/DD/YYYY" or "MM/DD/YYYY HHMM"
 	Reported  string // "MM/DD/YYYY"
+	Received  string // "MM/DD/YYYY"
 	Fasting   string
 	Labs      map[string]string // "01" -> "Labcorp San Diego"
 	LabsTorn  bool              // a Performing Labs line that reLab cannot read
@@ -355,6 +356,8 @@ func (c columns) cells(toks []token) (cells, error) {
 		return out, fmt.Errorf("%q in the units column is not a unit this importer knows: one word with a / or %%, or a known unit", out.units)
 	case out.units == "" && out.ref != "" && reNumberValue.MatchString(out.value) && !strings.ContainsAny(out.ref, "0123456789"):
 		return out, fmt.Errorf("%q in the reference column holds no number for a numeric result with no unit: a unit may have moved there", out.ref)
+	case out.units == "" && out.ref != "" && unitOK(out.ref):
+		return out, fmt.Errorf("%q in the reference column is a unit: a column may have moved", out.ref)
 	case out.units != "" && (isValue(out.units) || isFlag(out.units)):
 		return out, fmt.Errorf("%q in the units column is a result or a flag, not a unit: a column may have moved", out.units)
 	}
@@ -631,11 +634,18 @@ func (p *parser) fieldLine(toks []token) (bool, error) {
 		if err := p.readField(f.f.label, f.m); err != nil {
 			return true, err
 		}
-		if f.f.label == "Ordered Items" && p.region == beforeHeader {
-			p.ordered = true
-		}
+		// Ordered Items wraps onto the margin lines after it while a line
+		// ends in ";"; any other field line ends the list.
+		p.ordered = f.f.label == "Ordered Items" && p.region == beforeHeader && strings.HasSuffix(m0(f.m), ";")
 	}
 	return true, nil
+}
+
+func m0(m []string) string {
+	if len(m) == 0 {
+		return ""
+	}
+	return m[0]
 }
 
 func (p *parser) readField(label string, m []string) error {
@@ -660,6 +670,8 @@ func (p *parser) readField(label string, m []string) error {
 		if rep.Collected == "" || m[2] != "" {
 			rep.Collected = collected // the specimen details line has the time
 		}
+	case "Date Received":
+		rep.Received = m[0][:10]
 	case "Date Reported":
 		if rep.Reported != "" && rep.Reported != m[1] {
 			return errors.New("conflicting report dates")
@@ -695,7 +707,10 @@ func (p *parser) beforeHeader(n int, l string, toks []token) error {
 	case err != nil:
 		return err
 	case ok && p.ordered:
-		return nil // the list of ordered tests goes on; it is not read
+		// The list of ordered tests goes on while each of its lines ends in
+		// ";". It is not read.
+		p.ordered = strings.HasSuffix(toks[0].text, ";")
+		return nil
 	case ok && endHeadings[toks[0].text]:
 		p.region, p.ended = afterEnd, toks[0].text
 	case ok && (endsInReading(toks[0].text) || nameHidesValue(toks[0].text) != nil):
@@ -793,6 +808,18 @@ func (p *parser) results(n int, l string, toks []token) error {
 	// is the units of a row above it, or a moved column.
 	if first.start >= c.bounds()[3] {
 		return fmt.Errorf("line %d starts in the units or reference column but is not the values of the row above, so a unit or range would be lost", n)
+	}
+	// A comment never reads as values: a line that does is the rest of a row
+	// (its flag, unit or range on the line below), and as a comment its cells
+	// would be lost. Nor does its tail read as a value or unit: that is a row
+	// whose name starts in the comment column.
+	if _, err := c.cells(toks); err == nil {
+		return fmt.Errorf("line %d reads as result columns, but no row above is waiting for them: a flag, unit or range would be lost", n)
+	}
+	if len(toks) > 1 {
+		if v, err := c.cells(toks[1:]); err == nil && (v.value != "" || v.units != "") {
+			return fmt.Errorf("line %d in the comment column holds a result after its first column: it may be a row, and its reading would be lost", n)
+		}
 	}
 	return p.comment(n, toks)
 }

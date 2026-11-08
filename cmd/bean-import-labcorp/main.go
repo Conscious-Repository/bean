@@ -256,15 +256,24 @@ func (rep *Report) observed(loc *time.Location) (map[string]any, string) {
 	return map[string]any{"start": start, "precision": "day"}, rep.Collected
 }
 
-// collectionTimeUnsure reports a report note that says the collection date
-// or time was not given, as Labcorp prints when it used the receipt date.
+// collectionTimeUnsure reports a note that says the collection date or time
+// was not given, as Labcorp prints when it used the receipt date. The note
+// may be a report note or a result's comment, and may wrap, so all of them
+// are read as one text.
 func (rep *Report) collectionTimeUnsure() bool {
-	for _, n := range rep.Notes {
-		if strings.Contains(strings.ToLower(n), "time of collection was not indicated") {
-			return true
-		}
+	all := append([]string{}, rep.Notes...)
+	for _, r := range rep.Results {
+		all = append(all, r.Comment...)
 	}
-	return false
+	text := strings.Join(strings.Fields(strings.ToLower(strings.Join(all, " "))), " ")
+	return strings.Contains(text, "time of collection was not indicated")
+}
+
+// collectionDayUnsure: the lab says it used the receipt date when no
+// collection date was supplied, and the two days are the same, so the day
+// recorded may be the day the lab received the specimen.
+func (rep *Report) collectionDayUnsure() bool {
+	return rep.collectionTimeUnsure() && rep.Received != "" && len(rep.Collected) >= 10 && rep.Received == rep.Collected[:10]
 }
 
 // A zone alone cannot identify a nonexistent or repeated DST wall-clock minute.
@@ -298,6 +307,10 @@ func uniqueLocalTime(t time.Time, printed string) bool {
 // digest, not in blobs: then purging the lab.report erases the file.
 func (rep *Report) records(reportSHA string, loc *time.Location) []map[string]any {
 	observed, rawTime := rep.observed(loc)
+	collectionDay := ""
+	if rep.collectionDayUnsure() {
+		collectionDay = "may be the receipt day: the report says it used the receipt date when no collection date was supplied"
+	}
 	reportNote := strings.Join(rep.Notes, " ")
 	occurrence := map[string]int{}
 	var out []map[string]any
@@ -323,7 +336,8 @@ func (rep *Report) records(reportSHA string, loc *time.Location) []map[string]an
 			"flag": r.Flag, "reference_interval": r.Ref, "previous_result": r.Previous,
 			"performing_lab": rep.Labs[r.LabCode], "reported": rep.Reported, "fasting": rep.Fasting,
 			"raw_time": rawTime, "lab_comment": strings.Join(r.Comment, " "),
-			"report_note": reportNote, "report_sha256": reportSHA,
+			"collection_day": collectionDay,
+			"report_note":    reportNote, "report_sha256": reportSHA,
 		} {
 			if v != "" {
 				ctx[k] = v

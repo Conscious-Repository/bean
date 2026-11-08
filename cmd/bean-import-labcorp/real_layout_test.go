@@ -116,3 +116,20 @@ func TestCollectionTimeUnsureKeepsDay(t *testing.T) {
 		t.Errorf("with the note: %v %q", obs, raw)
 	}
 }
+
+// With the lab's note and the same collection and receipt day, the day
+// itself may be the receipt day, and every reading says so.
+func TestCollectionDayMayBeReceipt(t *testing.T) {
+	rep := realLayout(t)
+	rep.Notes = []string{"The date and/or time of collection was not indicated on the requisition."}
+	if rep.collectionDayUnsure() {
+		t.Fatal("unsure with different days")
+	}
+	rep.Received = rep.Collected[:10]
+	if !rep.collectionDayUnsure() {
+		t.Fatal("not unsure with the same day")
+	}
+	if recs := rep.records("", nil); recs[0]["context"].(map[string]any)["collection_day"] == nil {
+		t.Errorf("no collection_day in context: %v", recs[0]["context"])
+	}
+}

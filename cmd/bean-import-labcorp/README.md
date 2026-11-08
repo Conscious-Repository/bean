@@ -71,8 +71,8 @@ Lines that may appear anywhere:
   `HHMM <zone>`), `Date Received` and `Date Entered` (optionally `HHMM Local`
   or `HHMM <zone>`), `Fasting` (`Yes`, `No` or `Not Given`), `Ordered Items`,
   `Control ID` and `Alternate Control Number` (which may be empty). The
-  `Ordered Items` list may wrap onto the margin lines after it, up to a blank
-  line; those lines are not read. Only fields
+  `Ordered Items` list may wrap onto the margin lines after it while each
+  line ends in `;`; those lines are not read. Only fields
   are read for the specimen id, collection date and time, report date and
   fasting, and every one of them in the report must agree: two specimen ids,
   two collection days or times, two report days or two fasting answers are
@@ -135,6 +135,10 @@ In the results:
 - No comment starts in the units or reference column: a line that starts
   there and is not a row's values is refused, since a unit or range would be
   lost.
+- A comment never reads as values: a line that reads as result columns but
+  is not a waiting row's values is refused (the rest of a row on the line
+  below it), and so is one whose columns after the first hold a value or a
+  unit (a row whose name starts in the comment column).
 
 A value is a number with an optional `<`, `>`, `<=` or `>=` (`101`, `-2.0`,
 `<0.5`); a dipstick grade `1+` to `4+`; a count range such as `0-5`; a titer
@@ -255,10 +259,12 @@ refused. Add a family or a number here when a real report needs it.
 
 A result with a value under a "Test not performed" line is refused.
 
-When a note of the report says the date or time of collection was not
-indicated on the requisition, the time the report prints may be the receipt
-time. Then only the collection day is recorded, and the printed time is kept
-as `raw_time`.
+When a note of the report, or a comment under a result, says the date or
+time of collection was not indicated on the requisition, the time the report
+prints may be the receipt time. Then only the collection day is recorded, and
+the printed time is kept as `raw_time`. If the collection and receipt days
+are also the same, the day itself may be the receipt day, and each reading's
+`context.collection_day` says so.
 
 The shapes come from a real report: `testdata/real-layout.txt` is its
 layout, column for column, with every name, id, date, value, flag and

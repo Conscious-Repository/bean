@@ -48,7 +48,9 @@ func TestRebuildRefusesUnreadToken(t *testing.T) {
 			// above it has no value; a row line is refused by the rebuild.
 			want := "is in no field of the result"
 			if label == "value line" {
-				want = "has no value"
+				// It does not read whole, so it is not the row's values; it
+				// reads as result columns, so it is not a comment either.
+				want = "reads as result columns"
 			}
 			mustRefuse(t, ambiguityReport(l), want)
 		})
