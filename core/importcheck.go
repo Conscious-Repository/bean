@@ -26,46 +26,13 @@ func (s *Store) CheckPartial(line []byte) error {
 	if err := l.canWrite(w); err != nil {
 		return err
 	}
-	v, err := Parse(line)
-	obj, ok := v.(map[string]any)
-	if err != nil || !ok {
-		return errors.New("bad json")
-	}
-	for _, k := range forbiddenPartial {
-		if _, has := obj[k]; has {
-			return badField(k)
-		}
-	}
-	obj["v"] = 0.0
-	obj["nonce"] = NewNonce()
-	obj["author"] = w.author
-	obj["kid"] = w.signer.Public()
-	if _, has := obj["subject"]; !has {
-		obj["subject"] = w.identity
-	}
-	times, _ := obj["times"].(map[string]any)
-	if times == nil {
-		times = map[string]any{"observed": nil}
-		obj["times"] = times
-	}
-	times["imported"] = s.nowString()
-	src, _ := obj["source"].(map[string]any)
-	if src == nil {
-		return badField("source")
-	}
 	var key []byte
 	if w.secret != nil {
 		key = DedupeKey(w.secret)
 	}
-	ref, hasInput, err := inputRef(src, "ref_input", key, 1)
+	obj, src, err := s.completePartial(w, line, key, 1)
 	if err != nil {
 		return err
-	}
-	if hasInput {
-		src["ref"] = ref
-	}
-	if _, has := src["ref"]; !has {
-		src["ref"] = nil
 	}
 	if _, _, err := inputRef(src, "supersedes_ref", key, 1); err != nil {
 		return err

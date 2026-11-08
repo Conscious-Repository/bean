@@ -147,42 +147,9 @@ func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, err
 		if line == "" {
 			continue
 		}
-		v, perr := Parse([]byte(line))
-		obj, ok := v.(map[string]any)
-		if perr != nil || !ok {
-			return res, fmt.Errorf("bad json: line %d", lineNo)
-		}
-		for _, k := range forbiddenPartial {
-			if _, has := obj[k]; has {
-				return res, fmt.Errorf("bad field: %s: line %d", k, lineNo)
-			}
-		}
-		obj["v"] = 0.0
-		obj["nonce"] = NewNonce()
-		obj["author"] = w.author
-		obj["kid"] = w.signer.Public()
-		if _, has := obj["subject"]; !has {
-			obj["subject"] = w.identity
-		}
-		times, _ := obj["times"].(map[string]any)
-		if times == nil {
-			times = map[string]any{"observed": nil}
-			obj["times"] = times
-		}
-		times["imported"] = s.nowString()
-		src, _ := obj["source"].(map[string]any)
-		if src == nil {
-			return res, fmt.Errorf("bad field: source: line %d", lineNo)
-		}
-		ref, hasInput, err := inputRef(src, "ref_input", dedupeKey, lineNo)
+		obj, src, err := s.completePartial(w, []byte(line), dedupeKey, lineNo)
 		if err != nil {
 			return res, err
-		}
-		if hasInput {
-			src["ref"] = ref
-		}
-		if _, has := src["ref"]; !has {
-			src["ref"] = nil
 		}
 		// C17: supersede by ref.
 		sref, hasSuper, err := inputRef(src, "supersedes_ref", dedupeKey, lineNo)
@@ -278,6 +245,51 @@ func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, err
 		return res, err
 	}
 	return res, nil
+}
+
+// completePartial turns one partial record line (SPEC.md 9.2) into the
+// record that w would sign: version, nonce, author, kid, default subject,
+// import time and the ref from ref_input. Append and CheckPartial both use
+// it, so a check before a write sees what the write signs.
+func (s *Store) completePartial(w writer, line, dedupeKey []byte, lineNo int) (obj, src map[string]any, err error) {
+	v, perr := Parse(line)
+	obj, ok := v.(map[string]any)
+	if perr != nil || !ok {
+		return nil, nil, fmt.Errorf("bad json: line %d", lineNo)
+	}
+	for _, k := range forbiddenPartial {
+		if _, has := obj[k]; has {
+			return nil, nil, fmt.Errorf("bad field: %s: line %d", k, lineNo)
+		}
+	}
+	obj["v"] = 0.0
+	obj["nonce"] = NewNonce()
+	obj["author"] = w.author
+	obj["kid"] = w.signer.Public()
+	if _, has := obj["subject"]; !has {
+		obj["subject"] = w.identity
+	}
+	times, _ := obj["times"].(map[string]any)
+	if times == nil {
+		times = map[string]any{"observed": nil}
+		obj["times"] = times
+	}
+	times["imported"] = s.nowString()
+	src, _ = obj["source"].(map[string]any)
+	if src == nil {
+		return nil, nil, fmt.Errorf("bad field: source: line %d", lineNo)
+	}
+	ref, hasInput, err := inputRef(src, "ref_input", dedupeKey, lineNo)
+	if err != nil {
+		return nil, nil, err
+	}
+	if hasInput {
+		src["ref"] = ref
+	}
+	if _, has := src["ref"]; !has {
+		src["ref"] = nil
+	}
+	return obj, src, nil
 }
 
 // hasNoValue reports a value that says nothing, like {"n": null}: a test not
