@@ -15,7 +15,7 @@ import (
 
 // R12-A2: the 64 KiB attribute bound was checked only after encoding/xml had
 // built every attribute of the element in memory: 3 million attributes cost
-// many times the XML. Now a run of more than 1 MiB without '>' is refused
+// many times the XML. Now a run of more than 1 MiB without '<' is refused
 // before the decoder sees the rest of it.
 func TestR12AppleAttributeFloodMemory(t *testing.T) {
 	var x bytes.Buffer
@@ -57,7 +57,7 @@ func TestR12AppleTagBound(t *testing.T) {
 	}
 	text := healthXML(strings.Repeat(" ", maxTag+1))
 	if err := convertFile(writeXML(t, text), io.Discard, options{blob: testBlob}); !errors.Is(err, errTag) {
-		t.Errorf("1 MiB of text without '>': %v", err)
+		t.Errorf("1 MiB of text without '<': %v", err)
 	}
 }
 

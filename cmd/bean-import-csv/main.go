@@ -308,4 +308,3 @@ func number(v string) (float64, bool) {
 	}
 	return n, core.SameDecimal(v, n)
 }
-

@@ -119,9 +119,10 @@ without waiting for FIFO writers. Decompressed export.xml is limited to
 256 MiB, ZIP declared contents to 512 MiB, members to 4096, Record elements to
 2 million, XML depth to 32 and attributes per element to 64 KiB. The 64 KiB
 is counted after `encoding/xml` has built the element, so the input is also
-read through a bound: more than 1 MiB without a `>` (one tag with its
-attributes, a comment, or text) is refused before the decoder holds it, which
-keeps an element of millions of attributes to tens of MiB. ZIP member paths,
+read through a bound: more than 1 MiB after a `<` without another `<` (one
+tag with its attributes, a comment, or text) is refused before the decoder
+holds it. A tag holds no `<`, so a `>` inside a quoted value cannot reset the
+bound. This keeps an element of millions of attributes to tens of MiB. ZIP member paths,
 symlinks and ambiguous export.xml members are rejected. No files are extracted;
 DTD entities are not fetched or expanded; this is not full DTD validation.
 Repeated DOCTYPE and misplaced/repeated XML declarations are rejected. Complete XML EOF and the selected export.xml member CRC are

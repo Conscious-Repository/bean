@@ -119,6 +119,7 @@ func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, err
 	// replaced them all, the first one that has it.
 	existing := map[string]string{}
 	currents := map[string][]string{}
+	currentTypes := map[string]map[string]bool{} // types of the current records of a ref
 	values := map[string]map[string]bool{}
 	for _, id := range sortedKeys(l.Report.Records) {
 		r := l.Report.Records[id]
@@ -130,15 +131,17 @@ func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, err
 			values[key] = map[string]bool{}
 			existing[key] = id
 		}
-		values[key][typedValue(r.Type, string(Canonical(r.Raw["value"])))] = true
+		values[key][typedValue(r.Type, r.Raw)] = true
 		if len(l.Report.Superseded[id]) == 0 {
 			if currents[key] == nil {
 				existing[key] = id
+				currentTypes[key] = map[string]bool{}
 			}
 			currents[key] = append(currents[key], id)
+			currentTypes[key][r.Type] = true
 		}
 	}
-	seen := map[string]bool{}
+	seen := map[string]string{} // ref -> the reading of the first line of this input that has it
 	sc := bufio.NewScanner(in)
 	sc.Buffer(make([]byte, 1<<20), MaxRecordSize+1024)
 	lineNo := 0
@@ -187,26 +190,43 @@ func (s *Store) appendWith(l *Loaded, w writer, in io.Reader) (AppendResult, err
 			subject, _ := obj["subject"].(string)
 			system, _ := src["system"].(string)
 			key := refLine(subject, system, ref)
-			if purged[key] || seen[key] {
+			typ, _ := obj["type"].(string)
+			reading := typedValue(typ, obj)
+			if purged[key] {
 				res.Skipped++
 				continue
 			}
-			seen[key] = true // the first line of an input decides for that ref
+			// The first line of an input decides for its ref. A later line
+			// with the same reading is a repeat; one with another reading
+			// would be lost, so the input is refused there.
+			if first, ok := seen[key]; ok {
+				if first != reading {
+					return res, fmt.Errorf("line %d: another line of this input has the same source id with another type, value or time; give each reading its own id", lineNo)
+				}
+				res.Skipped++
+				continue
+			}
+			seen[key] = reading
 			if known := values[key]; known != nil && !supersedes[existing[key]] {
 				value := string(Canonical(obj["value"]))
 				current := l.Report.Records[existing[key]]
-				typ, _ := obj["type"].(string)
-				// Already there: the ref has had this value under this type,
-				// and the type is the current record's. A reading of another
-				// type under the same ref is never skipped in silence.
-				if typ == current.Type && known[typedValue(typ, value)] {
+				// Already there: the ref has had this type, value and time,
+				// and a current record of the ref has this type. A reading
+				// of another type or time under the same ref is never
+				// skipped in silence.
+				// With no current record (a correction without this ref
+				// replaced them all), the type is the reading's own.
+				ownType := currentTypes[key][typ] || len(currents[key]) == 0 && typ == current.Type
+				if known[reading] && ownType {
 					res.Skipped++
 					continue
 				}
 				reason := ""
 				switch {
-				case typ != current.Type:
+				case !ownType:
 					reason = "its type differs, so it is not the same reading. Two sources may share ids: give each its own -system"
+				case !sameObserved(obj, current.Raw):
+					reason = "its time differs, so it may be another reading under the same id. Two files may number their rows alike: give each its own -system"
 				case hasNoValue(obj["value"]):
 					reason = "the input has no value, and an empty value never replaces one"
 				case len(currents[key]) == 0:
@@ -296,11 +316,21 @@ func (s *Store) completePartial(w writer, line, dedupeKey []byte, lineNo int) (o
 	return obj, src, nil
 }
 
-// typedValue is the key of Append's value history: a type and a canonical
-// value. A type holds no NUL, so the two cannot run together.
-func typedValue(typ, value string) string {
-	return typ + "\x00" + value
+// typedValue is the key of Append's value history: the type, the canonical
+// value and the canonical observed time of a record or a partial record. A
+// type holds no NUL, and canonical JSON has none raw, so they cannot run
+// together. The time counts: two files that number their rows alike give
+// two readings one id, and the second is not "already there".
+func typedValue(typ string, raw map[string]any) string {
+	return typ + "\x00" + string(Canonical(raw["value"])) + "\x00" + observedOf(raw)
 }
+
+func observedOf(raw map[string]any) string {
+	times, _ := raw["times"].(map[string]any)
+	return string(Canonical(times["observed"]))
+}
+
+func sameObserved(a, b map[string]any) bool { return observedOf(a) == observedOf(b) }
 
 // hasNoValue reports a value that says nothing, like {"n": null}: a test not
 // performed must not replace a result.

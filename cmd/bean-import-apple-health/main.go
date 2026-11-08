@@ -256,9 +256,9 @@ func (w *limitedOutput) Write(p []byte) (int, error) {
 // let one element cost many times its size in memory.
 const maxTag = 1 << 20
 
-var errTag = errors.New("XML tag or text exceeds 1 MiB without '>'")
+var errTag = errors.New("XML tag or text exceeds 1 MiB without '<'")
 
-// tagBound fails the read once more than maxTag bytes pass without a '>'.
+// tagBound fails the read once more than maxTag bytes pass without a '<'.
 type tagBound struct {
 	r   io.Reader
 	run int
@@ -271,7 +271,10 @@ func (t *tagBound) Read(p []byte) (int, error) {
 	}
 	n, err := t.r.Read(p)
 	for i, b := range p[:n] {
-		if b == '>' {
+		// A run starts at '<': a tag holds no other '<' (encoding/xml
+		// refuses one in an attribute value), but it may hold '>' in a
+		// quoted value, so a reset on '>' could be kept at zero.
+		if b == '<' {
 			t.run = 0
 			continue
 		}

@@ -113,7 +113,7 @@ Writes the decrypted file to stdout: `bean blob get <id> > report.pdf`.
 
 ### `append`, changed readings
 
-If an input gives a new value for a reading you already have, `append` writes nothing for it, prints a `changed:` line, and exits 1. bean cannot tell a lab's corrected report from an older report, a parser bug, or two sources that share an id. If the input is newer and right, run `append -corrections`: the new value replaces the old one as a correction, and the output says `1 of them new values`. It refuses a different type or an empty value, with or without the flag. Then the `changed:` line names the input's type and says why, for example `(type lab.ldl): not written, because its type differs`, and the error does not send you to `-corrections`. For two sources that share ids, give each its own `-system`. A value the reading has had is always skipped, so an old report cannot bring it back, but only under the reading's own type: a reading of another type under the same id is a `changed:` line even when its value is the same.
+If an input gives a new value for a reading you already have, `append` writes nothing for it, prints a `changed:` line, and exits 1. bean cannot tell a lab's corrected report from an older report, a parser bug, or two sources that share an id. If the input is newer and right, run `append -corrections`: the new value replaces the old one as a correction, and the output says `1 of them new values`. It refuses a different type or an empty value, with or without the flag. Then the `changed:` line names the input's type and says why, for example `(type lab.ldl): not written, because its type differs`, and the error does not send you to `-corrections`. For two sources that share ids, give each its own `-system`. A value the reading has had is always skipped, so an old report cannot bring it back, but only with the reading's own type and time: a reading of another type or time under the same id is a `changed:` line even when its value is the same, and `-corrections` does not write it. Two files that number their rows alike under one `-system` give this; give each its own `-system`. Two lines of one input with the same id and another reading stop the input with an error.
 
 ### `verify`
 
@@ -269,8 +269,8 @@ Reads a CSV file with a header row. Column `value` is required. Column `time` (R
 It refuses the file, names the line, and writes nothing when:
 
 - a row has more or fewer fields than the header. An unquoted `1,234` or `72,5` is two fields; put such a number in quotes, and it is kept as text.
-- two column names are the same in lower case without spaces (`Value` and `value `), or a column is named `raw_time`.
-- two rows have the same `id`. One id names one reading; the second would be dropped as already there.
+- two column names are the same ignoring letter case and spaces at either end (`Value` and `value `), or a column is named `raw_time`.
+- two rows have the same `id`. One id names one reading. Across files, a row whose id another file already used under the same `-system` is a `changed:` line when its time differs.
 - with `-blob` (so under `bean import`): a `time` that is not RFC 3339 with an offset, or a `value` written as a number that cannot be stored exactly: more digits than a float keeps (`0.30000000000000001`), a nonzero number that would be 0 (`1e-400`), or one too large (`1e17`, `9007199254740993`). An empty `time` is no time and is taken.
 
 Without `-blob` it keeps its older behaviour for those two: an unread time goes to `context.raw_time`, and an inexact number stays text.
