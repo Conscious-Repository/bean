@@ -524,3 +524,22 @@ func TestImportSignalKillsImporterGroup(t *testing.T) {
 		}
 	}
 }
+
+// The real-layout fixture (a real report's columns, synthetic content)
+// imports whole through bean import, and again adds nothing.
+func TestCLIImportRealLayout(t *testing.T) {
+	path := importerOnPath(t)
+	dir := t.TempDir()
+	run(t, dir, "", "init")
+	report := "../bean-import-labcorp/testdata/real-layout.txt"
+	out, errs, code := runPath(t, dir, path, "import", "labcorp", "-tz", "America/Chicago", report)
+	if code != 0 || !strings.Contains(out, "added 71, skipped 0") || !strings.Contains(out, "71 results, 2 without a value") {
+		t.Fatalf("import: %d\n%s\n%s", code, out, errs)
+	}
+	if out, _, code := runPath(t, dir, path, "import", "labcorp", "-tz", "America/Chicago", report); code != 0 || !strings.Contains(out, "added 0, skipped 71") {
+		t.Errorf("retry: %d %s", code, out)
+	}
+	if out, _, code := run(t, dir, "", "verify"); code != 0 || !strings.Contains(out, "73 valid, 0 invalid") {
+		t.Errorf("verify: %d %s", code, out)
+	}
+}

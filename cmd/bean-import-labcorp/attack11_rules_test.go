@@ -49,22 +49,22 @@ func TestNameWordMayBeReading(t *testing.T) {
 	}
 }
 
-// A token that starts within two columns of where a band starts is
-// refused, on a row and on a value line.
-func TestBandEdgeRefused(t *testing.T) {
+// A token that runs across the place where two columns meet is refused, on
+// a row and on a value line (DECISIONS 230). One that lies inside a column
+// is read in it.
+func TestTokenAcrossColumnsRefused(t *testing.T) {
 	cols, _ := parseHeader(tokens(header()))
-	for b := 1; b < len(cols); b++ {
-		s := cols[b] - slack
-		for col := s - edge; col < s+edge; col++ {
-			v := pad("", col) + "100" // the value itself at the edge of the result band
-			if b > 1 {
-				v = pad(pad("", 57)+"100", col) + "mg/dL"
-			}
-			name := pad("", 6) + "Glucose"
-			mustRefuse(t, ambiguityReport(name+v[len(name):]), "within 2 columns of where a column starts")
-			mustRefuse(t, ambiguityReport(row("Glucose", "01", "-", "", "", ""), v), "within 2 columns of where a column starts")
-		}
+	b := cols.bounds()
+	for i := 2; i < len(b); i++ {
+		v := pad(pad("", 57)+"100", b[i]-2) + "mg/dL" // starts 2 left of the boundary, ends right of it
+		name := pad("", 6) + "Glucose"
+		mustRefuse(t, ambiguityReport(name+v[len(name):]), "runs across two columns")
+		// On a value line it is not read as values, so it is a comment, and
+		// the row above it has no value: refused.
+		mustRefuse(t, ambiguityReport(row("Glucose", "01", "-", "", "", ""), v), "has no value")
 	}
+	// A value that starts in the test column and ends in the result column.
+	mustRefuse(t, ambiguityReport(pad(pad("", 6)+"Glucose", b[1]-2)+"1000"), "runs across two columns")
 	// The fixture's columns (result 57, flag 68, units 140, range 160) pass.
 	if _, err := parseReport(ambiguityReport(row("Glucose", "01", "100", "High", "mg/dL", "70-99"))); err != nil {
 		t.Fatal(err)
