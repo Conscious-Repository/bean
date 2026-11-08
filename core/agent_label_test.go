@@ -126,7 +126,16 @@ func TestAgentLabelsTwoNamesAreBothShown(t *testing.T) {
 			t.Fatalf("labels %q, want %q", got, want)
 		}
 	}
-	if _, err := s.Pair(pub, "laptop"); err == nil || !strings.Contains(err.Error(), `"laptop" and "desktop"`) && !strings.Contains(err.Error(), `"desktop" and "laptop"`) {
-		t.Errorf("pair with one of two names: %v", err)
+	// Each name the key has is its own; a third is refused.
+	for _, name := range []string{"laptop", "desktop"} {
+		if _, err := s.Pair(pub, name); err != nil {
+			t.Errorf("pair with its name %q: %v", name, err)
+		}
+	}
+	if got := verifyOK(t, s).AgentLabels()[pub]; got != want {
+		t.Errorf("pairing again changed the labels: %q", got)
+	}
+	if _, err := s.Pair(pub, "phone"); err == nil || !strings.Contains(err.Error(), `"laptop" and "desktop"`) && !strings.Contains(err.Error(), `"desktop" and "laptop"`) {
+		t.Errorf("pair with a third name: %v", err)
 	}
 }

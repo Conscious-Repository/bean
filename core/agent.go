@@ -269,20 +269,19 @@ func livePairings(ps []pairing) []pairing {
 	return out
 }
 
-// otherLabels names the labels of live, quoted, when one of them differs
-// from label. It returns "" when label is "" or every claim has it.
+// otherLabels names the labels of live, quoted, when label is not one of
+// them. It returns "" when label is "" or a claim has it: a key paired under
+// two names, from two of the person's machines, answers to each.
 func otherLabels(live []pairing, label string) string {
-	if label == "" {
+	if label == "" || len(live) == 0 {
 		return ""
 	}
 	var names []string
-	differs := false
 	for _, p := range live {
-		differs = differs || p.label != label
+		if p.label == label {
+			return ""
+		}
 		names = append(names, strconv.Quote(shownLabel(p.label)))
-	}
-	if !differs {
-		return ""
 	}
 	return strings.Join(names, " and ")
 }

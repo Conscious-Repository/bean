@@ -70,7 +70,14 @@ Four rules changed. bean never wrote a record that the new rules reject. Most ef
 
 ### Seventh audit (2026-11-07)
 
-Reads change only on frozen logs and for a reading whose correction is hidden; no record changes between valid and invalid (DECISIONS 203 to 210).
+Reads change only on frozen logs and for a reading whose correction is hidden; no record changes between valid and invalid (DECISIONS 203 to 224).
+
+- `purge` says when a file stays: `the file <id> is kept: N other records name it`, and a second line for deleted records that wait for `gc`, records about someone else and damaged files. It can now purge a record of a newer format.
+- `purge` and `gc` remove a sync tool's conflict copy of the deleted record (`name (conflicted copy).json`, `.sync-conflict-…`). A file under such a name never keeps a blob.
+- `export` lists `withheld_records` (damaged files a deletion names, left out) and `missing_blobs_of_others` (a count). A record of a newer format unlocks a file only when the key of the chain head, or a recovery key the chain commits to, signed it.
+- `import-export` reads `manifest.json` as a stream: at most 1 MiB per JSON token, nesting at most 16.
+- `bean import` exits 128 plus the signal number when stopped, and stops the importer's whole process group. The Labcorp importer reads a report by a strict grammar (0.3.0): it refuses lines it does not know, including tabs and non-ASCII, a name that may hold its value, and a value it does not know. Try it on your own report first.
+- A key paired under two names, from two of your machines, answers to either name.
 
 - On a frozen log, a deletion signed by a key below the fork no longer hides a record that no freeze rule puts in doubt, such as an agent's reading.
 - A reading whose only correction is hidden shows again, with a status that says why.

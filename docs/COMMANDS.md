@@ -77,7 +77,7 @@ Encrypts and stores a file, for example the PDF an import came from. Prints the 
 Keeps a provider file, then adds its readings. Runs `bean-import-<source>`, found next to `bean` or on `PATH`, for example `bean import labcorp -tz America/Chicago report.pdf`. In order, and it stops at the first failure:
 
 1. It copies the file privately, at most 256 MiB, works out the id the encrypted copy will have, and runs the importer on the copy. The importer's output goes to a private file, at most 1 GiB of readings plus 1 MiB. If the importer refuses the file, nothing is written.
-2. It checks the importer's first record: it must keep this file (`lab.report`, `apple-health.export`, `csv.file`) and carry `source.ref_input`, not a ready-made `source.ref` or a `source.supersedes_ref`. It must pass the checks `append` makes of a record: its fields, its size, your key. If it does not, or you deleted that record before with `purge`, nothing is written, not even the file. A file you deleted stays deleted under any `-system`.
+2. It checks the importer's first record: it must keep this file (`lab.report`, `apple-health.export`, `csv.file`) and carry `source.ref_input`, not a ready-made `source.ref` or a `source.supersedes_ref`. It must pass the checks `append` makes of a record: its fields, its size, your key. If it does not, or you deleted that record before with `purge`, nothing is written, not even the file. A file you deleted stays deleted under any `-system`, on a copy whose `local/purged-refs.jsonl` remembers the deletion: a copy that only received the deletion by sync, and never held the record, stores the file again. A file kept under another archive type is not caught.
 3. It stores the copy, encrypted, and reads it back. The bytes must match.
 4. It adds the first record and checks that the log keeps it: a current record of yours, about you, that names the blob and the file's SHA-256, and a blob that still reads back as the file. This check proves every record file, as `verify` does, because the object cache vouches for a file by its size and time.
 5. It adds the readings, then checks the file record again.
@@ -227,7 +227,7 @@ Deletes a record about you. Writes a tombstone that every copy obeys, and erases
 
 ### `gc`
 
-Erases records that a deletion from another copy hid at least 7 days ago, and the files that only those records used. It also erases a file under another name, such as a sync tool's conflict copy, of a record that it erases or that is erased already, and counts it as a record. It erases the files first, so a failure leaves the hidden record for the next `gc`. Nothing is erased without `gc` or `purge`. It refuses while your identity has records from a newer bean or is frozen, or a rotation's seal parts are missing (`incomplete seals`).
+Erases records that a deletion from another copy hid at least 7 days ago, and the files that only those records used. It also erases a file under another name, such as a sync tool's conflict copy, of a record that it erases or that is erased already. Only a copy of your own deleted record counts as a record, and only it takes the files it names along; any other copy is removed alone. It erases the files first, so a failure leaves the hidden record for the next `gc`. Nothing is erased without `gc` or `purge`. It refuses while your identity has records from a newer bean or is frozen, or a rotation's seal parts are missing (`incomplete seals`).
 
 ## Other
 
