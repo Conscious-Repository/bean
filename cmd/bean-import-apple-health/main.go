@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/big"
 	"os"
 	"path"
 	"regexp"
@@ -440,7 +439,7 @@ func reading(a map[string]string, m metric, index int, digest string, occ map[[3
 			mantissa = raw[:exponent]
 		}
 		underflow := n == 0 && strings.Trim(mantissa, "+-.0") != ""
-		if !decimal.MatchString(raw) || err != nil || !core.ExactNumber(n) || underflow || (!strings.ContainsAny(raw, ".eE") && math.Abs(n) >= 1<<53) || !sameDecimal(raw, n) {
+		if !decimal.MatchString(raw) || err != nil || !core.ExactNumber(n) || underflow || (!strings.ContainsAny(raw, ".eE") && math.Abs(n) >= 1<<53) || !core.SameDecimal(raw, n) {
 			return nil, errors.New("invalid or inexact numeric value")
 		}
 		value["n"] = n
@@ -504,27 +503,6 @@ func reading(a map[string]string, m metric, index int, digest string, occ map[[3
 	}
 	return map[string]any{"type": typ, "value": value, "times": map[string]any{"observed": observed}, "context": context,
 		"source": map[string]any{"system": system, "adapter": version, "ref_input": core.RefInputTuple(system, typ, observed, source, count)}}, nil
-}
-
-// Compare source and emitted decimal values, not the binary fraction behind a
-// float (ordinary 0.1 must remain usable). Bound rational parsing explicitly:
-// even a short zero with a huge exponent could otherwise allocate excessively.
-func sameDecimal(raw string, n float64) bool {
-	if len(raw) > 256 {
-		return false
-	}
-	if i := strings.IndexAny(raw, "eE"); i >= 0 {
-		exponent, err := strconv.ParseInt(raw[i+1:], 10, 32)
-		if err != nil || exponent < -1000 || exponent > 1000 {
-			return false
-		}
-	}
-	source, ok := new(big.Rat).SetString(raw)
-	if !ok {
-		return false
-	}
-	emitted, ok := new(big.Rat).SetString(string(core.Canonical(n)))
-	return ok && source.Cmp(emitted) == 0
 }
 
 func appleTime(s string) (time.Time, error) {

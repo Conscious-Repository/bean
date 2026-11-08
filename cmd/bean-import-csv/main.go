@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/big"
 	"os"
 	"regexp"
 	"strconv"
@@ -307,27 +306,6 @@ func number(v string) (float64, bool) {
 	if n == 0 && strings.Trim(mantissa, "+-.0") != "" {
 		return 0, false
 	}
-	return n, sameDecimal(v, n)
+	return n, core.SameDecimal(v, n)
 }
 
-// sameDecimal compares the source and the emitted decimal values, not the
-// binary fraction behind a float, so ordinary 0.1 stays a number. Rational
-// parsing is bounded: a short zero with a huge exponent could otherwise
-// allocate without limit. A copy of the Apple Health importer's.
-func sameDecimal(raw string, n float64) bool {
-	if len(raw) > 256 {
-		return false
-	}
-	if i := strings.IndexAny(raw, "eE"); i >= 0 {
-		exponent, err := strconv.ParseInt(raw[i+1:], 10, 32)
-		if err != nil || exponent < -1000 || exponent > 1000 {
-			return false
-		}
-	}
-	source, ok := new(big.Rat).SetString(raw)
-	if !ok {
-		return false
-	}
-	emitted, ok := new(big.Rat).SetString(string(core.Canonical(n)))
-	return ok && source.Cmp(emitted) == 0
-}

@@ -481,7 +481,7 @@ func TestImportChangedSaysWhy(t *testing.T) {
 		t.Errorf("without a reason: %s", msg)
 	}
 	c.NewType, c.Reason = "lab.ldl", "the type differs"
-	if msg := reportChanged([]core.Changed{c}, "run bean import csv -corrections").Error(); strings.Contains(msg, "then run") || !strings.Contains(msg, "cannot write either") {
+	if msg := reportChanged([]core.Changed{c}, "run bean import csv -corrections").Error(); strings.Contains(msg, "then run") || !strings.Contains(msg, "cannot write them either") {
 		t.Errorf("with a reason: %s", msg)
 	}
 }

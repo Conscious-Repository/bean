@@ -408,7 +408,7 @@ func reportChanged(changed []core.Changed, fix string) error {
 		parts = append(parts, fmt.Sprintf("%d readings have a new value, and nothing was written for them. Check that this input is newer and right, then %s", ask, fix))
 	}
 	if refused > 0 {
-		parts = append(parts, fmt.Sprintf("%d readings have a new value that -corrections cannot write either: see the changed: lines", refused))
+		parts = append(parts, fmt.Sprintf("%d readings were not written, and -corrections cannot write them either: each changed: line says why", refused))
 	}
 	return errors.New(strings.Join(parts, ". "))
 }
