@@ -284,11 +284,19 @@ func main() {
 		if err := pf.Parse(rest); err != nil || pf.NArg() != 1 {
 			usage()
 		}
-		tid, err := s.Purge(pf.Arg(0), *reason)
+		res, err := s.PurgeAll(pf.Arg(0), *reason)
 		if err != nil {
 			fail(err)
 		}
-		fmt.Println("purged, tombstone", tid)
+		fmt.Println("purged, tombstone", res.Tombstone)
+		// A file that another record names stays (C25), and is still readable.
+		for _, k := range res.Kept {
+			rec := "records name"
+			if k.Names == 1 {
+				rec = "record names"
+			}
+			fmt.Printf("the file %s is kept: %d other %s it. Purge those too to erase it\n", k.ID, k.Names, rec)
+		}
 	case "gc":
 		r, b, err := s.GC()
 		if err != nil {
@@ -336,6 +344,12 @@ func main() {
 			}
 			if n := len(res.NotExported); n > 0 {
 				fmt.Fprintf(os.Stderr, "bean: %d stored files were not decrypted. manifest.json lists each one with the reason (not_exported_blobs)\n", n)
+			}
+			if n := len(res.Withheld); n > 0 {
+				fmt.Fprintf(os.Stderr, "bean: %d damaged record files were left out because a deletion names them. manifest.json lists them (withheld_records)\n", n)
+			}
+			if n := res.MissingOthers; n > 0 {
+				fmt.Fprintf(os.Stderr, "bean: %d files that only other people's records name are not in this log (missing_blobs_of_others)\n", n)
 			}
 		}
 		if err != nil {

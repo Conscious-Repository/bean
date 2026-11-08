@@ -144,6 +144,12 @@ type Report struct {
 	// the identity's record, whatever its author field says: no step checks
 	// its key (DECISIONS 187).
 	OnChain map[string]bool
+	// TreeKeys: identity -> the signing keys of its tree nodes and the
+	// recovery keys they commit to (as Commitment strings), taken before
+	// too-new identities are dropped. Export uses it to tell whether a record
+	// this build cannot judge was signed by a key of its author. It changes no
+	// verdict.
+	TreeKeys map[string]map[string]bool
 	// What readers show for a frozen identity (DECISIONS 191). None of this
 	// changes Valid, Errors or the verify output.
 	Kept           map[string]bool     // corrections that are "frozen", but every branch kept them
@@ -211,7 +217,8 @@ func verifyFiles(files map[string][]byte, proven map[string]bool) *Report {
 	unknown := rp.checkFiles(files, proven) // step 1
 	rp.Unknown = unknown
 	trees := rp.buildTrees(sortedKeys(rp.Records)) // steps 2 and 3
-	rp.gate(unknown, trees)                        // 8.2
+	rp.TreeKeys = treeKeys(trees)
+	rp.gate(unknown, trees) // 8.2
 	ids := rp.dropTooNew(trees)
 	position := rp.freeze(trees)                 // steps 4 and 5
 	sealedBy := sealSets(rp, ids)                // step 5b
@@ -439,6 +446,30 @@ func (rp *Report) buildTrees(ids []string) map[string]*tree {
 		}
 	}
 	return trees
+}
+
+// treeKeys returns, per identity, the signing key of every tree node and the
+// commitment of every recovery key a node names. A walk accepted each node
+// from its parent, so only the person or the seed holder made them.
+func treeKeys(trees map[string]*tree) map[string]map[string]bool {
+	out := map[string]map[string]bool{}
+	for gid, t := range trees {
+		m := map[string]bool{}
+		for _, n := range t.nodes {
+			m[n.ValueKey()] = true
+			m[n.Recovery()] = true
+		}
+		delete(m, "")
+		out[gid] = m
+	}
+	return out
+}
+
+// signedByTree reports whether kid is a signing key of a node of identity
+// id's tree, or a recovery key that a node commits to.
+func (rp *Report) signedByTree(id, kid string) bool {
+	m := rp.TreeKeys[id]
+	return m[kid] || m[Commitment(kid)]
 }
 
 // path holds the keys and commitments of the nodes from a genesis to the

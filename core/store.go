@@ -481,6 +481,7 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 	// Restores: a hidden target comes back only when every tombstone that
 	// hid it is judged invalid. A tombstone that is unresolved, held, too
 	// new or missing keeps it hidden (fail closed).
+	var restore []string
 	for target := range hidden {
 		if _, still := rp.Purged[target]; still {
 			continue
@@ -488,6 +489,32 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 		if _, exists := files[PathOf(target)]; !exists || heldHidden(holds, rp, target) {
 			continue
 		}
+		restore = append(restore, target)
+	}
+	sort.Strings(restore)
+	// The deletion was undone, so a new import must not skip these readings.
+	// The ref lines go before any target moves back: a crash after the moves
+	// left the lines for good, since no later load restores the target again.
+	if len(restore) > 0 {
+		after := map[string]bool{}
+		for t := range hidden {
+			after[t] = true
+		}
+		for _, t := range restore {
+			delete(after, t)
+		}
+		p, err := openRefs()
+		if err != nil {
+			return nil, err
+		}
+		for _, t := range restore {
+			p.remove(rp.Records[t], rp, after)
+		}
+	}
+	if err := refs.flush(); err != nil {
+		return nil, err
+	}
+	for _, target := range restore {
 		if err := os.MkdirAll(filepath.Dir(s.path(PathOf(target))), 0o700); err != nil {
 			return nil, err
 		}
@@ -495,21 +522,12 @@ func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 			return nil, err
 		}
 		delete(hidden, target)
-		// The deletion was undone, so a new import must not skip this reading.
-		p, err := openRefs()
-		if err != nil {
-			return nil, err
-		}
-		p.remove(rp.Records[target], rp, hidden)
 		for tid, h := range holds {
 			if h.Target == target {
 				delete(holds, tid)
 				changed = true
 			}
 		}
-	}
-	if err := refs.flush(); err != nil {
-		return nil, err
 	}
 	if changed {
 		if err := s.writeHolds(holds); err != nil {
@@ -605,37 +623,52 @@ func (s *Store) GC() (records, blobs int, err error) {
 		return 0, 0, errors.New("incomplete seals: " + strings.Join(l.Report.Incomplete, ", ") + ": sync the missing seal parts before gc")
 	}
 	cutoff := s.Now().UTC().Add(-HoldDays * 24 * time.Hour)
-	var candidates []string
+	var candidates, targets []string
+	due := map[string]bool{}
 	for tid, h := range l.Holds {
 		recv, perr := time.Parse("2006-01-02T15:04:05Z", h.Received)
-		if perr != nil || recv.After(cutoff) {
+		if perr != nil || recv.After(cutoff) || due[h.Target] {
 			continue
 		}
 		if _, purged := l.Report.Purged[h.Target]; !purged || !l.Report.Valid[tid] || !l.Hidden[h.Target] {
 			continue
 		}
+		due[h.Target] = true
+		targets = append(targets, h.Target)
 		if r := l.Report.Records[h.Target]; r != nil {
 			for _, b := range r.Blobs {
 				candidates = append(candidates, b.Hash)
 			}
 		}
-		if err := os.Remove(hiddenPath(s.Dir, h.Target)); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return 0, 0, err
+	}
+	sort.Strings(targets)
+	for _, t := range targets {
+		delete(l.Files, PathOf(t))
+	}
+	// Blobs go first, while the hidden record still names them. A failure
+	// after this leaves a hidden record whose blobs are gone, and the next gc
+	// erases it. The other order left a blob that no record names, which gc
+	// never erases and export writes out (DECISIONS 212).
+	blobs, err = s.eraseBlobsOf(l.Files, candidates)
+	if err != nil {
+		return 0, blobs, err
+	}
+	for _, t := range targets {
+		if err := os.Remove(hiddenPath(s.Dir, t)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return records, blobs, err
 		}
-		for t, o := range l.Holds {
-			if o.Target == h.Target {
-				delete(l.Holds, t)
+		for tid, o := range l.Holds {
+			if o.Target == t {
+				delete(l.Holds, tid)
 			}
 		}
-		delete(l.Files, PathOf(h.Target))
-		delete(l.Hidden, h.Target)
+		delete(l.Hidden, t)
 		records++
 	}
 	if err := s.writeHolds(l.Holds); err != nil {
-		return 0, 0, err
+		return records, blobs, err
 	}
-	blobs, err = s.eraseBlobsOf(l.Files, candidates)
-	return records, blobs, err
+	return records, blobs, nil
 }
 
 // eraseBlobsOf erases the candidate blobs (the blobs of records that were
@@ -645,8 +678,16 @@ func (s *Store) GC() (records, blobs int, err error) {
 // bytes cannot. A file that does not parse counts when it contains the
 // blob id at all. A blob that no record ever named is never erased.
 func (s *Store) eraseBlobsOf(files map[string][]byte, candidates []string) (int, error) {
+	n, _, err := s.eraseBlobs(files, candidates, false)
+	return n, err
+}
+
+// eraseBlobs is eraseBlobsOf. With count, it also returns each candidate that
+// is kept and stored, with the number of record files that name it.
+func (s *Store) eraseBlobs(files map[string][]byte, candidates []string, count bool) (int, map[string]int, error) {
+	kept := map[string]int{}
 	if len(candidates) == 0 {
-		return 0, nil
+		return 0, kept, nil
 	}
 	want := map[string]bool{}
 	for _, c := range candidates {
@@ -655,11 +696,21 @@ func (s *Store) eraseBlobsOf(files map[string][]byte, candidates []string) (int,
 		}
 	}
 	for _, data := range files {
-		if len(want) == 0 {
+		if !count && len(want) == 0 {
 			break
 		}
+		seen := map[string]bool{}
 		for _, h := range namedBlobs(data) {
+			if count && !seen[h] && (want[h] || kept[h] > 0) {
+				kept[h]++
+			}
+			seen[h] = true
 			delete(want, h)
+		}
+	}
+	for id := range kept {
+		if _, err := os.Lstat(s.path(BlobPathOf(id))); err != nil {
+			delete(kept, id) // not stored here: nothing is kept
 		}
 	}
 	n := 0
@@ -669,11 +720,11 @@ func (s *Store) eraseBlobsOf(files map[string][]byte, candidates []string) (int,
 			continue
 		}
 		if err != nil {
-			return n, err
+			return n, kept, err
 		}
 		n++
 	}
-	return n, nil
+	return n, kept, nil
 }
 
 // namedBlobs returns the blob ids that a record file names, without
