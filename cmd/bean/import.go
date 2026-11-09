@@ -9,12 +9,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -204,13 +206,17 @@ func runImport(s *core.Store, bin, file string, args []string, corrections bool)
 	if err != nil {
 		return res, phaseError("archive", err)
 	}
-	if err := kept(s, archive.Type, bid, digest); err != nil {
+	rid, err := kept(s, archive.Type, bid, digest)
+	if err != nil {
 		return res, phaseError("retention", err)
 	}
+	// The record id is what bean purge takes to erase the file; the file's
+	// SHA-256 is what shasum gives; the blob id names the encrypted copy.
+	what := fmt.Sprintf("%s %s: file sha256 %s, stored as %s", archive.Type, rid, digest, bid)
 	if a.Added == 1 {
-		res.lines = append(res.lines, "kept "+archive.Type+" "+bid)
+		res.lines = append(res.lines, "kept "+what)
 	} else {
-		res.lines = append(res.lines, "already kept "+archive.Type+" "+bid)
+		res.lines = append(res.lines, "already kept "+what)
 	}
 	appendFn := s.Append
 	if corrections {
@@ -226,7 +232,7 @@ func runImport(s *core.Store, bin, file string, args []string, corrections bool)
 	if err != nil {
 		return res, phaseError("readings", err)
 	}
-	if err := kept(s, archive.Type, bid, digest); err != nil {
+	if _, err := kept(s, archive.Type, bid, digest); err != nil {
 		return res, phaseError("retention", err)
 	}
 	// The importer's own last line comes only now, made safe and named, so
@@ -443,32 +449,37 @@ func lastLine(s string) string {
 // kept reports whether the log keeps the person's record of this exact
 // file, and the file itself. It proves every record file, because the object
 // cache vouches for a file by its size and time, and it reads the blob back.
-func kept(s *core.Store, typ, bid, digest string) error {
+// It returns the id of that record, the one bean purge takes to erase the
+// file.
+func kept(s *core.Store, typ, bid, digest string) (string, error) {
 	l, err := s.LoadFull()
 	if err != nil {
-		return err
+		return "", err
 	}
 	if l.IsTooNew() {
-		return l.TooNewError()
+		return "", l.TooNewError()
 	}
-	found := false
-	for id, r := range l.Report.Records {
-		if found || r.Type != typ || !l.Current(id) || r.Author != l.ID || r.Subject != l.ID || r.Value["blob"] != bid || r.Context["sha256"] != digest {
+	found := ""
+	for _, id := range slices.Sorted(maps.Keys(l.Report.Records)) {
+		r := l.Report.Records[id]
+		if found != "" || r.Type != typ || !l.Current(id) || r.Author != l.ID || r.Subject != l.ID || r.Value["blob"] != bid || r.Context["sha256"] != digest {
 			continue
 		}
 		for _, b := range r.Blobs {
-			found = found || b.Hash == bid
+			if b.Hash == bid {
+				found = id
+			}
 		}
 	}
-	if !found {
-		return errors.New("no current record of yours keeps this file")
+	if found == "" {
+		return "", errors.New("no current record of yours keeps this file")
 	}
 	data, err := s.GetBlob(bid)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if sum := sha256.Sum256(data); hex.EncodeToString(sum[:]) != digest {
-		return errors.New("the stored copy no longer matches the file")
+		return "", errors.New("the stored copy no longer matches the file")
 	}
-	return nil
+	return found, nil
 }

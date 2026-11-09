@@ -1234,6 +1234,64 @@ func (s *Store) ImportExport(dir string) (records, blobs int, err error) {
 	return res.Records, res.Blobs, err
 }
 
+// SeedFromExport copies the record files of an export into a folder that
+// holds no log yet, so that restore can rebuild the keys from the 24 words
+// and import-export can then bring the files back. It checks each record
+// file as import-export does, and returns the export's identity and the
+// number of record files written. A folder that already holds a log
+// (local/identity) is refused: its records come in with import-export.
+func (s *Store) SeedFromExport(dir string) (string, int, error) {
+	unlock, err := s.lock()
+	if err != nil {
+		return "", 0, err
+	}
+	defer unlock()
+	if _, err := s.Identity(); !errors.Is(err, ErrNotInitialized) {
+		if err == nil {
+			return "", 0, errors.New("this folder already holds a log: use import-export")
+		}
+		return "", 0, err
+	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return "", 0, err
+	}
+	defer root.Close()
+	who, err := readManifestIdentity(root)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", 0, errors.New("not an export: no manifest.json in " + dir)
+	}
+	if err != nil {
+		return "", 0, err
+	}
+	entries, err := exportEntries(dir, "records", false)
+	if err != nil {
+		return "", 0, err
+	}
+	n := 0
+	for _, e := range entries {
+		data, err := readExportFile(root, "records/"+e.Name(), MaxSuccessionSize)
+		if err != nil {
+			return "", 0, err
+		}
+		p := PathOf("sha256:" + strings.TrimSuffix(e.Name(), ".json"))
+		if fr := CheckFile(p, data); fr.Err != nil {
+			return "", 0, fmt.Errorf("%s: %s", e.Name(), fr.Err)
+		}
+		if err := os.MkdirAll(filepath.Dir(s.path(p)), 0o700); err != nil {
+			return "", 0, err
+		}
+		wrote, err := writeIfAbsent(s.path(p), data, 0o600)
+		if err != nil {
+			return "", 0, err
+		}
+		if wrote {
+			n++
+		}
+	}
+	return who, n, nil
+}
+
 // ImportExportAll is ImportExport with the full result. It follows the rule of
 // Sync: a record that a valid deletion of the log and the export together
 // names is refused, and so is a blob that only deleted records name. Export

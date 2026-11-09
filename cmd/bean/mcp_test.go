@@ -40,15 +40,16 @@ func mcpStore(t *testing.T) (*core.Store, map[string]string) {
 	return s, ids
 }
 
-// mcpWrite turns on the write tools for rpc and call.
-var mcpWrite bool
+// mcpWrite turns on the write tools for rpc and call; mcpNoBlobs turns off
+// read_blob, which the tests have on unless they say otherwise.
+var mcpWrite, mcpNoBlobs bool
 
 // rpc sends lines to the server and returns one decoded response per
 // request that has an id.
 func rpc(t *testing.T, s *core.Store, lines ...string) []map[string]any {
 	t.Helper()
 	var out bytes.Buffer
-	if err := serveMCP(s, strings.NewReader(strings.Join(lines, "\n")+"\n"), &out, mcpWrite); err != nil {
+	if err := serveMCP(s, strings.NewReader(strings.Join(lines, "\n")+"\n"), &out, mcpOpts{write: mcpWrite, blobs: !mcpNoBlobs}); err != nil {
 		t.Fatal(err)
 	}
 	var resps []map[string]any
@@ -336,5 +337,24 @@ func TestMCPReadBlobRejectsSupersededRecord(t *testing.T) {
 	}
 	if len(old["blobs"].([]any)) != 1 {
 		t.Fatalf("historical blob metadata missing: %v", old)
+	}
+}
+
+// Without -blobs the server does not offer read_blob, and refuses it: a
+// kept lab report holds the person's name and birth date, and what a tool
+// returns goes to the AI provider.
+func TestMCPReadBlobNeedsFlag(t *testing.T) {
+	s, _ := mcpStore(t)
+	mcpNoBlobs = true
+	t.Cleanup(func() { mcpNoBlobs = false })
+	resps := rpc(t, s, `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
+	for _, tool := range resps[0]["result"].(map[string]any)["tools"].([]any) {
+		if tool.(map[string]any)["name"] == "read_blob" {
+			t.Error("read_blob offered without -blobs")
+		}
+	}
+	resps = rpc(t, s, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_blob","arguments":{"id":"sha256:`+strings.Repeat("0", 64)+`"}}}`)
+	if e, ok := resps[0]["error"].(map[string]any); !ok || !strings.Contains(e["message"].(string), "unknown tool") {
+		t.Errorf("read_blob without -blobs: %v", resps[0])
 	}
 }

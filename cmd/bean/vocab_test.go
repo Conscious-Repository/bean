@@ -19,10 +19,16 @@ func TestVocabularyPersonal(t *testing.T) {
 	write := func(typ string) (map[string]any, bool) {
 		return call(t, s, "log_entry", map[string]any{"type": typ, "value": "1", "at": "2026-10-24"})
 	}
-	// Built in: resting heart rate and lab results.
-	for _, typ := range []string{"heart.resting", "lab.glucose", "lab.bun-creatinine-ratio"} {
-		if m, isErr := write(typ); isErr {
-			t.Errorf("agent cannot write %s: %v", typ, m)
+	// Built in: resting heart rate. Lab results and Apple Health readings
+	// are in the vocabulary, but only an importer that keeps the source file
+	// writes them (DECISIONS 232).
+	if m, isErr := write("heart.resting"); isErr {
+		t.Errorf("agent cannot write heart.resting: %v", m)
+	}
+	for _, typ := range []string{"lab.glucose", "lab.bun-creatinine-ratio", "lab.report", "apple-health.steps", "csv.file"} {
+		m, isErr := write(typ)
+		if !isErr || strings.HasPrefix(typ, "lab.") && !strings.Contains(m["error"].(string), "only from an importer") {
+			t.Errorf("agent wrote %s: %v", typ, m)
 		}
 	}
 	for _, typ := range []string{"lab.glucose.fasting", "kombucha", "cgm.libre"} {

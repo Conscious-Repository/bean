@@ -118,12 +118,12 @@ func TestMCPScopeAndProvenance(t *testing.T) {
 		t.Error("instructions do not frame record text as data")
 	}
 	mcpWrite = true
-	for _, typ := range []string{"agent.pair", "device.pair", "bean.tombstone", "lab.glucose.fasting", "weight.fake"} {
+	for _, typ := range []string{"agent.pair", "device.pair", "bean.tombstone", "lab.glucose.fasting", "weight.fake", "lab.glucose"} {
 		if m, isErr := call(t, s, "log_entry", map[string]any{"type": typ, "value": "x"}); !isErr {
 			t.Errorf("agent wrote %s: %v", typ, m)
 		}
 	}
-	for _, typ := range []string{"food", "exercise.run", "symptom.nausea", "drink.tea", "note", "heart.resting", "lab.glucose"} {
+	for _, typ := range []string{"food", "exercise.run", "symptom.nausea", "drink.tea", "note", "heart.resting"} {
 		if m, isErr := call(t, s, "log_entry", map[string]any{"type": typ, "value": "x", "at": "2026-10-24"}); isErr {
 			t.Errorf("agent cannot write %s: %v", typ, m)
 		}
@@ -218,7 +218,7 @@ func TestMCPForgedSuccession(t *testing.T) {
 	if err := os.WriteFile(p, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	d, err := callTool(s, "get_record", json.RawMessage(`{"id":"`+ids["ache"]+`"}`), false)
+	d, err := callTool(s, "get_record", json.RawMessage(`{"id":"`+ids["ache"]+`"}`), mcpOpts{blobs: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +226,7 @@ func TestMCPForgedSuccession(t *testing.T) {
 	if strings.Contains(string(b), "stop all medication") {
 		t.Errorf("a forged note reached the AI: %s", b)
 	}
-	if _, err := callTool(s, "get_record", json.RawMessage(`{"id":"`+id+`"}`), false); err == nil {
+	if _, err := callTool(s, "get_record", json.RawMessage(`{"id":"`+id+`"}`), mcpOpts{blobs: true}); err == nil {
 		t.Error("get_record returned the forged record")
 	}
 }
@@ -255,7 +255,7 @@ func TestMCPFrozenField(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, c := range [][2]string{{"list_types", `{}`}, {"query_records", `{"type":"weight"}`}, {"stats", `{"type":"weight"}`}} {
-		d, err := callTool(s, c[0], json.RawMessage(c[1]), false)
+		d, err := callTool(s, c[0], json.RawMessage(c[1]), mcpOpts{blobs: true})
 		if err != nil {
 			t.Fatal(err)
 		}

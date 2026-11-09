@@ -15,6 +15,8 @@ This repository is the reference implementation of the **bean** protocol: [CORE.
 
 > **Status: pre-release.** The record format is a draft. It freezes at `v` 0 after two weeks of real use with no change to [CORE.md](CORE.md). Until then, keep your source files (PDFs, exports), so that you can import them again if the format changes.
 
+New here: [docs/ONBOARDING.md](docs/ONBOARDING.md) goes from install to an imported lab report, an AI assistant, a backup and a tested exit. It has rules to give an AI that helps you.
+
 ## Principles
 
 - **You own the folder.** No account, no server, no company in the middle. Copy it, back it up, delete it.
@@ -22,7 +24,7 @@ This repository is the reference implementation of the **bean** protocol: [CORE.
 - **Nothing is edited.** A correction is a new record that replaces the old one. A deletion is a record that every copy obeys.
 - **Signatures, not trust.** Every record is signed and named by its hash. `bean verify` finds any change.
 - **You outlive your keys.** 24 words on paper recover your identity on a new machine and retire a lost key.
-- **Leave at any time.** `bean export` writes everything as plaintext.
+- **Leave at any time.** `bean export` writes everything as plaintext. `bean restore -export` reads it back.
 
 ## Install
 
@@ -39,7 +41,7 @@ cd bean
 go install ./cmd/...
 ```
 
-This puts `bean`, `bean-import-labcorp` and `bean-import-csv` in `$(go env GOPATH)/bin`, usually `~/go/bin`. If your shell cannot find `bean`, add that folder to your `PATH`:
+This puts `bean`, `bean-import-labcorp`, `bean-import-apple-health` and `bean-import-csv` in `$(go env GOPATH)/bin`, usually `~/go/bin`. If your shell cannot find `bean`, add that folder to your `PATH`:
 
 ```
 echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.zshrc && source ~/.zshrc
@@ -56,13 +58,13 @@ If the build fails with `package crypto/hkdf is not in GOROOT`, your Go is too o
    echo 'export BEAN_DIR=~/health' >> ~/.zshrc && source ~/.zshrc
    ```
 
-2. Create your identity:
+2. Create your identity. Run this yourself, in a terminal that no AI assistant reads: it prints your recovery words.
 
    ```
    bean init -nostr new
    ```
 
-   It prints your identity, your npub and 24 words. **Write the 24 words on paper now.** `bean` shows them only once. They recover your identity on a new machine. Never type them into a crypto wallet. Write your identity id (the `sha256:...` on the first line) on the same paper: it is not secret, and `restore -identity` needs it if someone puts a copy of your public commitment in the folder.
+   It prints your identity, your npub and 24 words, and says where the log is. **Write the 24 words on paper now.** `bean` shows them only once. They recover your identity on a new machine. Never type them into a chat, an AI or a crypto wallet. Write your identity id (the `sha256:...` on the first line) on the same paper: it is not secret, and `restore -identity` needs it if someone puts a copy of your public commitment in the folder.
 
 3. Add something:
 
@@ -77,6 +79,8 @@ If the build fails with `package crypto/hkdf is not in GOROOT`, your Go is too o
    bean ls
    bean verify
    ```
+
+   The `verify` count includes your identity record.
 
 Without `-nostr new`, `init` makes an Ed25519 key instead of a Nostr key. `-nostr <file>` uses a Nostr secret key that you already have. A separate npub for your health log is the safer choice. The secret key is stored on this machine. A key that you replace can never sign this log again.
 
@@ -125,11 +129,15 @@ bean import labcorp -tz America/Chicago lab-result.pdf
 bean ls -type 'lab.*'
 ```
 
-bean keeps the PDF first, encrypted, as a `lab.report` record, and checks that it reads back. Then you get one record for each result, with the value, unit, flag, reference interval, panel and lab comments. Your name, birth date and patient ids are not copied; comments the lab wrote are, and the PDF keeps everything. `-tz` is the time zone where the sample was taken; without it, only the day is recorded. Import the same file again and nothing is added. If a later report changes a value, for example a final result replaces `Pending`, the new PDF is kept, but `bean import` names the reading, writes nothing for it, and exits 1. If the report is newer and right, run it again with `-corrections`.
+bean keeps the PDF first, encrypted, as a `lab.report` record, and checks that it reads back. Then you get one record for each result, with the value, unit, flag, reference interval, panel and lab comments. Your name, birth date and patient ids are not copied into the results; the PDF keeps everything.
 
-Each reading names the PDF by its SHA-256, not as a blob, so `bean purge` of the `lab.report` erases the PDF, and a later import of it writes nothing. Readings from importers before 0.2.0 still name the PDF; purge them too to erase it.
+- `-tz` is the zone where the sample was taken: `America/New_York`, `America/Chicago`, `America/Denver`, `America/Los_Angeles`. Not `CST`. Without it, only the day is recorded. If the report says the collection time was not given, only the day is recorded too.
+- The first output line names the record that keeps the PDF: `kept lab.report <id>: file sha256 <hash>, stored as <blob id>`. `bean purge <id>` erases the PDF.
+- Import the same file again and nothing is added. If a later report changes a value, for example a final result replaces `Pending`, the new PDF is kept, but `bean import` names the reading, writes nothing for it, and exits 1. If the report is newer and right, run it again with `-corrections`.
+- Check the values against the PDF. The importer reads the text layout and refuses any line it cannot read for sure; then nothing is written and the error names the line. The error can hold one of your values: do not paste it publicly ([how to share its shape](docs/ONBOARDING.md#if-the-import-is-refused)).
+- A `.txt` made with `pdftotext -layout` works too.
 
-The importer refuses a report it cannot read for sure, and then nothing is written: two results with one type, a test name that runs into the result column, or a result row before the column header. It needs `pdftotext` (`brew install poppler`) and reads only the Labcorp patient-report layout. See [the importer notes](cmd/bean-import-labcorp/README.md).
+Readings name the PDF by its SHA-256, not as a blob, so purging the `lab.report` erases the PDF. Readings from importers before 0.2.0 still name the PDF; purge them too. See [the importer notes](cmd/bean-import-labcorp/README.md).
 
 ### Apple Health
 
@@ -145,35 +153,42 @@ The export has no sample ids, so bean cannot tell a changed reading in a later e
 ### A CSV file
 
 ```
-BLOB=$(bean blob put export.csv)
-bean-import-csv -type hrv.rmssd -unit ms -blob $BLOB export.csv | bean append
+bean import csv -type hrv.rmssd -unit ms export.csv
 ```
 
-Keep the raw file first: then a better importer can read it again later. Without `-blob` the importer warns.
-
-The CSV needs a header row and a `value` column. A `time` column (RFC 3339) and an `id` column are optional. Other columns are kept as context.
-
-### Coming next
-
-Apple Health. Each importer is written against a real export file. See [docs/ROADMAP.md](docs/ROADMAP.md).
+The CSV needs a header row and a `value` column. A `time` column (RFC 3339) and an `id` column are optional. Other columns are kept as context. The file is kept first, so a better importer can read it again later. [docs/COMMANDS.md](docs/COMMANDS.md) lists what the CSV importer refuses.
 
 ## Log from an AI assistant
 
-`bean mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server. Any AI client that supports MCP can use it to read your log and add to it. The server runs this command:
+`bean mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server. Any AI client that supports MCP can use it to read your log, and to add to it if you let it.
+
+| Command | The assistant can |
+|---|---|
+| `bean mcp` | List types, query and summarize records, read one record. |
+| `bean mcp -write -label assistant` | Also log entries, signed with this machine's agent key. |
+| `bean mcp -blobs` | Also read stored text files, such as a report imported as `.txt`, with your name and birth date. A PDF gives only its size. |
+
+Start read-only. AI clients do not read your shell profile: use absolute paths, not `~` or `BEAN_DIR`.
+
+Claude Code:
 
 ```
-bean -dir ~/health mcp -write -label assistant
+claude mcp add -s user bean -- "$(which bean)" -dir "$HOME/health" mcp
 ```
 
-Add it to your client as an MCP server that uses stdio. Most clients take a JSON entry of this form:
+Claude Desktop, in `~/Library/Application Support/Claude/claude_desktop_config.json`, then restart it:
 
 ```json
-"bean": {"command": "/Users/you/go/bin/bean", "args": ["-dir", "/Users/you/health", "mcp", "-write", "-label", "assistant"]}
+{"mcpServers": {"bean": {"command": "/Users/you/go/bin/bean", "args": ["-dir", "/Users/you/health", "mcp"]}}}
 ```
 
-Then tell the assistant what happened, for example "had ramen with extra broth around 1" or "took 400 mg magnesium". You can also ask questions: "is my resting heart rate going up this month?" The assistant logs your words with the correct type and time. It puts a calorie or sodium estimate in a separate record that points to the meal. Your words do not change. Its records show as `[assistant]` in `bean ls`. One machine has one agent key, so every assistant on it signs as the same agent, under one label. Pick a label that fits them all, such as `assistant`. bean refuses a second label for that key: it would show one assistant's records under another's name. To tell two assistants apart, run one on another machine ([below](#run-an-agent-on-another-machine)). The assistant can log only the types in the vocabulary and in your own `vocabulary.md`, if you have one.
+Other clients take the same command and arguments as a stdio server.
 
-Without `-write`, the server can only read. With `-write`, the assistant signs with its own **agent key**, not your key. An agent can add records about you. It cannot correct or delete your records, and it cannot sign as you. The server sends the records it returns to the AI provider. Use a local model if that is a problem for you.
+With `-write`, tell the assistant what happened, for example "had ramen with extra broth around 1" or "took 400 mg magnesium". You can also ask questions: "is my resting heart rate going up this month?" The assistant logs your words with the correct type and time. It puts a calorie or sodium estimate in a separate record that points to the meal. Your words do not change. Its records show as `[assistant]` in `bean ls`.
+
+The assistant signs with its own **agent key**, not your key. It can add records about you. It cannot correct or delete your records, sign as you, or write lab results: those come only from an importer that keeps the source file. It can log only the types in the vocabulary and in your own `vocabulary.md`, if you have one. One machine has one agent key, so every assistant on it signs as the same agent, under one label. Pick a label that fits them all, such as `assistant`. bean refuses a second label for that key: it would show one assistant's records under another's name. To tell two assistants apart, run one on another machine ([below](#run-an-agent-on-another-machine)).
+
+The server sends the records it returns to the AI provider. Use a local model if that is a problem for you.
 
 ## More than one machine
 
@@ -226,6 +241,8 @@ Anyone who can read the server's folder can read your records: they are plain JS
 
 Any copy of `objects/` and `blobs/` is a backup: Time Machine, a drive, another machine. The 24 words rebuild the keys in `local/`. Also back up `local/purged-refs.jsonl`: it is the only record of which imports you deleted. Without it, importing the same source data again brings deleted readings back ([SECURITY.md](SECURITY.md)).
 
+A backup is a copy of the log. An export is plain files for leaving; `bean restore -export` turns one back into a log ([ONBOARDING](docs/ONBOARDING.md#7-leave-and-come-back)).
+
 If you lose the laptop:
 
 1. Install `bean` on the new machine.
@@ -235,13 +252,13 @@ If you lose the laptop:
    mkdir -p ~/health && cp -R /Volumes/Backup/health/objects /Volumes/Backup/health/blobs ~/health/
    ```
 
-3. Rebuild `local/` and move to a new signing key:
+3. Rebuild `local/` and move to a new signing key. Run it yourself: it reads your 24 words.
 
    ```
    bean -dir ~/health restore -nostr new
    ```
 
-   It shows what the old key signed and stops. Read the list. **If nobody else had the old key,** run it again with `-seal-all`, then type or paste the 24 words and press Ctrl-D. **If the key may be stolen,** add `-no-seal <id>` for each record that is not yours, or `-no-seal-file <file>` for many. `-list` shows every record. A record you keep stays valid for good, and you cannot undo a deletion you keep.
+   It shows what the old key signed and stops. Read the list. **If nobody else had the old key,** run it again with `-seal-all`, type the 24 words, and press Ctrl-D. Then clear the terminal and its scrollback (Cmd-K). **If the key may be stolen,** add `-no-seal <id>` for each record that is not yours, or `-no-seal-file <file>` for many. `-list` shows every record. A record you keep stays valid for good, and you cannot undo a deletion you keep.
 
 4. Put back your backup of the deleted-imports file:
 
@@ -253,7 +270,9 @@ Your identity and records stay the same. The lost key can no longer add, correct
 
 If `restore` says `ambiguous`, the folder holds more than one identity made from these words' public commitment (someone can copy it). Pass your identity id: `bean -dir ~/health restore -identity sha256:...`. Your identity id is on the first line that `init` printed, in any export's `manifest.json`, and in `bean whoami` on an old machine.
 
-Sync every copy before you rotate or restore, then check what the sync brought in. `bean rotate` works the same way as `restore`: without `-seal-all` it only shows the list. Never rotate or restore on two machines from the same point: that freezes the identity for good, and `bean migrate <empty folder>` then starts a new identity with your own records. Records that a copy made with the old key and did not sync before the rotation stop being valid. A log of more than 200,000 records per key rotates into a succession plus `seal part` records; copy all of them. Until every part is in a copy, `bean verify` there says `incomplete seals` and the old key's records do not count, but nothing is deleted. Never rotate or restore on two machines from the same point: that freezes the identity, and you must make a new one.
+Sync every copy before you rotate or restore, then check what the sync brought in. `bean rotate` works the same way as `restore`: without `-seal-all` it only shows the list. Records that a copy made with the old key and did not sync before the rotation stop being valid. A log of more than 200,000 records per key rotates into a succession plus `seal part` records; copy all of them. Until every part is in a copy, `bean verify` there says `incomplete seals` and the old key's records do not count, but nothing is deleted.
+
+**Never rotate or restore on two machines from the same point.** That freezes the identity for good, and `bean migrate <empty folder>` then starts a new identity with your own records.
 
 ### Upgrading
 
@@ -275,6 +294,7 @@ bean protects who wrote what, and protects your identity against a stolen device
 
 | Document | For |
 |---|---|
+| [docs/ONBOARDING.md](docs/ONBOARDING.md) | First run, step by step, alone or with an AI. |
 | [docs/COMMANDS.md](docs/COMMANDS.md) | Every command, flag and exit code. |
 | [cmd/bean/vocabulary.md](cmd/bean/vocabulary.md) | The usual record types and units. |
 | [SECURITY.md](SECURITY.md) | What is protected, and the keys. |

@@ -1,6 +1,6 @@
 # Command reference
 
-Every command and flag of `bean` and the importers. For a first run, read the [README](../README.md) first.
+Every command and flag of `bean` and the importers. For a first run, follow [ONBOARDING.md](ONBOARDING.md).
 
 ## Conventions
 
@@ -32,14 +32,14 @@ bean [-dir <folder>] <command> [arguments]
 
 ### `init [-nostr new|-|<file>] [-force]`
 
-Creates your identity and an empty log in the folder. It refuses inside a git work tree, because a commit could publish your keys; `-force` overrides. Prints `identity <id>`, then `npub <npub>` if you chose a Nostr key, then the 24 words.
+Creates your identity and an empty log in the folder. It refuses inside a git work tree, because a commit could publish your keys; `-force` overrides. Prints `identity <id>`, then `npub <npub>` if you chose a Nostr key, then the 24 words. Says on stderr where the log is.
 
 - No flag: the signing key is a new random Ed25519 key.
 - `-nostr new`: the signing key is a new Nostr (secp256k1) key, so the log has its own npub.
 - `-nostr <file>`: use the Nostr secret key in the file (`nsec1...` or 64 hex digits).
 - `-nostr -`: type or paste the secret key. The terminal does not show it.
 
-Write the 24 words on paper. `bean` shows them only once. They are the only way to recover your identity on a new machine. Do not type them into a crypto wallet.
+Write the 24 words on paper. `bean` shows them only once. They are the only way to recover your identity on a new machine. Do not type them into a crypto wallet, a chat or an AI. Run `init` yourself, not through an assistant: an assistant that runs commands sees their output.
 
 ### `whoami`
 
@@ -84,6 +84,8 @@ Keeps a provider file, then adds its readings. Runs `bean-import-<source>`, foun
 
 The error says what was written. A failure in step 5 can leave some readings; run the same command again, it adds only what is missing. Ctrl-C, `kill`, a closed terminal (SIGHUP) or SIGQUIT stops the importer and every process it started, such as `pdftotext`, also one still running after the importer exited, and removes the private copy; the exit code is 128 plus the signal number. A process the importer started that keeps its output open after it exits fails the import after one second, and is stopped. The importer runs in a process group of its own, so a SIGKILL to bean's group (`timeout -s KILL`, a job runner cancelling a step) does not reach it, and bean, killed, can neither stop it nor remove the private copy, which stays in the temporary folder until it is cleaned. On Linux the kernel then kills the importer, but not processes it started. On macOS nothing does: the importer runs to its end, within its own limits (30 seconds for `pdftotext` in `bean-import-labcorp`). Stop bean with a signal it can catch. When the import worked, the importer's last message comes last, after its name, with control characters shown as `\xNN`. When it failed, only the error is printed. A changed reading works as in `append`: nothing is written for it, the command exits 1, and `-corrections` writes it. A reading that `-corrections` still does not write has another type or no value under a ref the log has: give each source its own `-system`.
 
+On success the first line is `kept <type> <record id>: file sha256 <hash>, stored as <blob id>`, or `already kept ...` when the file was kept before. `purge <record id>` erases the file. The hash is what `shasum -a 256` gives for your file. `blob get <blob id>` reads the encrypted copy back.
+
 Readings name the file by its SHA-256 (`context.report_sha256`, `export_sha256`, `file_sha256`), not as a blob. So `purge` of the record that keeps the file erases the file. Readings from importers before `bean-import-labcorp@0.2.0`, `bean-import-apple-health@0.2.0` and `bean-import-csv@0.6.0` still name the blob, and the file stays until you purge them too.
 
 ## Read
@@ -92,7 +94,7 @@ Readings name the file by its SHA-256 (`context.report_sha256`, `export_sha256`,
 
 Lists current records in time order: when, type, value, who wrote it if not you, and the first 12 hex digits of the id. A corrected record shows only its newest version. Deleted records never show.
 
-A record that keeps a file, such as `lab.report` or `apple-health.export`, shows its value as `file <media type> <blob id start>`. A value in a blob with a unit shows as `series <blob id start> <unit>`. A time that `-since` or `-until` cannot read exits 2.
+A record that keeps a file, such as `lab.report` or `apple-health.export`, shows its value as `file <media type> <blob id start>`. A test the lab did not perform shows as `not performed`. A value in a blob with a unit shows as `series <blob id start> <unit>`. A time that `-since` or `-until` cannot read exits 2.
 
 | Flag | Meaning |
 |---|---|
@@ -109,7 +111,7 @@ Prints one record in full, its status (`valid`, `superseded by ...`, `purged by 
 
 ### `blob get <id>`
 
-Writes the decrypted file to stdout: `bean blob get <id> > report.pdf`.
+Writes the decrypted file to stdout: `bean blob get <id> > report.pdf`. The id is a blob id, such as the `stored as` id of `bean import`, in full or its first 6 or more hex digits.
 
 ### `append`, changed readings
 
@@ -134,9 +136,9 @@ Reads and checks every file and signature, and every stored file's hash. Run it 
 
 ## AI and agents
 
-### `mcp [-write] [-label <name>]`
+### `mcp [-write] [-blobs] [-label <name>]`
 
-Runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdin and stdout, for any AI client that supports MCP. Without `-write` it can only read. The read tools show only records about you; `include_others` adds the other people in the folder. Each row names its `author` and `subject`: `self`, `agent:<label>` or an identity id. Its tools:
+Runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdin and stdout, for any AI client that supports MCP. Without `-write` it can only read. Without `-blobs` it does not offer `read_blob`: a stored file such as a kept report holds your name and birth date, and what a tool returns goes to the AI provider. The read tools show only records about you; `include_others` adds the other people in the folder. Each row names its `author` and `subject`: `self`, `agent:<label>` or an identity id. Its tools:
 
 | Tool | Returns |
 |---|---|
@@ -144,8 +146,8 @@ Runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdin
 | `query_records` | Records by type and time. |
 | `stats` | Count, minimum, maximum, mean, median and spread of one type, by day, week or month if asked. Readings by different authors or in different units are in separate `groups`. |
 | `get_record` | One non-deleted, valid record, including superseded history, its status and replies. Blob IDs are metadata. |
-| `read_blob` | Only blobs of current records of yours or of a paired agent; superseded-only history and a stranger's record do not grant content access. Text is returned; for binary files only size. |
-| `log_entry` | With `-write` only. Adds a record signed by the agent key, of a type from the vocabulary only: the built-in one plus `vocabulary.md` in the bean folder, if it exists (cmd/bean/vocabulary.md, "Your own types"). It can also comment on a record (`about`) or replace one of the agent's own records (`corrects`). |
+| `read_blob` | With `-blobs` only. Takes the blob id in full or as its first 6 or more hex digits. Only blobs of current records of yours or of a paired agent; superseded-only history and a stranger's record do not grant content access. Text is returned; for binary files only size. |
+| `log_entry` | With `-write` only. Adds a record signed by the agent key, of a type from the vocabulary only: the built-in one plus `vocabulary.md` in the bean folder, if it exists (cmd/bean/vocabulary.md, "Your own types"). It can also comment on a record (`about`) or replace one of the agent's own records (`corrects`). It refuses `lab.*`, `apple-health.*` and `csv.file`: only an importer that keeps the source file writes those. |
 
 With `-write`, the first start makes the agent key of this machine and, on your own machine, trusts it. `-label` names that agent (default: `agent@<computer name>`). Without `-label`, a key that already exists keeps its name. A label that differs from the key's pairing is refused with exit 1, as in `agent init`.
 
@@ -195,6 +197,7 @@ Reads an export into a log of the same identity. Prints `added <r> records, <b> 
 - It reads `manifest.json` first, one token at a time, and keeps only the identity, so a large log's export reads back. A single value over 1 MiB, or nesting deeper than 16, is refused. An export of another identity fails with `export of identity <id>, this log is <id>`, and a folder without the file is `not an export`.
 - It follows the rule of `sync`: a record that a valid deletion names is refused, so an older export does not bring back what you purged since. Nor does it bring back a file that a deleted record names, unless a live record of yours or of a paired agent names it too. A stranger's record does not count.
 - It does not read `invalid/`.
+- It needs a log of the same identity. In a folder with no log it fails and names `restore -export`: `bean init` would make a new identity, which cannot read the export.
 
 ### `rotate [-list] [-seal-all] [-no-seal <id>]... [-nostr new|<file>]`
 
@@ -211,9 +214,11 @@ The sync can bring in records from a thief, and a seal cannot be undone, so `rot
 
 With nothing to decide on, for example on a new log, no flag is needed. Records the old key makes after the rotation are not valid. `-nostr` makes the new key a Nostr key, from a file because stdin carries the words. Above 200,000 records it also prints one `seal part <id>` line per extra seal record (C28); copy those with the rest of the log. It refuses above 200,200,000 records (`too large`). If a thief with your current key halted the log (`too new`), rotate goes past the halt and prints one `past halt <id>` line per halting record; the rotation retires that key, so the halt ends on every copy. A halt from a newer bean of your own (signed with the 24 words) is not passed: update bean.
 
-### `restore [-list] [-seal-all] [-no-seal <id>]... [-nostr new|<file>] [-identity <id>]`
+### `restore [-list] [-seal-all] [-no-seal <id>]... [-nostr new|<file>] [-identity <id>] [-export <folder>]`
 
 Rebuilds `local/` on a new machine. Copy `objects/` and `blobs/` from your backup into the folder, then run it and give the 24 words on stdin. It finds your identity, writes the identity secret, and moves you to a new signing key. Your identity id and records do not change. The lost key can no longer add, delete or correct anything. Sync every copy you still have into the folder first. The flags work as for `rotate`. If more than one identity matches the words, it fails with `ambiguous` and writes nothing; pass `-identity <id>`.
+
+`-export <folder>` rebuilds a log from an export, in an empty folder. It copies the export's records first, checked as in `import-export`, and takes the identity from `manifest.json`. Then it asks for your decision and the 24 words, as without the flag. After the restore it imports the export's files with the recovered key: `imported <n> files from the export`. Run it yourself, not through an assistant: it reads your 24 words.
 
 ### `migrate [-also <id>]... [-also-file <file>] [-nostr new|<file>] <empty folder>`, `migrate -list`
 

@@ -66,7 +66,15 @@ func main() {
 	}
 	text, raw, err := readSource(fs.Arg(0))
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "bean-import-labcorp: input or report validation failed")
+		// The importer's own messages hold no data and say what to do (install
+		// poppler, the size limit). An error from the system can name the
+		// file, and a file name can be private, so it is not printed.
+		var pe *os.PathError
+		if errors.As(err, &pe) {
+			fmt.Fprintln(os.Stderr, "bean-import-labcorp: the input could not be read")
+		} else {
+			fmt.Fprintf(os.Stderr, "bean-import-labcorp: %s\n", err)
+		}
 		os.Exit(1)
 	}
 	var loc *time.Location
@@ -104,7 +112,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "bean-import-labcorp: output failed; partial output possible")
 		os.Exit(1)
 	}
-	fmt.Fprintf(os.Stderr, "bean-import-labcorp: %d results, %d without a value; existing specimen/test identities dedupe, amendments require explicit correction\n", len(rep.Results), missing)
+	fmt.Fprintf(os.Stderr, "bean-import-labcorp: %d results, %d without a value. Importing the same report again adds nothing; a result whose value changed needs -corrections\n", len(rep.Results), missing)
 }
 
 const maxReportBytes = 32 << 20

@@ -37,7 +37,9 @@ done
 export BEAN_NOW=2026-10-30T12:00:00Z
 SCOPE=all
 [ "$(git -C "$REPO" rev-parse "$OLD")" = "$(cat "$REPO/tools/differential/reads-change-from" 2>/dev/null)" ] && SCOPE=verify
-mask() { sed -E 's/(sha256|ed25519|p256|secp256k1):[0-9a-f]+/\1:X/g; s/npub1[0-9a-z]+/npub1X/g' | grep -aEv "$ALLOW"; }
+# The prompt for the 24 words is interface text, not a result: its wording
+# may change without a read changing.
+mask() { sed -E 's/(sha256|ed25519|p256|secp256k1):[0-9a-f]+/\1:X/g; s/npub1[0-9a-z]+/npub1X/g' | grep -aEv "$ALLOW" | grep -av 'the 24 words'; }
 run() { # run <bin> <log copy> <out file>
   local b=$1 d=$2 o=$3
   { for c in "verify" "ls -all -json" "ls -all" "ls"; do

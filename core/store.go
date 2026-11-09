@@ -943,3 +943,34 @@ func (s *Store) VerifyLines() ([]string, int, error) {
 	sort.Strings(lines[:len(lines)-1])
 	return lines, code, nil
 }
+
+// ResolveBlob finds the stored file whose id is id, or the one whose hex
+// starts with a prefix of at least 6 digits, as Resolve does for records.
+func (s *Store) ResolveBlob(id string) (string, error) {
+	if IsID(id) {
+		return id, nil
+	}
+	hexPart := strings.TrimPrefix(id, "sha256:")
+	if len(hexPart) < 6 || len(hexPart) > 64 || !isLowerHex(hexPart, len(hexPart)) {
+		return "", errors.New("bad field: blob id")
+	}
+	files, _, err := listShards(s.Dir, dirBlobs)
+	if err != nil {
+		return "", err
+	}
+	found := ""
+	for _, f := range files {
+		h := strings.ReplaceAll(strings.TrimPrefix(f.rel, dirBlobs+"/"), "/", "")
+		if !strings.HasPrefix(h, hexPart) {
+			continue
+		}
+		if found != "" {
+			return "", errors.New("ambiguous blob id: " + id)
+		}
+		found = "sha256:" + h
+	}
+	if found == "" {
+		return "", errors.New("blob missing: " + id)
+	}
+	return found, nil
+}
