@@ -15,7 +15,7 @@ const created = "01JAN26:00:00:00"
 func sample(t *testing.T) []byte {
 	t.Helper()
 	data, err := xpttest.Write("TEST_J", created, []string{"SEQN", "X"}, []string{"Sequence number", "A value (mg/dL)"},
-		[][]float64{{1, 157}, {2, math.NaN()}, {3, 4.06}, {4, -0.1}, {5, 0}, {6, 13481.04209}, {7, 1e-70}, {8, 1e70}})
+		[][]float64{{1, 157}, {2, math.NaN()}, {3, 4.06}, {4, -0.1}, {5, 0}, {6, 13481.04209}, {7, 1e-60}, {8, 1e70}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +34,7 @@ func TestRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []float64{157, math.NaN(), 4.06, -0.1, 0, 13481.04209, 1e-70, 1e70}
+	want := []float64{157, math.NaN(), 4.06, -0.1, 0, 13481.04209, 1e-60, 1e70}
 	for i := range want {
 		if math.Float64bits(x[i]) != math.Float64bits(want[i]) && !(math.IsNaN(x[i]) && math.IsNaN(want[i])) {
 			t.Errorf("row %d: got %v, want %v", i+1, x[i], want[i])
@@ -119,6 +119,20 @@ func TestRefuses(t *testing.T) {
 		t.Fatal(err)
 	} else if _, err := f.Column("X"); err == nil {
 		t.Error("a zero with an exponent was read")
+	}
+	// What SAS does not write, and pandas reads differently: a fraction
+	// that starts with a zero hex digit, and the smallest IBM number, which
+	// pandas takes for zero.
+	for name, bits := range map[string][]byte{
+		"not normalized": {0x43, 0x0b, 0xb0, 0, 0, 0, 0, 0},
+		"too small":      {0x00, 0x10, 0, 0, 0, 0, 0, 0},
+	} {
+		odd := change(func(b []byte) []byte { copy(b[obs+8:], bits); return b })
+		if f, err := Parse(odd); err != nil {
+			t.Fatal(err)
+		} else if _, err := f.Column("X"); err == nil {
+			t.Errorf("%s: read", name)
+		}
 	}
 	// 56 significant bits do not fit a double.
 	wide := change(func(b []byte) []byte {

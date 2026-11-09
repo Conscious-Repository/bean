@@ -81,8 +81,7 @@ func record(raw []byte, blob string) (map[string]any, string, error) {
 	if !datasetPattern.MatchString(x.Dataset) {
 		return nil, "", errors.New("the data set name is not one NHANES uses")
 	}
-	cycle, ok := nhanes.CycleOf(x.Dataset)
-	if !ok {
+	if !nhanes.InCycle(x.Dataset) {
 		return nil, "", fmt.Errorf("%s is not a file of a survey cycle bean reads (2017-2018, names ending in _J)", x.Dataset)
 	}
 	if seqn, ok := x.Variable("SEQN"); !ok || !seqn.Numeric {
@@ -116,9 +115,9 @@ func record(raw []byte, blob string) (map[string]any, string, error) {
 			"sha256": digest, "bytes": float64(len(raw)),
 			"assurance": "unsigned-file",
 			"dataset":   x.Dataset,
-			"cycle":     cycle.Years,
+			"cycle":     nhanes.Years,
 			"publisher": "US National Center for Health Statistics (CDC), NHANES",
-			"url":       cycle.URL + x.Dataset + ".xpt",
+			"url":       nhanes.URL + x.Dataset + ".xpt",
 			"license":   "public domain (a work of the US Government); NCHS asks users not to try to identify participants",
 			"created":   x.Created,
 			"rows":      float64(x.Rows),
@@ -126,12 +125,12 @@ func record(raw []byte, blob string) (map[string]any, string, error) {
 		},
 		"blobs": []any{map[string]any{"hash": blob, "role": "raw-export", "media_type": "application/x-sas-xport"}},
 	}
-	note := fmt.Sprintf("%s, NHANES %s: %d rows, %d variables. ", x.Dataset, cycle.Years, x.Rows, len(x.Variables))
+	note := fmt.Sprintf("%s, NHANES %s: %d rows, %d variables. ", x.Dataset, nhanes.Years, x.Rows, len(x.Variables))
 	switch known, listed := nhanes.Known[x.Dataset]; {
 	case listed && known == digest:
-		note += "It is the file CDC served when this bean was made"
+		note += "It is the file on record"
 	case listed:
-		note += "It is not the file CDC served when this bean was made: comparisons will say so. Its SHA-256 is " + digest
+		note += "It is NOT the file on record: it may be cut short or changed, and bean compare uses it only with -unknown-files. Its SHA-256 is " + digest
 	default:
 		note += "bean has no SHA-256 on record for this file. Its SHA-256 is " + digest
 	}

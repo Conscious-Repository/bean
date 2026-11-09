@@ -137,14 +137,17 @@ Reads and checks every file and signature, and every stored file's hash. Run it 
 
 ## Compare
 
-### `compare -sex male|female -age <from>-<to> [-where <rule>]... [-save] <id>... | -type <type>`
+### `compare -sex male|female -age <from>-<to> [-where <rule>]... [-unknown-files] [-save] <id>... | -type <type>`
 
 Shows where a reading lies among the people of a cohort in NHANES 2017-2018, from the files you kept with `bean import nhanes`. [COMPARE.md](COMPARE.md) has the files, the columns, the limits and the method.
 
 - `-sex` and `-age` are required. `-age 30-39` includes both ends; 80 means 80 and over. Without them the command exits 2: bean never guesses a cohort.
 - `-where <FILE>.<VARIABLE>=<value>` or `=<from>-<to>` adds a rule, and may repeat: `-where DEMO_J.RIDRETH3=3 -where BMX_J.BMXBMI=20-27`. The file is `DEMO_J`, `BMX_J` or `DR1TOT_J`. A rule on `DR1TOT_J` makes the computation use the dietary day one weight.
 - Give one or more record ids, or `-type` for every current reading of a type or prefix (`'lab.*'`). With `-type`, readings of a type bean has no reference data for are counted, not listed.
-- `-save` writes each result as a signed `comparison.percentile` record and prints `saved <id>`. Without it nothing is written. The same inputs again add nothing.
+- `-unknown-files` also uses a kept file whose SHA-256 is not the one on record. Without it such a copy is refused: it may be a download that was cut short.
+- `-save` writes each result as a signed `comparison.percentile` record and prints `saved <id>`. Without it nothing is written. The same inputs again add nothing. A comparison you deleted before is not saved again: the row says `not saved`, and the exit code is 1.
+
+`purge`, `add -corrects`, `append`, `import`, `sync` and `import-export` delete the saved comparisons of a reading that is no longer current, and say how many on stderr. `compare` does the same before it shows anything.
 
 Each row has the reading, its value, the percentile, the shares of the cohort with a lower and with the same value, the cohort's 25th to 75th percentile and median, the number of people, and a status: `qualified` with the reasons below the table, or `not comparable:` and why, with no number. A cohort of fewer than 30 people gives no number. Exit 1 when nothing could be compared.
 
@@ -285,7 +288,7 @@ Reads an Apple Health export. By default it writes one `apple-health.export` rec
 
 ### `bean-import-nhanes -blob <id> <file.XPT>`
 
-Keeps one public NHANES file of the 2017-2018 cycle (SAS transport, a name ending in `_J`) as reference data for `bean compare`. Run it as `bean import nhanes TCHOL_J.XPT`. It writes one `reference.file` record and no readings: the file is about other people. `context` has the file's `sha256` and `bytes`, the data set name, the cycle, the URL CDC serves it from, the row count and every variable with its label. It says whether the file is the one CDC served on 2026-11-09. It refuses a file that is not transport version 5, holds more than one data set, has no `SEQN`, is of another cycle, or has a name or label that is not plain ASCII. `bean purge` of the record erases the file.
+Keeps one public NHANES file of the 2017-2018 cycle (SAS transport, a name ending in `_J`) as reference data for `bean compare`. Run it as `bean import nhanes TCHOL_J.XPT`. It writes one `reference.file` record and no readings: the file is about other people. `context` has the file's `sha256` and `bytes`, the data set name, the cycle, the URL CDC serves it from, the row count and every variable with its label. It says whether the file is the one on record; `bean compare` uses another copy only with `-unknown-files`. It refuses a file that is not transport version 5, holds more than one data set, has no `SEQN`, is of another cycle, or has a name or label that is not plain ASCII. `bean purge` of the record erases the file.
 
 ### `bean-import-csv -type <type> [-unit <unit>] [-system <name>] [-blob <id>] [-precision <p>] <file.csv>`
 

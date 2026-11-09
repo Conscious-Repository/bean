@@ -21,9 +21,9 @@ import (
 const (
 	recordLen  = 80
 	namestrLen = 140
-	// MaxVariables and MaxRows bound what Parse accepts.
-	MaxVariables = 2000
-	MaxRows      = 5_000_000
+	// maxVariables and maxRows bound what Parse accepts.
+	maxVariables = 2000
+	maxRows      = 5_000_000
 )
 
 const (
@@ -62,7 +62,8 @@ func Parse(data []byte) (*File, error) {
 		}
 		return data[i*recordLen : (i+1)*recordLen], nil
 	}
-	// Records 0 to 2: the library header and its two lines.
+	// Record 0: the library header. Records 1 and 2 hold the writer's name
+	// and times, which nothing here depends on.
 	if r, err := rec(0); err != nil || string(r) != libraryHeader {
 		return nil, errors.New("not a SAS transport (XPORT version 5) file")
 	}
@@ -96,7 +97,7 @@ func Parse(data []byte) (*File, error) {
 		return nil, errors.New("not a transport file this reader knows: bad NAMESTR header")
 	}
 	nvar, err := strconv.Atoi(string(r[54:58]))
-	if err != nil || nvar < 1 || nvar > MaxVariables || !isDigits(r[54:58]) {
+	if err != nil || nvar < 1 || nvar > maxVariables || !isDigits(r[54:58]) {
 		return nil, errors.New("bad number of variables")
 	}
 	off := 8 * recordLen
@@ -156,7 +157,7 @@ func Parse(data []byte) (*File, error) {
 	if len(obs)-rows*f.rowLen >= recordLen {
 		return nil, errors.New("more blanks at the end than padding needs")
 	}
-	if rows > MaxRows {
+	if rows > maxRows {
 		return nil, errors.New("too many rows")
 	}
 	if bytes.Contains(obs[:rows*f.rowLen], []byte("HEADER RECORD*******")) {
@@ -199,8 +200,10 @@ func (f *File) Column(name string) ([]float64, error) {
 
 // ibmFloat reads an IBM System/360 double: a sign bit, a 7-bit exponent of
 // 16 in excess 64, and a 56-bit fraction. A first byte of '.', '_' or 'A' to
-// 'Z' with the rest zero is a SAS missing value. A number that an IEEE
-// double cannot hold exactly is refused.
+// 'Z' with the rest zero is a SAS missing value. It refuses what SAS does
+// not write and other readers read differently: a number that an IEEE
+// double cannot hold exactly, one whose fraction does not start with a
+// nonzero hex digit, and one below 1e-70, which some readers take for zero.
 func ibmFloat(b []byte) (float64, error) {
 	var frac uint64
 	for _, c := range b[1:] {
@@ -218,8 +221,14 @@ func ibmFloat(b []byte) (float64, error) {
 	if bits.Len64(frac)-bits.TrailingZeros64(frac) > 53 {
 		return 0, errors.New("a number with more digits than a double holds")
 	}
+	if frac>>52 == 0 {
+		return 0, errors.New("a number that is not normalized")
+	}
 	exp := 4*(int(b[0]&0x7f)-64) - 56
 	x := math.Ldexp(float64(frac), exp)
+	if x < 1e-70 {
+		return 0, errors.New("a number too small to be a measurement")
+	}
 	if b[0]&0x80 != 0 {
 		x = -x
 	}

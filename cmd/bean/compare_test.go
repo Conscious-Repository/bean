@@ -39,14 +39,14 @@ func compareLog(t *testing.T, files ...string) (dir, path string, ids [3]string)
 
 func TestCompare(t *testing.T) {
 	dir, _, ids := compareLog(t, "TCHOL_J", "HDL_J", "DEMO_J")
-	out, errs, code := run(t, dir, "", "compare", "-sex", "male", "-age", "30-39", ids[0])
+	out, errs, code := run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", ids[0])
 	if code != 0 {
 		t.Fatalf("%d\n%s\n%s", code, out, errs)
 	}
 	for _, want := range []string{
 		"Compared with NHANES 2017-2018: male, age 30-39.", "lab.cholesterol-total", "193 mg/dL", "qualified",
 		"not whether it is healthy", "their own instruments and methods", "you chose the cohort",
-		"bean does not know this copy of TCHOL_J", "bean does not know this copy of DEMO_J",
+		"this copy of TCHOL_J is not the file on record", "this copy of DEMO_J is not the file on record", "qualified, file not on record",
 		"Not saved. Pass -save",
 	} {
 		if !strings.Contains(out, want) {
@@ -58,17 +58,17 @@ func TestCompare(t *testing.T) {
 		t.Errorf("a comparison was saved:\n%s", ls)
 	}
 	// The same command prints the same bytes.
-	if again, _, _ := run(t, dir, "", "compare", "-sex", "male", "-age", "30-39", ids[0]); again != out {
+	if again, _, _ := run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", ids[0]); again != out {
 		t.Errorf("two runs differ:\n%s\n%s", out, again)
 	}
 	// -type compares what it can and counts the rest.
-	out, _, code = run(t, dir, "", "compare", "-sex", "female", "-age", "20-59", "-type", "lab.*")
+	out, _, code = run(t, dir, "", "compare", "-unknown-files", "-sex", "female", "-age", "20-59", "-type", "lab.*")
 	if code != 0 || !strings.Contains(out, "lab.hdl-cholesterol") || strings.Contains(out, "lab.tsh") || !strings.Contains(out, "1 other readings are not comparable") {
 		t.Errorf("-type: %d\n%s", code, out)
 	}
 	// An id that cannot be compared is a row that says why, and exit 1 when
 	// nothing could be.
-	out, errs, code = run(t, dir, "", "compare", "-sex", "female", "-age", "20-59", ids[2])
+	out, errs, code = run(t, dir, "", "compare", "-unknown-files", "-sex", "female", "-age", "20-59", ids[2])
 	if code != 1 || !strings.Contains(out, "not comparable: bean has no reference data for this type") || !strings.Contains(errs, "nothing could be compared") {
 		t.Errorf("tsh: %d\n%s\n%s", code, out, errs)
 	}
@@ -76,7 +76,7 @@ func TestCompare(t *testing.T) {
 
 func TestCompareSave(t *testing.T) {
 	dir, _, ids := compareLog(t, "TCHOL_J", "HDL_J", "DEMO_J", "BMX_J", "DR1TOT_J")
-	args := []string{"compare", "-sex", "female", "-age", "20-80", "-where", "DEMO_J.RIDRETH3=3-4", "-where", "DR1TOT_J.DR1TFIBE=5-40", "-save", ids[0], ids[1]}
+	args := []string{"compare", "-unknown-files", "-sex", "female", "-age", "20-80", "-where", "DEMO_J.RIDRETH3=3-4", "-where", "DR1TOT_J.DR1TFIBE=5-40", "-save", ids[0], ids[1]}
 	out, errs, code := run(t, dir, "", args...)
 	if code != 0 || !strings.Contains(out, "added 2, already there 0") || !strings.Contains(out, "states the cohort you chose") || !strings.Contains(out, "one day") || !strings.Contains(out, "NHANES records every age of 80 and over as 80") {
 		t.Fatalf("%d\n%s\n%s", code, out, errs)
@@ -86,7 +86,7 @@ func TestCompareSave(t *testing.T) {
 		t.Errorf("again: %d\n%s", code, out)
 	}
 	// Another cohort is another comparison.
-	if out, _, code := run(t, dir, "", "compare", "-sex", "female", "-age", "20-79", "-save", ids[0]); code != 0 || !strings.Contains(out, "added 1, already there 0") {
+	if out, _, code := run(t, dir, "", "compare", "-unknown-files", "-sex", "female", "-age", "20-79", "-save", ids[0]); code != 0 || !strings.Contains(out, "added 1, already there 0") {
 		t.Errorf("another cohort: %d\n%s", code, out)
 	}
 	ls, _, _ := run(t, dir, "", "ls", "-json", "-type", "comparison.percentile")
@@ -203,10 +203,13 @@ func TestCompareRefuses(t *testing.T) {
 		"rule file not kept": {[]string{"-sex", "male", "-age", "30-39", "-where", "BMX_J.BMXBMI=20-25", ids[0]}, 1, "BMX_J.xpt"},
 		// Too few people: no number.
 		"small cohort": {[]string{"-sex", "male", "-age", "30-30", "-where", "DEMO_J.RIDRETH3=6", ids[0]}, 1, "bean gives no result below 30"},
+		// A flag given twice would silently take the last value.
+		"sex twice": {[]string{"-sex", "male", "-sex", "female", "-age", "30-39", ids[0]}, 2, "one cohort at a time"},
+		"age twice": {[]string{"-sex", "male", "-age", "30-39", "-age", "40-49", ids[0]}, 2, "one cohort at a time"},
 		// A variable the file does not have.
 		"unknown variable": {[]string{"-sex", "male", "-age", "30-39", "-where", "DEMO_J.RIDRETH9=1", ids[0]}, 1, "has no variable RIDRETH9"},
 	} {
-		out, errs, code := run(t, dir, "", append([]string{"compare"}, c.args...)...)
+		out, errs, code := run(t, dir, "", append([]string{"compare", "-unknown-files"}, c.args...)...)
 		if code != c.code || !strings.Contains(out+errs, c.want) {
 			t.Errorf("%s: exit %d, want %d and %q\n%s\n%s", name, code, c.code, c.want, out, errs)
 		}
@@ -223,13 +226,23 @@ func TestCompareRefuses(t *testing.T) {
 		"text":              {strings.TrimSpace(text), "the reading is not a number"},
 		"a corrected value": {ids[0], "is not a current record about you"},
 	} {
-		out, errs, code := run(t, dir, "", "compare", "-sex", "male", "-age", "30-39", c[0])
+		out, errs, code := run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", c[0])
 		if code != 1 || !strings.Contains(out+errs, c[1]) || strings.Contains(out, "qualified") {
 			t.Errorf("%s: %d\n%s\n%s", name, code, out, errs)
 		}
 	}
-	if out, _, code := run(t, dir, "", "compare", "-sex", "male", "-age", "30-39", strings.TrimSpace(newer)); code != 0 || !strings.Contains(out, "201 mg/dL") {
+	if out, _, code := run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", strings.TrimSpace(newer)); code != 0 || !strings.Contains(out, "201 mg/dL") {
 		t.Errorf("the correction: %d\n%s", code, out)
+	}
+	// A value that cannot be a measurement gets no percentile.
+	zero, _, _ := run(t, dir, "", "add", "lab.cholesterol-total", "0", "-unit", "mg/dL", "-at", "2026-10-01")
+	if out, errs, code := run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", strings.TrimSpace(zero)); code != 1 || !strings.Contains(out, "the reading is not above zero") {
+		t.Errorf("zero: %d\n%s\n%s", code, out, errs)
+	}
+	// Without -unknown-files a copy that is not the file on record is not
+	// used: it may be a download that was cut short.
+	if out, errs, code := run(t, dir, "", "compare", "-sex", "male", "-age", "30-39", strings.TrimSpace(newer)); code != 1 || !strings.Contains(out, "is not the file on record") || !strings.Contains(out, "-unknown-files") || strings.Contains(out, "qualified") {
+		t.Errorf("unknown copy without the flag: %d\n%s\n%s", code, out, errs)
 	}
 	// Two kept copies of one data set that bean does not know: it cannot
 	// choose, and says so.
@@ -241,7 +254,7 @@ func TestCompareRefuses(t *testing.T) {
 	if out, errs, code := runPath(t, dir, path, "import", "-yes", "nhanes", other); code != 0 {
 		t.Fatalf("second copy: %d\n%s\n%s", code, out, errs)
 	}
-	if out, errs, code := run(t, dir, "", "compare", "-sex", "male", "-age", "30-39", strings.TrimSpace(newer)); code != 1 || !strings.Contains(out, "more than one copy of TCHOL_J") {
+	if out, errs, code := run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", strings.TrimSpace(newer)); code != 1 || !strings.Contains(out, "keeps 2 copies of TCHOL_J") {
 		t.Errorf("two copies: %d\n%s\n%s", code, out, errs)
 	}
 	// A purged reference file is gone for compare too.
@@ -256,8 +269,55 @@ func TestCompareRefuses(t *testing.T) {
 			run(t, dir, "", "purge", r.ID)
 		}
 	}
-	if out, errs, code := run(t, dir, "", "compare", "-sex", "male", "-age", "30-39", strings.TrimSpace(newer)); code != 1 || !strings.Contains(out, "the log does not keep TCHOL_J") {
+	if out, errs, code := run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", strings.TrimSpace(newer)); code != 1 || !strings.Contains(out, "the log does not keep TCHOL_J") {
 		t.Errorf("purged file: %d\n%s\n%s", code, out, errs)
+	}
+}
+
+// A saved comparison does not outlive its reading: a correction or a
+// deletion of the reading deletes it, as a record every copy obeys, and a
+// comparison the person deleted is not saved again in silence.
+func TestCompareDoesNotOutliveItsReading(t *testing.T) {
+	dir, _, ids := compareLog(t, "TCHOL_J", "HDL_J", "DEMO_J")
+	save := func(id string) {
+		t.Helper()
+		if out, errs, code := run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", "-save", id); code != 0 || !strings.Contains(out, "added 1") {
+			t.Fatalf("save: %d\n%s\n%s", code, out, errs)
+		}
+	}
+	count := func() int {
+		ls, _, _ := run(t, dir, "", "ls", "-type", "comparison.percentile")
+		return strings.Count(ls, "comparison.percentile")
+	}
+	save(ids[0])
+	save(ids[1])
+	if count() != 2 {
+		t.Fatalf("%d comparisons", count())
+	}
+	// A correction of the first reading deletes its comparison.
+	out, errs, code := run(t, dir, "", "add", "lab.cholesterol-total", "201", "-unit", "mg/dL", "-at", "2026-11-01", "-corrects", ids[0])
+	if code != 0 || !strings.Contains(errs, "deleted 1 saved comparisons") || count() != 1 {
+		t.Fatalf("after a correction: %d, %d comparisons\n%s\n%s", code, count(), out, errs)
+	}
+	newer := strings.TrimSpace(out)
+	save(newer)
+	// A deletion of the second reading deletes its comparison.
+	if _, errs, code := run(t, dir, "", "purge", ids[1]); code != 0 || !strings.Contains(errs, "deleted 1 saved comparisons") || count() != 1 {
+		t.Fatalf("after a purge: %d, %d comparisons\n%s", code, count(), errs)
+	}
+	if out, _, code := run(t, dir, "", "verify"); code != 0 || !strings.Contains(out, "0 invalid") {
+		t.Errorf("verify: %d\n%s", code, out)
+	}
+	// A comparison the person deleted is not saved again, and bean says so.
+	ls, _, _ := run(t, dir, "", "ls", "-json", "-type", "comparison.percentile")
+	var r struct {
+		ID string `json:"id"`
+	}
+	json.Unmarshal([]byte(strings.TrimSpace(ls)), &r)
+	run(t, dir, "", "purge", r.ID)
+	out, _, code = run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", "-save", newer)
+	if code != 1 || !strings.Contains(out, "not saved: you deleted this comparison") || strings.Contains(out, "already there 1") || count() != 0 {
+		t.Errorf("a deleted comparison: %d, %d comparisons\n%s", code, count(), out)
 	}
 }
 
@@ -272,7 +332,7 @@ func TestCompareMarksAnotherAuthor(t *testing.T) {
 		t.Skipf("this log does not take an agent's record without pairing: %s", errs)
 	}
 	id := strings.TrimSpace(out)
-	out, _, code = run(t, dir, "", "compare", "-sex", "male", "-age", "30-39", "-save", id)
+	out, _, code = run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", "-save", id)
 	if code != 0 || !strings.Contains(out, "180 mg/dL  [") || !strings.Contains(out, "signed by an agent or another key") {
 		t.Errorf("%d\n%s", code, out)
 	}

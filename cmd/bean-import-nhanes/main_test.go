@@ -35,7 +35,7 @@ func TestRecord(t *testing.T) {
 		}
 	}
 	// The synthetic file is not CDC's, and the importer says so.
-	if !strings.Contains(note, "not the file CDC served") || !strings.Contains(note, "TCHOL_J, NHANES 2017-2018") {
+	if !strings.Contains(note, "NOT the file on record") || !strings.Contains(note, "TCHOL_J, NHANES 2017-2018") {
 		t.Errorf("note: %s", note)
 	}
 	// The same file gives the same record.

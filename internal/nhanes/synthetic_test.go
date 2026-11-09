@@ -13,8 +13,8 @@ import (
 // The files in testdata are synthetic: made here, with the layout and the
 // variable names of CDC's files and no person's data. Their header says
 // SYNTH where CDC's says the system that wrote them, and their SHA-256 is
-// not in Known, so a comparison with them says that bean does not know
-// them. BEAN_UPDATE=1 go test ./internal/nhanes -run TestSyntheticFiles
+// not in Known, so bean compare uses them only with -unknown-files, and
+// says so on each row. BEAN_UPDATE=1 go test ./internal/nhanes -run TestSyntheticFiles
 // writes them again.
 
 // splitmix is a small fixed generator, so the files never change with Go.

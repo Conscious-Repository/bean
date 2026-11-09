@@ -13,18 +13,24 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
 PY=${PY:-python3}
 DATA=${BEAN_NHANES_DIR:-$ROOT/internal/nhanes/testdata}
+# The synthetic files are not the files on record: bean uses them only when
+# told to. CDC's own files need no flag.
+UNKNOWN=; [ -n "${BEAN_NHANES_DIR:-}" ] || UNKNOWN=-unknown-files
+# CDC serves .xpt; the synthetic files are .XPT.
+xpt() { for e in XPT xpt; do [ -f "$DATA/$1.$e" ] && { echo "$DATA/$1.$e"; return; }; done; echo "$DATA/$1.XPT"; }
+FILES=(); for f in TCHOL_J HDL_J DEMO_J BMX_J DR1TOT_J; do FILES+=("$(xpt $f)"); done
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 (cd "$ROOT" && go build -o "$T/bin/" ./cmd/bean ./cmd/bean-import-nhanes) || { echo "build failed"; exit 1; }
 export PATH="$T/bin:$PATH"
 bean() { "$T/bin/bean" -dir "$T/log" "$@"; }
 bean init >/dev/null 2>&1 || { echo "init failed"; exit 1; }
-for f in TCHOL_J HDL_J DEMO_J BMX_J DR1TOT_J; do
-  bean import -yes nhanes "$DATA/$f.XPT" >/dev/null 2>&1 || { echo "import $f failed"; exit 1; }
+for f in "${FILES[@]}"; do
+  bean import -yes nhanes "$f" >/dev/null 2>&1 || { echo "import $f failed"; exit 1; }
 done
 for v in 127 150 187 193 200.5 250 400; do bean add lab.cholesterol-total $v -unit mg/dL -at 2026-11-01 >/dev/null; done
 for v in 29 44 52 60 72; do bean add lab.hdl-cholesterol $v -unit mg/dL -at 2026-11-01 >/dev/null; done
 n=0
-compare() { bean compare -save -type 'lab.*' "$@" >/dev/null 2>"$T/err" || { echo "compare $* failed: $(cat "$T/err")"; exit 1; }; n=$((n + 12)); }
+compare() { bean compare $UNKNOWN -save -type 'lab.*' "$@" >/dev/null 2>"$T/err" || { echo "compare $* failed: $(cat "$T/err")"; exit 1; }; n=$((n + 12)); }
 compare -sex male -age 30-39
 compare -sex female -age 6-80
 compare -sex female -age 20-59 -where DEMO_J.RIDRETH3=3-4
@@ -42,7 +48,7 @@ all() {
     echo "DIFFER $what: reproduce.py exit $code, reproduced $got of $n"; grep -v '^reproduced ' "$T/out.txt" | head -20; exit 1
   fi
 }
-all "records and files" "$T/records.jsonl" "$DATA"/*.XPT
+all "records and files" "$T/records.jsonl" "${FILES[@]}"
 # Leaving: an export folder is all that a person without bean needs.
 bean export "$T/export" >/dev/null 2>&1 || { echo "export failed"; exit 1; }
 all "an export folder" "$T/export"
@@ -72,13 +78,46 @@ with open(dst, "w") as out:
 PYEOF
 }
 change claim 'pass'
-repro "$T/changed.jsonl" "$DATA"/*.XPT >"$T/out.txt" || { echo "DIFFER: the unchanged pair of records was refused"; cat "$T/out.txt"; exit 1; }
+repro "$T/changed.jsonl" "${FILES[@]}" >"$T/out.txt" || { echo "DIFFER: the unchanged pair of records was refused"; cat "$T/out.txt"; exit 1; }
 # A changed number, in the result or in the reading, breaks the record's id.
 change claim 'r["context"]["result"]["p50"] += 1'
-none "a changed result" "$T/changed.jsonl" "$DATA"/*.XPT
+none "a changed result" "$T/changed.jsonl" "${FILES[@]}"
 change reading 'r["value"]["n"] += 1'
-none "a changed reading" "$T/changed.jsonl" "$DATA"/*.XPT
+none "a changed reading" "$T/changed.jsonl" "${FILES[@]}"
 # A changed file has another SHA-256 than the claim names.
-"$PY" -I -c 'import sys; d = bytearray(open(sys.argv[1], "rb").read()); d[-200] ^= 1; open(sys.argv[2], "wb").write(d)' "$DATA/DEMO_J.XPT" "$T/DEMO_J.XPT"
-none "a file with another SHA-256" "$T/records.jsonl" "$DATA/TCHOL_J.XPT" "$DATA/HDL_J.XPT" "$DATA/BMX_J.XPT" "$DATA/DR1TOT_J.XPT" "$T/DEMO_J.XPT"
-echo "compare: reproduce.py checks and computes all $n comparisons again from $(basename "$DATA"), also from an export alone, and refuses a changed result, reading and file"
+"$PY" -I -c 'import sys; d = bytearray(open(sys.argv[1], "rb").read()); d[-200] ^= 1; open(sys.argv[2], "wb").write(d)' "$(xpt DEMO_J)" "$T/DEMO_J.XPT" || { echo "could not change a file"; exit 1; }
+# The changed file must still read as a file: the refusal must come from its
+# SHA-256, not from a file that cannot be opened.
+"$PY" -I -c 'import sys, pandas; pandas.read_sas(sys.argv[1], format="xport")' "$T/DEMO_J.XPT" || { echo "the changed file does not read"; exit 1; }
+none "a file with another SHA-256" "$T/records.jsonl" "$(xpt TCHOL_J)" "$(xpt HDL_J)" "$(xpt BMX_J)" "$(xpt DR1TOT_J)" "$T/DEMO_J.XPT"
+# A claim that is signed and whose numbers compute, but that is not one the
+# method makes, must be refused: each of these is written with bean append,
+# so its id and signature are good.
+forge() {
+  "$PY" -I - "$T/records.jsonl" "$1" >"$T/forged.jsonl" <<'PYEOF'
+import json, sys
+records = [json.loads(l) for l in open(sys.argv[1])]
+r = next(x for x in records if x["type"] == "comparison.percentile" and len(x["context"]["cohort"]["rules"]) == 2)
+c = r["context"]
+exec(sys.argv[2])
+src = dict(r["source"]); src.pop("ref", None); src["ref"] = None
+print(json.dumps({"type": r["type"], "value": r["value"], "times": {"observed": r["times"]["observed"]},
+                  "refs": r["refs"], "source": src, "context": c}))
+PYEOF
+  rm -rf "$T/flog"; cp -R "$T/log" "$T/flog"
+  "$T/bin/bean" -dir "$T/flog" append <"$T/forged.jsonl" >/dev/null 2>&1 || { echo "forge: append failed"; exit 1; }
+  "$T/bin/bean" -dir "$T/flog" ls -json >"$T/forged-log.jsonl"
+  before=$(grep -c . "$T/records.jsonl"); after=$(grep -c . "$T/forged-log.jsonl")
+  [ "$after" = $((before + 1)) ] || { echo "forge: the forged claim was not added"; exit 1; }
+  repro "$T/forged-log.jsonl" "${FILES[@]}" >"$T/out.txt"; code=$?
+  if [ "$code" != 1 ] || [ "$(grep -c '^DIFFERS ' "$T/out.txt")" != 1 ] || [ "$(grep -c '^reproduced ' "$T/out.txt")" != "$n" ]; then
+    echo "DIFFER: reproduce.py accepted a claim with $2 (exit $code)"; grep -v '^reproduced ' "$T/out.txt" | head -5; exit 1
+  fi
+}
+forge 'c["cohort"]["text"] = "female, age 20-29"' "a cohort text that its rules do not say"
+forge 'c["reference"]["weight"] = {"dataset": "DEMO_J", "variable": "RIDAGEYR"}' "a weight the method does not give"
+forge 'c["status"] = "comparable"' "a status the method does not give"
+forge 'c["reasons"] = c["reasons"][:1]' "reasons left out"
+forge 'c["cohort"]["rules"] = c["cohort"]["rules"][1:]' "a cohort with no sex"
+forge 'c["reference"]["files"][0]["known"] = not c["reference"]["files"][0]["known"]' "a wrong word on which file is on record"
+echo "compare: reproduce.py checks and computes all $n comparisons again from $(basename "$DATA"), also from an export alone, and refuses a changed result, reading and file, and six signed claims the method does not make"

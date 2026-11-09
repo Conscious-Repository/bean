@@ -15,8 +15,10 @@ For each comparison.percentile record it checks, in this order:
     the reading it is about (the id is a hash of the record, so the claim
     pins the reading's value without holding it);
  2. each data file has the SHA-256 the claim names;
- 3. each variable the claim names has, in its file, the label the claim
-    gives it;
+ 3. the claim is one the method could have made: the cohort starts with
+    sex and age, its text says what its rules say, the weight is the one
+    the method gives, and the status and reasons follow from the inputs;
+    and each variable has, in its file, the label the claim gives it;
  4. the method of docs/COMPARE.md, computed here from the claim's own
     cohort and the reading's value, gives every number of the result;
  5. numpy's own weighted quantile and sums agree with that.
@@ -25,8 +27,11 @@ It prints one line per comparison, with the reading and the variable it
 was set against, and exits 1 if any check fails. Whether the two measure
 the same thing is for you to judge: the line shows both.
 
-It shares no code with bean and has no table of tests or variables: it
-reads only what the claim says. The record checks are those of the second
+It shares no code with bean and has no table of tests: which variable a
+reading is set against is read from the claim and shown to you. It knows
+the method: the weights, the data sets a rule may name, the reasons, and
+the SHA-256 of each file as CDC served it, so that it does not take the
+claim's word for which file is CDC's. The record checks are those of the second
 verifier (tools/second/beanverify.py), which must sit where this file
 expects it. A good signature shows which key signed. Whether that key
 speaks for the person is a question for the whole log: bean verify, or
@@ -46,6 +51,33 @@ import beanverify  # noqa: E402
 
 METHOD = ("nhanes-weighted-percentile", "1")
 MIN_N = 30
+SMALL_N = 100
+MAX_AGE = 80
+DEMO, EXAM_WEIGHT = "DEMO_J", "WTMEC2YR"
+# The data sets a rule may name, with the weight an analysis with each must
+# use when it is not the examination weight (docs/COMPARE.md, step 4).
+COHORT_FILES = {"DEMO_J": None, "BMX_J": None, "DR1TOT_J": "WTDRD1"}
+# The SHA-256 of each file as wwwn.cdc.gov served it on 2026-11-09: the same
+# table as bean's (internal/nhanes), kept here so that this tool does not
+# take the claim's word for which file is CDC's.
+KNOWN = {
+    "DEMO_J": "c0b46e0345ea19404928656277c8b0d10b0cca348a9b2fe4fc3c67e8b7ee73ec",
+    "TCHOL_J": "0291a6a4f6d82dac8392c8c992b519946824dfeda01647935520cf506ed9f4ab",
+    "HDL_J": "9f4eb41b89f0c9f3d6262f873e671eeb2f2eb40581a8426b2a3c8fd4fc19439e",
+    "GHB_J": "35f07094573a0061a03ed609a5a363b34eb1b1c7065d1623b43d72e132a8a654",
+    "CBC_J": "00f964098dc91272e415344554cbf1b627ecaeb2eda201518527446a7d81e742",
+    "BMX_J": "8d675e42d8826ac98714b2c3dd4c5138a5e353fb4424f7eff5e6db4a01ce838a",
+    "DR1TOT_J": "390ae5205acfbcb87e0ca3d9aabd1c801b60657d3f2802ac08d5b3ed93f0af6d",
+}
+# The reasons of a qualified comparison, in the order a claim lists them.
+REASON_METHOD = "the lab that measured the reading and NHANES used their own instruments and methods"
+REASON_POPULATION = "NHANES is a sample of people living in the United States in the survey years, not a reference range, and like you only in what the cohort states"
+REASON_COHORT = "you chose the cohort: bean does not know whether you belong to it"
+REASON_TOP_AGE = "NHANES records every age of 80 and over as 80"
+REASON_DIET = "the cohort is chosen by what people said they ate on one day, which is not what a person usually eats"
+REASON_SMALL = "the cohort is small: fewer than 100 people"
+REASON_UNKNOWN = "this copy of %s is not the file on record: its SHA-256 differs"
+REASON_AUTHOR = "the reading was signed by an agent or another key, not by you"
 QUANTILES = (("p5", 0.05), ("p25", 0.25), ("p50", 0.5), ("p75", 0.75), ("p95", 0.95))
 
 
@@ -63,6 +95,89 @@ def read_xpt(path):
     if table["SEQN"].isna().any() or table["SEQN"].duplicated().any():
         raise ValueError(path + " has a missing or repeated SEQN")
     return table.set_index("SEQN", drop=False)
+
+
+def num(x):
+    """A number the short way: 20, not 20.0."""
+    return str(int(x)) if float(x).is_integer() else repr(float(x))
+
+
+def is_number(x):
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+
+
+def check_form(claim, reading):
+    """The claim must be one that the method could have produced: the
+    cohort starts with sex and age, the rules name data sets the method
+    allows, the weight is the one step 4 gives, the text says what the rules
+    say, and the status and reasons follow from the inputs. Returns the
+    reasons it must carry but for those that need the result, or raises
+    ValueError."""
+    ctx = claim["context"]
+    ref, cohort = ctx["reference"], ctx["cohort"]
+    rules = cohort["rules"]
+    if claim.get("author") != claim.get("subject"):
+        raise ValueError("the claim is not signed by the person it is about")
+    if ref.get("system") != "nhanes" or ref.get("cycle") != "2017-2018" or ref.get("demographics") != DEMO:
+        raise ValueError("not NHANES 2017-2018 with DEMO_J")
+    if not str(ref.get("dataset", "")).endswith("_J") or ref["dataset"] in COHORT_FILES:
+        raise ValueError("the test's data set is not a test file of the cycle")
+    if len(rules) < 2:
+        raise ValueError("the cohort has no sex and age")
+    seen = set()
+    for r in rules:
+        name = (r.get("dataset"), r.get("variable"))
+        if name[0] not in COHORT_FILES or not isinstance(name[1], str):
+            raise ValueError("a rule names a data set the method does not allow: %s" % (name[0],))
+        if name[1] == "SEQN" or name[1].startswith("WT") or name[1].startswith("SDMV") or name in seen:
+            raise ValueError("a rule on a design variable, or two rules on one variable: %s" % name[1])
+        seen.add(name)
+        if not is_number(r.get("min")) or not is_number(r.get("max")) or r["min"] > r["max"] or r["min"] < 0:
+            raise ValueError("a rule without a range of two numbers: %s" % name[1])
+    sex, age = rules[0], rules[1]
+    if (sex["dataset"], sex["variable"]) != (DEMO, "RIAGENDR") or sex["min"] != sex["max"] or sex["min"] not in (1, 2):
+        raise ValueError("the first rule is not one sex")
+    if (age["dataset"], age["variable"]) != (DEMO, "RIDAGEYR") or age["max"] > MAX_AGE or not float(age["min"]).is_integer() or not float(age["max"]).is_integer():
+        raise ValueError("the second rule is not an age range in years up to 80")
+    # Step 4: the weight.
+    weight = (DEMO, EXAM_WEIGHT)
+    for r in rules:
+        if COHORT_FILES[r["dataset"]]:
+            weight = (r["dataset"], COHORT_FILES[r["dataset"]])
+            break
+    if (ref["weight"].get("dataset"), ref["weight"].get("variable")) != weight:
+        raise ValueError("the weight is not the one the method gives: %s.%s" % weight)
+    # The cohort in words, from the rules.
+    text = "%s, age %s-%s" % ("male" if sex["min"] == 1 else "female", num(age["min"]), num(age["max"]))
+    if age["max"] == MAX_AGE:
+        text = "%s, age %s and over" % ("male" if sex["min"] == 1 else "female", num(age["min"]))
+    for r in rules[2:]:
+        span = num(r["min"]) if r["min"] == r["max"] else "%s-%s" % (num(r["min"]), num(r["max"]))
+        text += ", %s.%s=%s" % (r["dataset"], r["variable"], span)
+    if cohort.get("text") != text:
+        raise ValueError("the cohort's text is not what its rules say: %r" % text)
+    # The files: the test's, the demographics, then each rule's, once each.
+    needed = []
+    for d in [ref["dataset"], DEMO] + [r["dataset"] for r in rules]:
+        if d not in needed:
+            needed.append(d)
+    if [f.get("dataset") for f in ref["files"]] != needed:
+        raise ValueError("the claim does not name exactly the files the method reads")
+    unknown = []
+    for f in ref["files"]:
+        on_record = KNOWN.get(f["dataset"]) == f.get("sha256")
+        if f.get("known") is not on_record:
+            raise ValueError("the claim is wrong about whether %s is the file on record" % f["dataset"])
+        if not on_record:
+            unknown.append(REASON_UNKNOWN % f["dataset"])
+    if ctx.get("status") != "qualified":
+        raise ValueError("the status is not qualified")
+    reasons = [REASON_METHOD, REASON_POPULATION, REASON_COHORT]
+    if age["max"] == MAX_AGE:
+        reasons.append(REASON_TOP_AGE)
+    if any(r["dataset"] == "DR1TOT_J" for r in rules):
+        reasons.append(REASON_DIET)
+    return reasons, unknown, ([REASON_AUTHOR] if reading.get("author") != claim["author"] else [])
 
 
 def round1(y):
@@ -210,8 +325,12 @@ def check(claim, inputs):
     if {"rel": "about", "id": rid} not in claim.get("refs", []) or reading.get("subject") != claim.get("subject"):
         return False, "the claim is not about the reading it names, or they are about two people"
     value = reading.get("value", {}).get("n")
-    if not isinstance(value, (int, float)) or isinstance(value, bool):
-        return False, "the reading is not a number"
+    if not is_number(value) or not value > 0:
+        return False, "the reading is not a number above zero"
+    try:
+        reasons, unknown, by = check_form(claim, reading)
+    except (KeyError, TypeError, ValueError, AttributeError) as err:
+        return False, "not a claim the method makes: %s" % err
     tables = {}
     for f in ctx["reference"]["files"]:
         if f["sha256"] not in inputs.files:
@@ -237,7 +356,12 @@ def check(claim, inputs):
     differs = numpy_differs(rows, float(value), got)
     if differs:
         return False, "%s: %s" % (what, differs)
-    return True, "%s: percentile %s, n %s" % (what, got["percentile"], got["n"])
+    if got["n"] < SMALL_N:
+        reasons.append(REASON_SMALL)
+    if ctx.get("reasons") != reasons + unknown + by:
+        return False, "%s: the reasons are not the ones these inputs give" % what
+    note = "; NOT the files on record: " + ", ".join(f["dataset"] for f in ref["files"] if not f["known"]) if unknown else ""
+    return True, "%s: percentile %s, n %s%s" % (what, got["percentile"], got["n"], note)
 
 
 def main(argv):

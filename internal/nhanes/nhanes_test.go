@@ -1,7 +1,6 @@
 package nhanes
 
 import (
-	"errors"
 	"math"
 	"os"
 	"path/filepath"
@@ -32,7 +31,7 @@ func load(t *testing.T, dir string, names ...string) map[string]*xpt.File {
 
 func cohort(t *testing.T, sex string, lo, hi int, rules ...Rule) Cohort {
 	t.Helper()
-	c, err := NewCohort(Cycles[0], sex, lo, hi)
+	c, err := NewCohort(sex, lo, hi)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +70,7 @@ func plain(t *testing.T, files map[string]*xpt.File, a Analyte, c Cohort) []pers
 		cache[dataset+"."+variable] = out
 		return out
 	}
-	wd, wv := c.Weight(Cycles[0])
+	wd, wv := c.Weight()
 	weights := get(wd, wv)
 	var out []person
 next:
@@ -110,7 +109,7 @@ func TestCompareAgainstPlain(t *testing.T) {
 			for _, p := range people {
 				total += p.w
 			}
-			for _, v := range []float64{0, 127, 150.5, 193, 200, 250, 1000, 40, 52} {
+			for _, v := range []float64{0.5, 127, 150.5, 193, 200, 250, 1000, 40, 52} {
 				got, err := Compare(files, a, c, v)
 				if err != nil {
 					t.Fatalf("%s %s %v: %v", a.Variable, c, v, err)
@@ -154,10 +153,10 @@ func TestCompareAgainstPlain(t *testing.T) {
 func TestWeight(t *testing.T) {
 	plainCohort := cohort(t, "male", 30, 39)
 	diet := cohort(t, "male", 30, 39, Rule{"BMX_J", "BMXBMI", 10, 90}, Rule{"DR1TOT_J", "DR1TKCAL", 0, 99999})
-	if d, v := plainCohort.Weight(Cycles[0]); d != "DEMO_J" || v != "WTMEC2YR" {
+	if d, v := plainCohort.Weight(); d != "DEMO_J" || v != "WTMEC2YR" {
 		t.Errorf("%s %s", d, v)
 	}
-	if d, v := diet.Weight(Cycles[0]); d != "DR1TOT_J" || v != "WTDRD1" {
+	if d, v := diet.Weight(); d != "DR1TOT_J" || v != "WTDRD1" {
 		t.Errorf("%s %s", d, v)
 	}
 }
@@ -170,9 +169,8 @@ func TestRefusals(t *testing.T) {
 		t.Fatal(err)
 	}
 	// A small cohort gives its size and no number.
-	var small ErrSmall
 	res, err := Compare(files, tc, cohort(t, "male", 30, 30, Rule{"DEMO_J", "RIDRETH3", 6, 6}), 190)
-	if !errors.As(err, &small) || small.N >= MinN || res != (Result{N: small.N}) {
+	if err == nil || !strings.Contains(err.Error(), "no result below 30") || res.N >= MinN || res != (Result{N: res.N}) {
 		t.Errorf("small cohort: %+v %v", res, err)
 	}
 	for name, c := range map[string]Cohort{
@@ -192,11 +190,11 @@ func TestRefusals(t *testing.T) {
 		}
 	}
 	for _, bad := range [][3]any{{"other", 30, 39}, {"male", -1, 39}, {"male", 40, 39}, {"male", 30, 81}} {
-		if _, err := NewCohort(Cycles[0], bad[0].(string), bad[1].(int), bad[2].(int)); err == nil {
+		if _, err := NewCohort(bad[0].(string), bad[1].(int), bad[2].(int)); err == nil {
 			t.Errorf("%v: a cohort", bad)
 		}
 	}
-	for _, v := range []float64{math.NaN(), math.Inf(1)} {
+	for _, v := range []float64{math.NaN(), math.Inf(1), 0, -5} {
 		if _, err := Compare(files, tc, good, v); err == nil {
 			t.Errorf("%v: compared", v)
 		}
@@ -230,17 +228,25 @@ func TestRefusals(t *testing.T) {
 func TestAnalytes(t *testing.T) {
 	seen := map[string]bool{}
 	for _, a := range Analytes {
-		if _, ok := CycleOf(a.Dataset); !ok || Known[a.Dataset] == "" || len(a.Units) == 0 {
+		if !InCycle(a.Dataset) || Known[a.Dataset] == "" || a.Unit == "" || a.Label == "" {
 			t.Errorf("%+v: no cycle, digest or unit", a)
 		}
-		for _, typ := range a.Types {
-			if seen[typ] || !strings.HasPrefix(typ, "lab.") {
-				t.Errorf("%s: twice, or not a lab type", typ)
-			}
-			seen[typ] = true
-			if got, ok := AnalyteFor(typ); !ok || got.Variable != a.Variable {
-				t.Errorf("%s: %+v", typ, got)
-			}
+		if seen[a.Type] || !strings.HasPrefix(a.Type, "lab.") {
+			t.Errorf("%s: twice, or not a lab type", a.Type)
+		}
+		seen[a.Type] = true
+		if got, ok := AnalyteFor(a.Type); !ok || got.Variable != a.Variable {
+			t.Errorf("%s: %+v", a.Type, got)
+		}
+	}
+	// The checker in Python holds the same digests.
+	py, err := os.ReadFile("../../tools/compare/reproduce.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, digest := range Known {
+		if !strings.Contains(string(py), `"`+name+`": "`+digest+`"`) {
+			t.Errorf("tools/compare/reproduce.py does not have the digest of %s", name)
 		}
 	}
 	if _, ok := AnalyteFor("lab.glucose"); ok {

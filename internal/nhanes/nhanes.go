@@ -23,35 +23,28 @@ const System = "nhanes"
 // FileType is the type of the record that keeps one NHANES file.
 const FileType = "reference.file"
 
-// Cycle is one survey cycle.
-type Cycle struct {
-	Suffix string // the end of each data set name
-	Years  string
-	URL    string // the folder CDC serves the files from
-	Demo   string // the demographics data set
-	Weight string // the examination weight
+// The one survey cycle bean reads: 2017-2018. A file of another cycle is
+// refused: its weights and variables are not the same. A second cycle is a
+// second set of these, and then a type for them.
+const (
+	Years  = "2017-2018"
+	Suffix = "_J" // the end of each data set name
+	// URL is the folder CDC serves the files from.
+	URL    = "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/"
+	Demo   = "DEMO_J"   // the demographics data set
+	Weight = "WTMEC2YR" // the examination weight, in Demo
+)
+
+// InCycle reports whether a data set name such as TCHOL_J is of the cycle.
+func InCycle(dataset string) bool {
+	return strings.HasSuffix(dataset, Suffix) && len(dataset) > len(Suffix)
 }
 
-// Cycles are the cycles bean reads. A file of another cycle is refused: its
-// weights and variables are not the same.
-var Cycles = []Cycle{
-	{Suffix: "_J", Years: "2017-2018", URL: "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/", Demo: "DEMO_J", Weight: "WTMEC2YR"},
-}
-
-// CycleOf returns the cycle of a data set name such as TCHOL_J.
-func CycleOf(dataset string) (Cycle, bool) {
-	for _, c := range Cycles {
-		if strings.HasSuffix(dataset, c.Suffix) && len(dataset) > len(c.Suffix) {
-			return c, true
-		}
-	}
-	return Cycle{}, false
-}
-
-// Known holds the SHA-256 of each file as wwwn.cdc.gov served it on
-// 2026-11-09. A file with another digest still imports and compares, and
-// the comparison says that bean does not know it: CDC may have published it
-// again, or it is not CDC's file.
+// Known holds the SHA-256 of each file as one download from wwwn.cdc.gov
+// gave it on 2026-11-09: the files on record. A file with another digest
+// still imports, but bean compare uses it only when told to: it may be cut
+// short, changed, or a later release. tools/compare/reproduce.py holds the
+// same table, and a test keeps the two equal.
 var Known = map[string]string{
 	"DEMO_J":   "c0b46e0345ea19404928656277c8b0d10b0cca348a9b2fe4fc3c67e8b7ee73ec",
 	"TCHOL_J":  "0291a6a4f6d82dac8392c8c992b519946824dfeda01647935520cf506ed9f4ab",
@@ -83,56 +76,44 @@ var CohortFiles = map[string]CohortFile{
 		Reason: "the cohort is chosen by what people said they ate on one day, which is not what a person usually eats"},
 }
 
-// Analyte maps the record types of one lab test to its NHANES variable.
+// Analyte maps the record type of one lab test to its NHANES variable.
 // Every row is a claim that the two measure the same quantity in the same
-// unit. Add a row only from a real report and the file's own label.
+// unit. Add a row only from a real report and the file's own label. A
+// second lab's name for a test is a second row.
 type Analyte struct {
-	// Types are the bean record types, as an importer writes them.
-	Types []string
-	// Units are the units of a reading that equal the variable's unit.
-	Units []string
-	// Dataset and Variable name the NHANES column; Unit is the unit in
-	// its label, which Compare checks.
-	Dataset, Variable, Unit string
+	// Type is the bean record type, as an importer writes it, and Unit the
+	// unit of a reading that equals the variable's unit.
+	Type, Unit string
+	// Dataset and Variable name the NHANES column; Label is the unit in
+	// the variable's label, which Compare checks.
+	Dataset, Variable, Label string
 }
 
 // Analytes are the tests bean compares. All of them were measured in the
 // whole examined sample, so they use the examination weight.
 var Analytes = []Analyte{
-	{[]string{"lab.cholesterol-total"}, []string{"mg/dL"}, "TCHOL_J", "LBXTC", "mg/dL"},
-	{[]string{"lab.hdl-cholesterol"}, []string{"mg/dL"}, "HDL_J", "LBDHDD", "mg/dL"},
-	{[]string{"lab.hemoglobin-a1c"}, []string{"%"}, "GHB_J", "LBXGH", "%"},
-	{[]string{"lab.wbc"}, []string{"x10E3/uL"}, "CBC_J", "LBXWBCSI", "1000 cells/uL"},
-	{[]string{"lab.rbc"}, []string{"x10E6/uL"}, "CBC_J", "LBXRBCSI", "million cells/uL"},
-	{[]string{"lab.hemoglobin"}, []string{"g/dL"}, "CBC_J", "LBXHGB", "g/dL"},
-	{[]string{"lab.hematocrit"}, []string{"%"}, "CBC_J", "LBXHCT", "%"},
-	{[]string{"lab.mcv"}, []string{"fL"}, "CBC_J", "LBXMCVSI", "fL"},
-	{[]string{"lab.mch"}, []string{"pg"}, "CBC_J", "LBXMCHSI", "pg"},
-	{[]string{"lab.mchc"}, []string{"g/dL"}, "CBC_J", "LBXMC", "g/dL"},
-	{[]string{"lab.rdw"}, []string{"%"}, "CBC_J", "LBXRDW", "%"},
-	{[]string{"lab.platelets"}, []string{"x10E3/uL"}, "CBC_J", "LBXPLTSI", "1000 cells/uL"},
+	{"lab.cholesterol-total", "mg/dL", "TCHOL_J", "LBXTC", "mg/dL"},
+	{"lab.hdl-cholesterol", "mg/dL", "HDL_J", "LBDHDD", "mg/dL"},
+	{"lab.hemoglobin-a1c", "%", "GHB_J", "LBXGH", "%"},
+	{"lab.wbc", "x10E3/uL", "CBC_J", "LBXWBCSI", "1000 cells/uL"},
+	{"lab.rbc", "x10E6/uL", "CBC_J", "LBXRBCSI", "million cells/uL"},
+	{"lab.hemoglobin", "g/dL", "CBC_J", "LBXHGB", "g/dL"},
+	{"lab.hematocrit", "%", "CBC_J", "LBXHCT", "%"},
+	{"lab.mcv", "fL", "CBC_J", "LBXMCVSI", "fL"},
+	{"lab.mch", "pg", "CBC_J", "LBXMCHSI", "pg"},
+	{"lab.mchc", "g/dL", "CBC_J", "LBXMC", "g/dL"},
+	{"lab.rdw", "%", "CBC_J", "LBXRDW", "%"},
+	{"lab.platelets", "x10E3/uL", "CBC_J", "LBXPLTSI", "1000 cells/uL"},
 }
 
 // AnalyteFor returns the analyte that a record type names.
 func AnalyteFor(typ string) (Analyte, bool) {
 	for _, a := range Analytes {
-		for _, t := range a.Types {
-			if t == typ {
-				return a, true
-			}
+		if a.Type == typ {
+			return a, true
 		}
 	}
 	return Analyte{}, false
-}
-
-// HasUnit reports whether a reading in this unit can be compared as it is.
-func (a Analyte) HasUnit(unit string) bool {
-	for _, u := range a.Units {
-		if u == unit {
-			return true
-		}
-	}
-	return false
 }
 
 // Method names the computation. A change to what Compare computes is a new
@@ -174,8 +155,8 @@ func num(x float64) string { return strconv.FormatFloat(x, 'g', -1, 64) }
 type Cohort struct{ Rules []Rule }
 
 // NewCohort makes the cohort of one sex and an age range in years, both
-// ends included, in the demographics file of the cycle.
-func NewCohort(cycle Cycle, sex string, ageMin, ageMax int) (Cohort, error) {
+// ends included.
+func NewCohort(sex string, ageMin, ageMax int) (Cohort, error) {
 	code := map[string]float64{"male": 1, "female": 2}[sex]
 	if code == 0 {
 		return Cohort{}, errors.New("sex is male or female, as NHANES records it")
@@ -184,8 +165,8 @@ func NewCohort(cycle Cycle, sex string, ageMin, ageMax int) (Cohort, error) {
 		return Cohort{}, fmt.Errorf("age is a range of years from 0 to %d, for example 30-39; %d means %d and over", MaxAge, MaxAge, MaxAge)
 	}
 	return Cohort{[]Rule{
-		{cycle.Demo, "RIAGENDR", code, code},
-		{cycle.Demo, "RIDAGEYR", float64(ageMin), float64(ageMax)},
+		{Demo, "RIAGENDR", code, code},
+		{Demo, "RIDAGEYR", float64(ageMin), float64(ageMax)},
 	}}, nil
 }
 
@@ -229,13 +210,13 @@ func (c Cohort) Datasets() []string {
 // Weight returns the data set and the variable of the sample weight: the
 // weight of the first rule's data set that needs its own, else the
 // examination weight in the demographics file.
-func (c Cohort) Weight(cycle Cycle) (dataset, variable string) {
+func (c Cohort) Weight() (dataset, variable string) {
 	for _, d := range c.Datasets() {
 		if w := CohortFiles[d].Weight; w != "" {
 			return d, w
 		}
 	}
-	return cycle.Demo, cycle.Weight
+	return Demo, Weight
 }
 
 // TopAge reports whether the age range ends at MaxAge, which stands for
@@ -267,13 +248,6 @@ type Result struct {
 	P5, P25, P50, P75, P95   float64
 }
 
-// ErrSmall is returned for a cohort of fewer than MinN people.
-type ErrSmall struct{ N int }
-
-func (e ErrSmall) Error() string {
-	return fmt.Sprintf("the cohort has %d people with a value; bean gives no result below %d. Widen a range or drop a rule", e.N, MinN)
-}
-
 // column is one variable of one file, by SEQN.
 type column struct {
 	row    map[float64]int
@@ -288,10 +262,10 @@ func (c column) of(seqn float64) float64 {
 }
 
 // Compare computes where v lies among the cohort's values of the analyte.
-// files holds the analyte's file, the demographics file of its cycle, and
-// the file of every rule, by data set name. The steps, in this order, are
-// the method:
+// files holds the analyte's file, the demographics file, and the file of
+// every rule, by data set name. The steps, in this order, are the method:
 //
+//  0. v must be above zero: none of these quantities can be zero or less.
 //  1. Take the rows of the analyte's file in file order. Skip a row with
 //     no value.
 //  2. The demographics file must have a row with the same SEQN; none is an
@@ -310,27 +284,21 @@ func (c column) of(seqn float64) float64 {
 //     in file order, then the values in rising order.
 //  8. Each percentage is rounded to one decimal: floor(10 y + 0.5) / 10.
 //
-// Fewer than MinN rows left is ErrSmall, and no result.
+// With fewer than MinN rows left it returns the count and an error, and no
+// other number.
 func Compare(files map[string]*xpt.File, a Analyte, c Cohort, v float64) (Result, error) {
 	var res Result
 	if err := c.Check(); err != nil {
 		return res, err
 	}
-	if math.IsNaN(v) || math.IsInf(v, 0) {
-		return res, errors.New("the reading is not a number")
+	if !(v > 0) || math.IsInf(v, 0) {
+		return res, errors.New("the reading is not a number above zero")
 	}
-	cycle, ok := CycleOf(a.Dataset)
-	if !ok {
-		return res, fmt.Errorf("%s is not a file of a cycle bean reads", a.Dataset)
-	}
-	// Every file is the data set its name says, of the analyte's cycle.
+	// Every file is the data set its name says, of the cycle.
 	file := func(dataset string) (*xpt.File, error) {
 		f := files[dataset]
-		if f == nil || f.Dataset != dataset {
-			return nil, fmt.Errorf("the file of %s is missing", dataset)
-		}
-		if fc, ok := CycleOf(dataset); !ok || fc != cycle {
-			return nil, fmt.Errorf("%s is not a file of NHANES %s", dataset, cycle.Years)
+		if f == nil || f.Dataset != dataset || !InCycle(dataset) {
+			return nil, fmt.Errorf("the file of %s is missing, or not a file of NHANES %s", dataset, Years)
 		}
 		return f, nil
 	}
@@ -338,42 +306,49 @@ func Compare(files map[string]*xpt.File, a Analyte, c Cohort, v float64) (Result
 	if err != nil {
 		return res, err
 	}
-	if lv, _ := lab.Variable(a.Variable); !strings.HasSuffix(lv.Label, "("+a.Unit+")") {
-		return res, fmt.Errorf("%s in %s is labelled %q, not in %s", a.Variable, lab.Dataset, lv.Label, a.Unit)
+	if lv, _ := lab.Variable(a.Variable); !strings.HasSuffix(lv.Label, "("+a.Label+")") {
+		return res, fmt.Errorf("%s in %s is labelled %q, not in %s", a.Variable, lab.Dataset, lv.Label, a.Label)
 	}
 	// Each file's rows by SEQN, read once.
 	rows := map[string]map[float64]int{}
-	col := func(dataset, variable string) (column, error) {
+	index := func(dataset string) (map[float64]int, []float64, error) {
 		f, err := file(dataset)
+		if err != nil {
+			return nil, nil, err
+		}
+		seqn, err := f.Column("SEQN")
+		if err != nil {
+			return nil, nil, err
+		}
+		if rows[dataset] == nil {
+			m := make(map[float64]int, len(seqn))
+			for i, s := range seqn {
+				if _, twice := m[s]; twice || math.IsNaN(s) {
+					return nil, nil, fmt.Errorf("%s has a missing or repeated SEQN", dataset)
+				}
+				m[s] = i
+			}
+			rows[dataset] = m
+		}
+		return rows[dataset], seqn, nil
+	}
+	col := func(dataset, variable string) (column, error) {
+		m, _, err := index(dataset)
 		if err != nil {
 			return column{}, err
 		}
-		if rows[dataset] == nil {
-			seqn, err := f.Column("SEQN")
-			if err != nil {
-				return column{}, err
-			}
-			index := make(map[float64]int, len(seqn))
-			for i, s := range seqn {
-				if _, twice := index[s]; twice || math.IsNaN(s) {
-					return column{}, fmt.Errorf("%s has a missing or repeated SEQN", dataset)
-				}
-				index[s] = i
-			}
-			rows[dataset] = index
-		}
-		values, err := f.Column(variable)
-		return column{rows[dataset], values}, err
+		values, err := files[dataset].Column(variable)
+		return column{m, values}, err
 	}
-	seqn, err := lab.Column("SEQN")
+	_, seqn, err := index(a.Dataset)
 	if err != nil {
 		return res, err
 	}
-	x, err := col(a.Dataset, a.Variable)
+	x, err := lab.Column(a.Variable)
 	if err != nil {
 		return res, err
 	}
-	people, err := col(cycle.Demo, "SEQN")
+	people, _, err := index(Demo)
 	if err != nil {
 		return res, err
 	}
@@ -383,8 +358,7 @@ func Compare(files map[string]*xpt.File, a Analyte, c Cohort, v float64) (Result
 			return res, err
 		}
 	}
-	wd, wv := c.Weight(cycle)
-	weight, err := col(wd, wv)
+	weight, err := col(c.Weight())
 	if err != nil {
 		return res, err
 	}
@@ -392,11 +366,11 @@ func Compare(files map[string]*xpt.File, a Analyte, c Cohort, v float64) (Result
 	byValue := map[float64]float64{}
 rowLoop:
 	for i, s := range seqn {
-		if math.IsNaN(x.values[i]) {
+		if math.IsNaN(x[i]) {
 			continue
 		}
-		if _, ok := people.row[s]; !ok {
-			return res, fmt.Errorf("%s has a person that %s does not: they are not files of one release", lab.Dataset, cycle.Demo)
+		if _, ok := people[s]; !ok {
+			return res, fmt.Errorf("%s has a person that %s does not: they are not files of one release", lab.Dataset, Demo)
 		}
 		for k, r := range c.Rules {
 			if y := rules[k].of(s); !(y >= r.Min && y <= r.Max) {
@@ -409,15 +383,15 @@ rowLoop:
 		}
 		res.N++
 		total += w
-		if x.values[i] < v {
+		if x[i] < v {
 			below += w
-		} else if x.values[i] == v {
+		} else if x[i] == v {
 			equal += w
 		}
-		byValue[x.values[i]] += w
+		byValue[x[i]] += w
 	}
 	if res.N < MinN {
-		return Result{N: res.N}, ErrSmall{res.N}
+		return Result{N: res.N}, fmt.Errorf("the cohort has %d people with a value; bean gives no result below %d. Widen a range or drop a rule", res.N, MinN)
 	}
 	res.Below = round1(100 * below / total)
 	res.Equal = round1(100 * equal / total)
@@ -441,4 +415,7 @@ rowLoop:
 	return res, nil
 }
 
-func round1(y float64) float64 { return math.Floor(10*y+0.5) / 10 }
+// round1 rounds to one decimal. The conversions keep a compiler from
+// fusing the multiplication and the addition into one operation, as Go
+// allows and arm64 does: every implementation must round each step.
+func round1(y float64) float64 { return math.Floor(float64(float64(10*y)+0.5)) / 10 }

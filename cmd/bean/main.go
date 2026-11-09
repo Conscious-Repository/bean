@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -85,7 +86,7 @@ var syntax = map[string]string{
 	"ls":            "ls [-type <t>] [-since <time>] [-until <time>] [-author me|agent|<id>|<npub>] [-all] [-json]",
 	"show":          "show <id>",
 	"verify":        "verify",
-	"compare":       "compare -sex male|female -age <from>-<to> [-where <DATASET>.<VARIABLE>=<value>|<from>-<to>]... [-save] <id>... | -type <type>",
+	"compare":       "compare -sex male|female -age <from>-<to> [-where <DATASET>.<VARIABLE>=<value>|<from>-<to>]... [-unknown-files] [-save] <id>... | -type <type>",
 	"mcp":           "mcp [-write] [-blobs] [-label <name>]",
 	"agent":         "agent init [-label <name>] [-identity <id>] | agent pair <npub> [-label <name>]",
 	"sync":          "sync <source folder>",
@@ -403,6 +404,18 @@ func main() {
 		fmt.Printf("added %d records, %d blobs, refused %d purged\n", res.Records, res.Blobs, res.Refused)
 	default:
 		usage()
+	}
+	// A command that can correct or delete a reading, or bring such a
+	// change from another copy, also deletes the saved comparisons of that
+	// reading (compare.go). add does it only for a correction: it is the
+	// command people run most, and the check reads the whole log.
+	switch cmd {
+	case "purge", "append", "import", "sync", "import-export":
+		sweepComparisons(s)
+	case "add":
+		if slices.Contains(rest, "-corrects") || slices.Contains(rest, "--corrects") || slices.ContainsFunc(rest, func(a string) bool { return strings.HasPrefix(a, "-corrects=") || strings.HasPrefix(a, "--corrects=") }) {
+			sweepComparisons(s)
+		}
 	}
 }
 
