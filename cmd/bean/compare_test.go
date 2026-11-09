@@ -2,10 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Conscious-Repository/bean/internal/nhanes"
 )
 
 const refData = "../../internal/nhanes/testdata/"
@@ -44,9 +47,9 @@ func TestCompare(t *testing.T) {
 		t.Fatalf("%d\n%s\n%s", code, out, errs)
 	}
 	for _, want := range []string{
-		"Compared with NHANES 2017-2018: male, age 30-39.", "lab.cholesterol-total", "193 mg/dL", "qualified",
+		"Compared with NHANES 2017-2018: male, age 30-39.", "lab.cholesterol-total", "193 mg/dL", "Read each number with these caveats:",
 		"not whether it is healthy", "their own instruments and methods", "you chose the cohort",
-		"this copy of TCHOL_J is not the file on record", "this copy of DEMO_J is not the file on record", "qualified, file not on record",
+		"this copy of TCHOL_J is not the file on record", "this copy of DEMO_J is not the file on record", "small cohort, file not on record",
 		"Not saved. Pass -save",
 	} {
 		if !strings.Contains(out, want) {
@@ -63,13 +66,13 @@ func TestCompare(t *testing.T) {
 	}
 	// -type compares what it can and counts the rest.
 	out, _, code = run(t, dir, "", "compare", "-unknown-files", "-sex", "female", "-age", "20-59", "-type", "lab.*")
-	if code != 0 || !strings.Contains(out, "lab.hdl-cholesterol") || strings.Contains(out, "lab.tsh") || !strings.Contains(out, "1 other readings are not comparable") {
+	if code != 0 || !strings.Contains(out, "lab.hdl-cholesterol") || !strings.Contains(out, "No reference data for 1 other types: lab.tsh.") {
 		t.Errorf("-type: %d\n%s", code, out)
 	}
 	// An id that cannot be compared is a row that says why, and exit 1 when
 	// nothing could be.
 	out, errs, code = run(t, dir, "", "compare", "-unknown-files", "-sex", "female", "-age", "20-59", ids[2])
-	if code != 1 || !strings.Contains(out, "not comparable: bean has no reference data for this type") || !strings.Contains(errs, "nothing could be compared") {
+	if code != 1 || !strings.Contains(out, "not comparable: no reference data for this type") || !strings.Contains(errs, "nothing could be compared") {
 		t.Errorf("tsh: %d\n%s\n%s", code, out, errs)
 	}
 }
@@ -97,21 +100,19 @@ func TestCompareSave(t *testing.T) {
 	var found bool
 	for _, line := range lines {
 		var r struct {
-			ID     string         `json:"id"`
-			Author string         `json:"author"`
-			Value  map[string]any `json:"value"`
-			Times  struct {
+			ID    string         `json:"id"`
+			Value map[string]any `json:"value"`
+			Times struct {
 				Observed map[string]any `json:"observed"`
 			} `json:"times"`
 			Refs    []map[string]string `json:"refs"`
 			Context struct {
-				Status    string   `json:"status"`
-				Reasons   []string `json:"reasons"`
+				Caveats   []string `json:"caveats"`
 				Reading   string   `json:"reading"`
 				Reference struct {
-					Variable, Label, Unit, Dataset string
-					Weight                         map[string]string
-					Files                          []map[string]any
+					Variable, Label, Dataset string
+					Weight                   map[string]string
+					Files                    []map[string]any
 				} `json:"reference"`
 				Cohort struct {
 					Text  string
@@ -129,10 +130,10 @@ func TestCompareSave(t *testing.T) {
 			continue
 		}
 		found = true
-		if c.Status != "qualified" || len(c.Reasons) < 5 || r.Value["unit"] != "{percentile}" || r.Value["n"] != c.Result["percentile"] {
-			t.Errorf("status, reasons or value: %s", line)
+		if len(c.Caveats) < 5 || r.Value["unit"] != "{percentile}" || r.Value["n"] != c.Result["percentile"] {
+			t.Errorf("caveats or value: %s", line)
 		}
-		if c.Reference.Variable != "LBXTC" || c.Reference.Label != "Total Cholesterol (mg/dL)" || c.Reference.Unit != "mg/dL" || c.Reference.Dataset != "TCHOL_J" {
+		if c.Reference.Variable != "LBXTC" || c.Reference.Label != "Total Cholesterol (mg/dL)" || c.Reference.Dataset != "TCHOL_J" {
 			t.Errorf("reference: %+v", c.Reference)
 		}
 		// A diet rule brings the day one weight.
@@ -142,25 +143,24 @@ func TestCompareSave(t *testing.T) {
 		if c.Cohort.Text != "female, age 20 and over, DEMO_J.RIDRETH3=3-4, DR1TOT_J.DR1TFIBE=5-40" || c.Cohort.Rules[3]["label"] != "Dietary fiber (gm)" || c.Cohort.Rules[2]["min"] != 3.0 || c.Cohort.Rules[2]["max"] != 4.0 {
 			t.Errorf("cohort: %+v", c.Cohort)
 		}
-		if c.Method["id"] != "nhanes-weighted-percentile" || c.Method["version"] != "1" || c.Method["min_n"] != 30.0 {
+		if c.Method["id"] != "nhanes-weighted-percentile" || c.Method["version"] != "1" {
 			t.Errorf("method: %v", c.Method)
 		}
 		// The claim is about the reading and each file it read, and names
 		// each file by its SHA-256. It does not copy the reading's value.
-		if len(r.Refs) != 4 || r.Refs[0]["id"] != ids[0] || len(c.Reference.Files) != 3 || c.Reference.Files[0]["known"] != false {
+		if len(r.Refs) != 4 || r.Refs[0]["id"] != ids[0] || len(c.Reference.Files) != 3 {
 			t.Errorf("refs and files: %v %v", r.Refs, c.Reference.Files)
 		}
-		for i, f := range c.Reference.Files {
-			raw, _ := os.ReadFile(filepath.Join(refData, f["dataset"].(string)+".XPT"))
-			if f["bytes"] != float64(len(raw)) || f["record"] != r.Refs[i+1]["id"] || len(f["sha256"].(string)) != 64 {
-				t.Errorf("file %d: %v", i, f)
+		for _, f := range c.Reference.Files {
+			if fileDigest(filepath.Join(refData, f["dataset"].(string)+".XPT")) != f["sha256"] || len(f) != 2 {
+				t.Errorf("file: %v", f)
 			}
 		}
 		if strings.Contains(line, `"n":193`) || strings.Contains(line, "mg/dL\",\"n\"") {
 			t.Errorf("the claim copies the reading's value: %s", line)
 		}
-		if r.Times.Observed["precision"] != "day" || c.Result["n"] < 30 {
-			t.Errorf("time or n: %s", line)
+		if r.Times.Observed["precision"] != "day" || c.Result["n"] < 30 || len(c.Result) != 7 {
+			t.Errorf("time or result: %s", line)
 		}
 	}
 	if !found {
@@ -186,7 +186,7 @@ func TestCompareRefuses(t *testing.T) {
 		"no cohort":          {[]string{ids[0]}, 2, "not comparable without a cohort"},
 		"no age":             {[]string{"-sex", "male", ids[0]}, 2, "not comparable without a cohort"},
 		"bad sex":            {[]string{"-sex", "m", "-age", "30-39", ids[0]}, 2, "sex is male or female"},
-		"one age":            {[]string{"-sex", "male", "-age", "35", ids[0]}, 2, "bad -age"},
+		"one age":            {[]string{"-sex", "male", "-age", "35", ids[0]}, 2, "For someone of 35, try 30-39"},
 		"age over 80":        {[]string{"-sex", "male", "-age", "70-90", ids[0]}, 2, "80 means 80 and over"},
 		"age with a sign":    {[]string{"-sex", "male", "-age", "+30-39", ids[0]}, 2, "bad -age"},
 		"bad rule":           {[]string{"-sex", "male", "-age", "30-39", "-where", "bmi=20-25", ids[0]}, 2, "bad -where"},
@@ -202,10 +202,7 @@ func TestCompareRefuses(t *testing.T) {
 		// A rule's file is not in the log.
 		"rule file not kept": {[]string{"-sex", "male", "-age", "30-39", "-where", "BMX_J.BMXBMI=20-25", ids[0]}, 1, "BMX_J.xpt"},
 		// Too few people: no number.
-		"small cohort": {[]string{"-sex", "male", "-age", "30-30", "-where", "DEMO_J.RIDRETH3=6", ids[0]}, 1, "bean gives no result below 30"},
-		// A flag given twice would silently take the last value.
-		"sex twice": {[]string{"-sex", "male", "-sex", "female", "-age", "30-39", ids[0]}, 2, "one cohort at a time"},
-		"age twice": {[]string{"-sex", "male", "-age", "30-39", "-age", "40-49", ids[0]}, 2, "one cohort at a time"},
+		"small cohort": {[]string{"-sex", "male", "-age", "30-30", "-where", "DEMO_J.RIDRETH3=6", ids[0]}, 1, "bean gives no number for a cohort of fewer than 30 people"},
 		// A variable the file does not have.
 		"unknown variable": {[]string{"-sex", "male", "-age", "30-39", "-where", "DEMO_J.RIDRETH9=1", ids[0]}, 1, "has no variable RIDRETH9"},
 	} {
@@ -213,7 +210,7 @@ func TestCompareRefuses(t *testing.T) {
 		if code != c.code || !strings.Contains(out+errs, c.want) {
 			t.Errorf("%s: exit %d, want %d and %q\n%s\n%s", name, code, c.code, c.want, out, errs)
 		}
-		if strings.Contains(out, "qualified") {
+		if strings.Contains(out, "caveats") {
 			t.Errorf("%s: a result was printed\n%s", name, out)
 		}
 	}
@@ -227,7 +224,7 @@ func TestCompareRefuses(t *testing.T) {
 		"a corrected value": {ids[0], "is not a current record about you"},
 	} {
 		out, errs, code := run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", c[0])
-		if code != 1 || !strings.Contains(out+errs, c[1]) || strings.Contains(out, "qualified") {
+		if code != 1 || !strings.Contains(out+errs, c[1]) || strings.Contains(out, "caveats") {
 			t.Errorf("%s: %d\n%s\n%s", name, code, out, errs)
 		}
 	}
@@ -236,12 +233,12 @@ func TestCompareRefuses(t *testing.T) {
 	}
 	// A value that cannot be a measurement gets no percentile.
 	zero, _, _ := run(t, dir, "", "add", "lab.cholesterol-total", "0", "-unit", "mg/dL", "-at", "2026-10-01")
-	if out, errs, code := run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", strings.TrimSpace(zero)); code != 1 || !strings.Contains(out, "the reading is not above zero") {
+	if out, errs, code := run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", strings.TrimSpace(zero)); code != 1 || !strings.Contains(out, "the reading is not a number above zero") {
 		t.Errorf("zero: %d\n%s\n%s", code, out, errs)
 	}
 	// Without -unknown-files a copy that is not the file on record is not
 	// used: it may be a download that was cut short.
-	if out, errs, code := run(t, dir, "", "compare", "-sex", "male", "-age", "30-39", strings.TrimSpace(newer)); code != 1 || !strings.Contains(out, "is not the file on record") || !strings.Contains(out, "-unknown-files") || strings.Contains(out, "qualified") {
+	if out, errs, code := run(t, dir, "", "compare", "-sex", "male", "-age", "30-39", strings.TrimSpace(newer)); code != 1 || !strings.Contains(out, "is not the file on record") || !strings.Contains(out, "-unknown-files") || strings.Contains(out, "caveats") {
 		t.Errorf("unknown copy without the flag: %d\n%s\n%s", code, out, errs)
 	}
 	// Two kept copies of one data set that bean does not know: it cannot
@@ -269,7 +266,7 @@ func TestCompareRefuses(t *testing.T) {
 			run(t, dir, "", "purge", r.ID)
 		}
 	}
-	if out, errs, code := run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", strings.TrimSpace(newer)); code != 1 || !strings.Contains(out, "the log does not keep TCHOL_J") {
+	if out, errs, code := run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", strings.TrimSpace(newer)); code != 1 || !strings.Contains(out, "The log does not keep TCHOL_J") {
 		t.Errorf("purged file: %d\n%s\n%s", code, out, errs)
 	}
 }
@@ -329,11 +326,11 @@ func TestCompareMarksAnotherAuthor(t *testing.T) {
 	}
 	out, errs, code := run(t, dir, "", "add", "-agent", "lab.cholesterol-total", "180", "-unit", "mg/dL")
 	if code != 0 {
-		t.Skipf("this log does not take an agent's record without pairing: %s", errs)
+		t.Fatalf("an agent's reading: %s", errs)
 	}
 	id := strings.TrimSpace(out)
 	out, _, code = run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", "-save", id)
-	if code != 0 || !strings.Contains(out, "180 mg/dL  [") || !strings.Contains(out, "signed by an agent or another key") {
+	if code != 0 || !strings.Contains(out, "180 mg/dL  [assistant]") || !strings.Contains(out, "signed by an agent or another key") {
 		t.Errorf("%d\n%s", code, out)
 	}
 	if ls, _, _ := run(t, dir, "", "ls", "-json", "-type", "comparison.percentile"); !strings.Contains(ls, "signed by an agent or another key") {
@@ -341,10 +338,31 @@ func TestCompareMarksAnotherAuthor(t *testing.T) {
 	}
 }
 
-// An assistant cannot write a comparison or a reference file, also when the
-// person's own vocabulary names the type.
-func TestCompareTypesAreNotForAssistants(t *testing.T) {
-	if !computedOnly("comparison.percentile") || !importerOnly("reference.file") || computedOnly("note") || importerOnly("note") {
-		t.Error("comparison.* or reference.* can be logged by an assistant")
+// The MCP tool does not write a comparison, a reference file or the record
+// of a share, also when the person's own vocabulary names the type. And the
+// caveats in tools/compare/reproduce.py are the ones bean writes.
+func TestCompareIsNotForTheMCPTool(t *testing.T) {
+	dir := t.TempDir()
+	run(t, dir, "", "init")
+	run(t, dir, "", "agent", "init", "-label", "assistant")
+	os.WriteFile(filepath.Join(dir, "vocabulary.md"), []byte("| Type | Value | Useful details |\n|---|---|---|\n| `comparison.percentile` | number | |\n| `share` | number | |\n| `reference.file` | text | |\n"), 0o600)
+	for _, typ := range []string{"comparison.percentile", "share", "reference.file"} {
+		call := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"log_entry","arguments":{"type":"` + typ + `","value":46}}}` + "\n"
+		out, _, _ := run(t, dir, call, "mcp", "-write", "-label", "assistant")
+		if !strings.Contains(out, "an assistant cannot write them") {
+			t.Errorf("%s through the MCP tool:\n%s", typ, out)
+		}
+		if ls, _, _ := run(t, dir, "", "ls", "-all", "-type", typ); ls != "" {
+			t.Errorf("%s was written:\n%s", typ, ls)
+		}
+	}
+	py, err := os.ReadFile("../../tools/compare/reproduce.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, text := range []string{caveatMethod, caveatPopulation, caveatCohort, caveatTopAge, caveatAuthor, fmt.Sprintf(caveatSmall, nhanes.SmallN), strings.Replace(caveatUnknown, "%s", "%s", 1), nhanes.CohortFiles["DR1TOT_J"].Reason} {
+		if !strings.Contains(string(py), `"`+text+`"`) {
+			t.Errorf("tools/compare/reproduce.py does not have the caveat %q", text)
+		}
 	}
 }

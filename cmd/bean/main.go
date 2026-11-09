@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
@@ -355,6 +354,16 @@ func main() {
 		if len(rest) != 1 {
 			usage()
 		}
+		// sync copies every record of the source into this log, for good.
+		// That is right for another copy of this log, and wrong for anyone
+		// else's folder, such as a bundle someone sent.
+		if me, err := s.Identity(); err == nil {
+			if _, err := os.Stat(filepath.Join(rest[0], "objects")); err == nil {
+				if _, err := os.Stat(filepath.Join(rest[0], filepath.FromSlash(core.PathOf(me)))); err != nil {
+					fail(fmt.Errorf("%s is not a copy of your log: it does not hold your identity record. bean sync copies every record of its source into your log, for good. To read a bundle someone sent you, run bean check-bundle %s", rest[0], rest[0]))
+				}
+			}
+		}
 		src := core.Open(rest[0])
 		src.Now = s.Now
 		res, err := s.Sync(src)
@@ -419,15 +428,10 @@ func main() {
 	}
 	// A command that can correct or delete a reading, or bring such a
 	// change from another copy, also deletes the saved comparisons of that
-	// reading (compare.go). add does it only for a correction: it is the
-	// command people run most, and the check reads the whole log.
+	// reading (compare.go). bean add does it itself, for a correction only.
 	switch cmd {
 	case "purge", "append", "import", "sync", "import-export":
 		sweepComparisons(s)
-	case "add":
-		if slices.Contains(rest, "-corrects") || slices.Contains(rest, "--corrects") || slices.ContainsFunc(rest, func(a string) bool { return strings.HasPrefix(a, "-corrects=") || strings.HasPrefix(a, "--corrects=") }) {
-			sweepComparisons(s)
-		}
 	}
 }
 

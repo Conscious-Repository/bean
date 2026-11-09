@@ -131,13 +131,6 @@ type importOpts struct {
 	review                     io.Reader
 }
 
-// isTerminal reports whether f is a terminal: a person who can read the
-// table and answer, not a script or an AI assistant's tool.
-func isTerminal(f *os.File) bool {
-	fi, err := f.Stat()
-	return err == nil && fi.Mode()&os.ModeCharDevice != 0
-}
-
 // maxReviewRows is how many readings the review lists; it counts the rest.
 const maxReviewRows = 300
 

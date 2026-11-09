@@ -161,11 +161,11 @@ PYEOF
 }
 craft 'c["files"] = 5' "files that is not a list"
 craft 'c["records"] = "x"' "records that is not a list"
-craft 'c["files"] = [{"blob": "x", "record": c["records"][0], "included": False}]' "a file entry with a bad blob id"
-craft 'c["files"] = [{"blob": "'$Z'", "record": [1], "included": False}]' "a file entry whose record is a list"
-craft 'c["files"] = [{"blob": "'$Z'", "record": c["records"][0]}]' "a file entry with no included"
-craft 'c["files"] = [{"blob": "'$Z'", "record": c["records"][0], "included": True, "sha256": "'$(printf 'a%.0s' $(seq 64))'", "bytes": True}]' "bytes that is true"
-craft 'c["files"] = [{"blob": "'$Z'", "record": c["records"][0], "included": False}]' "a file that no record names"
+craft 'c["files"] = [{"blob": "x", "record": c["records"][0], "sha256": "'$(printf 'a%.0s' $(seq 64))'", "bytes": 1}]' "a file entry with a bad blob id"
+craft 'c["files"] = [{"blob": "'$Z'", "record": [1], "sha256": "'$(printf 'a%.0s' $(seq 64))'", "bytes": 1}]' "a file entry whose record is a list"
+craft 'c["files"] = [{"blob": "'$Z'", "record": c["records"][0], "sha256": "'$(printf 'a%.0s' $(seq 64))'", "bytes": True}]' "bytes that is true"
+craft 'c["files"] = [{"blob": "'$Z'", "record": c["records"][0], "sha256": "'$(printf 'a%.0s' $(seq 64))'"}]' "a file entry with no size"
+craft 'c["files"] = [{"blob": "'$Z'", "record": c["records"][0], "sha256": "'$(printf 'a%.0s' $(seq 64))'", "bytes": 1}]' "a file that no record names"
 craft 'v["n"] = 7' "a count that is not the number listed"
 craft 'del c["proof"]' "no proof list"
 craft 'c["proof"] = c["proof"][:-1] if len(c["proof"]) > 1 else []' "a proof list with one left out"
@@ -174,7 +174,10 @@ craft 'c["proof"] = c["proof"][:-1] if len(c["proof"]) > 1 else []' "a proof lis
 # bundle carries only the person's identity records. bean share says so
 # before it writes anything.
 printf '{"type":"note","subject":"%s","value":{"s":"seen in clinic"},"times":{"observed":null},"source":{"system":"clinic","adapter":"c@1","ref":null}}\n' "$ME" | bean -dir "$X" append >/dev/null 2>&1
-b sync "$X" >/dev/null 2>&1
+# bean sync takes only a copy of this log, so the clinic's records arrive in one.
+if b sync "$X" >/dev/null 2>&1; then echo "DIFFER: bean sync took a stranger's folder"; rc=1; fi
+cp -R "$L/objects" "$T/mix-objects"; mkdir "$T/mix"; mv "$T/mix-objects" "$T/mix/objects"; cp -R "$X"/objects/* "$T/mix/objects/"
+b sync "$T/mix" >/dev/null 2>&1
 CL=$(b ls -all -json -type note | "$PY" -I -c 'import sys, json; print(next((r["id"] for r in map(json.loads, sys.stdin) if r["value"].get("s") == "seen in clinic"), ""))')
 n=$((n + 1)); before=$(b ls -json -type share | grep -c .)
 if [ -z "$CL" ] || b share -yes -out "$T/clinic" "$CL" >"$T/out.txt" 2>&1 || ! grep -q "cannot be shared" "$T/out.txt" || [ -e "$T/clinic" ] || [ "$(b ls -json -type share | grep -c .)" != "$before" ]; then

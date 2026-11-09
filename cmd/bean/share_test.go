@@ -56,15 +56,15 @@ func TestShare(t *testing.T) {
 	var share struct {
 		ID      string `json:"id"`
 		Context struct {
-			Records   []string `json:"records"`
-			Note      string   `json:"note"`
-			Statement string   `json:"statement"`
+			Records []string `json:"records"`
+			Proof   []string `json:"proof"`
+			Note    string   `json:"note"`
 		} `json:"context"`
 	}
 	if err := json.Unmarshal([]byte(strings.TrimSpace(ls)), &share); err != nil {
 		t.Fatalf("%v\n%s", err, ls)
 	}
-	if len(share.Context.Records) != 2 || share.Context.Note != "for my doctor" || !strings.Contains(share.Context.Statement, "not a complete history") {
+	if len(share.Context.Records) != 2 || len(share.Context.Proof) != 1 || share.Context.Note != "for my doctor" {
 		t.Errorf("share record: %+v", share)
 	}
 	if _, err := os.Stat(objectPath(out, share.ID)); err != nil {
@@ -75,7 +75,7 @@ func TestShare(t *testing.T) {
 	nowhere := t.TempDir()
 	stdout, errs, code = run(t, nowhere, "", "check-bundle", out)
 	before := treeDigest(t, out)
-	for _, want := range []string{"bundle ok", "share " + share.ID, "records: 2 listed; files: 0 included, 0 named and not included", "signed: 2 by the person, 0 by an agent", "corrections: 0 of the listed records", "note: for my doctor", "not a complete history", "not that a value is true", "cannot show that it is still the person's key"} {
+	for _, want := range []string{"bundle ok", "share " + share.ID, "It holds:", "after a week of oats", "lab.cholesterol-total  193 mg/dL", "records: 2 listed; files: 0 included, 0 named and not included", "signed: 2 by the person, 0 by an agent", "corrections: 0 of the listed records", "note: for my doctor", "not a complete history", "not that a value is true", "cannot show that it is still the person's key"} {
 		if code != 0 || !strings.Contains(stdout, want) {
 			t.Errorf("check-bundle: %d, no %q in\n%s\n%s", code, want, stdout, errs)
 		}
@@ -87,6 +87,56 @@ func TestShare(t *testing.T) {
 	}
 	if _, errs, code := run(t, dir, "", "verify"); code != 0 {
 		t.Errorf("the log after a share: %s", errs)
+	}
+}
+
+// A type picks readings, never the record that keeps a file: 'lab.*' must
+// not send the lab report, with the person's name in it. And a bundle is
+// read with check-bundle, never synced into the reader's own log.
+func TestShareKeepsFilesHomeAndBundlesOut(t *testing.T) {
+	path := importerOnPath(t)
+	dir := t.TempDir()
+	run(t, dir, "", "init")
+	report := filepath.Join(t.TempDir(), "report.txt")
+	os.WriteFile(report, []byte(labReport("101")), 0o600)
+	if out, errs, code := runPath(t, dir, path, "import", "-yes", "lab", report); code != 0 {
+		t.Fatalf("%s\n%s", out, errs)
+	}
+	out := filepath.Join(t.TempDir(), "bundle")
+	stdout, errs, code := run(t, dir, "", "share", "-yes", "-files", "-out", out, "-type", "lab.*")
+	if code != 0 || !strings.Contains(stdout, "shared 2 records and 0 files") {
+		t.Fatalf("%d\n%s\n%s", code, stdout, errs)
+	}
+	if _, err := os.Stat(filepath.Join(out, "files")); err == nil {
+		t.Error("the lab report was shared by type")
+	}
+	// Named by its id, with -files, the report goes.
+	ls, _, _ := run(t, dir, "", "ls", "-json", "-type", "lab.report")
+	var rep struct {
+		ID string `json:"id"`
+	}
+	json.Unmarshal([]byte(strings.TrimSpace(ls)), &rep)
+	named := filepath.Join(t.TempDir(), "named")
+	if stdout, errs, code := run(t, dir, "", "share", "-yes", "-files", "-out", named, rep.ID); code != 0 || !strings.Contains(stdout, "shared 1 records and 1 files") {
+		t.Fatalf("%d\n%s\n%s", code, stdout, errs)
+	}
+	// Another person's log refuses to sync a bundle, and is unchanged.
+	sam := t.TempDir()
+	run(t, sam, "", "init")
+	before, _, _ := run(t, sam, "", "ls", "-all")
+	if stdout, errs, code := run(t, sam, "", "sync", out); code != 1 || !strings.Contains(errs, "is not a copy of your log") || !strings.Contains(errs, "bean check-bundle") {
+		t.Errorf("sync of a bundle: %d\n%s\n%s", code, stdout, errs)
+	}
+	if after, _, _ := run(t, sam, "", "ls", "-all"); after != before {
+		t.Errorf("a refused sync changed the log:\n%s", after)
+	}
+	// The person's own copy still syncs.
+	copyDir := t.TempDir()
+	if err := os.CopyFS(filepath.Join(copyDir, "objects"), os.DirFS(filepath.Join(dir, "objects"))); err != nil {
+		t.Fatal(err)
+	}
+	if _, errs, code := run(t, dir, "", "sync", copyDir); code != 0 {
+		t.Errorf("sync of an own copy: %d\n%s", code, errs)
 	}
 }
 

@@ -27,7 +27,7 @@ func TestRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if f.Dataset != "TEST_J" || f.Created != created || f.Rows != 8 || len(f.Variables) != 2 || f.Variables[1].Label != "A value (mg/dL)" {
+	if f.Dataset != "TEST_J" || f.Rows != 8 || len(f.Variables) != 2 || f.Variables[1].Label != "A value (mg/dL)" {
 		t.Fatalf("%+v", f)
 	}
 	x, err := f.Column("X")

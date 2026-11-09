@@ -31,17 +31,17 @@ In order. Each step is done only when its test passes.
    - `bean import nhanes <file.XPT>` keeps a public file as a `reference.file` record, on the same rail as a lab report: encrypted blob, SHA-256, the data set, CDC's URL, each variable with its label (DECISIONS 236).
    - One record per file, not one per release: CDC publishes files, and each is pinned on its own.
    - The person who imports it signs for having kept it. It is never written as CDC's claim.
-   - `internal/xpt` reads SAS transport itself. On ten CDC files it gives the same bits as pandas for every value.
+   - `internal/xpt` reads SAS transport itself. On ten CDC files it gives the same bits as pandas for every value but zero, which pandas reads as 5.4e-79.
 3. **`bean compare`. Done.**
    - `bean compare -sex <s> -age <from>-<to> [-where <rule>]... <ids> | -type 'lab.*'` (DECISIONS 237 to 240 and 246 to 248, [COMPARE.md](COMPARE.md)).
    - The cohort is "people like me", stated as rules: sex and age, then any of ethnicity, body measures and a day's food. Every rule is in the claim, and n is on every row.
    - Twelve tests: total and HDL cholesterol, hemoglobin A1c and the blood count.
    - `-save` writes a `comparison.percentile` claim, `about` the reading and each file, with the cohort, the method, the files' digests and the result. It does not copy the reading's value.
-   - Statuses: `qualified`, with reasons, or `not comparable`, with no number. Nothing is `comparable` yet. Fewer than 30 people: no number.
+   - A row is a number with its caveats, or no number and why. Fewer than 30 people: no number.
    - It says where a value lies in a sample. It does not diagnose, flag risk or advise.
    - Same inputs, same bytes.
 4. **Independent reproduction. Done.**
-   - `tools/compare/reproduce.py` (Python, pandas) computes every number of a saved claim again from the claim, the reading and the files. It shares no code with bean and has no table of its own.
+   - `tools/compare/reproduce.py` (Python, pandas) computes every number of a saved claim again from the claim, the reading and the files. It shares no code with bean and has no table of tests; it knows the method and the files' digests.
    - `make compare` fails if one number differs, in CI on synthetic files; with `BEAN_NHANES_DIR` it runs on CDC's files.
 5. **`bean share` and `bean check-bundle`. Done.**
    - `bean share -out <folder> <ids> | -type <type>` writes the chosen records, the records they are about, the identity records that verify them, and one `share` record signed by the person that lists exactly what the bundle holds. Files go only with `-files`, as plaintext named by SHA-256 (DECISIONS 251, [SHARE.md](SHARE.md)).
@@ -56,7 +56,20 @@ In order. Each step is done only when its test passes.
 
 Not this week: Apple Health readings beyond what exists, `bean-import-csv -map`, `-to <npub>` encryption, `bean attest` and `bean trust`, NIP-46, nutrition.
 
-## After the loop: people like me
+## After the loop: compare without the download
+
+Today a person downloads the survey files to compare with them. That is right for someone who wants every rule and every check in their own hands, and too much for most people, who will meet bean inside a phone app. The way to drop the download without sending anyone's number anywhere:
+
+- **A reference pack.** One small signed file per data set that holds, for every cohort on a fixed menu (sex and age band first), the weight of each distinct value of each test: the table that steps 6 to 8 of the method need ([COMPARE.md](COMPARE.md)). The same table gives the same result, to the last bit, as the files.
+- **Blind by construction.** Everyone fetches the same file, so the host learns neither a person's value nor which cohort they looked at. The comparison runs on the device. No encryption scheme is needed for this, and none is planned for it.
+- **Checkable by anyone.** A pack is a deterministic output of public files, a menu and the method. Whoever has the files builds the same bytes and compares the digest. Most people never will; that anyone can is what keeps a publisher honest. A saved comparison pins the pack's digest and the cohort.
+- **Raw files stay.** A cohort off the menu, such as a diet pattern, needs the files on the person's own machine, as today.
+- **Other sources, the same shape.** A pack built from AION devices' pooled data, with a floor on n and only for people who agreed: nobody outside can rebuild it, so comparisons with it carry that as a caveat. A table from a published study, with its citation. A friend's bundle.
+- **Custody is a separate choice.** A host that holds a person's data and computes for them is the easy path for many, and makes that host a handler of health values, with what follows from that. It uses the same method and writes the same claim, signed by the host.
+
+Not planned: homomorphic encryption or multi-party computation. They answer a question this design does not ask, which is how to compute on values that the one computing must not see. Here the public table goes to the value, not the value to the table.
+
+## After that: people like me
 
 The first question a person asks is not "where is my cholesterol" but "how do I compare with people like me, who eat what I eat". The rule-based cohort is the start. In order of value for the effort:
 
@@ -75,7 +88,7 @@ The first question a person asks is not "where is my cholesterol" but "how do I 
 3. **Freeze at `v` 0** (CORE.md section 6). After two weeks of real use (lab results, Apple Health, chat and agent logging) with no change to CORE.md, every DEFAULT in SPEC.md is final.
 4. **Longitudinal comparison.** A reading over time against what published studies saw over the same interval: baseline, cadence, follow-up and attrition. This needs a time-course matching contract first.
 5. **Summary-statistics references.** Many studies publish only aggregates. A reference may be a published table, with its citation, as well as participant-level files. Access-restricted datasets stay outside the repository.
-6. **Comparison packages.** Standardize the interface of a comparison (inputs, method, cohort, status), and let others publish datasets and methods for it. Extension 1's replay rules wait until two kinds of comparison exist.
+6. **Comparison packages.** Standardize the interface of a comparison (inputs, method, cohort, caveats), and let others publish datasets and methods for it. Extension 1's replay rules wait until two kinds of comparison exist.
 7. **Nutrition as exposure.** `food` and `food.estimate` exist. Next comes a source-backed estimate (USDA FoodData Central) with its uncertainty, kept apart from what the person said they ate. No causal claims.
 8. **Share and trust, further.** `check-bundle -key <key>` to compare the signing key with one the person gave, `-to <npub>` encryption of a bundle, a share that does not carry the stable identity id, expiring links, `bean attest <id>`, and `bean trust <identity or npub> <1-100>`. Readers compute trust; the core does not.
 9. **Release.** A `go install` path and a neutral home ([GOVERNANCE-PROPOSAL.md](GOVERNANCE-PROPOSAL.md)).

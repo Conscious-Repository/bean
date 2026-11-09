@@ -1,10 +1,10 @@
 package nhanes
 
 import (
+	"errors"
 	"math"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 
@@ -41,123 +41,38 @@ func cohort(t *testing.T, sex string, lo, hi int, rules ...Rule) Cohort {
 
 var synthetic = []string{"TCHOL_J", "HDL_J", "DEMO_J", "BMX_J", "DR1TOT_J"}
 
-// person is one row of the cohort, as a slower and plainer reading of the
-// method collects it.
-type person struct{ x, w float64 }
-
-// plain selects the cohort by joining whole rows first, then computes the
-// shares with exact sums of the sorted weights. It shares no step with
-// Compare but the rounding.
-func plain(t *testing.T, files map[string]*xpt.File, a Analyte, c Cohort) []person {
-	t.Helper()
-	cache := map[string]map[float64]float64{}
-	get := func(dataset, variable string) map[float64]float64 {
-		if c := cache[dataset+"."+variable]; c != nil {
-			return c
-		}
-		seqn, err := files[dataset].Column("SEQN")
-		if err != nil {
-			t.Fatal(err)
-		}
-		v, err := files[dataset].Column(variable)
-		if err != nil {
-			t.Fatal(err)
-		}
-		out := map[float64]float64{}
-		for i := range seqn {
-			out[seqn[i]] = v[i]
-		}
-		cache[dataset+"."+variable] = out
-		return out
-	}
-	wd, wv := c.Weight()
-	weights := get(wd, wv)
-	var out []person
-next:
-	for s, x := range get(a.Dataset, a.Variable) {
-		w, ok := weights[s]
-		if math.IsNaN(x) || !ok || math.IsNaN(w) || w <= 0 {
-			continue
-		}
-		for _, r := range c.Rules {
-			y, ok := get(r.Dataset, r.Variable)[s]
-			if !ok || math.IsNaN(y) || y < r.Min || y > r.Max {
-				continue next
-			}
-		}
-		out = append(out, person{x, w})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].x < out[j].x })
-	return out
-}
-
-func TestCompareAgainstPlain(t *testing.T) {
+// Fixed results on the synthetic files, one for each kind of rule and each
+// weight. tools/compare/run.sh computes the same cohorts again in Python.
+func TestCompareSynthetic(t *testing.T) {
 	files := load(t, "testdata", synthetic...)
 	tc, _, _ := AnalyteFor("lab.cholesterol-total", "mg/dL")
 	hdl, _, _ := AnalyteFor("lab.hdl-cholesterol", "mg/dL")
-	for _, c := range []Cohort{
-		cohort(t, "male", 30, 39),
-		cohort(t, "female", 6, 80),
-		cohort(t, "female", 20, 59, Rule{"DEMO_J", "RIDRETH3", 3, 4}),
-		cohort(t, "male", 20, 80, Rule{"BMX_J", "BMXBMI", 22, 30}),
-		cohort(t, "female", 18, 80, Rule{"DR1TOT_J", "DR1TPROT", 60, 140}, Rule{"DR1TOT_J", "DR1TFIBE", 10, 40}),
-		cohort(t, "male", 18, 80, Rule{"DEMO_J", "RIDRETH3", 3, 3}, Rule{"BMX_J", "BMXBMI", 18, 35}, Rule{"DR1TOT_J", "DR1TKCAL", 1500, 3000}),
+	for _, c := range []struct {
+		analyte Analyte
+		cohort  Cohort
+		value   float64
+		want    Result
+	}{
+		{tc, cohort(t, "male", 30, 39), 187, syntheticWant[0]},
+		{hdl, cohort(t, "female", 20, 59, Rule{"DEMO_J", "RIDRETH3", 3, 4}), 52, syntheticWant[1]},
+		{tc, cohort(t, "male", 20, 80, Rule{"BMX_J", "BMXBMI", 22, 30}), 200.5, syntheticWant[2]},
+		{tc, cohort(t, "female", 18, 80, Rule{"DR1TOT_J", "DR1TPROT", 60, 140}, Rule{"DR1TOT_J", "DR1TFIBE", 10, 40}), 193, syntheticWant[3]},
 	} {
-		for _, a := range []Analyte{tc, hdl} {
-			people := plain(t, files, a, c)
-			var total float64
-			for _, p := range people {
-				total += p.w
-			}
-			for _, v := range []float64{0.5, 127, 150.5, 193, 200, 250, 1000, 40, 52} {
-				got, err := Compare(files, a, c, v)
-				if err != nil {
-					t.Fatalf("%s %s %v: %v", a.Variable, c, v, err)
-				}
-				var below, equal float64
-				for _, p := range people {
-					if p.x < v {
-						below += p.w
-					} else if p.x == v {
-						equal += p.w
-					}
-				}
-				want := Result{N: len(people), Below: 100 * below / total, Equal: 100 * equal / total, Percentile: 100 * (below + equal/2) / total}
-				// The plain sums add in another order: allow the last digit
-				// of the rounding to differ only at a rounding boundary.
-				near := func(a, b float64) bool { return math.Abs(a-b) <= 0.05+1e-9 }
-				if got.N != want.N || !near(got.Below, want.Below) || !near(got.Equal, want.Equal) || !near(got.Percentile, want.Percentile) {
-					t.Errorf("%s %s %v: got %+v, want %+v", a.Variable, c, v, got, want)
-				}
-				// A quantile is a value of the sample that splits the weight.
-				for q, x := range map[float64]float64{0.05: got.P5, 0.25: got.P25, 0.5: got.P50, 0.75: got.P75, 0.95: got.P95} {
-					var upTo, under float64
-					for _, p := range people {
-						if p.x <= x {
-							upTo += p.w
-						}
-						if p.x < x {
-							under += p.w
-						}
-					}
-					if upTo < q*total*(1-1e-12) || under > q*total*(1+1e-12) {
-						t.Errorf("%s %s: quantile %v is %v, which does not split the weight", a.Variable, c, q, x)
-					}
-				}
-			}
+		got, err := Compare(files, c.analyte, c.cohort, c.value)
+		if err != nil || got != c.want {
+			t.Errorf("%s %s %v: got %#v %v, want %#v", c.analyte.Variable, c.cohort, c.value, got, err, c.want)
 		}
 	}
-}
-
-// The diet rules change the weight, and with it the result.
-func TestWeight(t *testing.T) {
-	plainCohort := cohort(t, "male", 30, 39)
-	diet := cohort(t, "male", 30, 39, Rule{"BMX_J", "BMXBMI", 10, 90}, Rule{"DR1TOT_J", "DR1TKCAL", 0, 99999})
-	if d, v := plainCohort.Weight(); d != "DEMO_J" || v != "WTMEC2YR" {
+	// A rule on the dietary file changes the weight.
+	if d, v := cohort(t, "male", 30, 39).Weight(); d != "DEMO_J" || v != "WTMEC2YR" {
 		t.Errorf("%s %s", d, v)
 	}
-	if d, v := diet.Weight(); d != "DR1TOT_J" || v != "WTDRD1" {
+	if d, v := cohort(t, "male", 30, 39, Rule{"BMX_J", "BMXBMI", 10, 90}, Rule{"DR1TOT_J", "DR1TKCAL", 0, 99999}).Weight(); d != "DR1TOT_J" || v != "WTDRD1" {
 		t.Errorf("%s %s", d, v)
+	}
+	// A cohort's text never has an exponent: it is part of a signed claim.
+	if got := cohort(t, "female", 18, 80, Rule{"DR1TOT_J", "DR1TKCAL", 0, 1000000}, Rule{"BMX_J", "BMXBMI", 18.5, 40}).String(); got != "female, age 18 and over, DR1TOT_J.DR1TKCAL=0-1000000, BMX_J.BMXBMI=18.5-40" {
+		t.Error(got)
 	}
 }
 
@@ -170,7 +85,7 @@ func TestRefusals(t *testing.T) {
 	}
 	// A small cohort gives its size and no number.
 	res, err := Compare(files, tc, cohort(t, "male", 30, 30, Rule{"DEMO_J", "RIDRETH3", 6, 6}), 190)
-	if err == nil || !strings.Contains(err.Error(), "no result below 30") || res.N >= MinN || res != (Result{N: res.N}) {
+	if !errors.Is(err, ErrSmall) || res.N >= MinN || res != (Result{N: res.N}) {
 		t.Errorf("small cohort: %+v %v", res, err)
 	}
 	for name, c := range map[string]Cohort{
@@ -306,7 +221,15 @@ func TestRealFiles(t *testing.T) {
 
 // Total cholesterol of 187 mg/dL in three cohorts of NHANES 2017-2018.
 var (
-	realMale30         = Result{N: 339, Percentile: 46, Below: 44.2, Equal: 3.5, P5: 135, P25: 164, P50: 188, P75: 213, P95: 256}
-	realMale30WhiteBMI = Result{N: 39, Percentile: 55, Below: 50.1, Equal: 9.8, P5: 130, P25: 161, P50: 182, P75: 204, P95: 222}
-	realMale30Diet     = Result{N: 81, Percentile: 37.8, Below: 37.8, Equal: 0, P5: 145, P25: 171, P50: 191, P75: 217, P95: 251}
+	realMale30         = Result{N: 339, Percentile: 46, Below: 44.2, Equal: 3.5, P25: 164, P50: 188, P75: 213}
+	realMale30WhiteBMI = Result{N: 39, Percentile: 55, Below: 50.1, Equal: 9.8, P25: 161, P50: 182, P75: 204}
+	realMale30Diet     = Result{N: 81, Percentile: 37.8, Below: 37.8, Equal: 0, P25: 171, P50: 191, P75: 217}
 )
+
+// syntheticWant are the results of TestCompareSynthetic.
+var syntheticWant = []Result{
+	{N: 86, Percentile: 44.3, Below: 43.7, Equal: 1.2, P25: 176, P50: 190, P75: 203},
+	{N: 195, Percentile: 53.7, Below: 49.9, Equal: 7.6, P25: 47, P50: 52, P75: 57},
+	{N: 277, Percentile: 65.4, Below: 65.4, Equal: 0, P25: 176, P50: 191, P75: 205},
+	{N: 327, Percentile: 52.1, Below: 51, Equal: 2.1, P25: 178, P50: 192, P75: 205},
+}

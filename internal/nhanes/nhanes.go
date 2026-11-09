@@ -156,12 +156,15 @@ type Rule struct {
 
 func (r Rule) String() string {
 	if r.Min == r.Max {
-		return fmt.Sprintf("%s.%s=%s", r.Dataset, r.Variable, num(r.Min))
+		return fmt.Sprintf("%s.%s=%s", r.Dataset, r.Variable, Num(r.Min))
 	}
-	return fmt.Sprintf("%s.%s=%s-%s", r.Dataset, r.Variable, num(r.Min), num(r.Max))
+	return fmt.Sprintf("%s.%s=%s-%s", r.Dataset, r.Variable, Num(r.Min), Num(r.Max))
 }
 
-func num(x float64) string { return strconv.FormatFloat(x, 'g', -1, 64) }
+// Num writes a number the short way, in digits and never with an exponent:
+// 20, 18.5, 1000000. A cohort's text is part of a signed claim, and a second
+// implementation must write the same text.
+func Num(x float64) string { return strconv.FormatFloat(x, 'f', -1, 64) }
 
 // Cohort selects the people a reading is compared with: those who pass
 // every rule. Sex and age come first; bean gives no result without them.
@@ -241,9 +244,9 @@ func (c Cohort) String() string {
 	if c.Rules[0].Min == 2 {
 		sex = "female"
 	}
-	out := fmt.Sprintf("%s, age %s-%s", sex, num(c.Rules[1].Min), num(c.Rules[1].Max))
+	out := fmt.Sprintf("%s, age %s-%s", sex, Num(c.Rules[1].Min), Num(c.Rules[1].Max))
 	if c.TopAge() {
-		out = fmt.Sprintf("%s, age %s and over", sex, num(c.Rules[1].Min))
+		out = fmt.Sprintf("%s, age %s and over", sex, Num(c.Rules[1].Min))
 	}
 	for _, r := range c.Rules[2:] {
 		out += ", " + r.String()
@@ -252,14 +255,18 @@ func (c Cohort) String() string {
 }
 
 // Result is where a value lies in a cohort. The percentages are rounded to
-// one decimal; the quantiles are values of the sample.
+// one decimal; the quartiles are values of the sample.
 type Result struct {
 	N int // people in the cohort with a value and a weight
 	// Below and Equal are the weighted shares of the cohort with a lower
 	// value and with the same value. Percentile is Below plus half of Equal.
 	Percentile, Below, Equal float64
-	P5, P25, P50, P75, P95   float64
+	P25, P50, P75            float64
 }
+
+// ErrSmall is the error for a cohort of fewer than MinN people. The result
+// then holds the count and no other number.
+var ErrSmall = fmt.Errorf("the cohort has fewer than %d people with a value", MinN)
 
 // column is one variable of one file, by SEQN.
 type column struct {
@@ -276,42 +283,26 @@ func (c column) of(seqn float64) float64 {
 
 // Compare computes where v lies among the cohort's values of the analyte.
 // files holds the analyte's file, the demographics file, and the file of
-// every rule, by data set name. The steps, in this order, are the method:
+// every rule, by data set name. The method is written once, as numbered
+// steps, in docs/COMPARE.md ("The method, version 1"); the comments below
+// name the steps.
 //
-//  0. v must be above zero: none of these quantities can be zero or less.
-//  1. Take the rows of the analyte's file in file order. Skip a row with
-//     no value.
-//  2. The demographics file must have a row with the same SEQN; none is an
-//     error.
-//  3. For each rule, find the row of its data set with the same SEQN. Skip
-//     the row if there is none, if it has no value of the variable, or if
-//     the value is below Min or above Max.
-//  4. The weight is that of Cohort.Weight, from the row with the same
-//     SEQN. Skip the row if the weight is missing or not above zero.
-//  5. W is the sum of the weights of the rows left, B of those with a
-//     value below v, E of those with a value equal to v, each added in
-//     file order.
-//  6. below = 100 B / W, equal = 100 E / W, percentile = 100 (B + E/2) / W.
-//  7. Quantile q is the smallest value x such that the weights of the rows
-//     with a value at most x reach q W. The weights of one value are added
-//     in file order, then the values in rising order.
-//  8. Each percentage is rounded to one decimal: floor(10 y + 0.5) / 10.
-//
-// With fewer than MinN rows left it returns the count and an error, and no
-// other number.
+// Everything after the cohort is chosen depends only on the weight that
+// each distinct value carries (steps 5 to 8). So a table of those weights
+// for a cohort gives the same result, bit for bit, as the files do.
 func Compare(files map[string]*xpt.File, a Analyte, c Cohort, v float64) (Result, error) {
 	var res Result
 	if err := c.Check(); err != nil {
 		return res, err
 	}
+	// Step 0.
 	if !(v > 0) || math.IsInf(v, 0) {
 		return res, errors.New("the reading is not a number above zero")
 	}
-	// Every file is the data set its name says, of the cycle.
 	file := func(dataset string) (*xpt.File, error) {
 		f := files[dataset]
-		if f == nil || f.Dataset != dataset || !InCycle(dataset) {
-			return nil, fmt.Errorf("the file of %s is missing, or not a file of NHANES %s", dataset, Years)
+		if f == nil || f.Dataset != dataset {
+			return nil, fmt.Errorf("the file of %s is missing", dataset)
 		}
 		return f, nil
 	}
@@ -375,7 +366,8 @@ func Compare(files map[string]*xpt.File, a Analyte, c Cohort, v float64) (Result
 	if err != nil {
 		return res, err
 	}
-	var total, below, equal float64
+	// Steps 1 to 5: the weight of each distinct value in the cohort, added
+	// in file order.
 	byValue := map[float64]float64{}
 rowLoop:
 	for i, s := range seqn {
@@ -395,26 +387,33 @@ rowLoop:
 			continue
 		}
 		res.N++
-		total += w
-		if x[i] < v {
-			below += w
-		} else if x[i] == v {
-			equal += w
-		}
 		byValue[x[i]] += w
 	}
 	if res.N < MinN {
-		return Result{N: res.N}, fmt.Errorf("the cohort has %d people with a value; bean gives no result below %d. Widen a range or drop a rule", res.N, MinN)
+		return Result{N: res.N}, ErrSmall
 	}
-	res.Below = round1(100 * below / total)
-	res.Equal = round1(100 * equal / total)
-	res.Percentile = round1(100 * (below + equal/2) / total)
+	res.Percentile, res.Below, res.Equal, res.P25, res.P50, res.P75 = Place(byValue, v)
+	return res, nil
+}
+
+// Place is steps 6 to 8: where v lies, given the weight of each distinct
+// value of a cohort. The sums run over the values in rising order.
+func Place(byValue map[float64]float64, v float64) (percentile, below, equal, p25, p50, p75 float64) {
 	values := make([]float64, 0, len(byValue))
 	for value := range byValue {
 		values = append(values, value)
 	}
 	sort.Float64s(values)
-	quantile := func(q float64) float64 {
+	var total, b, e float64
+	for _, value := range values {
+		total += byValue[value]
+		if value < v {
+			b += byValue[value]
+		} else if value == v {
+			e = byValue[value]
+		}
+	}
+	quartile := func(q float64) float64 {
 		var sum float64
 		for _, value := range values {
 			sum += byValue[value]
@@ -424,8 +423,7 @@ rowLoop:
 		}
 		return values[len(values)-1]
 	}
-	res.P5, res.P25, res.P50, res.P75, res.P95 = quantile(0.05), quantile(0.25), quantile(0.5), quantile(0.75), quantile(0.95)
-	return res, nil
+	return round1(100 * (b + e/2) / total), round1(100 * b / total), round1(100 * e / total), quartile(0.25), quartile(0.5), quartile(0.75)
 }
 
 // round1 rounds to one decimal. The conversions keep a compiler from

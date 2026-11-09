@@ -15,8 +15,9 @@ bean. It prints `bundle ok` and exits 0, or the problems and exits 1.
  3. The records are exactly the ones the share record lists, each valid,
     about that person and of a kind that is shared, plus the proof it
     names: that person's identity records and pairings.
- 4. Every stored file that a listed record names is accounted for.
- 5. files/ holds exactly the files the share record includes, each with its
+ 4. Each file the share record lists belongs to a listed record, and is
+    the file that record states, where it states one.
+ 5. files/ holds exactly the files the share record lists, each with its
     SHA-256 and size.
 
 A bundle shows that what it holds is authentic. It cannot show that it is
@@ -146,6 +147,8 @@ def check(folder):
     value = share.get("value") if isinstance(share.get("value"), dict) else {}
     if listed is None or proof is None or not whole(value.get("n")) or value["n"] != len(listed):
         return problems + ["the share record's lists are damaged"], None
+    # The files it holds: each entry names a stored file of a listed record,
+    # with the SHA-256 and the size of its plaintext.
     account, want = {}, {}
     entries = ctx.get("files", [])
     damaged = not isinstance(entries, list)
@@ -153,19 +156,15 @@ def check(folder):
         if not isinstance(e, dict):
             damaged = True
             continue
-        blob, record, inc = e.get("blob"), e.get("record"), e.get("included")
-        has_digest, has_size = "sha256" in e, "bytes" in e
-        if (not is_id(blob) or not is_id(record) or record not in listed or not isinstance(inc, bool)
-                or (has_digest and not (isinstance(e["sha256"], str) and HEX64.fullmatch(e["sha256"])))
-                or (has_size and not whole(e["bytes"]))
-                or inc != has_size or (inc and not has_digest)):
+        blob, record, digest, size = e.get("blob"), e.get("record"), e.get("sha256"), e.get("bytes")
+        if (not is_id(blob) or not is_id(record) or record not in listed or (blob, record) in account
+                or not (isinstance(digest, str) and HEX64.fullmatch(digest)) or not whole(size)):
             damaged = True
             continue
-        if (blob, record) in account or (inc and want.get(e["sha256"], e["bytes"]) != e["bytes"]):
+        if want.get(digest, size) != size:
             damaged = True
         account[(blob, record)] = e
-        if inc:
-            want[e["sha256"]] = e["bytes"]
+        want[digest] = size
     if damaged:
         return problems + ["the share record's list of files is damaged"], None
     # Rule 1, the warnings. One is expected: a listed record that corrects an
@@ -217,7 +216,9 @@ def check(folder):
         problems.append("%s is listed, and is not in the bundle" % i)
     for i in sorted(proof - set(records)):
         problems.append("%s is named as proof, and is not in the bundle" % i)
-    # Rule 4.
+    # Rule 4: each entry is for a stored file that its listed record names,
+    # and is the file that record states, where it states one. A stored file
+    # with no entry stays home: it is counted, not faulted.
     named = 0
     for i in sorted(listed & set(records)):
         r = records[i]
@@ -225,15 +226,13 @@ def check(folder):
         for b in blobs:
             e = account.pop((b["hash"], i), None)
             if e is None:
-                problems.append("%s names a stored file that the share record does not account for" % i)
+                named += 1
                 continue
             stated = (r.get("context") or {}).get("sha256")
-            if isinstance(stated, str) and stated and len(blobs) == 1 and (r.get("value") or {}).get("blob") == b["hash"] and e.get("sha256") and e["sha256"] != stated:
+            if isinstance(stated, str) and stated and len(blobs) == 1 and (r.get("value") or {}).get("blob") == b["hash"] and e["sha256"] != stated:
                 problems.append("the file of %s is not the one its record states" % i)
-            if not e["included"]:
-                named += 1
     if account:
-        problems.append("the share record accounts for a file that no listed record names")
+        problems.append("the share record lists a file that no listed record names")
     # Rule 5.
     included = len(want)
     fdir = os.path.join(folder, "files")

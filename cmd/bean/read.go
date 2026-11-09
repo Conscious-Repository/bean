@@ -201,6 +201,12 @@ func cmdAdd(s *core.Store, args []string) {
 		fail(err)
 	}
 	fmt.Println(id)
+	// A correction makes the saved comparisons of the old reading stale.
+	// Only then: this is the command people run most, and the check reads
+	// the whole log.
+	if o.Corrects != "" {
+		sweepComparisons(s)
+	}
 }
 
 // byText names the author when it is not the person: a paired agent's

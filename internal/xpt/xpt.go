@@ -44,10 +44,7 @@ type Variable struct {
 // File is one parsed data set.
 type File struct {
 	// Dataset is the member name, for example TCHOL_J.
-	Dataset string
-	// Created is the creation time as the file prints it, for example
-	// 12FEB20:13:51:13.
-	Created   string
+	Dataset   string
 	Variables []Variable
 	Rows      int
 	rowLen    int
@@ -82,7 +79,7 @@ func Parse(data []byte) (*File, error) {
 	if r, err = rec(5); err != nil {
 		return nil, err
 	}
-	f := &File{Dataset: text(r[8:16]), Created: text(r[64:80])}
+	f := &File{Dataset: text(r[8:16])}
 	if f.Dataset == "" {
 		return nil, errors.New("the data set has no name")
 	}

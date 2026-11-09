@@ -109,7 +109,7 @@ bean add note "drank 1 L of water, gone by 5 pm" -about 1b59a1
 bean add food "toast" -photo breakfast.jpg
 ```
 
-- `-at` says when it happened. Without it, the time is now.
+- `-at` says when it happened. Without it, the time is now, also for a correction: give `-corrects` the old record's time with `-at`.
 - `-about <id>` attaches a record to another one. An id can be shortened to its first 6 or more hex digits.
 - `-photo` attaches an image, stored encrypted.
 - The [type vocabulary](cmd/bean/vocabulary.md) lists the usual types and units, so that your records line up over time. To add types of your own, put a `vocabulary.md` in your bean folder ([Your own types](cmd/bean/vocabulary.md#your-own-types)).
@@ -126,8 +126,8 @@ bean ls -json -type weight                # records as stored, for jq or a scrip
 Correct or delete:
 
 ```
-bean add weight 81.2 -unit kg -corrects 31fe48    # replaces your record 31fe48
-bean purge 1b59a1                                 # deletes record 1b59a1 from every copy
+bean add weight 81.2 -unit kg -corrects 31fe48 -at 2026-10-27   # replaces your record 31fe48
+bean purge 1b59a1                                               # deletes record 1b59a1 from every copy
 ```
 
 ## Import your data
@@ -178,20 +178,21 @@ The CSV needs a header row and a `value` column. A `time` column (RFC 3339) and 
 `bean compare` shows where a reading lies among people you describe, in public survey data (NHANES, from the US CDC). You say who: sex, age, and if you like ethnicity, BMI, or what they ate that day. It runs on your machine, on files you downloaded and keep.
 
 ```
-bean import nhanes DEMO_J.XPT
-bean import nhanes TCHOL_J.XPT
+for f in DEMO_J TCHOL_J; do
+  curl -fLO https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/$f.xpt && bean import -yes nhanes $f.xpt
+done
 bean compare -sex male -age 30-39 -type 'lab.*'
 bean compare -sex male -age 30-39 -where DEMO_J.RIDRETH3=3 -where BMX_J.BMXBMI=20-27 -type 'lab.*'
 ```
 
 ```
 Compared with NHANES 2017-2018: male, age 30-39.
-READING                VALUE      PERCENTILE  LOWER  SAME  MIDDLE HALF  MEDIAN  N    STATUS     ID
-lab.cholesterol-total  187 mg/dL  46          44.2%  3.5%  164 to 213   188     339  qualified  fca23ea91778
+READING                VALUE      PERCENTILE  LOWER  SAME  MIDDLE HALF  MEDIAN  N    NOTE  ID
+lab.cholesterol-total  187 mg/dL  46          44.2%  3.5%  164 to 213   188     339        fca23ea91778
 ```
 
 - It says where a value lies in a sample, and how many people the sample has. It does not say whether a value is healthy, and it does not advise.
-- Every result is `qualified`, with its reasons, or `not comparable`, with no number. A cohort of fewer than 30 people gives no number.
+- Every number comes with its caveats and with how many people it rests on. A cohort of fewer than 30 people gives no number.
 - `-save` keeps a result as a signed record that names each file by its SHA-256, the cohort and the method. Anyone can compute it again without bean: `tools/compare/reproduce.py` does, in Python.
 - Twelve blood tests today: total and HDL cholesterol, hemoglobin A1c and the blood count.
 
@@ -202,11 +203,11 @@ lab.cholesterol-total  187 mg/dL  46          44.2%  3.5%  164 to 213   188     
 `bean share` writes records you choose into a folder that anyone can check without your log, your keys or an account.
 
 ```
-bean share -out for-ana -note "my lipids this year" -type 'lab.*' -since 2026-01-01
-bean check-bundle for-ana
+bean share -out for-ana -note "my lipids" -type 'comparison.*'
+bean check-bundle for-ana          # what Ana runs: it checks the folder, then shows what it holds
 ```
 
-- It shows what will leave and asks first. Only the records you choose go, with what they are about. Files go only with `-files`.
+- It shows what will leave and asks first. Only the records you choose go, with what they are about. Files go only with `-files`, and a lab report only when you name it.
 - The reader can tell that each record is yours and unchanged, and that nothing was added or removed. They can check it without bean: `tools/second/checkbundle.py`.
 - The reader cannot tell that it is complete: it is what you chose. Nor that the key that signed is still yours, if you changed keys since. bean says so on every check.
 - A bundle is not encrypted, and once sent it cannot be taken back.

@@ -6,8 +6,9 @@ without bean.
 
 A path is a folder, a .jsonl file of records, or a data file. A folder is
 read whole: every .json file in it is a record, every other file a data
-file. So a `bean export` folder is enough by itself, and so is the output of
-`bean ls -json` next to the NHANES files you downloaded from CDC.
+file. So a `bean export` folder or a share bundle with its files is enough
+by itself, and so is the output of `bean ls -json` next to the NHANES files
+you downloaded from CDC.
 
 For each comparison.percentile record it checks, in this order:
 
@@ -17,25 +18,25 @@ For each comparison.percentile record it checks, in this order:
  2. each data file has the SHA-256 the claim names;
  3. the claim is one the method could have made: the cohort starts with
     sex and age, its text says what its rules say, the weight is the one
-    the method gives, and the status and reasons follow from the inputs;
-    and each variable has, in its file, the label the claim gives it;
+    the method gives, and the caveats follow from the inputs; and each
+    variable has, in its file, the label the claim gives it;
  4. the method of docs/COMPARE.md, computed here from the claim's own
     cohort and the reading's value, gives every number of the result;
- 5. numpy's own weighted quantile and sums agree with that.
+ 5. numpy's own weighted quantile gives the same quartiles.
 
 It prints one line per comparison, with the reading and the variable it
-was set against, and exits 1 if any check fails. Whether the two measure
-the same thing is for you to judge: the line shows both.
+was set against, and exits 1 if any check fails or cannot be made. Whether
+the two measure the same thing is for you to judge: the line shows both.
 
 It shares no code with bean and has no table of tests: which variable a
 reading is set against is read from the claim and shown to you. It knows
-the method: the weights, the data sets a rule may name, the reasons, and
-the SHA-256 of each file as CDC served it, so that it does not take the
-claim's word for which file is CDC's. The record checks are those of the second
-verifier (tools/second/beanverify.py), which must sit where this file
-expects it. A good signature shows which key signed. Whether that key
-speaks for the person is a question for the whole log: bean verify, or
-beanverify.py, answers it.
+the method: the weights, the data sets a rule may name, the caveats, and
+the SHA-256 of each file as CDC served it, so that it can say for itself
+which files are the ones on record. The record checks are those of the
+second verifier (tools/second/beanverify.py), which must sit where this
+file expects it. A good signature shows which key signed. Whether that key
+speaks for the person is a question for the whole log or bundle: bean
+verify, bean check-bundle or their Python twins answer it.
 """
 import hashlib
 import json
@@ -54,12 +55,13 @@ MIN_N = 30
 SMALL_N = 100
 MAX_AGE = 80
 DEMO, EXAM_WEIGHT = "DEMO_J", "WTMEC2YR"
+QUARTILES = (("p25", 0.25), ("p50", 0.5), ("p75", 0.75))
 # The data sets a rule may name, with the weight an analysis with each must
 # use when it is not the examination weight (docs/COMPARE.md, step 4).
 COHORT_FILES = {"DEMO_J": None, "BMX_J": None, "DR1TOT_J": "WTDRD1"}
 # The SHA-256 of each file as wwwn.cdc.gov served it on 2026-11-09: the same
-# table as bean's (internal/nhanes), kept here so that this tool does not
-# take the claim's word for which file is CDC's.
+# table as bean's (internal/nhanes), kept here so that this tool can say for
+# itself which files are the ones on record.
 KNOWN = {
     "DEMO_J": "c0b46e0345ea19404928656277c8b0d10b0cca348a9b2fe4fc3c67e8b7ee73ec",
     "TCHOL_J": "0291a6a4f6d82dac8392c8c992b519946824dfeda01647935520cf506ed9f4ab",
@@ -69,16 +71,25 @@ KNOWN = {
     "BMX_J": "8d675e42d8826ac98714b2c3dd4c5138a5e353fb4424f7eff5e6db4a01ce838a",
     "DR1TOT_J": "390ae5205acfbcb87e0ca3d9aabd1c801b60657d3f2802ac08d5b3ed93f0af6d",
 }
-# The reasons of a qualified comparison, in the order a claim lists them.
-REASON_METHOD = "the lab that measured the reading and NHANES used their own instruments and methods"
-REASON_POPULATION = "NHANES is a sample of people living in the United States in the survey years, not a reference range, and like you only in what the cohort states"
-REASON_COHORT = "you chose the cohort: bean does not know whether you belong to it"
-REASON_TOP_AGE = "NHANES records every age of 80 and over as 80"
-REASON_DIET = "the cohort is chosen by what people said they ate on one day, which is not what a person usually eats"
-REASON_SMALL = "the cohort is small: fewer than 100 people"
-REASON_UNKNOWN = "this copy of %s is not the file on record: its SHA-256 differs"
-REASON_AUTHOR = "the reading was signed by an agent or another key, not by you"
-QUANTILES = (("p5", 0.05), ("p25", 0.25), ("p50", 0.5), ("p75", 0.75), ("p95", 0.95))
+# The caveats of a comparison, in the order a claim lists them.
+CAVEAT_METHOD = "the lab that measured the reading and NHANES used their own instruments and methods"
+CAVEAT_POPULATION = "NHANES is a sample of people living in the United States in the survey years, not a reference range"
+CAVEAT_COHORT = "you chose the cohort: bean does not know whether you belong to it"
+CAVEAT_TOP_AGE = "NHANES records every age of 80 and over as 80"
+CAVEAT_DIET = "the cohort is chosen by what people said they ate on one day, which is not what a person usually eats"
+CAVEAT_SMALL = "the cohort is small: fewer than 100 people"
+CAVEAT_UNKNOWN = "this copy of %s is not the file on record: its SHA-256 differs"
+CAVEAT_AUTHOR = "the reading was signed by an agent or another key, not by you"
+
+
+class Missing(Exception):
+    """An input the check needs is not among the paths given."""
+
+
+def safe(s):
+    """Text from a record, with nothing that can end a line or move the
+    cursor: a unit or a note must not be able to fake a line of this tool."""
+    return "".join(c if c.isprintable() else "\\x%02x" % ord(c) for c in str(s))
 
 
 def read_xpt(path):
@@ -98,8 +109,8 @@ def read_xpt(path):
 
 
 def num(x):
-    """A number the short way: 20, not 20.0."""
-    return str(int(x)) if float(x).is_integer() else repr(float(x))
+    """A number the short way, in digits and never with an exponent."""
+    return np.format_float_positional(float(x), trim="-")
 
 
 def is_number(x):
@@ -109,17 +120,16 @@ def is_number(x):
 def check_form(claim, reading):
     """The claim must be one that the method could have produced: the
     cohort starts with sex and age, the rules name data sets the method
-    allows, the weight is the one step 4 gives, the text says what the rules
-    say, and the status and reasons follow from the inputs. Returns the
-    reasons it must carry but for those that need the result, or raises
-    ValueError."""
+    allows, the weight is the one step 4 gives, and the text says what the
+    rules say. Returns the caveats it must carry but for the ones that need
+    the result, or raises ValueError."""
     ctx = claim["context"]
     ref, cohort = ctx["reference"], ctx["cohort"]
     rules = cohort["rules"]
     if claim.get("author") != claim.get("subject"):
         raise ValueError("the claim is not signed by the person it is about")
-    if ref.get("system") != "nhanes" or ref.get("cycle") != "2017-2018" or ref.get("demographics") != DEMO:
-        raise ValueError("not NHANES 2017-2018 with DEMO_J")
+    if ref.get("system") != "nhanes" or ref.get("cycle") != "2017-2018":
+        raise ValueError("not NHANES 2017-2018")
     if not str(ref.get("dataset", "")).endswith("_J") or ref["dataset"] in COHORT_FILES:
         raise ValueError("the test's data set is not a test file of the cycle")
     if len(rules) < 2:
@@ -163,34 +173,26 @@ def check_form(claim, reading):
             needed.append(d)
     if [f.get("dataset") for f in ref["files"]] != needed:
         raise ValueError("the claim does not name exactly the files the method reads")
-    unknown = []
-    for f in ref["files"]:
-        on_record = KNOWN.get(f["dataset"]) == f.get("sha256")
-        if f.get("known") is not on_record:
-            raise ValueError("the claim is wrong about whether %s is the file on record" % f["dataset"])
-        if not on_record:
-            unknown.append(REASON_UNKNOWN % f["dataset"])
-    if ctx.get("status") != "qualified":
-        raise ValueError("the status is not qualified")
-    reasons = [REASON_METHOD, REASON_POPULATION, REASON_COHORT]
+    caveats = [CAVEAT_METHOD, CAVEAT_POPULATION, CAVEAT_COHORT]
     if age["max"] == MAX_AGE:
-        reasons.append(REASON_TOP_AGE)
+        caveats.append(CAVEAT_TOP_AGE)
     if any(r["dataset"] == "DR1TOT_J" for r in rules):
-        reasons.append(REASON_DIET)
-    return reasons, unknown, ([REASON_AUTHOR] if reading.get("author") != claim["author"] else [])
+        caveats.append(CAVEAT_DIET)
+    return caveats, ([CAVEAT_AUTHOR] if reading.get("author") != claim["author"] else [])
 
 
 def round1(y):
     return math.floor(10 * y + 0.5) / 10
 
 
-def cohort_rows(claim, tables):
-    """Steps 1 to 4: the value and the weight of each row of the cohort."""
+def cohort_weights(claim, tables):
+    """Steps 1 to 5: the number of rows in the cohort, and the weight of
+    each distinct value, added in file order."""
     ref, cohort = claim["context"]["reference"], claim["context"]["cohort"]
-    lab, demo = tables[ref["dataset"]], tables[ref["demographics"]]
+    lab, demo = tables[ref["dataset"]], tables[DEMO]
     weights = tables[ref["weight"]["dataset"]][ref["weight"]["variable"]]
     rules = [(tables[r["dataset"]][r["variable"]], r["min"], r["max"]) for r in cohort["rules"]]
-    out = []
+    n, by_value = 0, {}
     for seqn, x in zip(lab["SEQN"], lab[ref["variable"]]):  # file order
         if math.isnan(x):
             continue
@@ -201,32 +203,32 @@ def cohort_rows(claim, tables):
         w = weights.get(seqn, math.nan)
         if not (w > 0) or math.isinf(w):
             continue
-        out.append((x, w))
-    return out
-
-
-def compute(rows, value):
-    """Steps 5 to 9, as written."""
-    n, total, below, equal = len(rows), 0.0, 0.0, 0.0
-    by_value = {}
-    for x, w in rows:
-        total += w
-        if x < value:
-            below += w
-        elif x == value:
-            equal += w
+        n += 1
         by_value[x] = by_value.get(x, 0.0) + w
+    return n, by_value
+
+
+def place(n, by_value, value):
+    """Steps 6 to 8, with the sums over the values in rising order."""
     if n < MIN_N:
         return {"n": n}
+    values = sorted(by_value)
+    total = below = equal = 0.0
+    for x in values:
+        total += by_value[x]
+        if x < value:
+            below += by_value[x]
+        elif x == value:
+            equal = by_value[x]
     out = {
         "n": n,
         "percentile": round1(100 * (below + equal / 2) / total),
         "below": round1(100 * below / total),
         "equal": round1(100 * equal / total),
     }
-    for name, q in QUANTILES:
+    for name, q in QUARTILES:
         running = 0.0
-        for x in sorted(by_value):
+        for x in values:
             running += by_value[x]
             if running >= q * total:
                 break
@@ -234,21 +236,12 @@ def compute(rows, value):
     return out
 
 
-def numpy_differs(rows, value, got):
-    """The same numbers from numpy's own sums and weighted quantile. Its
-    sums add in another order, so a share may differ in its last digit."""
-    x = np.array([r[0] for r in rows])
-    w = np.array([r[1] for r in rows])
-    total = w.sum()
-    shares = {
-        "below": 100 * w[x < value].sum() / total,
-        "equal": 100 * w[x == value].sum() / total,
-    }
-    shares["percentile"] = shares["below"] + shares["equal"] / 2
-    for name, share in shares.items():
-        if abs(share - got[name]) > 0.05 + 1e-6:
-            return "%s is %s, numpy gives %.4f" % (name, got[name], share)
-    for name, q in QUANTILES:
+def numpy_differs(by_value, got):
+    """The quartiles again, from numpy's own weighted quantile: a third
+    opinion that neither bean nor this file's author wrote."""
+    x = np.array(sorted(by_value))
+    w = np.array([by_value[v] for v in sorted(by_value)])
+    for name, q in QUARTILES:
         theirs = float(np.quantile(x, q, weights=w, method="inverted_cdf"))
         if theirs != got[name]:
             return "%s is %s, numpy gives %s" % (name, got[name], theirs)
@@ -312,56 +305,58 @@ class Inputs:
 
 
 def check(claim, inputs):
-    """Returns (ok, text) for one comparison."""
+    """Returns the text for one comparison that reproduces. Raises Missing
+    when an input is not there, ValueError when a check fails."""
     ctx = claim["context"]
     method = ctx["method"]
-    if (method["id"], method["version"]) != METHOD or method["min_n"] != MIN_N:
-        return False, "a method this tool does not know: %s@%s" % (method["id"], method["version"])
+    if (method.get("id"), method.get("version")) != METHOD:
+        raise ValueError("a method this tool does not know: %s@%s" % (method.get("id"), method.get("version")))
     rid = ctx["reading"]
     reading = inputs.records.get(rid)
+    if reading is None and rid in inputs.bad:
+        raise ValueError("the reading %s fails its checks: %s" % (str(rid)[7:19], inputs.bad[rid]))
     if reading is None:
-        why = inputs.bad.get(rid, "it is not among the records given")
-        return False, "the reading %s cannot be used: %s" % (str(rid)[7:19], why)
+        raise Missing("the reading %s is not among the records given" % str(rid)[7:19])
     if {"rel": "about", "id": rid} not in claim.get("refs", []) or reading.get("subject") != claim.get("subject"):
-        return False, "the claim is not about the reading it names, or they are about two people"
+        raise ValueError("the claim is not about the reading it names, or they are about two people")
     value = reading.get("value", {}).get("n")
     if not is_number(value) or not value > 0:
-        return False, "the reading is not a number above zero"
-    try:
-        reasons, unknown, by = check_form(claim, reading)
-    except (KeyError, TypeError, ValueError, AttributeError) as err:
-        return False, "not a claim the method makes: %s" % err
-    tables = {}
-    for f in ctx["reference"]["files"]:
-        if f["sha256"] not in inputs.files:
-            return False, "no file given with the SHA-256 of %s, %s" % (f["dataset"], f["sha256"])
-        tables[f["dataset"]] = inputs.table(f["sha256"])
-    # The claim says in words what each variable is: the files must agree.
+        raise ValueError("the reading is not a number above zero")
+    caveats, by = check_form(claim, reading)
     ref = ctx["reference"]
+    tables, off_record = {}, []
+    for f in ref["files"]:
+        if f["sha256"] not in inputs.files:
+            raise Missing("the file %s (SHA-256 %s) is not among the paths given" % (f["dataset"], f["sha256"]))
+        tables[f["dataset"]] = inputs.table(f["sha256"])
+        if KNOWN.get(f["dataset"]) != f["sha256"]:
+            off_record.append(f["dataset"])
+    # The claim says in words what each variable is: the files must agree.
     named = [(ref["dataset"], ref["variable"], ref["label"])] + [(r["dataset"], r["variable"], r["label"]) for r in ctx["cohort"]["rules"]]
     for dataset, variable, label in named:
         if tables[dataset].attrs["labels"].get(variable) != label:
-            return False, "%s.%s is not labelled %r in the file" % (dataset, variable, label)
-    try:
-        rows = cohort_rows(claim, tables)
-        got = compute(rows, float(value))
-    except (KeyError, ValueError, TypeError) as err:
-        return False, "cannot compute: %s" % err
+            raise ValueError("%s.%s is not labelled %r in the file" % (dataset, variable, label))
+    n, by_value = cohort_weights(claim, tables)
+    got = place(n, by_value, float(value))
     want = ctx["result"]
     # Whether the reading and the variable measure the same thing is for the
     # reader to judge: show both.
     what = "%s %s %s against %s %r, %s" % (reading["type"], value, reading["value"].get("unit", ""), ref["variable"], ref["label"], ctx["cohort"]["text"])
     if got != want or claim["value"] != {"n": want.get("percentile"), "unit": "{percentile}"}:
-        return False, "%s: the claim says %s, this tool computes %s" % (what, json.dumps(want, sort_keys=True), json.dumps(got, sort_keys=True))
-    differs = numpy_differs(rows, float(value), got)
+        raise ValueError("%s: the claim says %s, this tool computes %s" % (what, json.dumps(want, sort_keys=True), json.dumps(got, sort_keys=True)))
+    differs = numpy_differs(by_value, got)
     if differs:
-        return False, "%s: %s" % (what, differs)
+        raise ValueError("%s: %s" % (what, differs))
     if got["n"] < SMALL_N:
-        reasons.append(REASON_SMALL)
-    if ctx.get("reasons") != reasons + unknown + by:
-        return False, "%s: the reasons are not the ones these inputs give" % what
-    note = "; NOT the files on record: " + ", ".join(f["dataset"] for f in ref["files"] if not f["known"]) if unknown else ""
-    return True, "%s: percentile %s, n %s%s" % (what, got["percentile"], got["n"], note)
+        caveats.append(CAVEAT_SMALL)
+    # A claim made on a file that was not on record says so. Which files are
+    # on record is this tool's own word, below, and may differ from bean's
+    # on the day of the claim: that caveat is not compared.
+    theirs = [c for c in ctx.get("caveats", []) if c not in {CAVEAT_UNKNOWN % f["dataset"] for f in ref["files"]}]
+    if theirs != caveats + by:
+        raise ValueError("%s: the caveats are not the ones these inputs give" % what)
+    note = "; NOT the files on record: " + ", ".join(off_record) if off_record else ""
+    return "%s: percentile %s, n %s%s" % (what, got["percentile"], got["n"], note)
 
 
 def main(argv):
@@ -373,30 +368,30 @@ def main(argv):
         try:
             inputs.add(path)
         except OSError as err:
-            print("cannot read %s: %s" % (path, err))
+            print("cannot read %s: %s" % (safe(path), err))
             return 1
     claims = [r for r in inputs.records.values() if r["type"] == "comparison.percentile"]
-    bad_claims = 0
+    bad = 0
     for rid, why in sorted(inputs.bad.items()):
         if why != "not a record":
-            print("REFUSED %s %s" % (str(rid)[7:19] if str(rid).startswith("sha256:") else rid, why))
-            bad_claims += 1
-    if not claims and not bad_claims:
+            print("REFUSED %s %s" % (safe(str(rid)[7:19] if str(rid).startswith("sha256:") else rid), safe(why)))
+            bad += 1
+    if not claims and not bad:
         print("no comparison among the records given")
         return 1
-    bad = bad_claims
     signers = {}
     for claim in sorted(claims, key=lambda r: r["id"]):
         try:
-            ok, text = check(claim, inputs)
-        except (KeyError, TypeError, ValueError, OSError) as err:
-            ok, text = False, "cannot check: %s" % err
-        bad += not ok
-        if ok:
+            word, text = "reproduced", check(claim, inputs)
             signers[claim["kid"]] = signers.get(claim["kid"], 0) + 1
-        print(("reproduced " if ok else "DIFFERS ") + claim["id"][7:19] + " " + text)
+        except Missing as err:
+            word, text = "CANNOT CHECK", str(err)
+        except (KeyError, TypeError, ValueError, AttributeError, OSError) as err:
+            word, text = "DIFFERS", "%s" % err
+        bad += word != "reproduced"
+        print("%s %s %s" % (word, claim["id"][7:19], safe(text)))
     for kid, n in sorted(signers.items()):
-        print("signed by %s: %d" % (kid, n))
+        print("signed by %s: %d" % (safe(kid), n))
     return 1 if bad else 0
 
 

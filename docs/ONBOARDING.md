@@ -21,7 +21,7 @@ Give the assistant these rules first:
 > Help me set up bean by following docs/ONBOARDING.md. Rules:
 >
 > 1. Never ask for my 24 words. Never run `bean init`, `bean rotate` or `bean restore`: I run them myself, in a terminal you cannot read. If I start to type or paste the words to you, stop me. I also run `bean import` myself: it shows my values for me to check. Never pass `-yes` for me.
-> 2. Do not look at my health data. Do not open my lab reports or log files, and do not run `bean ls`, `bean show`, `bean export` or `bean blob get` unless I ask. Use exit codes and counts: the `added` line of an import, the `summary` line of `bean verify`.
+> 2. Do not look at my health data. Do not open my lab reports or log files, and do not run `bean ls`, `bean show`, `bean compare`, `bean check-bundle`, `bean export` or `bean blob get` unless I ask. Never run `bean share`: I decide what leaves, at my own terminal. Use exit codes and counts: the `added` line of an import, the `summary` line of `bean verify`.
 > 3. If an import is refused, ask for the shape of the line, as the guide shows, not its contents.
 > 4. Keep my data on my machine. Do not upload files or paste my records anywhere. Connecting you to my log through MCP is where my records start to reach your provider: do it only when I say so, read-only first (`bean mcp`, no `-write` or `-blobs`). Ask before `-write` or `-blobs`.
 
@@ -36,7 +36,7 @@ echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.zshrc && source ~/.zshrc
 bean version
 ```
 
-Poppler provides `pdftotext`, which reads PDFs. `go install` puts `bean`, `bean-import-lab`, `bean-import-apple-health` and `bean-import-csv` in `$(go env GOPATH)/bin`, or in `$GOBIN` if you set it. `bean version` should say `bean 0.6.0 (records v 0)` or later. An older version means another `bean` comes first on your `PATH`: `which -a bean` lists them. `package crypto/hkdf is not in GOROOT` means your Go is too old: `brew upgrade go`.
+Poppler provides `pdftotext`, which reads PDFs. `go install` puts `bean`, `bean-import-lab`, `bean-import-apple-health`, `bean-import-csv` and `bean-import-nhanes` in `$(go env GOPATH)/bin`, or in `$GOBIN` if you set it. `bean version` should say `bean 0.6.0 (records v 0)` or later. An older version means another `bean` comes first on your `PATH`: `which -a bean` lists them. `package crypto/hkdf is not in GOROOT` means your Go is too old: `brew upgrade go`.
 
 ## 2. Create your log
 
@@ -118,6 +118,10 @@ pdftotext -layout ~/Downloads/lab-result.pdf - | sed -n '42p' | tr '0-9' '9' | t
 Use the line number from the error. The output looks like `      xxx 99        9.99        x99x9/xx        9.99-9.99`: enough to add the shape to the importer.
 
 A `.txt` from `pdftotext -layout report.pdf report.txt` imports the same way. Apple Health and CSV: see the [README](../README.md#import-your-data).
+
+## Compare and share
+
+Once readings are in, [COMPARE.md](COMPARE.md) shows where they lie among people you describe, and [SHARE.md](SHARE.md) hands chosen records to someone who can check them without bean. [examples/blood](../examples/blood/README.md) runs both on a synthetic report.
 
 ## 5. Connect an AI assistant (optional)
 
@@ -213,6 +217,8 @@ bean -dir ~/health-restored blob get <stored as id> | shasum -a 256
 ```
 
 The hash matches your original. To use the restored log, point `BEAN_DIR` and your MCP config at `~/health-restored`. Never `bean init` for this: a new identity cannot read your export.
+
+Saved comparisons, the reference files you kept and the records of your shares are in the export like every record, and a comparison can be checked from the export alone ([COMPARE.md](COMPARE.md)). The bundles you sent are folders outside your log: keep those yourself.
 
 ## Troubleshooting
 

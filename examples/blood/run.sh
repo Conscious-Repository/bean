@@ -18,7 +18,7 @@
 # --synthetic uses the small made-up files in internal/nhanes/testdata
 # instead of CDC's, so it runs offline: CI does this. Its numbers describe
 # nobody.
-set -eu
+set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
 SYNTHETIC=; [ "${1:-}" = --synthetic ] && { SYNTHETIC=1; shift; }
@@ -52,12 +52,14 @@ XPT=()
 for f in $FILES; do
   p=$DATA/$f.xpt; [ -f "$p" ] || p=$DATA/$f.XPT
   XPT+=("$p")
-  bean import -yes nhanes "$p" | tail -1
+  bean import -yes nhanes "$p" >/dev/null && echo "kept $f"
 done
 
 say "3. Compare with men of 30 to 39, then with those of a BMI from 20 to 27"
-bean compare $UNKNOWN -sex male -age 30-39 -type 'lab.*' -save | tee "$WORK/compare.txt" | grep -v '^saved '
-bean compare $UNKNOWN -sex male -age 30-39 -where BMX_J.BMXBMI=20-27 -type 'lab.*' | tee "$WORK/compare-bmi.txt"
+bean compare $UNKNOWN -sex male -age 30-39 -type 'lab.*' -save >"$WORK/compare.txt"
+grep -v '^saved ' "$WORK/compare.txt"
+bean compare $UNKNOWN -sex male -age 30-39 -where BMX_J.BMXBMI=20-27 -type 'lab.*' >"$WORK/compare-bmi.txt"
+cat "$WORK/compare-bmi.txt"
 
 say "4. Share the saved comparisons"
 bean share -yes -note "the example bundle" -out "$WORK/bundle" -type 'comparison.*'
@@ -65,8 +67,10 @@ bean share -yes -note "the example bundle" -out "$WORK/bundle" -type 'comparison
 say "5. Check the bundle, with bean and without"
 bean check-bundle "$WORK/bundle"
 if python3 -c 'import pandas, numpy, cryptography' 2>/dev/null; then
-  python3 -I "$ROOT/tools/second/checkbundle.py" "$WORK/bundle" | tail -1
-  python3 -I "$ROOT/tools/compare/reproduce.py" "$WORK/bundle" "${XPT[@]}" | tee "$WORK/reproduce.txt" | sed 's/^\(reproduced\|DIFFERS\) [0-9a-f]* /\1 /' | grep -v '^signed by '
+  python3 -I "$ROOT/tools/second/checkbundle.py" "$WORK/bundle" >"$WORK/checkbundle.txt"
+  tail -1 "$WORK/checkbundle.txt"
+  python3 -I "$ROOT/tools/compare/reproduce.py" "$WORK/bundle" "${XPT[@]}" >"$WORK/reproduce.txt"
+  sed 's/^reproduced [0-9a-f]* /reproduced /' "$WORK/reproduce.txt" | grep -v '^signed by '
 else
   echo "(python3 with tools/requirements.txt is not installed: the checks without bean are skipped)"
 fi

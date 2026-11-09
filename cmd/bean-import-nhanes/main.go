@@ -90,15 +90,12 @@ func record(raw []byte, blob string) (map[string]any, string, error) {
 	if x.Rows == 0 {
 		return nil, "", fmt.Errorf("%s has no rows", x.Dataset)
 	}
-	var vars []any
-	for _, v := range x.Variables {
+	// A label goes into every saved comparison that uses its variable: it
+	// must be plain text.
+	for i, v := range x.Variables {
 		if !datasetPattern.MatchString(v.Name) || !labelPattern.MatchString(v.Label) {
-			return nil, "", fmt.Errorf("variable %d of %s has a name or label that is not plain text", len(vars)+1, x.Dataset)
+			return nil, "", fmt.Errorf("variable %d of %s has a name or label that is not plain text", i+1, x.Dataset)
 		}
-		vars = append(vars, map[string]any{"name": v.Name, "label": v.Label})
-	}
-	if !labelPattern.MatchString(x.Created) {
-		return nil, "", errors.New("the file's creation time is not plain text")
 	}
 	sum := sha256.Sum256(raw)
 	digest := hex.EncodeToString(sum[:])
@@ -119,9 +116,6 @@ func record(raw []byte, blob string) (map[string]any, string, error) {
 			"publisher": "US National Center for Health Statistics (CDC), NHANES",
 			"url":       nhanes.URL + x.Dataset + ".xpt",
 			"license":   "public domain (a work of the US Government); NCHS asks users not to try to identify participants",
-			"created":   x.Created,
-			"rows":      float64(x.Rows),
-			"variables": vars,
 		},
 		"blobs": []any{map[string]any{"hash": blob, "role": "raw-export", "media_type": "application/x-sas-xport"}},
 	}

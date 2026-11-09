@@ -3,9 +3,9 @@
 `bean share` writes records you choose into a folder: a bundle. You send the folder any way you like. The person who gets it can check that every record is yours and unchanged, with `bean check-bundle` or with a Python script, and needs no account, no key of yours and no copy of your log.
 
 ```
-bean share -out for-ana 3fa9c1 7b8b81          # these records
-bean share -out lipids -type 'lab.*' -since 2026-01-01
-bean share -out with-files -files 7b8b81       # also the files they keep
+bean share -out for-ana 3fa9c1 7b8b81              # these records
+bean share -out lipids -type 'comparison.*'        # every saved comparison, each with its reading
+bean share -out with-files -files 7b8b81           # also the files those records keep
 ```
 
 ## What goes in
@@ -13,7 +13,8 @@ bean share -out with-files -files 7b8b81       # also the files they keep
 - **The records you name**, by id or by `-type` (with `-since` and `-until`). Only current records about you: not a corrected one, not a deleted one, and not one that another identity signed, since a bundle carries only your identity records.
 - **What they are about, one step.** A record is read with the record it is about, so that one comes along: the reading of a comparison, the meal of an estimate, the entry a note comments on. What that one is about in turn stays home unless you name it. The review marks each record that comes along, and says which it could not bring and why.
 - **Nothing else of yours.** Not the rest of the log, not a lab report unless you name it. A reading names its report by a hash, and the report stays home.
-- **Files only with `-files`.** A record that keeps a file (a lab report, a photo, a reference file) is shared without the file, which the bundle then names and does not hold. With `-files` each file goes in as plaintext.
+- **Files only with `-files`.** A record that keeps a file (a lab report, a photo, a reference file) is shared without the file. With `-files` each file goes in whole, as plaintext: for a lab report that is the report as you imported it, with your name and birth date.
+- **A type never picks a record that keeps a file.** `-type 'lab.*'` shares your lab readings, not the lab report. Name such a record by its id when you mean to share it.
 - **Your identity records**: the ones that show which keys speak for you, and the pairing of an agent whose record you share.
 - **One share record**, signed by you: the list of exactly what the bundle holds, your `-note`, and the time.
 
@@ -33,6 +34,8 @@ One command checks the bundle and, when it passes, shows what it holds: each rec
 
 Read a bundle with `check-bundle`, not by pointing `-dir` at it: a bundle is someone else's records, not your log. If you did, no harm is done: bean leaves a `local` folder there, which the check names and does not read.
 
+A bundle does not go into your own log. `bean sync` refuses it: sync is for copies of your own log, and it would mix the sender's records into yours for good. To set someone's numbers next to yours, read their bundle with `check-bundle` and your own with `bean ls` or `bean compare`. There is no merged view yet.
+
 ## What the reader can and cannot tell
 
 They can tell that:
@@ -51,7 +54,9 @@ They cannot tell, and bean says so on every check:
 
 And you should know:
 
-- **A bundle is a disclosure.** It is not encrypted, and once sent it cannot be taken back. Deleting a record later does not reach a bundle you sent.
+- **A bundle is a disclosure.** It is not encrypted, and once sent it cannot be taken back. Deleting or correcting a record later does not reach a bundle you sent: send a new one.
+- **Keep the folder you sent** if you want to know later what was in it. The share record in your log lists ids; a record you deleted since is gone from your log, and the bundle is the only copy.
+- **Send it as one file.** A bundle is a folder: zip it. Without `-files` it is a few kilobytes; with the NHANES files about 18 MB.
 - **Two bundles of yours can be linked.** Every record carries your identity id.
 - **Your identity records say how many records you had at each key change.** A key change lists the ids of the records it seals. The ids are hashes and give no content away, but their number shows.
 - **A correction travels without what it corrects.** A record that replaces an earlier one is shared alone; the earlier one stays home. The check says how many such corrections a bundle holds.
@@ -83,9 +88,8 @@ The share record is an ordinary record:
 | `times.observed` | when it was written, to the minute |
 | `context.records` | the ids of the shared records |
 | `context.proof` | the ids of the identity records and pairings that travel with them |
-| `context.files` | absent, or one entry per stored file that a shared record names: `blob` (the id the record names), `record`, `media_type`, `included` (true or false), and, when it is included, `sha256` (64 hex digits) and `bytes` (a whole number) of the plaintext. A record that states its file's `sha256` gives it here also when the file is not included; `bytes` is there only when the file is. |
+| `context.files` | absent, or one entry per file in `files/`: `blob` (the id by which a listed record names it), `record` (that record), and `sha256` (64 hex digits) and `bytes` (a whole number) of the plaintext. A stored file that stays home has no entry: its own record names it. |
 | `context.note` | the `-note`, if any |
-| `context.statement` | `Selected records, not a complete history.` |
 
 A bundle passes when all of this holds. A list in the share record that is not as the table says fails the check; it is never read in a kinder way.
 
@@ -96,8 +100,8 @@ A bundle passes when all of this holds. A list in the share record that is not a
 3. Every other record is one that `context.records` lists or one that `context.proof` names, never both, and every id in either list is there.
    - A listed record is valid, has the person as its `subject`, and is not an identity record, a tombstone, a pairing or a share record.
    - A proof record is valid, and is an identity record (`bean.genesis`, `bean.succession`, `bean.seal`) on the person's chain, or a pairing (`agent.pair`, `device.pair`) that the person signed about themselves.
-4. Every stored file that a listed record names has exactly one entry in `context.files` with that `blob` and `record`, and every entry is for such a file. When the record has one stored file, names it in `value.blob` and states `context.sha256`, the entry's `sha256`, if it has one, is equal to it.
-5. `files/` holds exactly the files whose entries say `included`, each a plain file, not a link, with the entry's `bytes` and with the SHA-256 of its name.
+4. Every entry of `context.files` is for a stored file that its listed record names, once. When that record has one stored file, names it in `value.blob` and states `context.sha256`, the entry's `sha256` is equal to it.
+5. `files/` holds exactly the files that the entries list, each a plain file, not a link, with the entry's `bytes` and with the SHA-256 of its name.
 
 A listed record that an agent or another key signed is valid by rule 1 and passes: the person chose to share it. The check counts such records apart: by the person, by an agent whose pairing is in the proof, by another key.
 

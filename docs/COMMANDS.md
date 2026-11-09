@@ -78,7 +78,7 @@ Keeps a provider file, then adds its readings. Runs `bean-import-<source>`, foun
 
 1. It copies the file privately, at most 256 MiB, works out the id the encrypted copy will have, and runs the importer on the copy. The importer's output goes to a private file, at most 1 GiB of readings plus 1 MiB. If the importer refuses the file, nothing is written.
 2. It checks the importer's first record: it must keep this file (`lab.report`, `apple-health.export`, `csv.file`, `reference.file`) and carry `source.ref_input`, not a ready-made `source.ref` or a `source.supersedes_ref`. It must pass the checks `append` makes of a record: its fields, its size, your key. If it does not, or you deleted that record before with `purge`, nothing is written, not even the file. A file you deleted stays deleted under any `-system`, on a copy whose `local/purged-refs.jsonl` remembers the deletion: a copy that only received the deletion by sync, and never held the record, stores the file again. A file kept under another archive type is not caught.
-3. It shows the readings, one line each (type, value as printed, unit, flag), and asks `Save <n> readings and keep the file? [y/N]`. Only `y` goes on; anything else writes nothing. `-yes` skips the review, for scripts. Without a terminal and without `-yes` it writes nothing and shows no value: the readings would land in a script's log or an AI assistant's context.
+3. It shows the readings, one line each (type, value as printed, unit, flag), and asks `Save <n> readings and keep the file? [y/N]`. Only `y` goes on; anything else writes nothing. `-yes` skips the review, for scripts. Without a terminal and without `-yes` it writes nothing and shows no value: the readings would land in a script's log or an AI assistant's context. A terminal is what the system says is one; a closed input or `/dev/null` is not.
 4. It stores the copy, encrypted, and reads it back. The bytes must match.
 5. It adds the first record and checks that the log keeps it: a current record of yours, about you, that names the blob and the file's SHA-256, and a blob that still reads back as the file. This check proves every record file, as `verify` does, because the object cache vouches for a file by its size and time.
 6. It adds the readings, then checks the file record again.
@@ -149,7 +149,7 @@ Shows where a reading lies among the people of a cohort in NHANES 2017-2018, fro
 
 `purge`, `add -corrects`, `append`, `import`, `sync` and `import-export` delete the saved comparisons of a reading that is no longer current, and say how many on stderr. `compare` does the same before it shows anything.
 
-Each row has the reading, its value, the percentile, the shares of the cohort with a lower and with the same value, the cohort's 25th to 75th percentile and median, the number of people, and a status: `qualified` with the reasons below the table, or `not comparable:` and why, with no number. A cohort of fewer than 30 people gives no number. Exit 1 when nothing could be compared.
+Each row has the reading, its value, the percentile, the shares of the cohort with a lower and with the same value, the cohort's 25th to 75th percentile and median, the number of people, and a note: `small cohort` under 100 people, `file not on record`, or `not comparable:` and why, with no number. A cohort of fewer than 30 people gives no number. Under the table come what to do about a missing result, the types bean has no reference data for, and the caveats that every number carries. Exit 1 when nothing could be compared.
 
 A comparison says where a value lies in a sample. It does not say whether the value is healthy.
 
@@ -159,7 +159,7 @@ A comparison says where a value lies in a sample. It does not say whether the va
 
 Writes chosen records into a new or empty folder, a bundle, that anyone can check without your log or keys. [SHARE.md](SHARE.md) says what goes in, what a reader can tell, and the format.
 
-- Give record ids, or `-type` with optional `-since` and `-until`. Only current records about you can be shared, and not one that another identity signed. A record brings the record it is about, one step and no further.
+- Give record ids, or `-type` with optional `-since` and `-until`. Only current records about you can be shared, and not one that another identity signed. A record brings the record it is about, one step and no further. A type never picks a record that keeps a file, such as a lab report: name that one by its id.
 - `-files` also writes the files those records keep, in plaintext. Without it a file is named in the bundle and not shared.
 - `-note` is a line for the reader, kept in the share record.
 - It lists what will leave, on stderr, and asks `Share <n> records? [y/N]`. `-yes` skips that. Without a terminal and without `-yes` it writes nothing.
@@ -208,7 +208,7 @@ If the key is already paired, the same label or no `-label` prints that pairing.
 
 ### `sync <folder>`
 
-Copies to this log every record and file that the other folder has and this one does not. It checks each file first, and replaces a stored copy that fails the checks. It reads this log's files from disk, not from the cache, so it also repairs a file that was changed in place. It does not copy a record that a valid deletion names. It judges each deletion on the files of both folders together, not on what the other folder says: a copy that has not seen your rotation takes the old key's deletions for valid. Run it both ways to make two copies the same. Prints `copied <r> records, <b> blobs, refused <p> purged`. Sync only from your own copies.
+Copies to this log every record and file that the other folder has and this one does not. It checks each file first, and replaces a stored copy that fails the checks. It reads this log's files from disk, not from the cache, so it also repairs a file that was changed in place. It does not copy a record that a valid deletion names. It judges each deletion on the files of both folders together, not on what the other folder says: a copy that has not seen your rotation takes the old key's deletions for valid. Run it both ways to make two copies the same. Prints `copied <r> records, <b> blobs, refused <p> purged`. Sync only from your own copies: it refuses a folder that does not hold your identity record, such as a bundle someone sent (read that with `check-bundle`).
 
 - The other folder must hold a log (`local/identity` or `objects/`). If it does not, `sync` fails with `no log in <folder>`, so a typo does not look like a sync with nothing to copy.
 - A record file of the other folder that fails its checks is not copied, nor a file that this log needs whose hash is wrong. Then `sync` copies the rest, prints `skipped <n> bad record files, <m> bad blobs in <folder>`, and exits 1. Run `bean verify` in that folder. A stranger's broken file there has the same effect.

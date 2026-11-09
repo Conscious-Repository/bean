@@ -38,11 +38,6 @@ import (
 const (
 	shareType   = "share"
 	shareSystem = "bean-share"
-	// shareStatement goes into every share record.
-	shareStatement = "Selected records, not a complete history."
-	// maxBundleRecord is the largest record file a bundle may hold: the
-	// size the core allows a key change. A larger file is not read.
-	maxBundleRecord = 16 << 20
 )
 
 // isPairing reports a pairing that the person signed about themselves.
@@ -60,13 +55,25 @@ func statedDigest(r *core.Record, blob string) string {
 	return s
 }
 
+// neverListed reports the kinds of record that a share does not list:
+// identity records and pairings travel as proof, and a deletion or the
+// record of a share is not shared.
+func neverListed(r *core.Record) bool {
+	return r.IsIdentity() || r.Type == "bean.tombstone" || r.Type == "agent.pair" || r.Type == "device.pair" || r.Type == shareType
+}
+
+// onChain reports an identity record of the person that their chain holds.
+func onChain(rp *core.Report, r *core.Record, person string) bool {
+	return r.IsIdentity() && (r.ID == person || r.Subject == person) && rp.Valid[r.ID] && !rp.OffTree(r)
+}
+
 // notShareable says why a record cannot go into a bundle, or "".
 func notShareable(l *core.Loaded, r *core.Record) string {
 	switch {
-	case r.IsIdentity() || r.Type == "bean.tombstone" || r.Type == "agent.pair" || r.Type == "device.pair":
-		return "it is a " + r.Type + " record: your identity and pairing records travel with every bundle, and are not chosen"
 	case r.Type == shareType:
 		return "it is the record of a share, which is not shared again"
+	case neverListed(r):
+		return "it is a " + r.Type + " record: your identity and pairing records travel with every bundle, and are not chosen"
 	case r.Subject != l.ID:
 		return "it is not about you"
 	case !l.Current(r.ID):
@@ -79,10 +86,9 @@ func notShareable(l *core.Loaded, r *core.Record) string {
 
 // sharedFile is one stored file that a shared record names.
 type sharedFile struct {
-	blob, record, mediaType string
-	digest                  string // SHA-256 of the plaintext, "" when not known
-	size                    int
-	data                    []byte // the plaintext, with -files
+	blob, record, mediaType, recordType string
+	digest                              string // SHA-256 of the plaintext, with -files
+	data                                []byte // the plaintext, with -files
 }
 
 func cmdShare(s *core.Store, args []string) {
@@ -126,14 +132,22 @@ func cmdShare(s *core.Store, args []string) {
 	}
 	// What the person chose.
 	chosen := map[string]*core.Record{}
+	// A type picks readings, never a record that keeps a file: 'lab.*' must
+	// not sweep up the lab report itself, with the person's name in it. Such
+	// a record is shared when it is named by its id.
+	keepsFile := 0
 	if *typ != "" {
 		for _, r := range recs {
-			if notShareable(l, r) == "" {
+			switch {
+			case notShareable(l, r) != "":
+			case len(r.Blobs) > 0:
+				keepsFile++
+			default:
 				chosen[r.ID] = r
 			}
 		}
 		if len(chosen) == 0 {
-			fail(fmt.Errorf("no current record of type %s in that time", *typ))
+			fail(fmt.Errorf("no current record of type %s in that time (a record that keeps a file is shared by its id, not by type)", *typ))
 		}
 	}
 	for _, id := range pos {
@@ -181,19 +195,18 @@ func cmdShare(s *core.Store, args []string) {
 	distinct := map[string]bool{}
 	for _, r := range shared {
 		for _, b := range r.Blobs {
-			sf := sharedFile{blob: b.Hash, record: r.ID, mediaType: b.MediaType, digest: statedDigest(r, b.Hash)}
+			sf := sharedFile{blob: b.Hash, record: r.ID, mediaType: b.MediaType, recordType: r.Type}
 			if *files {
 				data, err := s.GetBlob(b.Hash)
 				if err != nil {
 					fail(fmt.Errorf("the file of %s cannot be read: %w", r.ID[7:19], err))
 				}
 				sum := sha256.Sum256(data)
-				got := hex.EncodeToString(sum[:])
-				if sf.digest != "" && sf.digest != got {
+				sf.digest, sf.data = hex.EncodeToString(sum[:]), data
+				if stated := statedDigest(r, b.Hash); stated != "" && stated != sf.digest {
 					fail(fmt.Errorf("the file of %s does not match the SHA-256 in its record", r.ID[7:19]))
 				}
-				sf.digest, sf.data, sf.size = got, data, len(data)
-				distinct[got] = true
+				distinct[sf.digest] = true
 			}
 			kept = append(kept, sf)
 		}
@@ -211,7 +224,7 @@ func cmdShare(s *core.Store, args []string) {
 		r := l.Report.Records[id]
 		switch {
 		case !l.Report.Valid[id]:
-		case r.IsIdentity() && (id == l.ID || r.Subject == l.ID) && !l.Report.OffTree(r):
+		case onChain(l.Report, r, l.ID):
 			proof = append(proof, r)
 		case isPairing(r, l.ID) && authors[r.ValueKey()] && l.Current(id):
 			proof = append(proof, r)
@@ -241,10 +254,13 @@ func cmdShare(s *core.Store, args []string) {
 		}
 		for _, sf := range kept {
 			if *files {
-				fmt.Fprintf(w, "  file of %s: %s, %d bytes, in plaintext\n", sf.record[7:19], safe(sf.mediaType), sf.size)
+				fmt.Fprintf(w, "  THE WHOLE FILE that %s (%s) keeps, as you imported it: %s, %d bytes, in plaintext. A lab report holds your name and birth date.\n", sf.record[7:19], sf.recordType, safe(sf.mediaType), len(sf.data))
 			} else {
-				fmt.Fprintf(w, "  file of %s: named, not shared (pass -files to share it)\n", sf.record[7:19])
+				fmt.Fprintf(w, "  the file that %s (%s) keeps: named, not shared (-files shares it)\n", sf.record[7:19], sf.recordType)
 			}
+		}
+		if keepsFile > 0 {
+			fmt.Fprintf(w, "  not shared: %d records of that type that keep a file. Name one by its id to share it.\n", keepsFile)
 		}
 		fmt.Fprintf(w, "  also: your %d identity records and %d pairings, and the share record itself\n", len(proof)-pairings, pairings)
 		fmt.Fprintln(w, "A bundle is a disclosure: it is not encrypted, and once sent it cannot be taken back. Each record carries your identity id, so two bundles of yours can be linked.")
@@ -270,17 +286,14 @@ func cmdShare(s *core.Store, args []string) {
 	for _, r := range proof {
 		proofIDs = append(proofIDs, r.ID)
 	}
+	// The files that travel, and no others: a file that stays home is named
+	// by its own record, and needs no word here.
 	for _, sf := range kept {
-		e := map[string]any{"blob": sf.blob, "record": sf.record, "media_type": sf.mediaType, "included": *files}
-		if sf.digest != "" {
-			e["sha256"] = sf.digest
-		}
 		if *files {
-			e["bytes"] = float64(sf.size)
+			fileList = append(fileList, map[string]any{"blob": sf.blob, "record": sf.record, "sha256": sf.digest, "bytes": float64(len(sf.data))})
 		}
-		fileList = append(fileList, e)
 	}
-	ctx := map[string]any{"records": ids, "proof": proofIDs, "statement": shareStatement}
+	ctx := map[string]any{"records": ids, "proof": proofIDs}
 	if fileList != nil {
 		ctx["files"] = fileList
 	}
@@ -325,7 +338,7 @@ func cmdShare(s *core.Store, args []string) {
 			gone(err)
 		}
 	}
-	if *files && len(kept) > 0 {
+	if len(fileList) > 0 {
 		if err := os.MkdirAll(filepath.Join(tmp, "files"), 0o700); err != nil {
 			gone(err)
 		}
@@ -428,7 +441,7 @@ func bundleRecords(dir string) (files map[string][]byte, bad []string, err error
 				continue
 			}
 			info, err := e.Info()
-			if err != nil || !e.Type().IsRegular() || info.Size() > maxBundleRecord {
+			if err != nil || !e.Type().IsRegular() || info.Size() > core.MaxSuccessionSize {
 				bad = append(bad, rel)
 				continue
 			}
@@ -552,13 +565,14 @@ func checkBundle(dir string) ([]string, bool) {
 		bad("the share record's lists are damaged")
 		return done(lines)
 	}
+	// The files it holds: each entry names a stored file of a listed record,
+	// with the SHA-256 and the size of its plaintext.
 	type entry struct {
-		digest   string
-		size     float64
-		included bool
+		digest string
+		size   float64
 	}
 	account := map[string]entry{} // blob id and record id -> the share's word
-	want := map[string]float64{}  // SHA-256 -> size, of the files it includes
+	want := map[string]float64{}  // SHA-256 -> size
 	rawFiles, hasFiles := share.Context["files"]
 	entries, isList := rawFiles.([]any)
 	damaged := hasFiles && !isList
@@ -566,28 +580,17 @@ func checkBundle(dir string) ([]string, bool) {
 		m, _ := x.(map[string]any)
 		blob, _ := m["blob"].(string)
 		record, _ := m["record"].(string)
-		included, isBool := m["included"].(bool)
-		digest, hasDigest := m["sha256"].(string)
+		digest, _ := m["sha256"].(string)
 		size, hasSize := m["bytes"].(float64)
-		_, anyDigest := m["sha256"]
-		_, anySize := m["bytes"]
-		switch {
-		case !core.IsID(blob) || !listed[record] || !isBool,
-			anyDigest != hasDigest || (hasDigest && !isHexDigest(digest)),
-			anySize != hasSize || (hasSize && (size < 0 || size != float64(int64(size)))),
-			included != hasSize || (included && !hasDigest):
+		if _, twice := account[blob+" "+record]; twice || !core.IsID(blob) || !listed[record] || !core.IsID("sha256:"+digest) || !hasSize || size < 0 || size != float64(int64(size)) {
+			damaged = true
+			continue
+		}
+		if prev, ok := want[digest]; ok && prev != size {
 			damaged = true
 		}
-		if _, twice := account[blob+" "+record]; twice {
-			damaged = true
-		}
-		if prev, ok := want[digest]; included && ok && prev != size {
-			damaged = true
-		}
-		account[blob+" "+record] = entry{digest, size, included}
-		if included {
-			want[digest] = size
-		}
+		account[blob+" "+record] = entry{digest, size}
+		want[digest] = size
 	}
 	if damaged {
 		bad("the share record's list of files is damaged")
@@ -635,8 +638,7 @@ func checkBundle(dir string) ([]string, bool) {
 		case listed[id] && proof[id]:
 			bad("%s is listed as a record and as proof", id)
 		case proof[id]:
-			onChain := r.IsIdentity() && (id == person || r.Subject == person) && !rp.OffTree(r)
-			if !rp.Valid[id] || !(onChain || isPairing(r, person)) {
+			if !onChain(rp, r, person) && !(isPairing(r, person) && rp.Valid[id]) {
 				bad("%s is named as proof, and is not a valid identity record or pairing of the person", id)
 			}
 		case !listed[id]:
@@ -645,7 +647,7 @@ func checkBundle(dir string) ([]string, bool) {
 			bad("%s is listed, and is not valid", id)
 		case r.Subject != person:
 			bad("%s is listed, and is about someone else", id)
-		case r.IsIdentity() || r.Type == "bean.tombstone" || r.Type == "agent.pair" || r.Type == "device.pair" || r.Type == shareType:
+		case neverListed(r):
 			bad("%s is listed, and is a %s record, which is not shared", id, r.Type)
 		case r.Author == person:
 			byPerson++
@@ -665,7 +667,9 @@ func checkBundle(dir string) ([]string, bool) {
 			bad("%s is named as proof, and is not in the bundle", id)
 		}
 	}
-	// Rule 4: every stored file that a listed record names is accounted for.
+	// Rule 4: each entry is for a stored file that its listed record names,
+	// and is the file that record states, where it states one. A stored file
+	// with no entry stays home: it is counted, not faulted.
 	named := 0
 	for _, id := range slices.Sorted(maps.Keys(listed)) {
 		r := rp.Records[id]
@@ -675,20 +679,17 @@ func checkBundle(dir string) ([]string, bool) {
 		for _, b := range r.Blobs {
 			e, ok := account[b.Hash+" "+id]
 			if !ok {
-				bad("%s names a stored file that the share record does not account for", id)
+				named++
 				continue
 			}
 			delete(account, b.Hash+" "+id)
-			if stated := statedDigest(r, b.Hash); stated != "" && e.digest != "" && e.digest != stated {
+			if stated := statedDigest(r, b.Hash); stated != "" && e.digest != stated {
 				bad("the file of %s is not the one its record states", id)
-			}
-			if !e.included {
-				named++
 			}
 		}
 	}
 	if len(account) > 0 {
-		bad("the share record accounts for a file that no listed record names")
+		bad("the share record lists a file that no listed record names")
 	}
 	// Rule 5: files/ holds exactly the included files.
 	included := len(want)
@@ -769,16 +770,4 @@ var bundleCaveats = []string{
 	"These are selected records, not a complete history: a correction or a deletion that the share leaves out does not show.",
 	"A signature shows which identity signed, not that a value is true, nor who that identity is.",
 	"The key above is the one that signed. A bundle cannot show that it is still the person's key: a key change made since is not in it. When it matters, ask the person for their current key (bean whoami).",
-}
-
-func isHexDigest(s string) bool {
-	if len(s) != 64 {
-		return false
-	}
-	for _, c := range s {
-		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
-			return false
-		}
-	}
-	return true
 }

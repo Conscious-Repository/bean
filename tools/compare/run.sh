@@ -29,15 +29,22 @@ for f in "${FILES[@]}"; do
 done
 for v in 127 150 187 193 200.5 250 400; do bean add lab.cholesterol-total $v -unit mg/dL -at 2026-11-01 >/dev/null; done
 for v in 29 44 52 60 72; do bean add lab.hdl-cholesterol $v -unit mg/dL -at 2026-11-01 >/dev/null; done
-n=0
-compare() { bean compare $UNKNOWN -save -type 'lab.*' "$@" >/dev/null 2>"$T/err" || { echo "compare $* failed: $(cat "$T/err")"; exit 1; }; n=$((n + 12)); }
+# A reading that an agent signed: its comparison carries that as a caveat.
+bean agent init -label assistant >/dev/null 2>&1
+bean add -agent lab.cholesterol-total 181 -unit mg/dL -at 2026-11-01 >/dev/null || { echo "agent add failed"; exit 1; }
+compare() { bean compare $UNKNOWN -save -type 'lab.*' "$@" >/dev/null 2>"$T/err" || { echo "compare $* failed: $(cat "$T/err")"; exit 1; }; }
 compare -sex male -age 30-39
 compare -sex female -age 6-80
 compare -sex female -age 20-59 -where DEMO_J.RIDRETH3=3-4
 compare -sex male -age 20-80 -where BMX_J.BMXBMI=22-30
 compare -sex female -age 18-80 -where DR1TOT_J.DR1TPROT=60-140 -where DR1TOT_J.DR1TFIBE=10-40
 compare -sex male -age 18-80 -where DEMO_J.RIDRETH3=3 -where BMX_J.BMXBMI=18-35 -where DR1TOT_J.DR1TKCAL=1500-3000
-bean ls -json >"$T/records.jsonl"
+# A rule with a large number and one with decimals: the cohort's text must be
+# written the same way by both.
+compare -sex female -age 18-80 -where DR1TOT_J.DR1TKCAL=0-1000000 -where BMX_J.BMXBMI=18.5-40
+bean ls -all -json >"$T/records.jsonl"
+n=$(grep -c '"type":"comparison.percentile"' "$T/records.jsonl")
+[ "$n" -ge 70 ] || { echo "only $n comparisons were saved"; exit 1; }
 repro() { "$PY" -I "$HERE/reproduce.py" "$@"; }
 # all <what> <paths>: every comparison must be reproduced.
 all() {
@@ -90,6 +97,12 @@ none "a changed reading" "$T/changed.jsonl" "${FILES[@]}"
 # SHA-256, not from a file that cannot be opened.
 "$PY" -I -c 'import sys, pandas; pandas.read_sas(sys.argv[1], format="xport")' "$T/DEMO_J.XPT" || { echo "the changed file does not read"; exit 1; }
 none "a file with another SHA-256" "$T/records.jsonl" "$(xpt TCHOL_J)" "$(xpt HDL_J)" "$(xpt BMX_J)" "$(xpt DR1TOT_J)" "$T/DEMO_J.XPT"
+# A file that was not given is a check that cannot be made, not a result
+# that differs.
+repro "$T/records.jsonl" "$(xpt TCHOL_J)" "$(xpt DEMO_J)" >"$T/out.txt"; code=$?
+if [ "$code" != 1 ] || grep -q '^DIFFERS ' "$T/out.txt" || ! grep -q '^CANNOT CHECK ' "$T/out.txt"; then
+  echo "DIFFER: a missing file is not reported as a check that cannot be made"; head -3 "$T/out.txt"; exit 1
+fi
 # A claim that is signed and whose numbers compute, but that is not one the
 # method makes, must be refused: each of these is written with bean append,
 # so its id and signature are good.
@@ -106,7 +119,7 @@ print(json.dumps({"type": r["type"], "value": r["value"], "times": {"observed": 
 PYEOF
   rm -rf "$T/flog"; cp -R "$T/log" "$T/flog"
   "$T/bin/bean" -dir "$T/flog" append <"$T/forged.jsonl" >/dev/null 2>&1 || { echo "forge: append failed"; exit 1; }
-  "$T/bin/bean" -dir "$T/flog" ls -json >"$T/forged-log.jsonl"
+  "$T/bin/bean" -dir "$T/flog" ls -all -json >"$T/forged-log.jsonl"
   before=$(grep -c . "$T/records.jsonl"); after=$(grep -c . "$T/forged-log.jsonl")
   [ "$after" = $((before + 1)) ] || { echo "forge: the forged claim was not added"; exit 1; }
   repro "$T/forged-log.jsonl" "${FILES[@]}" >"$T/out.txt"; code=$?
@@ -114,10 +127,13 @@ PYEOF
     echo "DIFFER: reproduce.py accepted a claim with $2 (exit $code)"; grep -v '^reproduced ' "$T/out.txt" | head -5; exit 1
   fi
 }
+# The first is the plain case: the form is right and one number is not. It
+# must be caught by computing, not by any other check.
+forge 'c["result"]["p50"] += 1' "a median that is not the one the files give"
+grep -q '^DIFFERS .*this tool computes' "$T/out.txt" || { echo "DIFFER: a wrong number was not caught by computing it"; grep '^DIFFERS' "$T/out.txt"; exit 1; }
 forge 'c["cohort"]["text"] = "female, age 20-29"' "a cohort text that its rules do not say"
 forge 'c["reference"]["weight"] = {"dataset": "DEMO_J", "variable": "RIDAGEYR"}' "a weight the method does not give"
-forge 'c["status"] = "comparable"' "a status the method does not give"
-forge 'c["reasons"] = c["reasons"][:1]' "reasons left out"
+forge 'c["caveats"] = c["caveats"][:1]' "caveats left out"
 forge 'c["cohort"]["rules"] = c["cohort"]["rules"][1:]' "a cohort with no sex"
-forge 'c["reference"]["files"][0]["known"] = not c["reference"]["files"][0]["known"]' "a wrong word on which file is on record"
-echo "compare: reproduce.py checks and computes all $n comparisons again from $(basename "$DATA"), also from an export alone, and refuses a changed result, reading and file, and six signed claims the method does not make"
+forge 'c["reference"]["files"] = c["reference"]["files"][:1]' "a file left out of the list"
+echo "compare: reproduce.py checks and computes all $n comparisons again from $(basename "$DATA"), also from an export alone, and refuses a changed result, reading and file, and six signed claims that the method does not give"
