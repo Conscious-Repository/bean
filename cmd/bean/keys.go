@@ -105,8 +105,21 @@ func cmdRotate(s *core.Store, args []string, restore bool) {
 	noSealFile := fs.String("no-seal-file", "", "a file with one id per line, not to keep")
 	nostr := fs.String("nostr", "", "new, or a file holding an nsec")
 	ident := fs.String("identity", "", "the identity id to restore when the words match more than one genesis")
-	if err := fs.Parse(args); err != nil || fs.NArg() != 0 || (*ident != "" && !restore) {
+	export := fs.String("export", "", "rebuild from this export folder: its records first, its files after the restore")
+	if err := fs.Parse(args); err != nil || fs.NArg() != 0 || (*ident != "" || *export != "") && !restore {
 		usage()
+	}
+	if *export != "" {
+		// An empty folder and an export: the records come first, so that the
+		// restore can find the identity and show what the old key signed.
+		who, n, err := s.SeedFromExport(*export)
+		if err != nil {
+			fail(err)
+		}
+		if *ident == "" {
+			*ident = who
+		}
+		fmt.Fprintf(os.Stderr, "copied %d record files from the export\n", n)
 	}
 	key, err := nostrKey(*nostr, false)
 	if err != nil {
@@ -176,6 +189,14 @@ func cmdRotate(s *core.Store, args []string, restore bool) {
 	}
 	fmt.Println("rotated to", res.NewKey)
 	fmt.Printf("sealed %d\n", len(res.Sealed))
+	if *export != "" {
+		// The keys are back, so the export's files can be encrypted again.
+		ir, err := s.ImportExportAll(*export)
+		if err != nil {
+			fail(fmt.Errorf("restored, but the files did not come back: %w; run bean import-export %s", err, *export))
+		}
+		fmt.Printf("imported %d files from the export\n", ir.Blobs)
+	}
 }
 
 // shownClaims is how many of the newest claims a rotation shows without -list.

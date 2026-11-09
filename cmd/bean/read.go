@@ -351,6 +351,10 @@ func valueText(r *core.Record) string {
 	case len(v) == 1 && v["n"] == nil:
 		if _, has := v["n"]; has {
 			out = "no value"
+			// A lab says why it has no value: show that, not a bare blank.
+			if c, _ := r.Context["lab_comment"].(string); strings.HasPrefix(strings.ToLower(c), "test not performed") || strings.HasPrefix(strings.ToLower(c), "not performed") {
+				out = "not performed"
+			}
 			break
 		}
 		out = string(core.Canonical(v))

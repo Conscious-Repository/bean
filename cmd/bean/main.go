@@ -83,7 +83,7 @@ var syntax = map[string]string{
 	"export":        "export <empty folder>",
 	"import-export": "import-export <export folder>",
 	"rotate":        "rotate [-list] [-seal-all] [-no-seal <id>]... [-no-seal-file <file>] [-nostr new|<nsec file>] < words.txt",
-	"restore":       "restore [-list] [-seal-all] [-no-seal <id>]... [-no-seal-file <file>] [-nostr new|<nsec file>] [-identity <id>] < words.txt",
+	"restore":       "restore [-list] [-seal-all] [-no-seal <id>]... [-no-seal-file <file>] [-nostr new|<nsec file>] [-identity <id>] [-export <folder>] < words.txt",
 	"migrate":       "migrate [-also <id>]... [-also-file <file>] [-nostr new|<nsec file>] <empty folder> | migrate -list",
 	"purge":         "purge [-reason <text>] <id>",
 	"gc":            "gc",
@@ -202,7 +202,10 @@ func main() {
 		for i, w := range words {
 			fmt.Printf("%2d. %s\n", i+1, w)
 		}
-		fmt.Fprintln(os.Stderr, "Write these 24 words on paper now. bean shows them only once. They recover your identity on a new machine. Use them only for bean: never type them into a crypto wallet.")
+		fmt.Fprintln(os.Stderr, "Write these 24 words on paper now. bean shows them only once. They recover your identity on a new machine. Use them only for bean: never type them into a crypto wallet, a chat or an AI assistant.")
+		if abs, err := filepath.Abs(s.Dir); err == nil {
+			fmt.Fprintln(os.Stderr, "Your log is in "+abs+". Keep it on an encrypted disk.")
+		}
 	case "append":
 		af := flag.NewFlagSet("append", flag.ContinueOnError)
 		af.SetOutput(io.Discard)
@@ -246,7 +249,11 @@ func main() {
 			}
 			fmt.Println(id)
 		case "get":
-			pt, err := s.GetBlob(rest[1])
+			id, err := s.ResolveBlob(rest[1])
+			if err != nil {
+				fail(err)
+			}
+			pt, err := s.GetBlob(id)
 			if err != nil {
 				fail(err)
 			}
@@ -341,7 +348,7 @@ func main() {
 		if len(rest) != 1 {
 			usage()
 		}
-		fmt.Fprintln(os.Stderr, "bean: the export is not encrypted")
+		fmt.Fprintln(os.Stderr, "note: the export is not encrypted: keep it somewhere private")
 		res, err := s.ExportAll(rest[0])
 		if res.Written {
 			// The export ran to its end; an error after this is about what it
@@ -372,6 +379,11 @@ func main() {
 	case "import-export":
 		if len(rest) != 1 {
 			usage()
+		}
+		if !hasLog(s) {
+			// bean init would make a new identity, which cannot read the export.
+			fmt.Fprintf(os.Stderr, "bean: no log in %s. To rebuild your log from this export, run bean restore -export %s -nostr new in an empty folder, with your 24 words. Do not run bean init: a new identity cannot read this export\n", logDir, rest[0])
+			os.Exit(1)
 		}
 		res, err := s.ImportExportAll(rest[0])
 		if err != nil {
@@ -417,7 +429,7 @@ func reportChanged(changed []core.Changed, fix string) error {
 // a log; in an empty folder they say so instead of printing nothing.
 var needsLog = map[string]bool{
 	"whoami": true, "add": true, "append": true, "blob": true, "ls": true, "show": true,
-	"verify": true, "mcp": true, "import": true, "export": true, "import-export": true, "rotate": true,
+	"verify": true, "mcp": true, "import": true, "export": true, "rotate": true,
 	"purge": true, "gc": true, "migrate": true,
 }
 

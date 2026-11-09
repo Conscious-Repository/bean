@@ -121,6 +121,12 @@ var mcpTools = []mcpTool{
 		Description: "Return a valid, non-deleted record in full, including historical superseded records, its status and replies. Named blobs are metadata; read_blob returns content only when a current record names the blob. Accepts a full id or a unique prefix of 6 or more hex digits.",
 		InputSchema: schema(map[string]any{"id": strProp("Record id (sha256:...) or hex prefix."), "include_others": othersProp}, "id"),
 	},
+}
+
+// blobTools read stored files. They are offered only with -blobs: a kept
+// report holds the person's name and birth date, and what a tool returns
+// goes to the AI provider.
+var blobTools = []mcpTool{
 	{
 		Name:        "read_blob",
 		Description: "Return decrypted text only for a blob named by a current (non-superseded, non-duplicate) record of the person or a paired agent. Historical get_record may show blob IDs without granting this tool access to their content. Binary blobs return only their size.",
@@ -151,6 +157,9 @@ var writeTools = []mcpTool{
 }
 
 func init() {
+	for i := range blobTools {
+		blobTools[i].Annotations = map[string]any{"readOnlyHint": true, "openWorldHint": false}
+	}
 	for i := range mcpTools {
 		mcpTools[i].Annotations = map[string]any{"readOnlyHint": true, "openWorldHint": false}
 	}
@@ -175,6 +184,9 @@ func toolLogEntry(s *core.Store, a toolArgs) (any, error) {
 	}
 	if !v.allows(a.Type) {
 		return nil, fmt.Errorf("type not in the vocabulary: %q", a.Type)
+	}
+	if importerOnly(a.Type) {
+		return nil, fmt.Errorf("%s records come only from an importer that keeps the source file; an assistant cannot write them. Log the person's words as a note instead", a.Type)
 	}
 	var value string
 	switch v := a.Value.(type) {
@@ -215,10 +227,23 @@ func toolLogEntry(s *core.Store, a toolArgs) (any, error) {
 	return map[string]any{"id": id, "type": a.Type, "author": core.Npub(ag.Signer.Public())}, nil
 }
 
+// importerOnly reports the types that only an importer writes: lab results
+// and Apple Health readings, and the records that keep their source files.
+// A lab value typed by an assistant would sit next to the lab's own, with
+// nothing behind it but the assistant's word.
+func importerOnly(typ string) bool {
+	return strings.HasPrefix(typ, "lab.") || strings.HasPrefix(typ, "apple-health.") || typ == "csv.file"
+}
+
+// mcpOpts are the tools the server offers: log_entry with write, read_blob
+// with blobs.
+type mcpOpts struct{ write, blobs bool }
+
 func cmdMCP(s *core.Store, args []string) {
 	fs := flag.NewFlagSet("mcp", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	write := fs.Bool("write", false, "add log_entry, signed by this machine's agent key")
+	blobs := fs.Bool("blobs", false, "add read_blob, which returns the text of stored files such as a kept lab report")
 	host, _ := os.Hostname()
 	label := fs.String("label", "", "label for the agent key (default agent@<computer name> when one is made now)")
 	if err := fs.Parse(args); err != nil || fs.NArg() != 0 {
@@ -240,14 +265,14 @@ func cmdMCP(s *core.Store, args []string) {
 			fail(err)
 		}
 	}
-	if err := serveMCP(s, os.Stdin, os.Stdout, *write); err != nil {
+	if err := serveMCP(s, os.Stdin, os.Stdout, mcpOpts{*write, *blobs}); err != nil {
 		fail(err)
 	}
 }
 
-// serveMCP answers requests from in until it closes. write adds the
-// log_entry tool.
-func serveMCP(s *core.Store, in io.Reader, out io.Writer, write bool) error {
+// serveMCP answers requests from in until it closes, with the tools opts
+// allows.
+func serveMCP(s *core.Store, in io.Reader, out io.Writer, opts mcpOpts) error {
 	sc := bufio.NewScanner(in)
 	sc.Buffer(make([]byte, 1<<20), 16<<20)
 	enc := json.NewEncoder(out)
@@ -267,7 +292,7 @@ func serveMCP(s *core.Store, in io.Reader, out io.Writer, write bool) error {
 			continue // a notification, for example notifications/initialized
 		}
 		resp := rpcResponse{JSONRPC: "2.0", ID: req.ID}
-		resp.Result, resp.Error = handleMCP(s, req, write)
+		resp.Result, resp.Error = handleMCP(s, req, opts)
 		if err := enc.Encode(resp); err != nil {
 			return err
 		}
@@ -275,7 +300,7 @@ func serveMCP(s *core.Store, in io.Reader, out io.Writer, write bool) error {
 	return sc.Err()
 }
 
-func handleMCP(s *core.Store, req rpcRequest, write bool) (any, *rpcError) {
+func handleMCP(s *core.Store, req rpcRequest, opts mcpOpts) (any, *rpcError) {
 	switch req.Method {
 	case "initialize":
 		var p struct {
@@ -295,14 +320,17 @@ func handleMCP(s *core.Store, req rpcRequest, write bool) (any, *rpcError) {
 			"protocolVersion": v,
 			"capabilities":    map[string]any{"tools": map[string]any{}},
 			"serverInfo":      map[string]any{"name": "bean", "version": core.Adapter},
-			"instructions":    instructions(zone, write, vocab),
+			"instructions":    instructions(zone, opts.write, vocab),
 		}, nil
 	case "ping":
 		return map[string]any{}, nil
 	case "tools/list":
-		tools := mcpTools
-		if write {
-			tools = append(append([]mcpTool{}, mcpTools...), writeTools...)
+		tools := append([]mcpTool{}, mcpTools...)
+		if opts.blobs {
+			tools = append(tools, blobTools...)
+		}
+		if opts.write {
+			tools = append(tools, writeTools...)
 		}
 		return map[string]any{"tools": tools}, nil
 	case "tools/call":
@@ -316,7 +344,7 @@ func handleMCP(s *core.Store, req rpcRequest, write bool) (any, *rpcError) {
 		if len(p.Arguments) == 0 || string(p.Arguments) == "null" {
 			p.Arguments = json.RawMessage("{}")
 		}
-		data, err := callTool(s, p.Name, p.Arguments, write)
+		data, err := callTool(s, p.Name, p.Arguments, opts)
 		if errors.Is(err, errUnknownTool) {
 			return nil, &rpcError{-32602, "unknown tool: " + p.Name}
 		}
@@ -360,7 +388,7 @@ type toolArgs struct {
 	PhotoPath string         `json:"photo_path"`
 }
 
-func callTool(s *core.Store, name string, raw json.RawMessage, write bool) (any, error) {
+func callTool(s *core.Store, name string, raw json.RawMessage, opts mcpOpts) (any, error) {
 	var a toolArgs
 	dec := json.NewDecoder(strings.NewReader(string(raw)))
 	dec.DisallowUnknownFields()
@@ -394,9 +422,11 @@ func callTool(s *core.Store, name string, raw json.RawMessage, write bool) (any,
 	case "get_record":
 		return toolGetRecord(s, f, a.ID, self)
 	case "read_blob":
-		return toolReadBlob(s, f, a.ID, a.MaxBytes)
+		if opts.blobs {
+			return toolReadBlob(s, f, a.ID, a.MaxBytes)
+		}
 	case "log_entry":
-		if write {
+		if opts.write {
 			return toolLogEntry(s, a)
 		}
 	}

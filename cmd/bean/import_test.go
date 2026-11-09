@@ -109,7 +109,7 @@ func TestCLIImportKeepsFileFirst(t *testing.T) {
 		t.Errorf("ls:\n%s", ls)
 	}
 	// The stored copy is the file, byte for byte.
-	blob := strings.Fields(out[strings.Index(out, "kept lab.report ")+len("kept lab.report "):])[0]
+	blob := strings.Fields(out[strings.Index(out, "stored as ")+len("stored as "):])[0]
 	if got, _, code := run(t, dir, "", "blob", "get", blob); code != 0 || got != labReport("101") {
 		t.Errorf("blob get: %d %q", code, got)
 	}
@@ -541,5 +541,85 @@ func TestCLIImportRealLayout(t *testing.T) {
 	}
 	if out, _, code := run(t, dir, "", "verify"); code != 0 || !strings.Contains(out, "73 valid, 0 invalid") {
 		t.Errorf("verify: %d %s", code, out)
+	}
+	// A test the lab did not perform says so in ls.
+	if out, _, _ := run(t, dir, "", "ls", "-type", "lab.glucose"); !strings.Contains(out, "not performed") {
+		t.Errorf("ls of a test not performed: %s", out)
+	}
+}
+
+// Leaving and coming back: an export alone, with the 24 words, rebuilds the
+// log in an empty folder, records and files. import-export there says to
+// use restore, not init.
+func TestCLIRestoreFromExport(t *testing.T) {
+	path := importerOnPath(t)
+	dir := t.TempDir()
+	initOut, _, _ := run(t, dir, "", "init")
+	words := wordsFrom(initOut)
+	if _, errs, code := runPath(t, dir, path, "import", "labcorp", "../bean-import-labcorp/testdata/real-layout.txt"); code != 0 {
+		t.Fatalf("import: %s", errs)
+	}
+	exp := filepath.Join(t.TempDir(), "export")
+	if _, errs, code := run(t, dir, "", "export", exp); code != 0 {
+		t.Fatalf("export: %s", errs)
+	}
+	before, _, _ := run(t, dir, "", "ls", "-all", "-json")
+
+	fresh := t.TempDir()
+	if _, errs, code := run(t, fresh, "", "import-export", exp); code != 1 || !strings.Contains(errs, "restore -export") || !strings.Contains(errs, "Do not run bean init") {
+		t.Errorf("import-export into an empty folder: %d %s", code, errs)
+	}
+	// Without a decision restore shows what the old key signed and stops.
+	if _, errs, code := run(t, fresh, words, "restore", "-export", exp, "-nostr", "new"); code == 0 || !strings.Contains(errs, "copied") {
+		t.Fatalf("restore without -seal-all: %d %s", code, errs)
+	}
+	out, errs, code := run(t, fresh, words, "restore", "-export", exp, "-nostr", "new", "-seal-all")
+	if code != 0 || !strings.Contains(out, "imported 1 files from the export") {
+		t.Fatalf("restore -export: %d\n%s\n%s", code, out, errs)
+	}
+	if after, _, _ := run(t, fresh, "", "ls", "-all", "-json"); strings.Count(after, "\n") < strings.Count(before, "\n") {
+		t.Errorf("records lost: %d before, %d after", strings.Count(before, "\n"), strings.Count(after, "\n"))
+	}
+	if out, _, code := run(t, fresh, "", "verify"); code != 0 {
+		t.Errorf("verify: %d %s", code, out)
+	}
+	js, _, _ := run(t, fresh, "", "ls", "-type", "lab.report", "-json")
+	var rec struct {
+		Value map[string]any `json:"value"`
+	}
+	json.Unmarshal([]byte(strings.TrimSpace(js)), &rec)
+	got, _, code := run(t, fresh, "", "blob", "get", rec.Value["blob"].(string))
+	want, _ := os.ReadFile("../bean-import-labcorp/testdata/real-layout.txt")
+	if code != 0 || got != string(want) {
+		t.Errorf("the kept report did not come back: %d, %d bytes of %d", code, len(got), len(want))
+	}
+}
+
+// bean import names the record that purge takes, and blob get takes the
+// short id that ls shows.
+func TestCLIImportNamesRecordAndShortBlobID(t *testing.T) {
+	path := importerOnPath(t)
+	dir := t.TempDir()
+	run(t, dir, "", "init")
+	report := filepath.Join(t.TempDir(), "report.txt")
+	os.WriteFile(report, []byte(labReport("101")), 0o600)
+	out, errs, code := runPath(t, dir, path, "import", "labcorp", report)
+	if code != 0 {
+		t.Fatalf("import: %s", errs)
+	}
+	line, _, _ := strings.Cut(out[strings.Index(out, "kept lab.report ")+len("kept lab.report "):], "\n")
+	f := strings.Fields(line)
+	rid, bid := strings.TrimSuffix(f[0], ":"), f[len(f)-1]
+	if f[1] != "file" || f[2] != "sha256" || f[4] != "stored" {
+		t.Fatalf("kept line: %q", out)
+	}
+	if got, _, code := run(t, dir, "", "blob", "get", bid[7:19]); code != 0 || got != labReport("101") {
+		t.Errorf("blob get by short id: %d", code)
+	}
+	if _, errs, code := run(t, dir, "", "purge", rid[7:13]); code != 0 {
+		t.Fatalf("purge by the printed record id: %s", errs)
+	}
+	if _, _, code := run(t, dir, "", "blob", "get", bid); code == 0 {
+		t.Error("the file is still readable after purge")
 	}
 }
