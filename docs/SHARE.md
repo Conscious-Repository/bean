@@ -10,16 +10,16 @@ bean share -out with-files -files 7b8b81       # also the files they keep
 
 ## What goes in
 
-- **The records you name**, by id or by `-type` (with `-since` and `-until`). Only current records about you: not a corrected one, not a deleted one.
-- **What they are about.** A record is read with the record it is about, so that one comes along: the reading of a comparison, the meal of an estimate, the entry a note comments on.
+- **The records you name**, by id or by `-type` (with `-since` and `-until`). Only current records about you: not a corrected one, not a deleted one, and not one that another identity signed, since a bundle carries only your identity records.
+- **What they are about, one step.** A record is read with the record it is about, so that one comes along: the reading of a comparison, the meal of an estimate, the entry a note comments on. What that one is about in turn stays home unless you name it. The review marks each record that comes along, and says which it could not bring and why.
 - **Nothing else of yours.** Not the rest of the log, not a lab report unless you name it. A reading names its report by a hash, and the report stays home.
 - **Files only with `-files`.** A record that keeps a file (a lab report, a photo, a reference file) is shared without the file, which the bundle then names and does not hold. With `-files` each file goes in as plaintext.
 - **Your identity records**: the ones that show which keys speak for you, and the pairing of an agent whose record you share.
 - **One share record**, signed by you: the list of exactly what the bundle holds, your `-note`, and the time.
 
-bean shows the list and asks before it writes. `-yes` skips that, for scripts. Without a terminal and without `-yes` it writes nothing, so an assistant that runs it cannot disclose for you.
+bean shows the list and asks before it writes: each record, the cohort of a comparison, each file, and how many identity records go along. `-yes` skips that, for scripts. Without a terminal and without `-yes` it writes nothing. That stops an assistant from sharing through a tool that has no terminal. It does not stop a program that has your shell and passes `-yes`: what runs as you can do what you can.
 
-The share record also stays in your log, as type `share`: your own record of what you disclosed and when. `bean ls -type share` lists them.
+The bundle is written whole or not at all: it is built beside its place, checked as its reader will check it, and moved there. Only then does the share record go into your log, as type `share`: your own record of what you disclosed and when. `bean ls -type share` lists them. A share that fails leaves no bundle and no record.
 
 ## What the reader can and cannot tell
 
@@ -30,8 +30,8 @@ python3 tools/second/checkbundle.py for-ana
 
 They can tell that:
 
-- each record is byte for byte what your key signed, and that key spoke for your identity when it signed;
-- the bundle holds exactly the records you listed, no more and no fewer;
+- each record is byte for byte what a key signed, and that key spoke for your identity by the identity records in the bundle;
+- the bundle holds exactly the records you listed, and exactly the identity and pairing records you named, no more and no fewer;
 - each file is the one you listed, and the one its own record states, where the record states its SHA-256;
 - which records you signed, which an agent you paired signed, and which another key signed.
 
@@ -40,12 +40,14 @@ They cannot tell, and bean says so on every check:
 - **That it is complete.** A bundle is the records you chose. A correction or a deletion you left out, or made later, does not show. "All my readings this year" is your word, not something the bundle proves.
 - **That a value is true.** A signature shows who signed.
 - **Who you are.** An identity is a key, not a name.
+- **That the key is still yours.** A bundle holds the key changes made before it was signed, not later ones. Someone who stole a key you have since retired can sign a bundle with it, leave the retirement out, and it passes. The check prints the key that signed. When it matters, the reader asks you for your current key (`bean whoami`) by another way, and compares.
 
 And you should know:
 
 - **A bundle is a disclosure.** It is not encrypted, and once sent it cannot be taken back. Deleting a record later does not reach a bundle you sent.
 - **Two bundles of yours can be linked.** Every record carries your identity id.
 - **Your identity records say how many records you had at each key change.** A key change lists the ids of the records it seals. The ids are hashes and give no content away, but their number shows.
+- **A correction travels without what it corrects.** A record that replaces an earlier one is shared alone; the earlier one stays home. The check says how many such corrections a bundle holds.
 - **A shared comparison gives its reading away**, with the public files ([COMPARE.md](COMPARE.md)). Its reading is in the bundle anyway.
 
 ## Check a shared comparison
@@ -73,18 +75,25 @@ The share record is an ordinary record:
 | `value` | `{"n": <number of records listed>, "unit": "{record}"}` |
 | `times.observed` | when it was written, to the minute |
 | `context.records` | the ids of the shared records |
-| `context.files` | one entry per stored file that a shared record names: `blob` (the id the record names), `record`, `media_type`, `included`, and `sha256` and `bytes` of the plaintext when it is included. A record that states its file's `sha256` gives it here also when the file is not included. |
+| `context.proof` | the ids of the identity records and pairings that travel with them |
+| `context.files` | absent, or one entry per stored file that a shared record names: `blob` (the id the record names), `record`, `media_type`, `included` (true or false), and, when it is included, `sha256` (64 hex digits) and `bytes` (a whole number) of the plaintext. A record that states its file's `sha256` gives it here also when the file is not included; `bytes` is there only when the file is. |
 | `context.note` | the `-note`, if any |
 | `context.statement` | `Selected records, not a complete history.` |
 
-A bundle passes when all of this holds:
+A bundle passes when all of this holds. A list in the share record that is not as the table says fails the check; it is never read in a kinder way.
 
-1. Every file under `objects/` passes the checks of a log: its id is the hash of its content, its signature is good, and by the rules of [SPEC.md](../SPEC.md) its key spoke for its author. A record that names a stored file is not at fault because the encrypted file is absent: a bundle never holds one.
-2. Exactly one valid `share` record is there, with `author` equal to `subject`, an identity id, and `source.system` `bean-share`.
-3. Every other record is either one that `context.records` lists, or an identity record (`bean.genesis`, `bean.succession`, `bean.seal`) of that person, or a pairing (`agent.pair`, `device.pair`) that the person signed about themselves. Every listed record is there, is valid, and has the person as its `subject`.
-4. Every stored file that a listed record names has an entry in `context.files` with that `blob` and `record`. When the record has one stored file, names it in `value.blob` and states `context.sha256`, the entry's `sha256`, if it has one, is equal to it.
+1. Every file under `objects/` is a plain file of at most 16 MiB, two levels down, and passes the checks of a log with nothing left over: no error, no warning, no record of a newer format, no frozen identity, no key change with a part missing. Two things a log's verifier reports are expected, and only these:
+   - a record that names a stored file is not at fault because the encrypted file is absent: a bundle never holds one;
+   - a listed record that replaces an earlier record (`supersedes`) is held when that earlier record is not in the bundle. The check counts these.
+2. Exactly one `share` record is there. It is valid, its `author` equals its `subject` and is an identity id, its `source.system` is `bean-share`, and its `value.n` is the number of ids in `context.records`.
+3. Every other record is one that `context.records` lists or one that `context.proof` names, never both, and every id in either list is there.
+   - A listed record is valid, has the person as its `subject`, and is not an identity record, a tombstone, a pairing or a share record.
+   - A proof record is valid, and is an identity record (`bean.genesis`, `bean.succession`, `bean.seal`) on the person's chain, or a pairing (`agent.pair`, `device.pair`) that the person signed about themselves.
+4. Every stored file that a listed record names has exactly one entry in `context.files` with that `blob` and `record`, and every entry is for such a file. When the record has one stored file, names it in `value.blob` and states `context.sha256`, the entry's `sha256`, if it has one, is equal to it.
 5. `files/` holds exactly the files whose entries say `included`, each a plain file, not a link, with the entry's `bytes` and with the SHA-256 of its name.
 
-A record that an agent or another key signed is valid by rule 1 and passes: the person chose to share it. The check counts such records apart.
+A listed record that an agent or another key signed is valid by rule 1 and passes: the person chose to share it. The check counts such records apart: by the person, by an agent whose pairing is in the proof, by another key.
 
-`bean check-bundle` and `tools/second/checkbundle.py` both implement these five rules, and share no code. One author wrote both, so their agreement shows that the rules can be followed twice, not that a stranger has checked them. `make bundles` makes bundles with bean, good and damaged, and fails if the two disagree on any.
+A checker reads `objects/` and `files/` and nothing else of the folder, opens nothing that is not a plain file, and writes nothing.
+
+`bean check-bundle` and `tools/second/checkbundle.py` both implement these five rules, and share no code. One author wrote both, so their agreement shows that the rules can be followed twice, not that a stranger has checked them. `make bundles` makes bundles with bean, good and damaged, with records forged by a stranger and share records mis-signed by the person, and fails if the two disagree on any.

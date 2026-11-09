@@ -77,7 +77,7 @@ The first question a person asks is not "where is my cholesterol" but "how do I 
 5. **Summary-statistics references.** Many studies publish only aggregates. A reference may be a published table, with its citation, as well as participant-level files. Access-restricted datasets stay outside the repository.
 6. **Comparison packages.** Standardize the interface of a comparison (inputs, method, cohort, status), and let others publish datasets and methods for it. Extension 1's replay rules wait until two kinds of comparison exist.
 7. **Nutrition as exposure.** `food` and `food.estimate` exist. Next comes a source-backed estimate (USDA FoodData Central) with its uncertainty, kept apart from what the person said they ate. No causal claims.
-8. **Share and trust, further.** `-to <npub>` encryption of a bundle, a share that does not carry the stable identity id, expiring links, `bean attest <id>`, and `bean trust <identity or npub> <1-100>`. Readers compute trust; the core does not.
+8. **Share and trust, further.** `check-bundle -key <key>` to compare the signing key with one the person gave, `-to <npub>` encryption of a bundle, a share that does not carry the stable identity id, expiring links, `bean attest <id>`, and `bean trust <identity or npub> <1-100>`. Readers compute trust; the core does not.
 9. **Release.** A `go install` path and a neutral home ([GOVERNANCE-PROPOSAL.md](GOVERNANCE-PROPOSAL.md)).
 10. **NIP-46 remote signing,** so that the nsec never sits on the host.
 11. **Device capture** (Extension 2). Wait for a real instrument, not a synthetic one.

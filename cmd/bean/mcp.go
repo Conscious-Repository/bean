@@ -241,10 +241,11 @@ func importerOnly(typ string) bool {
 	return strings.HasPrefix(typ, "lab.") || strings.HasPrefix(typ, "apple-health.") || typ == "csv.file" || strings.HasPrefix(typ, "reference.")
 }
 
-// computedOnly reports the types that only bean itself writes: a
-// comparison, and the record of a share. A percentile typed by an assistant
-// would look like a computed one, with no file and no method behind it, and
-// a share record is the person's word on what they disclosed.
+// computedOnly reports the types that the MCP tool does not write: a
+// comparison, which bean compare computes from kept files, and the record
+// of a share, which is the person's word on what they disclosed. This
+// guards the tool, not the log: a program with the person's shell can
+// write any type with bean add.
 func computedOnly(typ string) bool {
 	return strings.HasPrefix(typ, "comparison.") || typ == shareType
 }

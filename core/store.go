@@ -397,11 +397,6 @@ func (s *Store) load(full bool) (*Loaded, error) { return s.loadWith(full, false
 // restores, no cache. Sync reads its source this way.
 func (s *Store) loadReadOnly() (*Loaded, error) { return s.loadWith(false, true) }
 
-// LoadReadOnly proves every record file of a folder without changing the
-// folder and without a lock: for a folder that is not this machine's log,
-// such as a share bundle someone sent. It reads no cache.
-func (s *Store) LoadReadOnly() (*Loaded, error) { return s.loadWith(true, true) }
-
 func (s *Store) loadWith(full, readOnly bool) (*Loaded, error) {
 	if !readOnly {
 		removeStaleTemps(s.path(dirObjects), s.path(dirBlobs), s.path(dirLocal))

@@ -74,17 +74,67 @@ func TestShare(t *testing.T) {
 	// Anyone can check it, with no log: from an empty folder.
 	nowhere := t.TempDir()
 	stdout, errs, code = run(t, nowhere, "", "check-bundle", out)
-	for _, want := range []string{"bundle ok", "share " + share.ID, "records: 2 listed; files: 0 included, 0 named and not included", "signed: 2 by the person, 0 by an agent", "note: for my doctor", "not a complete history", "not that a value is true"} {
+	before := treeDigest(t, out)
+	for _, want := range []string{"bundle ok", "share " + share.ID, "records: 2 listed; files: 0 included, 0 named and not included", "signed: 2 by the person, 0 by an agent", "corrections: 0 of the listed records", "note: for my doctor", "not a complete history", "not that a value is true", "cannot show that it is still the person's key"} {
 		if code != 0 || !strings.Contains(stdout, want) {
 			t.Errorf("check-bundle: %d, no %q in\n%s\n%s", code, want, stdout, errs)
 		}
 	}
-	// The check changes nothing in the bundle.
-	if _, err := os.Stat(filepath.Join(out, "local")); err == nil {
-		t.Error("check-bundle wrote into the bundle")
+	// The check changes nothing in the bundle: no entry more or fewer, and
+	// no byte of any file.
+	if treeDigest(t, out) != before {
+		t.Error("check-bundle changed the bundle")
 	}
 	if _, errs, code := run(t, dir, "", "verify"); code != 0 {
 		t.Errorf("the log after a share: %s", errs)
+	}
+}
+
+// treeDigest is a digest of every path and every file's bytes under dir.
+func treeDigest(t *testing.T, dir string) string {
+	t.Helper()
+	var all strings.Builder
+	err := filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		all.WriteString(p + "\x00" + d.Type().String() + "\x00")
+		if d.Type().IsRegular() {
+			all.WriteString(fileDigest(p))
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return all.String()
+}
+
+// A record brings the record it is about, and no further: what that one is
+// about in turn stays home unless it is chosen too.
+func TestShareBringsOneStep(t *testing.T) {
+	dir, _, ids := compareLog(t)
+	first, _, _ := run(t, dir, "", "add", "note", "first", "-about", ids[2])
+	second, _, _ := run(t, dir, "", "add", "note", "second", "-about", strings.TrimSpace(first))
+	first, second = strings.TrimSpace(first), strings.TrimSpace(second)
+	out := filepath.Join(t.TempDir(), "bundle")
+	if stdout, errs, code := run(t, dir, "", "share", "-yes", "-out", out, second); code != 0 || !strings.Contains(stdout, "shared 2 records") {
+		t.Fatalf("%d\n%s\n%s", code, stdout, errs)
+	}
+	for id, want := range map[string]bool{second: true, first: true, ids[2]: false} {
+		if _, err := os.Stat(objectPath(out, id)); (err == nil) != want {
+			t.Errorf("%s in the bundle: %v, want %v", id[7:19], err == nil, want)
+		}
+	}
+	// What a record is about, when that was corrected, stays home too: a
+	// share holds only current records. The bundle still checks.
+	run(t, dir, "", "add", "lab.tsh", "2.4", "-unit", "uIU/mL", "-corrects", ids[2])
+	alone := filepath.Join(t.TempDir(), "alone")
+	if stdout, errs, code := run(t, dir, "", "share", "-yes", "-out", alone, first); code != 0 || !strings.Contains(stdout, "shared 1 records") {
+		t.Fatalf("%d\n%s\n%s", code, stdout, errs)
+	}
+	if stdout, _, code := run(t, t.TempDir(), "", "check-bundle", alone); code != 0 || !strings.Contains(stdout, "bundle ok") {
+		t.Errorf("%d\n%s", code, stdout)
 	}
 }
 
@@ -193,11 +243,17 @@ func TestShareRefuses(t *testing.T) {
 		"no folder":          {[]string{"-yes", ids[2]}, 2, "usage"},
 		"nothing chosen":     {[]string{"-yes", "-out", out}, 2, "usage"},
 		"since without type": {[]string{"-yes", "-out", out, "-since", "2026-01-01", ids[2]}, 2, "usage"},
-		"a corrected record": {[]string{"-yes", "-out", out, ids[0]}, 1, "cannot be shared"},
-		"a deleted record":   {[]string{"-yes", "-out", out, ids[1]}, 1, "bean:"},
-		"an unknown id":      {[]string{"-yes", "-out", out, "abcdef123456"}, 1, "bean:"},
+		"a corrected record": {[]string{"-yes", "-out", out, ids[0]}, 1, "cannot be shared: it is superseded"},
+		"a deleted record":   {[]string{"-yes", "-out", out, ids[1]}, 1, "input missing"},
+		"an unknown id":      {[]string{"-yes", "-out", out, "abcdef123456"}, 1, "input missing"},
 		"no such type":       {[]string{"-yes", "-out", out, "-type", "cgm.*"}, 1, "no current record of type"},
 		"a folder in use":    {[]string{"-yes", "-out", full, ids[2]}, 1, "is not empty"},
+		"a file in the way":  {[]string{"-yes", "-out", filepath.Join(full, "x"), ids[2]}, 1, "bean:"},
+		// A bundle inside the log would put plaintext among the records.
+		"inside the log": {[]string{"-yes", "-out", filepath.Join(dir, "objects", "zz"), ids[2]}, 1, "is inside your log"},
+		// A place that cannot be written: nothing is left behind, in the
+		// log or on disk.
+		"no parent folder": {[]string{"-yes", "-out", filepath.Join(full, "x", "y", "z"), ids[2]}, 1, "bean:"},
 	} {
 		stdout, errs, code := run(t, dir, "", append([]string{"share"}, c.args...)...)
 		if code != c.code || !strings.Contains(stdout+errs, c.want) {
@@ -220,7 +276,7 @@ func TestShareRefuses(t *testing.T) {
 		ID string `json:"id"`
 	}
 	json.Unmarshal([]byte(strings.TrimSpace(ls)), &share)
-	if _, errs, code := run(t, dir, "", "share", "-yes", "-out", filepath.Join(t.TempDir(), "again"), share.ID); code != 1 || !strings.Contains(errs, "cannot be shared") {
+	if _, errs, code := run(t, dir, "", "share", "-yes", "-out", filepath.Join(t.TempDir(), "again"), share.ID); code != 1 || !strings.Contains(errs, "it is the record of a share") {
 		t.Errorf("a share of a share: %d\n%s", code, errs)
 	}
 	// check-bundle refuses what is not a bundle.
@@ -230,6 +286,11 @@ func TestShareRefuses(t *testing.T) {
 		}
 	}
 	if !computedOnly("share") {
-		t.Error("an assistant can write a share record")
+		t.Error("the MCP tool takes a share record")
+	}
+	// The log is as valid as before, and holds nothing in its folder that
+	// a refused share left.
+	if stdout, _, code := run(t, dir, "", "verify"); code != 0 {
+		t.Errorf("verify after refused shares: %d\n%s", code, stdout)
 	}
 }

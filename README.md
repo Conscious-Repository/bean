@@ -208,7 +208,7 @@ bean check-bundle for-ana
 
 - It shows what will leave and asks first. Only the records you choose go, with what they are about. Files go only with `-files`.
 - The reader can tell that each record is yours and unchanged, and that nothing was added or removed. They can check it without bean: `tools/second/checkbundle.py`.
-- The reader cannot tell that it is complete: it is what you chose. bean says so on every check.
+- The reader cannot tell that it is complete: it is what you chose. Nor that the key that signed is still yours, if you changed keys since. bean says so on every check.
 - A bundle is not encrypted, and once sent it cannot be taken back.
 
 [docs/SHARE.md](docs/SHARE.md) has what goes in, the limits and the format.

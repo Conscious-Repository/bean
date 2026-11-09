@@ -159,16 +159,17 @@ A comparison says where a value lies in a sample. It does not say whether the va
 
 Writes chosen records into a new or empty folder, a bundle, that anyone can check without your log or keys. [SHARE.md](SHARE.md) says what goes in, what a reader can tell, and the format.
 
-- Give record ids, or `-type` with optional `-since` and `-until`. Only current records about you can be shared. A record brings the record it is about.
+- Give record ids, or `-type` with optional `-since` and `-until`. Only current records about you can be shared, and not one that another identity signed. A record brings the record it is about, one step and no further.
 - `-files` also writes the files those records keep, in plaintext. Without it a file is named in the bundle and not shared.
 - `-note` is a line for the reader, kept in the share record.
-- It lists what will leave and asks `Share <n> records? [y/N]`. `-yes` skips that. Without a terminal and without `-yes` it writes nothing.
+- It lists what will leave, on stderr, and asks `Share <n> records? [y/N]`. `-yes` skips that. Without a terminal and without `-yes` it writes nothing.
+- The folder must be new or empty, and not inside your log.
 
-It adds one `share` record to your log, the signed list of what the bundle holds, and writes it into the bundle too. Then it checks the bundle as its reader will. A bundle is not encrypted, and once sent it cannot be taken back.
+It builds the bundle beside its place, checks it as its reader will, and moves it there. Then it adds one `share` record to your log: the signed list of what the bundle holds, which is in the bundle too. A share that fails leaves neither. A bundle is not encrypted, and once sent it cannot be taken back.
 
 ### `check-bundle <folder>`
 
-Checks a bundle and changes nothing in it. It needs no log. It prints any record that fails, then the share record's id, the identity and key that signed it, how many records and files it holds, and who signed the records: the person, an agent the person paired, or another key. Then `bundle ok`, exit 0, or `bundle FAILED: <n> problems`, exit 1. It says each time that a bundle is selected records, not a complete history, and that a signature shows who signed, not that a value is true. `tools/second/checkbundle.py` does the same check without bean.
+Checks a bundle and changes nothing in it. It needs no log, and reads only the bundle's `objects` and `files` folders. It prints any record that fails, then the share record's id, the identity and key that signed it, how many records and files it holds, who signed the records (the person, an agent the person paired, or another key), and how many are corrections of a record that is not in the bundle. Then `bundle ok`, exit 0, or `bundle FAILED: <n> problems`, exit 1. It says each time what no bundle can show: that it is complete, that a value is true, who the identity is, and that the key that signed is still the person's. `tools/second/checkbundle.py` does the same check without bean.
 
 ## AI and agents
 
