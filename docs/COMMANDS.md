@@ -243,7 +243,7 @@ Print the help or the version.
 
 ## Importers
 
-Importers read one source format and write records to stdout. They never sign and never see your keys. Run them with `bean import <source>`, which keeps the file first; run alone, they print the records for `bean append`.
+Importers read one source format and write records to stdout. [IMPORTERS.md](IMPORTERS.md) has the contract for writing one. They never sign and never see your keys. Run them with `bean import <source>`, which keeps the file first; run alone, they print the records for `bean append`.
 
 ### `bean-import-lab [-blob <id>] [-tz <zone>] <report.pdf | report.txt>`
 

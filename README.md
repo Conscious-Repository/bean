@@ -120,6 +120,8 @@ bean purge 1b59a1                                 # deletes record 1b59a1 from e
 
 ## Import your data
 
+Each source has an importer: a separate program, `bean-import-<name>`, that `bean import <name>` runs. Anyone can write one for their own source, in any language. [docs/IMPORTERS.md](docs/IMPORTERS.md) has the contract and a list of community importers.
+
 ### Lab reports (PDF)
 
 bean reads lab report PDFs in the layouts it knows. Today: the Labcorp patient report. Any other layout is refused, and nothing is written. Import yours:
@@ -297,6 +299,7 @@ bean protects who wrote what, and protects your identity against a stolen device
 |---|---|
 | [docs/ONBOARDING.md](docs/ONBOARDING.md) | First run, step by step, alone or with an AI. |
 | [docs/COMMANDS.md](docs/COMMANDS.md) | Every command, flag and exit code. |
+| [docs/IMPORTERS.md](docs/IMPORTERS.md) | Write an importer for your own source; community importers. |
 | [cmd/bean/vocabulary.md](cmd/bean/vocabulary.md) | The usual record types and units. |
 | [SECURITY.md](SECURITY.md) | What is protected, and the keys. |
 | [CORE.md](CORE.md) | The protocol, in short. |
