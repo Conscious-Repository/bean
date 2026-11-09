@@ -79,6 +79,14 @@ damage "$T/rot"; rm $(grep -l '"type":"bean.succession"' "$T"/d/objects/*/*.json
 # A stranger's record, with the stranger's own identity, slipped in.
 X=$T/stranger; mkdir -p "$X"; bean -dir "$X" init >/dev/null 2>&1; bean -dir "$X" add weight 60 -unit kg >/dev/null
 damage "$T/plain"; cp -R "$X"/objects/* "$T/d/objects/";                       both "a stranger's records added" "$T/d" bad
+# What a file browser leaves behind is not part of a bundle.
+damage "$T/cmpf"; touch "$T/d/.DS_Store" "$T/d/files/.DS_Store";                both "dot files left by a file browser" "$T/d" ok
+# Nothing else is: no third entry, and no link that leads out of the bundle.
+damage "$T/cmpf"; mkdir "$T/d/local"; echo x >"$T/d/local/identity";            both "a third folder" "$T/d" bad
+damage "$T/cmpf"; echo x >"$T/d/README.txt";                                    both "a stray file" "$T/d" bad
+damage "$T/cmpf"; mv "$T/d/files" "$T/elsewhere"; ln -s "$T/elsewhere" "$T/d/files"; both "files as a link out of the bundle" "$T/d" bad; rm -rf "$T/elsewhere"
+damage "$T/plain"; mv "$T/d/objects" "$T/elsewhere"; ln -s "$T/elsewhere" "$T/d/objects"; both "objects as a link out of the bundle" "$T/d" bad; rm -rf "$T/elsewhere"
+damage "$T/cmpf"; f=$(ls "$T/d/files" | head -1); cp "$T/d/files/$f" "$T/keep"; rm "$T/d/files/$f"; ln -s "$T/keep" "$T/d/files/$f"; both "a file as a link" "$T/d" bad
 both "a folder that is not a bundle" "$T/bin" bad
 both "a whole log, not a bundle" "$L" bad
 

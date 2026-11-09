@@ -59,7 +59,7 @@ python3 tools/compare/reproduce.py for-ana DEMO_J.xpt TCHOL_J.xpt
 
 ## The bundle, exactly
 
-A bundle is a folder with two entries.
+A bundle is a folder with two entries, both real folders: `objects/`, and `files/` when it holds files. A link in their place, or any third entry, fails the check. A name that starts with a dot is not part of a bundle, here or in `files/`, as in a log: a file browser leaves such files behind.
 
 `objects/` holds record files in the layout of a log ([SPEC.md](../SPEC.md) 7.1): `objects/<first two hex digits of the id>/<the other 62>.json`, each the stored bytes of one record. `files/` holds shared files, each named by the 64 hex digits of its SHA-256. There is no `blobs/` and no `local/`: no encrypted file and no key travels.
 
@@ -83,7 +83,7 @@ A bundle passes when all of this holds:
 2. Exactly one valid `share` record is there, with `author` equal to `subject`, an identity id, and `source.system` `bean-share`.
 3. Every other record is either one that `context.records` lists, or an identity record (`bean.genesis`, `bean.succession`, `bean.seal`) of that person, or a pairing (`agent.pair`, `device.pair`) that the person signed about themselves. Every listed record is there, is valid, and has the person as its `subject`.
 4. Every stored file that a listed record names has an entry in `context.files` with that `blob` and `record`. When the record has one stored file, names it in `value.blob` and states `context.sha256`, the entry's `sha256`, if it has one, is equal to it.
-5. `files/` holds exactly the files whose entries say `included`, each a plain file with the entry's `bytes` and with the SHA-256 of its name.
+5. `files/` holds exactly the files whose entries say `included`, each a plain file, not a link, with the entry's `bytes` and with the SHA-256 of its name.
 
 A record that an agent or another key signed is valid by rule 1 and passes: the person chose to share it. The check counts such records apart.
 

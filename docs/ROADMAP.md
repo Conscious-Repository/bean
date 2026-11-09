@@ -45,7 +45,7 @@ In order. Each step is done only when its test passes.
    - `make compare` fails if one number differs, in CI on synthetic files; with `BEAN_NHANES_DIR` it runs on CDC's files.
 5. **`bean share` and `bean check-bundle`. Done.**
    - `bean share -out <folder> <ids> | -type <type>` writes the chosen records, the records they are about, the identity records that verify them, and one `share` record signed by the person that lists exactly what the bundle holds. Files go only with `-files`, as plaintext named by SHA-256 (DECISIONS 251, [SHARE.md](SHARE.md)).
-   - A bundle is a small log, so the checks of a log apply unchanged. `bean check-bundle <folder>` needs no log, and `tools/second/checkbundle.py`, which follows SHARE.md and shares no code with bean, gives the same verdict: `make bundles` checks 21 bundles, good and damaged.
+   - A bundle is a small log, so the checks of a log apply unchanged. `bean check-bundle <folder>` needs no log, and `tools/second/checkbundle.py`, which follows SHARE.md and shares no code with bean, gives the same verdict: `make bundles` checks both on bundles good and damaged.
    - The person sees what leaves and confirms. The share record stays in the log as the record of the disclosure.
    - A bundle proves that what it holds is authentic and exactly what the person listed. It does not prove completeness, and every check says so.
    - A shared comparison computes again from its bundle (`reproduce.py <bundle>`).

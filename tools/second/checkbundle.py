@@ -33,10 +33,30 @@ IDENTITY = ("bean.genesis", "bean.succession", "bean.seal")
 PAIR = ("agent.pair", "device.pair")
 
 
+def real_dir(path):
+    return os.path.isdir(path) and not os.path.islink(path)
+
+
+def safe(s):
+    """Text from a bundle, with nothing that can move the cursor or fake a
+    line."""
+    return "".join(c if c.isprintable() else "\\x%02x" % ord(c) for c in s)
+
+
 def check(folder):
     problems = []
-    if not os.path.isdir(os.path.join(folder, "objects")):
+    # objects/ and files/ are real folders, not links that lead out of the
+    # bundle, and nothing else is there. Names that start with a dot are not
+    # part of a bundle, as in a log.
+    if not real_dir(os.path.join(folder, "objects")):
         return ["%s is not a bundle: it has no objects folder" % folder], None
+    for name in sorted(os.listdir(folder)):
+        if name.startswith("."):
+            continue
+        if name not in ("objects", "files") or not real_dir(os.path.join(folder, name)):
+            problems.append("%s is in the bundle, and a bundle holds only objects and files, as folders" % name)
+    if problems:
+        return problems, None
     files, _ = beanverify.load_dir(folder)
     records = {}
     for path, data in files.items():
@@ -112,6 +132,8 @@ def check(folder):
                 named += 1
     fdir = os.path.join(folder, "files")
     for name in sorted(os.listdir(fdir)) if os.path.isdir(fdir) else []:
+        if name.startswith("."):
+            continue
         if name not in want:
             problems.append("files/%s is in the bundle, and the share record does not list it" % name)
             continue
@@ -145,7 +167,7 @@ def main(argv):
         print("records: %d listed; files: %d included, %d named and not included" % (n, included, named))
         print("signed: %d by the person, %d by an agent the person paired, %d by another key" % tuple(signed))
     for p in sorted(problems):
-        print("problem: " + p)
+        print("problem: " + safe(p))
     if problems:
         print("bundle FAILED: %d problems" % len(problems))
         return 1

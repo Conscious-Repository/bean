@@ -219,7 +219,7 @@ func cmdShare(s *core.Store, args []string) {
 	}
 	shareID := res.IDs[0]
 	gone := func(err error) {
-		fail(fmt.Errorf("the bundle was not written whole (%w). The share record %s is in your log: bean purge it if you send nothing", err, shareID[7:19]))
+		fail(fmt.Errorf("the bundle was not written whole (%w). Delete %s, and bean purge the share record %s, which is in your log", err, *out, shareID[7:19]))
 	}
 	l, err = s.Load()
 	if err != nil {
@@ -352,8 +352,28 @@ func checkBundle(dir string) ([]string, bool) {
 		}
 		return append(lines, "bundle ok"), true
 	}
-	if info, err := os.Stat(filepath.Join(dir, "objects")); err != nil || !info.IsDir() {
+	// A bundle is a folder with objects/ and, when it holds files, files/:
+	// real folders, not links that lead out of it, and nothing else. Names
+	// that start with a dot are not part of a bundle, as in a log: a file
+	// browser leaves such files behind.
+	if info, err := os.Lstat(filepath.Join(dir, "objects")); err != nil || !info.IsDir() {
 		bad("%s is not a bundle: it has no objects folder", dir)
+		return done(nil)
+	}
+	top, err := os.ReadDir(dir)
+	if err != nil {
+		bad("the folder cannot be read: %s", err)
+		return done(nil)
+	}
+	for _, e := range top {
+		switch name := e.Name(); {
+		case strings.HasPrefix(name, "."):
+		case (name == "objects" || name == "files") && e.IsDir():
+		default:
+			bad("%s is in the bundle, and a bundle holds only objects and files, as folders", name)
+		}
+	}
+	if len(problems) > 0 {
 		return done(nil)
 	}
 	l, err := core.Open(dir).LoadReadOnly()
@@ -491,6 +511,9 @@ func checkBundle(dir string) ([]string, bool) {
 		bad("the files cannot be read: %s", err)
 	}
 	for _, f := range found {
+		if strings.HasPrefix(f.Name(), ".") {
+			continue
+		}
 		size, ok := want[f.Name()]
 		if !ok {
 			bad("files/%s is in the bundle, and the share record does not list it", f.Name())
