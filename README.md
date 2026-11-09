@@ -41,7 +41,7 @@ cd bean
 go install ./cmd/...
 ```
 
-This puts `bean`, `bean-import-lab`, `bean-import-apple-health` and `bean-import-csv` in `$(go env GOPATH)/bin`, usually `~/go/bin`. If your shell cannot find `bean`, add that folder to your `PATH`:
+This puts `bean`, `bean-import-lab`, `bean-import-apple-health`, `bean-import-csv` and `bean-import-nhanes` in `$(go env GOPATH)/bin`, usually `~/go/bin`. If your shell cannot find `bean`, add that folder to your `PATH`:
 
 ```
 echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.zshrc && source ~/.zshrc
@@ -160,6 +160,30 @@ bean import csv -type hrv.rmssd -unit ms export.csv
 ```
 
 The CSV needs a header row and a `value` column. A `time` column (RFC 3339) and an `id` column are optional. Other columns are kept as context. The file is kept first, so a better importer can read it again later. [docs/COMMANDS.md](docs/COMMANDS.md) lists what the CSV importer refuses.
+
+## Compare with people like you
+
+`bean compare` shows where a reading lies among people you describe, in public survey data (NHANES, from the US CDC). You say who: sex, age, and if you like ethnicity, BMI, or what they ate that day. It runs on your machine, on files you downloaded and keep.
+
+```
+bean import nhanes DEMO_J.XPT
+bean import nhanes TCHOL_J.XPT
+bean compare -sex male -age 30-39 -type 'lab.*'
+bean compare -sex male -age 30-39 -where DEMO_J.RIDRETH3=3 -where BMX_J.BMXBMI=20-27 -type 'lab.*'
+```
+
+```
+Compared with NHANES 2017-2018: male, age 30-39.
+READING                VALUE      PERCENTILE  LOWER  SAME  MIDDLE HALF  MEDIAN  N    STATUS     ID
+lab.cholesterol-total  187 mg/dL  46          44.2%  3.5%  164 to 213   188     339  qualified  fca23ea91778
+```
+
+- It says where a value lies in a sample, and how many people the sample has. It does not say whether a value is healthy, and it does not advise.
+- Every result is `qualified`, with its reasons, or `not comparable`, with no number. A cohort of fewer than 30 people gives no number.
+- `-save` keeps a result as a signed record that names each file by its SHA-256, the cohort and the method. Anyone can compute it again without bean: `tools/compare/reproduce.py` does, in Python.
+- Twelve blood tests today: total and HDL cholesterol, hemoglobin A1c and the blood count.
+
+[docs/COMPARE.md](docs/COMPARE.md) has the files to download, the rules, the limits and the method.
 
 ## Log from an AI assistant
 
@@ -300,6 +324,7 @@ bean protects who wrote what, and protects your identity against a stolen device
 | [docs/ONBOARDING.md](docs/ONBOARDING.md) | First run, step by step, alone or with an AI. |
 | [docs/COMMANDS.md](docs/COMMANDS.md) | Every command, flag and exit code. |
 | [docs/IMPORTERS.md](docs/IMPORTERS.md) | Write an importer for your own source; community importers. |
+| [docs/COMPARE.md](docs/COMPARE.md) | Compare a reading with people like you: files, rules, limits, method. |
 | [cmd/bean/vocabulary.md](cmd/bean/vocabulary.md) | The usual record types and units. |
 | [SECURITY.md](SECURITY.md) | What is protected, and the keys. |
 | [CORE.md](CORE.md) | The protocol, in short. |

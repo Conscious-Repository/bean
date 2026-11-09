@@ -11,6 +11,7 @@ bean does not need to know your source. Anyone can write an importer for theirs,
 | `bean import lab` | Lab report PDFs, in the layouts it knows: the Labcorp patient report | [README](../cmd/bean-import-lab/README.md) |
 | `bean import apple-health` | An Apple Health `export.zip` or `export.xml` | [README](../cmd/bean-import-apple-health/README.md) |
 | `bean import csv` | A CSV with a `value` column | [COMMANDS](COMMANDS.md) |
+| `bean import nhanes` | A public NHANES data file (`.XPT`, 2017-2018), kept as reference data for `bean compare`. No readings. | [COMPARE](COMPARE.md) |
 
 ## Community importers
 

@@ -14,6 +14,7 @@ go vet ./... && gofmt -l .           # gofmt must print nothing
 python3 -I tools/checksecp256k1.py   # independent BIP-340 and npub check, pure Python
 python3 -I tools/checkvectors.py     # independent check of the vectors; needs `pip install -r tools/requirements.txt`
 PY=python3 bash tools/second/run.sh  # the second verifier against bean and against vectors/conformance
+PY=python3 bash tools/compare/run.sh # every saved comparison computed again with Python and pandas
 ```
 
 Run all of them before every commit; `make check` runs them, plus staticcheck, govulncheck and a check that `tools/genvectors` reproduces every vector byte for byte. `make fuzz` runs the fuzz targets (2 minutes each) and `make smoke` runs the end-to-end and adversarial suite in `tools/smoke.sh`. When you change a test vector, run `go run ./tools/genvectors` and the Python checks. The conformance folders come from `tools/second/cases.py`: delete `vectors/conformance`, run `python3 tools/second/cases.py vectors/conformance`, then `go run ./tools/genvectors` to write each `expected.txt`. Every vector is reproducible; V6 uses an RFC 6979 nonce since 2026-10-30.
@@ -26,11 +27,17 @@ core/                     the protocol: canonical JSON, keys and signatures,
                           agents, the object cache. Knows no data source.
 cmd/bean/                 the CLI; read.go (ls, show, add), mcp.go (MCP server),
                           agent.go, keys.go, vocabulary.md (served to the AI)
+cmd/bean/compare.go       bean compare: a reading against NHANES, as a signed claim
+cmd/bean-import-nhanes/   keeps a public NHANES file as reference data
+internal/xpt/             reads SAS transport (XPT) files
+internal/nhanes/          the files, the table of tests, and the method of
+                          bean compare; testdata/ has synthetic files
 cmd/bean-import-csv/      CSV importer
 cmd/bean-import-lab/  Lab report PDF importer (labcorp.go: the one layout it knows)
 tools/genvectors/         writes vectors/
 tools/check*.py           independent checks of the vectors
 tools/second/             a second verifier in Python, and the conformance cases
+tools/compare/            a second implementation of bean compare in Python
 vectors/                  published test vectors (SPEC.md 14); conformance/ has
                           folders of record files with their verify output
 ```

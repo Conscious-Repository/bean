@@ -36,6 +36,11 @@ Read
   blob get <id>                 Write a stored file to stdout.
   verify                        Check every file and signature.
 
+Compare
+  compare -sex <s> -age <from>-<to> [-where <rule>]... [-save] <id>... | -type <type>
+                                Show where a reading lies among people like the
+                                ones you describe, in public survey data (NHANES).
+
 AI and agents
   mcp [-write] [-blobs] [-label <name>]
                                 Run the MCP server for an AI client. Read-only
@@ -80,6 +85,7 @@ var syntax = map[string]string{
 	"ls":            "ls [-type <t>] [-since <time>] [-until <time>] [-author me|agent|<id>|<npub>] [-all] [-json]",
 	"show":          "show <id>",
 	"verify":        "verify",
+	"compare":       "compare -sex male|female -age <from>-<to> [-where <DATASET>.<VARIABLE>=<value>|<from>-<to>]... [-save] <id>... | -type <type>",
 	"mcp":           "mcp [-write] [-blobs] [-label <name>]",
 	"agent":         "agent init [-label <name>] [-identity <id>] | agent pair <npub> [-label <name>]",
 	"sync":          "sync <source folder>",
@@ -266,6 +272,8 @@ func main() {
 		}
 	case "ls":
 		cmdList(s, rest)
+	case "compare":
+		cmdCompare(s, rest)
 	case "show":
 		cmdShow(s, rest)
 	case "add":
@@ -433,7 +441,7 @@ func reportChanged(changed []core.Changed, fix string) error {
 var needsLog = map[string]bool{
 	"whoami": true, "add": true, "append": true, "blob": true, "ls": true, "show": true,
 	"verify": true, "mcp": true, "import": true, "export": true, "rotate": true,
-	"purge": true, "gc": true, "migrate": true,
+	"purge": true, "gc": true, "migrate": true, "compare": true,
 }
 
 // hasLog reports whether the folder holds a log: an identity, or synced

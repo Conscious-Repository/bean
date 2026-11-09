@@ -77,7 +77,7 @@ Encrypts and stores a file, for example the PDF an import came from. Prints the 
 Keeps a provider file, then adds its readings. Runs `bean-import-<source>`, found next to `bean` or on `PATH`, for example `bean import lab -tz America/Chicago report.pdf`. In order, and it stops at the first failure:
 
 1. It copies the file privately, at most 256 MiB, works out the id the encrypted copy will have, and runs the importer on the copy. The importer's output goes to a private file, at most 1 GiB of readings plus 1 MiB. If the importer refuses the file, nothing is written.
-2. It checks the importer's first record: it must keep this file (`lab.report`, `apple-health.export`, `csv.file`) and carry `source.ref_input`, not a ready-made `source.ref` or a `source.supersedes_ref`. It must pass the checks `append` makes of a record: its fields, its size, your key. If it does not, or you deleted that record before with `purge`, nothing is written, not even the file. A file you deleted stays deleted under any `-system`, on a copy whose `local/purged-refs.jsonl` remembers the deletion: a copy that only received the deletion by sync, and never held the record, stores the file again. A file kept under another archive type is not caught.
+2. It checks the importer's first record: it must keep this file (`lab.report`, `apple-health.export`, `csv.file`, `reference.file`) and carry `source.ref_input`, not a ready-made `source.ref` or a `source.supersedes_ref`. It must pass the checks `append` makes of a record: its fields, its size, your key. If it does not, or you deleted that record before with `purge`, nothing is written, not even the file. A file you deleted stays deleted under any `-system`, on a copy whose `local/purged-refs.jsonl` remembers the deletion: a copy that only received the deletion by sync, and never held the record, stores the file again. A file kept under another archive type is not caught.
 3. It shows the readings, one line each (type, value as printed, unit, flag), and asks `Save <n> readings and keep the file? [y/N]`. Only `y` goes on; anything else writes nothing. `-yes` skips the review, for scripts. Without a terminal and without `-yes` it writes nothing and shows no value: the readings would land in a script's log or an AI assistant's context.
 4. It stores the copy, encrypted, and reads it back. The bytes must match.
 5. It adds the first record and checks that the log keeps it: a current record of yours, about you, that names the blob and the file's SHA-256, and a blob that still reads back as the file. This check proves every record file, as `verify` does, because the object cache vouches for a file by its size and time.
@@ -134,6 +134,21 @@ Reads and checks every file and signature, and every stored file's hash. Run it 
 | `warning: <id>: ungated: <id>` | A record from a newer bean signed by a key that may not change the rules for the identity: an old key or a stranger. It is skipped and does not stop anything. |
 | `compromised: <id>` | The identity forked and is frozen. Exit code 4 when it is yours. |
 | `summary: <v> valid, <i> invalid, <s> skipped, <h> held, <d> duplicate` | The counts. |
+
+## Compare
+
+### `compare -sex male|female -age <from>-<to> [-where <rule>]... [-save] <id>... | -type <type>`
+
+Shows where a reading lies among the people of a cohort in NHANES 2017-2018, from the files you kept with `bean import nhanes`. [COMPARE.md](COMPARE.md) has the files, the columns, the limits and the method.
+
+- `-sex` and `-age` are required. `-age 30-39` includes both ends; 80 means 80 and over. Without them the command exits 2: bean never guesses a cohort.
+- `-where <FILE>.<VARIABLE>=<value>` or `=<from>-<to>` adds a rule, and may repeat: `-where DEMO_J.RIDRETH3=3 -where BMX_J.BMXBMI=20-27`. The file is `DEMO_J`, `BMX_J` or `DR1TOT_J`. A rule on `DR1TOT_J` makes the computation use the dietary day one weight.
+- Give one or more record ids, or `-type` for every current reading of a type or prefix (`'lab.*'`). With `-type`, readings of a type bean has no reference data for are counted, not listed.
+- `-save` writes each result as a signed `comparison.percentile` record and prints `saved <id>`. Without it nothing is written. The same inputs again add nothing.
+
+Each row has the reading, its value, the percentile, the shares of the cohort with a lower and with the same value, the cohort's 25th to 75th percentile and median, the number of people, and a status: `qualified` with the reasons below the table, or `not comparable:` and why, with no number. A cohort of fewer than 30 people gives no number. Exit 1 when nothing could be compared.
+
+A comparison says where a value lies in a sample. It does not say whether the value is healthy.
 
 ## AI and agents
 
@@ -267,6 +282,10 @@ The shapes come from a real report's layout (`cmd/bean-import-lab/testdata/real-
 ### `bean-import-apple-health -blob <id> [-records [-types <t>,...]] <export.zip | export.xml>`
 
 Reads an Apple Health export. By default it writes one `apple-health.export` record that keeps the file, with counts per type. With `-records` it also writes one record per reading of 16 supported types, or of the `-types` you name. Apple writes a percentage as a fraction with unit `%`, for the `*Percentage` types and walking steadiness alike. Those readings say unit `1` (0.272 is 27.2%) and keep `context.source_unit: "%"`; a value outside 0..1, or another unit, is refused. Unit `%` on any other type is refused, and so is a quantity with no unit. Blood pressure and food are Correlations: they are counted and kept in the file, and a selected reading inside one is refused. Your name, birth date, source and device names are not copied; the file keeps them. Run it as `bean import apple-health [-records] export.zip`.
+
+### `bean-import-nhanes -blob <id> <file.XPT>`
+
+Keeps one public NHANES file of the 2017-2018 cycle (SAS transport, a name ending in `_J`) as reference data for `bean compare`. Run it as `bean import nhanes TCHOL_J.XPT`. It writes one `reference.file` record and no readings: the file is about other people. `context` has the file's `sha256` and `bytes`, the data set name, the cycle, the URL CDC serves it from, the row count and every variable with its label. It says whether the file is the one CDC served on 2026-11-09. It refuses a file that is not transport version 5, holds more than one data set, has no `SEQN`, is of another cycle, or has a name or label that is not plain ASCII. `bean purge` of the record erases the file.
 
 ### `bean-import-csv -type <type> [-unit <unit>] [-system <name>] [-blob <id>] [-precision <p>] <file.csv>`
 

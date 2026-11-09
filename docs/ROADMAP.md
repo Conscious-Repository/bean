@@ -27,36 +27,47 @@ In order. Each step is done only when its test passes.
 1. **Real import, privately (day 1). Done.**
    - A real report imports: 71 readings, each checked by hand against the PDF (DECISIONS 230, 231). Its layout, with synthetic content, is `cmd/bean-import-lab/testdata/real-layout.txt`. The real text never enters the repository.
    - `bean import` shows what it read and asks before it saves; `-yes` skips that for scripts (DECISIONS 234).
-2. **Reference data: NHANES 2017–2018 total cholesterol.**
-   - A reference adapter keeps the public files as blobs, each pinned by SHA-256: `TCHOL_J.XPT` (`LBXTC`, mg/dL) and `DEMO_J.XPT` (`RIAGENDR`, `RIDAGEYR`, `WTMEC2YR`, `SDMVPSU`, `SDMVSTRA`).
-   - It writes one `reference.dataset` claim per release: source URL, cycle, license, variables, and file digests.
-   - The person who imports it signs it as its curator. It is never written as CDC's claim.
-   - The adapter reads SAS transport (XPT v5) itself, with a test against a small synthetic XPT.
-3. **`bean compare`.**
-   - It writes a `comparison.percentile` claim with `about` refs to the personal reading and the `reference.dataset` claim.
-   - Its context records the cohort rule (age band, sex, exclusions), the method (weighted empirical percentile with exam weights), the program version, the inputs' digests and the result.
-   - It returns one of three statuses, each with its reasons:
-     - `comparable`;
-     - `qualified`: Labcorp and NHANES ran different assays, and NHANES describes a population, not a clinic;
-     - `not comparable`: another analyte, unit or specimen, or a missing age or sex. It writes no number.
-   - It describes where the value lies in the selected sample. It does not diagnose, flag risk or advise. That keeps it a display of public statistics, separate from interpretation.
+2. **Reference data: NHANES 2017–2018. Done.**
+   - `bean import nhanes <file.XPT>` keeps a public file as a `reference.file` record, on the same rail as a lab report: encrypted blob, SHA-256, the data set, CDC's URL, each variable with its label (DECISIONS 235).
+   - One record per file, not one per release: CDC publishes files, and each is pinned on its own.
+   - The person who imports it signs for having kept it. It is never written as CDC's claim.
+   - `internal/xpt` reads SAS transport itself. On ten CDC files it gives the same bits as pandas for every value.
+3. **`bean compare`. Done.**
+   - `bean compare -sex <s> -age <from>-<to> [-where <rule>]... <ids> | -type 'lab.*'` (DECISIONS 236 to 239, [COMPARE.md](COMPARE.md)).
+   - The cohort is "people like me", stated as rules: sex and age, then any of ethnicity, body measures and a day's food. Every rule is in the claim, and n is on every row.
+   - Twelve tests: total and HDL cholesterol, hemoglobin A1c and the blood count.
+   - `-save` writes a `comparison.percentile` claim, `about` the reading and each file, with the cohort, the method, the files' digests and the result. It does not copy the reading's value.
+   - Statuses: `qualified`, with reasons, or `not comparable`, with no number. Nothing is `comparable` yet. Fewer than 30 people: no number.
+   - It says where a value lies in a sample. It does not diagnose, flag risk or advise.
    - Same inputs, same bytes.
-4. **Independent reproduction.**
-   - A second implementation in `tools/second` (Python, reading the XPT with pandas) recomputes the percentile from the pinned files and the claim's context.
-   - CI fails if the two disagree in the last printed digit.
+4. **Independent reproduction. Done.**
+   - `tools/compare/reproduce.py` (Python, pandas) computes every number of a saved claim again from the claim, the reading and the files. It shares no code with bean and has no table of its own.
+   - `make compare` fails if one number differs, in CI on synthetic files; with `BEAN_NHANES_DIR` it runs on CDC's files.
 5. **`bean share` and `bean check-bundle`.**
    - `bean share <ids> -out bundle/` writes the chosen record files and the plaintext blobs they name. It adds the identity records needed to verify them and a manifest signed by the person.
    - `bean check-bundle <dir>` verifies the bundle without a log, and so does the Python second verifier.
    - A bundle proves that what it holds is authentic. It does not prove completeness: it is the selected records, not "all records from a week". The tool says so.
    - A bundle is a disclosure: once sent, it cannot be taken back.
 6. **Quickstart and release to peers.**
-   - `examples/blood/` holds a synthetic report, a script that runs steps 1 to 5, and the expected output.
+   - `examples/blood/` holds a synthetic report with values a person could have, a script that downloads the NHANES files and runs steps 1 to 5, and the expected output.
    - The README gets a five-minute path, and the repository opens to the people who will try it.
    - When it opens, require the CI check on `main`. A private repository on the free plan cannot, so until then a PR merges only after CI passes on its exact head.
 
 Not this week: Apple Health readings beyond what exists, `bean-import-csv -map`, `-to <npub>` encryption, `bean attest` and `bean trust`, NIP-46, nutrition.
 
-## After the loop
+## After the loop: people like me
+
+The first question a person asks is not "where is my cholesterol" but "how do I compare with people like me, who eat what I eat". The rule-based cohort is the start. In order of value for the effort:
+
+- **More tests.** Each is one row in `internal/nhanes`, from the file's own label and a real report's name for the test. Next: the biochemistry profile, hs-CRP, ferritin, vitamin D. Fasting tests (glucose, triglycerides, LDL, insulin) need the fasting weight first. Quest's names come with its importer.
+- **More people.** One cycle has about 9,000 people, so three rules often leave fewer than 30. Pool cycles (2017 to March 2020 is published as one file set), with the weights CDC gives for pooling.
+- **Your own food as the rule.** Work out the ranges from the person's own `food.estimate` records, and say how many days they cover. One recalled day in NHANES is not a usual diet; the two-day files and their weight come first.
+- **Check a recommended range.** Given a range someone recommends, show the share of the cohort inside it. That is a fact about the sample, not advice.
+- **Outcomes.** NHANES has linked mortality files. Associations only, and only after a regulatory read.
+- **Genetics.** NHANES publishes no genotypes. This is another rail with the same shape: the person's genotype file, a public score file pinned by its digest, computed locally, saved as a signed claim.
+- **An assistant asks for a comparison.** `bean mcp` can read saved comparisons today. A tool that runs one comes after the person has used the command for a while.
+
+## Also after the loop
 
 1. **Read PDFs by word position.** `pdftotext -bbox-layout` gives each word's box; columns come from where the header words sit, not from counted spaces. Most attacks on the layout grammar (DECISIONS 219 to 231) were artifacts of `-layout` spacing.
 2. **Unknown layouts, with an assistant if the person wants.** The person's own assistant, or a local model, proposes each reading with the page and words it read it from. bean checks every value against those words in the PDF and refuses what is not printed there; the person confirms the table, and the readings are theirs, with the extractor in context. bean ships no model and no key. A scanned PDF has no words to check against: the person confirms each value. Design it on a second real report from another lab, never from memory.
@@ -77,6 +88,7 @@ Not this week: Apple Health readings beyond what exists, `bean-import-csv -map`,
 - **A signature proves who signed, not that the number is right.** It does not prove that a lab or device produced the number, nor anyone's credentials.
 - **A shared subset proves authenticity, not completeness.** Record files are readable JSON; only blobs are encrypted. Share by bundle, never by copying the log folder. The subject id is stable, so two bundles from one person can be linked.
 - **Regulatory.** Storing, verifying and displaying are kept apart from interpreting. A percentile against public data is a function that needs its own review before any clinical use. bean does not interpret, predict or advise.
+- **A comparison is as good as its cohort.** NHANES is one country, one two-year window, about 9,000 people. A lab and the survey measure with different instruments. A narrow cohort has few people, and no interval of uncertainty is computed yet. Every result says its n and its reasons.
 
 ## Known gaps
 
