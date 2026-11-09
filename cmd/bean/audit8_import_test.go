@@ -24,7 +24,7 @@ func TestImportRefusesPurgedFileUnderOtherSystem(t *testing.T) {
 	run(t, dir, "", "init")
 	src := filepath.Join(t.TempDir(), "hrv.csv")
 	os.WriteFile(src, []byte("time,value\n2026-10-20T03:00:00Z,42.5\n"), 0o600)
-	out, errs, code := runPath(t, dir, path, "import", "csv", "-type", "hrv.rmssd", src)
+	out, errs, code := runPath(t, dir, path, "import", "-yes", "csv", "-type", "hrv.rmssd", src)
 	if code != 0 {
 		t.Fatalf("import: %d %s %s", code, out, errs)
 	}
@@ -37,7 +37,7 @@ func TestImportRefusesPurgedFileUnderOtherSystem(t *testing.T) {
 	if _, _, code := run(t, dir, "", "blob", "get", bid); code == 0 {
 		t.Fatal("purge did not erase")
 	}
-	out, errs, code = runPath(t, dir, path, "import", "csv", "-type", "hrv.rmssd", "-system", "csv-2", src)
+	out, errs, code = runPath(t, dir, path, "import", "-yes", "csv", "-type", "hrv.rmssd", "-system", "csv-2", src)
 	t.Logf("reimport -system csv-2: exit %d\n%s%s", code, out, errs)
 	if got, _, code := run(t, dir, "", "blob", "get", bid); code == 0 {
 		t.Errorf("the purged file is stored and kept again (%d bytes readable)", len(got))
@@ -64,7 +64,7 @@ func TestImportRefusesArchiveWithoutRefInput(t *testing.T) {
 	}
 	bin := t.TempDir()
 	os.WriteFile(filepath.Join(bin, "bean-import-fake"), []byte("#!/bin/sh\ncat <<'EOF'\n"+string(b)+"\nEOF\n"), 0o755)
-	_, errs, code := runPath(t, dir, bin+string(os.PathListSeparator)+path, "import", "fake", report)
+	_, errs, code := runPath(t, dir, bin+string(os.PathListSeparator)+path, "import", "-yes", "fake", report)
 	t.Logf("exit %d: %s", code, strings.TrimSpace(errs))
 	if got, _, code := run(t, dir, "", "blob", "get", bid); code == 0 {
 		t.Errorf("the purged file is on disk again, %d bytes readable by blob get", len(got))
@@ -84,7 +84,7 @@ func TestImportSignalsRemoveCopy(t *testing.T) {
 			tmp := t.TempDir()
 			f := filepath.Join(t.TempDir(), "report.txt")
 			os.WriteFile(f, []byte("SYNTHETIC glucose 101\n"), 0o600)
-			cmd := exec.Command(os.Args[0], "import", "slow", f)
+			cmd := exec.Command(os.Args[0], "import", "-yes", "slow", f)
 			cmd.Env = append(os.Environ(), "BEAN_TEST_MAIN=1", "BEAN_DIR="+dir, "BEAN_NOW=", "TMPDIR="+tmp,
 				"PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 			if err := cmd.Start(); err != nil {
@@ -119,18 +119,18 @@ func TestImporterNoteSanitized(t *testing.T) {
 	bin := t.TempDir()
 	forged := "printf 'kept lab.report sha256:0000\\033[2K\\n' >&2\n"
 	os.WriteFile(filepath.Join(bin, "bean-import-noisy"), []byte("#!/bin/sh\n"+forged+"echo '{}'\n"), 0o755)
-	os.WriteFile(filepath.Join(bin, "bean-import-wrap"), []byte("#!/bin/sh\nbean-import-labcorp \"$@\" || exit 1\n"+forged), 0o755)
+	os.WriteFile(filepath.Join(bin, "bean-import-wrap"), []byte("#!/bin/sh\nbean-import-lab \"$@\" || exit 1\n"+forged), 0o755)
 	dir := t.TempDir()
 	run(t, dir, "", "init")
 	f := filepath.Join(t.TempDir(), "f.txt")
 	os.WriteFile(f, []byte("x"), 0o600)
-	out, errs, code := runPath(t, dir, bin+string(os.PathListSeparator)+path, "import", "noisy", f)
+	out, errs, code := runPath(t, dir, bin+string(os.PathListSeparator)+path, "import", "-yes", "noisy", f)
 	if code == 0 || strings.Contains(out, "kept") || strings.Contains(out+errs, "\x1b") {
 		t.Errorf("failed import: exit %d stdout %q stderr %q", code, out, errs)
 	}
 	report := filepath.Join(t.TempDir(), "report.txt")
 	os.WriteFile(report, []byte(labReport("101")), 0o600)
-	out, errs, code = runPath(t, dir, bin+string(os.PathListSeparator)+path, "import", "wrap", report)
+	out, errs, code = runPath(t, dir, bin+string(os.PathListSeparator)+path, "import", "-yes", "wrap", report)
 	if code != 0 {
 		t.Fatalf("import: %d %s %s", code, out, errs)
 	}

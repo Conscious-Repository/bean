@@ -52,24 +52,31 @@ const maxImporterStderr = 64 << 10
 var sourceName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 func cmdImport(s *core.Store, args []string) {
-	if len(args) < 2 || !sourceName.MatchString(args[0]) {
+	// -yes and -corrections are bean's own flags, wherever they are.
+	var o importOpts
+	var rest []string
+	for _, a := range args {
+		switch a {
+		case "-yes", "--yes":
+			o.yes = true
+		case "-corrections", "--corrections":
+			o.corrections = true
+		default:
+			rest = append(rest, a)
+		}
+	}
+	if len(rest) < 2 || !sourceName.MatchString(rest[0]) {
 		usage()
 	}
-	source, file := args[0], args[len(args)-1]
-	corrections := false
-	var pass []string
-	for _, a := range args[1 : len(args)-1] {
-		if a == "-corrections" || a == "--corrections" {
-			corrections = true
-			continue
-		}
-		pass = append(pass, a)
-	}
+	source, file := rest[0], rest[len(rest)-1]
+	pass := rest[1 : len(rest)-1]
+	o.review = os.Stdin
+	o.terminal = isTerminal(os.Stdin)
 	bin, err := importerPath(source)
 	if err != nil {
 		fail(err)
 	}
-	out, err := runImport(s, bin, file, pass, corrections)
+	out, err := runImport(s, bin, file, pass, o)
 	for _, l := range out.lines {
 		fmt.Println(l)
 	}
@@ -107,6 +114,7 @@ func phaseError(phase string, err error) error {
 	msg := map[string]string{
 		"validation": "the file was not accepted, and nothing was written",
 		"purged":     "you deleted this file before (bean purge), and nothing was written",
+		"review":     "nothing was written",
 		"storage":    "the file could not be stored and read back; an encrypted copy may remain, but no record was written",
 		"archive":    "the record that keeps the file was not added, and an encrypted copy of the file may remain; no reading was written",
 		"retention":  "the log does not keep the file (it may have been deleted with bean purge); no reading was written",
@@ -115,7 +123,95 @@ func phaseError(phase string, err error) error {
 	return fmt.Errorf("%s: %w", msg, err)
 }
 
-func runImport(s *core.Store, bin, file string, args []string, corrections bool) (importResult, error) {
+// importOpts: corrections writes changed readings; yes saves without the
+// review; review is where the person's answer comes from, and terminal says
+// whether a person is there to give it.
+type importOpts struct {
+	corrections, yes, terminal bool
+	review                     io.Reader
+}
+
+// isTerminal reports whether f is a terminal: a person who can read the
+// table and answer, not a script or an AI assistant's tool.
+func isTerminal(f *os.File) bool {
+	fi, err := f.Stat()
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
+}
+
+// maxReviewRows is how many readings the review lists; it counts the rest.
+const maxReviewRows = 300
+
+// reviewReadings prints what the importer read, one line per reading, and
+// returns how many there are. rd is the importer's output after the record
+// that keeps the file.
+func reviewReadings(w io.Writer, rd *bufio.Reader) (int, error) {
+	n := 0
+	for {
+		line, err := rd.ReadBytes('\n')
+		if len(bytes.TrimSpace(line)) > 0 {
+			n++
+			if n <= maxReviewRows {
+				fmt.Fprintln(w, "  "+safe(reviewLine(line)))
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return n, err
+		}
+	}
+	if n > maxReviewRows {
+		fmt.Fprintf(w, "  ... and %d more\n", n-maxReviewRows)
+	}
+	return n, nil
+}
+
+// reviewLine is one reading as the review shows it: type, value, unit, flag.
+func reviewLine(line []byte) string {
+	var r struct {
+		Type    string         `json:"type"`
+		Value   map[string]any `json:"value"`
+		Context map[string]any `json:"context"`
+	}
+	if json.Unmarshal(line, &r) != nil {
+		return "(a line that is not a record)"
+	}
+	v := "no value"
+	switch {
+	case r.Value["n"] != nil:
+		v = fmt.Sprint(r.Value["n"])
+		if raw, ok := r.Context["raw_value"].(string); ok {
+			v = raw
+		}
+	case r.Value["s"] != nil:
+		v = fmt.Sprint(r.Value["s"])
+	case r.Value["b"] != nil:
+		v = fmt.Sprint(r.Value["b"])
+	default:
+		if c, _ := r.Context["lab_comment"].(string); strings.HasPrefix(strings.ToLower(c), "test not performed") {
+			v = "not performed"
+		}
+	}
+	if u, ok := r.Value["unit"].(string); ok && u != "" {
+		v += " " + u
+	}
+	if f, ok := r.Context["flag"].(string); ok && f != "" {
+		v += "  " + f
+	}
+	return r.Type + "  " + v
+}
+
+// confirmed reads the person's answer: y or yes saves, anything else does
+// not.
+func confirmed(r io.Reader) bool {
+	line, _ := bufio.NewReader(r).ReadString('\n')
+	a := strings.ToLower(strings.TrimSpace(line))
+	return a == "y" || a == "yes"
+}
+
+func runImport(s *core.Store, bin, file string, args []string, o importOpts) (importResult, error) {
+	corrections := o.corrections
 	var res importResult
 	dir, err := os.MkdirTemp("", "bean-import-*")
 	if err != nil {
@@ -193,6 +289,30 @@ func runImport(s *core.Store, bin, file string, args []string, corrections bool)
 	// no record naming it, and gc erases only what a record named.
 	if err := s.CheckPartial(first); err != nil {
 		return res, phaseError("validation", err)
+	}
+	// The person checks what was read before anything is written. Without a
+	// terminal and without -yes, nothing is shown: the readings would land
+	// in a script's log or an AI assistant's context.
+	if !o.yes {
+		if !o.terminal {
+			return res, phaseError("review", errors.New("review needs a terminal: run bean import yourself to check what it read, or pass -yes to save without review"))
+		}
+		if _, err := out.Seek(int64(len(first))+1, io.SeekStart); err != nil {
+			return res, phaseError("validation", err)
+		}
+		fmt.Println("Read from " + filepath.Base(file) + ":")
+		n, err := reviewReadings(os.Stdout, bufio.NewReader(out))
+		if err != nil {
+			return res, phaseError("validation", err)
+		}
+		fmt.Fprintf(os.Stderr, "Save %d readings and keep the file? [y/N] ", n)
+		if !confirmed(o.review) {
+			return res, phaseError("review", errors.New("not saved"))
+		}
+		if _, err := out.Seek(int64(len(first))+1, io.SeekStart); err != nil {
+			return res, phaseError("validation", err)
+		}
+		rd = bufio.NewReaderSize(out, 64<<10)
 	}
 	stored, err := s.PutBlob(data)
 	if err != nil {

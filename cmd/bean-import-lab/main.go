@@ -1,12 +1,12 @@
-// Command bean-import-labcorp turns a Labcorp patient report ("Enterprise
-// Report Version 2.00", the PDF that Labcorp, Superpower and other
-// services hand to patients) into JSONL partial records (SPEC.md 9). It
-// never signs and never holds the dedupe key.
+// Command bean-import-lab turns a lab report PDF in a layout it knows into
+// JSONL partial records (SPEC.md 9). It never signs and never holds the
+// dedupe key. The layouts it knows are in files of their own: labcorp.go,
+// the Labcorp patient report. Any other report is refused.
 //
 // Input is the PDF, which it reads with `pdftotext -layout` (poppler), or
 // a text file that pdftotext already made. One record per result row:
 //
-//   - type: "lab." plus a slug of the Labcorp test name ("LDL Chol Calc
+//   - type: "lab." plus a slug of the test name as printed ("LDL Chol Calc
 //     (NIH)" is lab.ldl-chol-calc-nih). No LOINC mapping yet; the report
 //     does not print codes and this adapter does not guess them.
 //   - value: {"n", "unit"} for a number, {"s", "unit"} for anything else
@@ -47,22 +47,19 @@ import (
 	"github.com/Conscious-Repository/bean/core"
 )
 
-const (
-	version = "bean-import-labcorp@0.3.0"
-	system  = "labcorp"
-)
+const version = "bean-import-lab@0.4.0"
 
 func main() {
-	fs := flag.NewFlagSet("bean-import-labcorp", flag.ContinueOnError)
+	fs := flag.NewFlagSet("bean-import-lab", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	blob := fs.String("blob", "", "blob id of the PDF, from bean blob put")
 	tz := fs.String("tz", "", "IANA zone of the collection site, for example America/Chicago")
 	if err := fs.Parse(os.Args[1:]); err != nil || fs.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: bean-import-labcorp [-blob <blob id>] [-tz <zone>] <report.pdf | report.txt>")
+		fmt.Fprintln(os.Stderr, "usage: bean-import-lab [-blob <blob id>] [-tz <zone>] <report.pdf | report.txt>")
 		os.Exit(2)
 	}
 	if *blob == "" {
-		fmt.Fprintln(os.Stderr, "bean-import-labcorp: warning: no -blob: the report is not kept; run bean blob put <report.pdf> first and pass -blob <id>")
+		fmt.Fprintln(os.Stderr, "bean-import-lab: warning: no -blob: the report is not kept; run bean blob put <report.pdf> first and pass -blob <id>")
 	}
 	text, raw, err := readSource(fs.Arg(0))
 	if err != nil {
@@ -71,22 +68,22 @@ func main() {
 		// file, and a file name can be private, so it is not printed.
 		var pe *os.PathError
 		if errors.As(err, &pe) {
-			fmt.Fprintln(os.Stderr, "bean-import-labcorp: the input could not be read")
+			fmt.Fprintln(os.Stderr, "bean-import-lab: the input could not be read")
 		} else {
-			fmt.Fprintf(os.Stderr, "bean-import-labcorp: %s\n", err)
+			fmt.Fprintf(os.Stderr, "bean-import-lab: %s\n", err)
 		}
 		os.Exit(1)
 	}
 	var loc *time.Location
 	if *tz != "" {
 		if loc, err = time.LoadLocation(*tz); err != nil {
-			fmt.Fprintf(os.Stderr, "bean-import-labcorp: bad -tz: %s\n", err)
+			fmt.Fprintf(os.Stderr, "bean-import-lab: bad -tz: %s\n", err)
 			os.Exit(2)
 		}
 	}
 	rep, err := parseReport(text)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "bean-import-labcorp: %s\n", err)
+		fmt.Fprintf(os.Stderr, "bean-import-lab: %s\n", err)
 		os.Exit(1)
 	}
 	digest := ""
@@ -103,16 +100,16 @@ func main() {
 	}
 	if *blob != "" {
 		if !regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(*blob) {
-			fmt.Fprintln(os.Stderr, "bean-import-labcorp: invalid blob reference")
+			fmt.Fprintln(os.Stderr, "bean-import-lab: invalid blob reference")
 			os.Exit(2)
 		}
 		records = append([]map[string]any{archiveRecord(raw, *blob)}, records...)
 	}
 	if err := writeRecords(os.Stdout, records); err != nil {
-		fmt.Fprintln(os.Stderr, "bean-import-labcorp: output failed; partial output possible")
+		fmt.Fprintln(os.Stderr, "bean-import-lab: output failed; partial output possible")
 		os.Exit(1)
 	}
-	fmt.Fprintf(os.Stderr, "bean-import-labcorp: %d results, %d without a value. Importing the same report again adds nothing; a result whose value changed needs -corrections\n", len(rep.Results), missing)
+	fmt.Fprintf(os.Stderr, "bean-import-lab: %d results, %d without a value. Importing the same report again adds nothing; a result whose value changed needs -corrections\n", len(rep.Results), missing)
 }
 
 const maxReportBytes = 32 << 20
@@ -265,7 +262,7 @@ func (rep *Report) observed(loc *time.Location) (map[string]any, string) {
 }
 
 // collectionTimeUnsure reports a note that says the collection date or time
-// was not given, as Labcorp prints when it used the receipt date. The note
+// was not given, as a report prints when the lab used the receipt date. The note
 // may be a report note or a result's comment, and may wrap, so all of them
 // are read as one text.
 func (rep *Report) collectionTimeUnsure() bool {
@@ -274,7 +271,7 @@ func (rep *Report) collectionTimeUnsure() bool {
 		all = append(all, r.Comment...)
 	}
 	text := strings.Join(strings.Fields(strings.ToLower(strings.Join(all, " "))), " ")
-	return strings.Contains(text, "time of collection was not indicated")
+	return strings.Contains(text, collectionNote)
 }
 
 // collectionDayUnsure: the lab says it used the receipt date when no

@@ -34,11 +34,11 @@ func TestCLIImportAppleKeepsExport(t *testing.T) {
 	run(t, dir, "", "init")
 	src := filepath.Join(t.TempDir(), "export.zip")
 	original := appleZip(t, src, appleXML)
-	out, errs, code := runPath(t, dir, path, "import", "apple-health", src)
+	out, errs, code := runPath(t, dir, path, "import", "-yes", "apple-health", src)
 	if code != 0 || !strings.Contains(out, "kept apple-health.export") || !strings.Contains(out, "added 0, skipped 0") {
 		t.Fatalf("import: %d\n%s\n%s", code, out, errs)
 	}
-	if out, _, code := runPath(t, dir, path, "import", "apple-health", src); code != 0 || !strings.Contains(out, "already kept") || !strings.Contains(out, "added 0, skipped 0") {
+	if out, _, code := runPath(t, dir, path, "import", "-yes", "apple-health", src); code != 0 || !strings.Contains(out, "already kept") || !strings.Contains(out, "added 0, skipped 0") {
 		t.Errorf("retry: %d %s", code, out)
 	}
 	js, _, _ := run(t, dir, "", "ls", "-type", "apple-health.export", "-json")
@@ -73,14 +73,14 @@ func TestCLIImportAppleRecords(t *testing.T) {
 	run(t, dir, "", "init")
 	src := filepath.Join(t.TempDir(), "export.zip")
 	appleZip(t, src, appleXML)
-	if out, errs, code := runPath(t, dir, path, "import", "apple-health", "-records", src); code != 0 || !strings.Contains(out, "added 1, skipped 0") {
+	if out, errs, code := runPath(t, dir, path, "import", "-yes", "apple-health", "-records", src); code != 0 || !strings.Contains(out, "added 1, skipped 0") {
 		t.Fatalf("records: %d %s %s", code, out, errs)
 	}
-	if out, _, _ := runPath(t, dir, path, "import", "apple-health", "-records", src); !strings.Contains(out, "added 0, skipped 1") {
+	if out, _, _ := runPath(t, dir, path, "import", "-yes", "apple-health", "-records", src); !strings.Contains(out, "added 0, skipped 1") {
 		t.Errorf("retry: %s", out)
 	}
 	appleZip(t, src, strings.Replace(appleXML, "en_US", "en_GB", 1))
-	out, errs, code := runPath(t, dir, path, "import", "apple-health", "-records", src)
+	out, errs, code := runPath(t, dir, path, "import", "-yes", "apple-health", "-records", src)
 	if code != 0 || !strings.Contains(out, "kept apple-health.export") || strings.Contains(out, "already kept") || !strings.Contains(out, "added 0, skipped 1") {
 		t.Errorf("changed export: %d %s %s", code, out, errs)
 	}
@@ -100,7 +100,7 @@ func TestCLIImportAppleMalformed(t *testing.T) {
 	before := countFiles(t, dir)
 	src := filepath.Join(t.TempDir(), "export.xml")
 	os.WriteFile(src, []byte("<HealthData><Record"), 0o600)
-	if _, errs, code := runPath(t, dir, path, "import", "apple-health", src); code != 1 || !strings.Contains(errs, "nothing was written") || strings.Contains(errs, "<HealthData") {
+	if _, errs, code := runPath(t, dir, path, "import", "-yes", "apple-health", src); code != 1 || !strings.Contains(errs, "nothing was written") || strings.Contains(errs, "<HealthData") {
 		t.Errorf("malformed: %d %s", code, errs)
 	}
 	if after := countFiles(t, dir); after != before {

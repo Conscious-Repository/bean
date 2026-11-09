@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -33,7 +34,7 @@ func importerOnPath(t *testing.T) string {
 	labcorpOnce.Do(func() {
 		labcorpDir, labcorpErr = os.MkdirTemp("", "bean-import-bin-*")
 		if labcorpErr == nil {
-			for _, name := range []string{"bean-import-labcorp", "bean-import-apple-health", "bean-import-csv"} {
+			for _, name := range []string{"bean-import-lab", "bean-import-apple-health", "bean-import-csv"} {
 				out, err := exec.Command("go", "build", "-o", filepath.Join(labcorpDir, name), "../"+name).CombinedOutput()
 				if err != nil {
 					labcorpErr = &buildError{string(out)}
@@ -100,7 +101,7 @@ func TestCLIImportKeepsFileFirst(t *testing.T) {
 	report := filepath.Join(t.TempDir(), "report.txt")
 	os.WriteFile(report, []byte(labReport("101")), 0o600)
 
-	out, errs, code := runPath(t, dir, path, "import", "labcorp", report)
+	out, errs, code := runPath(t, dir, path, "import", "-yes", "lab", report)
 	if code != 0 || !strings.Contains(out, "kept lab.report sha256:") || !strings.Contains(out, "added 2, skipped 0") || !strings.Contains(out, "2 results") {
 		t.Fatalf("import: %d\n%s\n%s", code, out, errs)
 	}
@@ -115,7 +116,7 @@ func TestCLIImportKeepsFileFirst(t *testing.T) {
 	}
 
 	// Again: nothing new.
-	out, errs, code = runPath(t, dir, path, "import", "labcorp", report)
+	out, errs, code = runPath(t, dir, path, "import", "-yes", "lab", report)
 	if code != 0 || !strings.Contains(out, "already kept") || !strings.Contains(out, "added 0, skipped 2") {
 		t.Errorf("reimport: %d\n%s\n%s", code, out, errs)
 	}
@@ -123,14 +124,14 @@ func TestCLIImportKeepsFileFirst(t *testing.T) {
 	// An amended report: the new file is kept, the changed reading is not
 	// written until the person says so.
 	os.WriteFile(report, []byte(labReport("99")), 0o600)
-	out, errs, code = runPath(t, dir, path, "import", "labcorp", report)
+	out, errs, code = runPath(t, dir, path, "import", "-yes", "lab", report)
 	if code != 1 || !strings.Contains(out, "kept lab.report") || !strings.Contains(errs, "changed:") || !strings.Contains(errs, "-corrections") {
 		t.Fatalf("amended: %d\n%s\n%s", code, out, errs)
 	}
 	if ls, _, _ := run(t, dir, "", "ls", "-type", "lab.glucose"); !strings.Contains(ls, "101") || strings.Contains(ls, " 99 ") {
 		t.Errorf("changed reading was written:\n%s", ls)
 	}
-	out, errs, code = runPath(t, dir, path, "import", "labcorp", "-corrections", report)
+	out, errs, code = runPath(t, dir, path, "import", "-yes", "lab", "-corrections", report)
 	if code != 0 || !strings.Contains(out, "1 of them new values") {
 		t.Fatalf("-corrections: %d\n%s\n%s", code, out, errs)
 	}
@@ -151,7 +152,7 @@ func TestCLIImportKeepsFileFirst(t *testing.T) {
 	}
 	other := filepath.Join(t.TempDir(), "other.txt")
 	os.WriteFile(other, []byte(labReport("99")), 0o600)
-	_, errs, code = runPath(t, dir, path, "import", "labcorp", other)
+	_, errs, code = runPath(t, dir, path, "import", "-yes", "lab", other)
 	if code != 1 || !strings.Contains(errs, "you deleted this file before") || !strings.Contains(errs, "nothing was written") {
 		t.Errorf("after purge: %d %s", code, errs)
 	}
@@ -181,17 +182,17 @@ func TestCLIImportRefusedWritesNothing(t *testing.T) {
 	before := countFiles(t, dir)
 	bad := filepath.Join(t.TempDir(), "bad.txt")
 	os.WriteFile(bad, []byte(strings.Replace(labReport("101"), "Sodium", "Glucose", 1)), 0o600)
-	_, errs, code := runPath(t, dir, path, "import", "labcorp", bad)
+	_, errs, code := runPath(t, dir, path, "import", "-yes", "lab", bad)
 	if code != 1 || !strings.Contains(errs, "nothing was written") || !strings.Contains(errs, "map to one type") {
 		t.Errorf("refused: %d %s", code, errs)
 	}
 	if after := countFiles(t, dir); after != before {
 		t.Errorf("files %d -> %d", before, after)
 	}
-	if _, errs, code := runPath(t, dir, path, "import", "nosuch", bad); code != 1 || !strings.Contains(errs, "no importer bean-import-nosuch") {
+	if _, errs, code := runPath(t, dir, path, "import", "-yes", "nosuch", bad); code != 1 || !strings.Contains(errs, "no importer bean-import-nosuch") {
 		t.Errorf("missing importer: %d %s", code, errs)
 	}
-	if _, errs, code := runPath(t, dir, path, "import", "labcorp", dir); code != 1 || !strings.Contains(errs, "not a regular file") {
+	if _, errs, code := runPath(t, dir, path, "import", "-yes", "lab", dir); code != 1 || !strings.Contains(errs, "not a regular file") {
 		t.Errorf("directory: %d %s", code, errs)
 	}
 }
@@ -206,7 +207,7 @@ func TestCLIImportNeedsArchiveFirst(t *testing.T) {
 	run(t, dir, "", "init")
 	f := filepath.Join(t.TempDir(), "f.txt")
 	os.WriteFile(f, []byte("x"), 0o600)
-	_, errs, code := runPath(t, dir, bin+string(os.PathListSeparator)+os.Getenv("PATH"), "import", "fake", f)
+	_, errs, code := runPath(t, dir, bin+string(os.PathListSeparator)+os.Getenv("PATH"), "import", "-yes", "fake", f)
 	if code != 1 || !strings.Contains(errs, "did not start with a record of the file") || !strings.Contains(errs, "nothing was written") {
 		t.Errorf("fake: %d %s", code, errs)
 	}
@@ -238,7 +239,7 @@ func importedReport(t *testing.T) (dir, report, path string, rec map[string]any)
 	run(t, dir, "", "init")
 	report = filepath.Join(t.TempDir(), "report.txt")
 	os.WriteFile(report, []byte(labReport("101")), 0o600)
-	if _, errs, code := runPath(t, dir, path, "import", "labcorp", report); code != 0 {
+	if _, errs, code := runPath(t, dir, path, "import", "-yes", "lab", report); code != 0 {
 		t.Fatalf("import: %d %s", code, errs)
 	}
 	js, _, _ := run(t, dir, "", "ls", "-type", "lab.report", "-json")
@@ -250,7 +251,7 @@ func importedReport(t *testing.T) (dir, report, path string, rec map[string]any)
 
 func importerRecord(t *testing.T, blob, report string) map[string]any {
 	t.Helper()
-	out, err := exec.Command(filepath.Join(labcorpDir, "bean-import-labcorp"), "-blob", blob, report).Output()
+	out, err := exec.Command(filepath.Join(labcorpDir, "bean-import-lab"), "-blob", blob, report).Output()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +272,7 @@ func TestCLIImportOtherSubjectDoesNotCount(t *testing.T) {
 		t.Fatalf("append: %d %s", code, errs)
 	}
 	run(t, dir, "", "purge", rec["id"].(string))
-	if _, errs, code := runPath(t, dir, path, "import", "labcorp", report); code != 1 || !strings.Contains(errs, "you deleted this file before") {
+	if _, errs, code := runPath(t, dir, path, "import", "-yes", "lab", report); code != 1 || !strings.Contains(errs, "you deleted this file before") {
 		t.Errorf("reimport: %d %s", code, errs)
 	}
 }
@@ -289,7 +290,7 @@ func TestCLIImportWrongDigestDoesNotCount(t *testing.T) {
 	rec["context"].(map[string]any)["sha256"] = strings.Repeat("0", 64)
 	line, _ := json.Marshal(rec)
 	run(t, dir, string(line)+"\n", "append")
-	if _, errs, code := runPath(t, dir, path, "import", "labcorp", report); code != 1 || !strings.Contains(errs, "does not keep the file") {
+	if _, errs, code := runPath(t, dir, path, "import", "-yes", "lab", report); code != 1 || !strings.Contains(errs, "does not keep the file") {
 		t.Errorf("import: %d %s", code, errs)
 	}
 	if ls, _, _ := run(t, dir, "", "ls", "-type", "lab.glucose"); strings.Contains(ls, "glucose") {
@@ -311,7 +312,7 @@ func TestCLIImportProvesRecordFiles(t *testing.T) {
 	repl := sig[:len(sig)-1] + map[bool]string{true: "1", false: "0"}[sig[len(sig)-1] == '0']
 	os.WriteFile(obj, []byte(strings.Replace(string(data), sig, repl, 1)), 0o600)
 	os.Chtimes(obj, old, old)
-	if _, errs, code := runPath(t, dir, path, "import", "labcorp", report); code != 1 || !strings.Contains(errs, "does not keep the file") {
+	if _, errs, code := runPath(t, dir, path, "import", "-yes", "lab", report); code != 1 || !strings.Contains(errs, "does not keep the file") {
 		t.Errorf("reimport: %d %s", code, errs)
 	}
 }
@@ -326,7 +327,7 @@ func TestCLIImportCorruptBlobRefused(t *testing.T) {
 	bid, _, _ := run(t, dir, "", "blob", "put", report)
 	h := strings.TrimPrefix(strings.TrimSpace(bid), "sha256:")
 	os.WriteFile(filepath.Join(dir, "blobs", h[:2], h[2:]), []byte("corrupt"), 0o600)
-	if _, errs, code := runPath(t, dir, path, "import", "labcorp", report); code != 1 || !strings.Contains(errs, "no record was written") {
+	if _, errs, code := runPath(t, dir, path, "import", "-yes", "lab", report); code != 1 || !strings.Contains(errs, "no record was written") {
 		t.Errorf("import: %d %s", code, errs)
 	}
 	if js, _, _ := run(t, dir, "", "ls", "-type", "lab.report", "-json"); strings.TrimSpace(js) != "" {
@@ -342,15 +343,15 @@ func TestCLIImportCorruptBlobRefused(t *testing.T) {
 func TestCLIImportPurgeErasesFile(t *testing.T) {
 	path := importerOnPath(t)
 	for _, tc := range []struct{ source, typ string }{
-		{"labcorp", "lab.report"},
+		{"lab", "lab.report"},
 		{"apple-health", "apple-health.export"},
 	} {
 		t.Run(tc.source, func(t *testing.T) {
 			dir := t.TempDir()
 			run(t, dir, "", "init")
 			src := filepath.Join(t.TempDir(), "file")
-			args := []string{"import", tc.source}
-			if tc.source == "labcorp" {
+			args := []string{"import", "-yes", tc.source}
+			if tc.source == "lab" {
 				os.WriteFile(src, []byte(labReport("101")), 0o600)
 				args = append(args, "-tz", "America/Chicago")
 			} else {
@@ -396,7 +397,7 @@ func TestCLIImportCSV(t *testing.T) {
 	run(t, dir, "", "init")
 	src := filepath.Join(t.TempDir(), "hrv.csv")
 	os.WriteFile(src, []byte("time,value,id\n2026-10-20T03:00:00Z,42.5,r1\n2026-10-21T03:00:00Z,40,r2\n"), 0o600)
-	args := []string{"import", "csv", "-type", "hrv.rmssd", "-unit", "ms", src}
+	args := []string{"import", "-yes", "csv", "-type", "hrv.rmssd", "-unit", "ms", src}
 	out, errs, code := runPath(t, dir, path, args...)
 	if code != 0 || !strings.Contains(out, "kept csv.file sha256:") || !strings.Contains(out, "added 2, skipped 0") {
 		t.Fatalf("import: %d\n%s\n%s", code, out, errs)
@@ -411,7 +412,7 @@ func TestCLIImportCSV(t *testing.T) {
 	bad := filepath.Join(t.TempDir(), "bad.csv")
 	os.WriteFile(bad, []byte("time,reading\n1,2\n"), 0o600)
 	before := countFiles(t, filepath.Join(dir, "blobs"))
-	if _, errs, code := runPath(t, dir, path, "import", "csv", "-type", "x", bad); code != 1 || !strings.Contains(errs, "nothing was written") {
+	if _, errs, code := runPath(t, dir, path, "import", "-yes", "csv", "-type", "x", bad); code != 1 || !strings.Contains(errs, "nothing was written") {
 		t.Errorf("bad csv: %d %s", code, errs)
 	}
 	if after := countFiles(t, filepath.Join(dir, "blobs")); after != before {
@@ -431,7 +432,7 @@ func TestCLIImportSignalRemovesSnapshot(t *testing.T) {
 			tmp := t.TempDir()
 			f := filepath.Join(t.TempDir(), "report.txt")
 			os.WriteFile(f, []byte("SYNTHETIC PATIENT Doe, Jane DOB 01/01/1990 glucose 101\n"), 0o600)
-			cmd := exec.Command(os.Args[0], "import", "slow", f)
+			cmd := exec.Command(os.Args[0], "import", "-yes", "slow", f)
 			cmd.Env = append(os.Environ(), "BEAN_TEST_MAIN=1", "BEAN_DIR="+dir, "BEAN_NOW=", "TMPDIR="+tmp,
 				"PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 			if err := cmd.Start(); err != nil {
@@ -496,7 +497,7 @@ func TestImportSignalKillsImporterGroup(t *testing.T) {
 	pidFile := filepath.Join(t.TempDir(), "child")
 	f := filepath.Join(t.TempDir(), "report.txt")
 	os.WriteFile(f, []byte("SYNTHETIC glucose 101\n"), 0o600)
-	cmd := exec.Command(os.Args[0], "import", "forks", f)
+	cmd := exec.Command(os.Args[0], "import", "-yes", "forks", f)
 	cmd.Env = append(os.Environ(), "BEAN_TEST_MAIN=1", "BEAN_DIR="+dir, "BEAN_NOW=", "TMPDIR="+t.TempDir(), "CHILD_PID="+pidFile,
 		"PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	if err := cmd.Start(); err != nil {
@@ -531,12 +532,12 @@ func TestCLIImportRealLayout(t *testing.T) {
 	path := importerOnPath(t)
 	dir := t.TempDir()
 	run(t, dir, "", "init")
-	report := "../bean-import-labcorp/testdata/real-layout.txt"
-	out, errs, code := runPath(t, dir, path, "import", "labcorp", "-tz", "America/Chicago", report)
+	report := "../bean-import-lab/testdata/real-layout.txt"
+	out, errs, code := runPath(t, dir, path, "import", "-yes", "lab", "-tz", "America/Chicago", report)
 	if code != 0 || !strings.Contains(out, "added 71, skipped 0") || !strings.Contains(out, "71 results, 2 without a value") {
 		t.Fatalf("import: %d\n%s\n%s", code, out, errs)
 	}
-	if out, _, code := runPath(t, dir, path, "import", "labcorp", "-tz", "America/Chicago", report); code != 0 || !strings.Contains(out, "added 0, skipped 71") {
+	if out, _, code := runPath(t, dir, path, "import", "-yes", "lab", "-tz", "America/Chicago", report); code != 0 || !strings.Contains(out, "added 0, skipped 71") {
 		t.Errorf("retry: %d %s", code, out)
 	}
 	if out, _, code := run(t, dir, "", "verify"); code != 0 || !strings.Contains(out, "73 valid, 0 invalid") {
@@ -556,7 +557,7 @@ func TestCLIRestoreFromExport(t *testing.T) {
 	dir := t.TempDir()
 	initOut, _, _ := run(t, dir, "", "init")
 	words := wordsFrom(initOut)
-	if _, errs, code := runPath(t, dir, path, "import", "labcorp", "../bean-import-labcorp/testdata/real-layout.txt"); code != 0 {
+	if _, errs, code := runPath(t, dir, path, "import", "-yes", "lab", "../bean-import-lab/testdata/real-layout.txt"); code != 0 {
 		t.Fatalf("import: %s", errs)
 	}
 	exp := filepath.Join(t.TempDir(), "export")
@@ -589,7 +590,7 @@ func TestCLIRestoreFromExport(t *testing.T) {
 	}
 	json.Unmarshal([]byte(strings.TrimSpace(js)), &rec)
 	got, _, code := run(t, fresh, "", "blob", "get", rec.Value["blob"].(string))
-	want, _ := os.ReadFile("../bean-import-labcorp/testdata/real-layout.txt")
+	want, _ := os.ReadFile("../bean-import-lab/testdata/real-layout.txt")
 	if code != 0 || got != string(want) {
 		t.Errorf("the kept report did not come back: %d, %d bytes of %d", code, len(got), len(want))
 	}
@@ -603,7 +604,7 @@ func TestCLIImportNamesRecordAndShortBlobID(t *testing.T) {
 	run(t, dir, "", "init")
 	report := filepath.Join(t.TempDir(), "report.txt")
 	os.WriteFile(report, []byte(labReport("101")), 0o600)
-	out, errs, code := runPath(t, dir, path, "import", "labcorp", report)
+	out, errs, code := runPath(t, dir, path, "import", "-yes", "lab", report)
 	if code != 0 {
 		t.Fatalf("import: %s", errs)
 	}
@@ -621,5 +622,47 @@ func TestCLIImportNamesRecordAndShortBlobID(t *testing.T) {
 	}
 	if _, _, code := run(t, dir, "", "blob", "get", bid); code == 0 {
 		t.Error("the file is still readable after purge")
+	}
+}
+
+// Without a terminal and without -yes, bean import writes nothing and prints
+// no reading: the table would land in a script's log or an assistant's
+// context. -yes saves without the review.
+func TestCLIImportReviewNeedsTerminalOrYes(t *testing.T) {
+	path := importerOnPath(t)
+	dir := t.TempDir()
+	run(t, dir, "", "init")
+	report := "../bean-import-lab/testdata/real-layout.txt"
+	before := countFiles(t, dir)
+	out, errs, code := runPath(t, dir, path, "import", "lab", report)
+	if code != 1 || !strings.Contains(errs, "review needs a terminal") || strings.Contains(out+errs, "lab.wbc") {
+		t.Errorf("no terminal: %d %q %q", code, out, errs)
+	}
+	if after := countFiles(t, dir); after != before {
+		t.Errorf("files %d -> %d", before, after)
+	}
+	if out, _, code := runPath(t, dir, path, "import", "lab", "-yes", report); code != 0 || !strings.Contains(out, "added 71") {
+		t.Errorf("-yes: %d %s", code, out)
+	}
+}
+
+// The review shows each reading as type, printed value, unit and flag; only
+// y or yes saves.
+func TestReviewLinesAndAnswer(t *testing.T) {
+	in := strings.Join([]string{
+		`{"type":"lab.tsh","value":{"n":1.19,"unit":"uIU/mL"},"context":{"raw_value":"1.190"}}`,
+		`{"type":"lab.chloride","value":{"n":95,"unit":"mmol/L"},"context":{"flag":"Low"}}`,
+		`{"type":"lab.glucose","value":{"n":null},"context":{"lab_comment":"Test not performed. Serum was in contact with cells."}}`,
+	}, "\n") + "\n"
+	var b strings.Builder
+	n, err := reviewReadings(&b, bufio.NewReader(strings.NewReader(in)))
+	want := "  lab.tsh  1.190 uIU/mL\n  lab.chloride  95 mmol/L  Low\n  lab.glucose  not performed\n"
+	if err != nil || n != 3 || b.String() != want {
+		t.Errorf("review %d %v:\n%s", n, err, b.String())
+	}
+	for a, want := range map[string]bool{"y\n": true, "Yes\n": true, "\n": false, "n\n": false, "": false, "yeah\n": false} {
+		if confirmed(strings.NewReader(a)) != want {
+			t.Errorf("answer %q", a)
+		}
 	}
 }

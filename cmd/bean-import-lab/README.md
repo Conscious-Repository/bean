@@ -1,10 +1,14 @@
-# Labcorp report importer
+# Lab report importer
+
+Reads lab report PDFs in the layouts it knows. Today that is one layout, the
+Labcorp patient report, described in `labcorp.go`; a second layout gets a
+file of its own. Any other report is refused.
 
 Supports the observed Labcorp patient-report layout, not arbitrary blood-test
 PDFs or image-only scans. PDF input requires `pdftotext` (Poppler); equivalent
 `pdftotext -layout` text is accepted. Tests contain only synthetic reports.
 
-Run it with `bean import labcorp [-tz <zone>] [-corrections] <report>`. bean
+Run it with `bean import lab [-tz <zone>] [-corrections] <report>`. bean
 copies the input privately, works out the blob id, runs this importer, checks
 that its first record keeps this file and was not purged, then stores the copy
 as an encrypted blob, reads it back, adds the `lab.report` record, and checks
@@ -242,7 +246,7 @@ against `lab.report`; verify owner authority separately with `bean verify`.
 Purging one reading does not erase its content from a retained report archive.
 Purging the `lab.report` erases the file, unless another record still names it.
 
-Run `go test ./cmd/bean-import-labcorp ./cmd/bean`. Tests exercise mixed
+Run `go test ./cmd/bean-import-lab ./cmd/bean`. Tests exercise mixed
 metadata, page breaks, bounded/private extraction, output failures, storage,
 repeat imports, amendments and byte-identical export of both report versions.
 

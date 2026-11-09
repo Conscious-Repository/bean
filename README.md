@@ -31,7 +31,7 @@ New here: [docs/ONBOARDING.md](docs/ONBOARDING.md) goes from install to an impor
 | You need | For | Install on macOS |
 |---|---|---|
 | Go 1.24 or later | Building `bean` | `brew install go` |
-| `pdftotext` | The Labcorp importer only | `brew install poppler` |
+| `pdftotext` | Lab report PDFs only | `brew install poppler` |
 
 Build and install the commands. The repository is private for now, so you need access to it on GitHub.
 
@@ -41,7 +41,7 @@ cd bean
 go install ./cmd/...
 ```
 
-This puts `bean`, `bean-import-labcorp`, `bean-import-apple-health` and `bean-import-csv` in `$(go env GOPATH)/bin`, usually `~/go/bin`. If your shell cannot find `bean`, add that folder to your `PATH`:
+This puts `bean`, `bean-import-lab`, `bean-import-apple-health` and `bean-import-csv` in `$(go env GOPATH)/bin`, usually `~/go/bin`. If your shell cannot find `bean`, add that folder to your `PATH`:
 
 ```
 echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.zshrc && source ~/.zshrc
@@ -120,24 +120,25 @@ bean purge 1b59a1                                 # deletes record 1b59a1 from e
 
 ## Import your data
 
-### Blood work (Labcorp, Superpower)
+### Lab reports (PDF)
 
-Superpower and Labcorp give you a Labcorp patient report as a PDF. Import it:
+bean reads lab report PDFs in the layouts it knows. Today: the Labcorp patient report. Any other layout is refused, and nothing is written. Import yours:
 
 ```
-bean import labcorp -tz America/Chicago lab-result.pdf
-bean ls -type 'lab.*'
+bean import lab -tz America/Chicago lab-result.pdf
 ```
+
+bean shows what it read and asks before it saves: compare it with the PDF, then type `y`. `-yes` skips the review, for scripts. Without a terminal and without `-yes` it writes nothing and shows no value, so an AI assistant cannot import for you unseen.
 
 bean keeps the PDF first, encrypted, as a `lab.report` record, and checks that it reads back. Then you get one record for each result, with the value, unit, flag, reference interval, panel and lab comments. Your name, birth date and patient ids are not copied into the results; the PDF keeps everything.
 
 - `-tz` is the zone where the sample was taken: `America/New_York`, `America/Chicago`, `America/Denver`, `America/Los_Angeles`. Not `CST`. Without it, only the day is recorded. If the report says the collection time was not given, only the day is recorded too.
 - The first output line names the record that keeps the PDF: `kept lab.report <id>: file sha256 <hash>, stored as <blob id>`. `bean purge <id>` erases the PDF.
 - Import the same file again and nothing is added. If a later report changes a value, for example a final result replaces `Pending`, the new PDF is kept, but `bean import` names the reading, writes nothing for it, and exits 1. If the report is newer and right, run it again with `-corrections`.
-- Check the values against the PDF. The importer reads the text layout and refuses any line it cannot read for sure; then nothing is written and the error names the line. The error can hold one of your values: do not paste it publicly ([how to share its shape](docs/ONBOARDING.md#if-the-import-is-refused)).
+- The importer reads the text layout and refuses any line it cannot read for sure; then nothing is written and the error names the line. The error can hold one of your values: do not paste it publicly ([how to share its shape](docs/ONBOARDING.md#if-the-import-is-refused)).
 - A `.txt` made with `pdftotext -layout` works too.
 
-Readings name the PDF by its SHA-256, not as a blob, so purging the `lab.report` erases the PDF. Readings from importers before 0.2.0 still name the PDF; purge them too. See [the importer notes](cmd/bean-import-labcorp/README.md).
+Readings name the PDF by its SHA-256, not as a blob, so purging the `lab.report` erases the PDF. Readings from importers before 0.2.0 still name the PDF; purge them too. See [the importer notes](cmd/bean-import-lab/README.md).
 
 ### Apple Health
 

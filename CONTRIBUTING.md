@@ -27,7 +27,7 @@ core/                     the protocol: canonical JSON, keys and signatures,
 cmd/bean/                 the CLI; read.go (ls, show, add), mcp.go (MCP server),
                           agent.go, keys.go, vocabulary.md (served to the AI)
 cmd/bean-import-csv/      CSV importer
-cmd/bean-import-labcorp/  Labcorp patient report importer
+cmd/bean-import-lab/  Lab report PDF importer (labcorp.go: the one layout it knows)
 tools/genvectors/         writes vectors/
 tools/check*.py           independent checks of the vectors
 tools/second/             a second verifier in Python, and the conformance cases
@@ -40,7 +40,7 @@ vectors/                  published test vectors (SPEC.md 14); conformance/ has
 - **Standard library first.** Ask before you add a dependency. The only one is `btcec/v2`, for secp256k1 signatures.
 - **Tests before code.** Every crypto primitive has an RFC or BIP vector. Every behavior has a test. A bug fix comes with a test that fails without the fix.
 - **The core knows no source.** Each data source is its own `cmd/bean-import-<source>`. Write an importer from a real export file, never from memory.
-- **Test data is synthetic.** Never commit real health data, keys or the 24 words. The Labcorp test builds a fake report in code.
+- **Test data is synthetic.** Never commit real health data, keys or the 24 words. The lab importer's tests build fake reports in code, and testdata/real-layout.txt is a real layout with synthetic content.
 - **When the spec is silent,** pick the simplest deterministic rule and add a numbered entry to `docs/DECISIONS.md`. Spec errors go there too.
 - **Measure before you optimize.** The object cache came from a profile of a 20,000-record log (DECISIONS 76).
 
