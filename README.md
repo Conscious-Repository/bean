@@ -124,7 +124,7 @@ Each source has an importer: a separate program, `bean-import-<name>`, that `bea
 
 ### Lab reports (PDF)
 
-bean reads lab report PDFs in the layouts it knows. Today: the Labcorp patient report. Any other layout is refused, and nothing is written. Import yours:
+bean reads lab report PDFs in the layouts it knows. Today: the Labcorp patient report and the Quest Diagnostics report. Any other layout is refused, and nothing is written. Import yours:
 
 ```
 bean import lab -tz America/Chicago lab-result.pdf
@@ -134,11 +134,11 @@ bean shows what it read and asks before it saves: compare it with the PDF, then 
 
 bean keeps the PDF first, encrypted, as a `lab.report` record, and checks that it reads back. Then you get one record for each result, with the value, unit, flag, reference interval, panel and lab comments. Your name, birth date and patient ids are not copied into the results; the PDF keeps everything.
 
-- `-tz` is the zone where the sample was taken: `America/New_York`, `America/Chicago`, `America/Denver`, `America/Los_Angeles`. Not `CST`. Without it, only the day is recorded. If the report says the collection time was not given, only the day is recorded too.
+- `-tz` is the zone where the sample was taken: `America/New_York`, `America/Chicago`, `America/Denver`, `America/Los_Angeles`. Not `CST`. Without it, only the day is recorded. If the report says the collection time was not given, only the day is recorded too. A Quest report prints its zone, so it needs no `-tz`; one that disagrees with the printed zone is refused.
 - The first output line names the record that keeps the PDF: `kept lab.report <id>: file sha256 <hash>, stored as <blob id>`. `bean purge <id>` erases the PDF.
 - Import the same file again and nothing is added. If a later report changes a value, for example a final result replaces `Pending`, the new PDF is kept, but `bean import` names the reading, writes nothing for it, and exits 1. If the report is newer and right, run it again with `-corrections`.
-- The importer reads the text layout and refuses any line it cannot read for sure; then nothing is written and the error names the line. The error can hold one of your values: do not paste it publicly ([how to share its shape](docs/ONBOARDING.md#if-the-import-is-refused)).
-- A `.txt` made with `pdftotext -layout` works too.
+- The importer reads the text layout (Labcorp) or each word's position (Quest) and refuses any line it cannot read for sure; then nothing is written and the error names the line, or the page and how far down it is. The error can hold one of your values: do not paste it publicly ([how to share its shape](docs/ONBOARDING.md#if-the-import-is-refused)).
+- A `.txt` made with `pdftotext -layout` works too, for Labcorp. A Quest report is read by where each word is printed: give the PDF, or the `.html` that `pdftotext -bbox-layout` makes.
 
 Readings name the PDF by its SHA-256, not as a blob, so purging the `lab.report` erases the PDF. Readings from importers before 0.2.0 still name the PDF; purge them too. See [the importer notes](cmd/bean-import-lab/README.md).
 

@@ -28,12 +28,12 @@ In order. Each step is done only when its test passes.
    - A real report imports: 71 readings, each checked by hand against the PDF (DECISIONS 230, 231). Its layout, with synthetic content, is `cmd/bean-import-lab/testdata/real-layout.txt`. The real text never enters the repository.
    - `bean import` shows what it read and asks before it saves; `-yes` skips that for scripts (DECISIONS 234).
 2. **Reference data: NHANES 2017–2018. Done.**
-   - `bean import nhanes <file.XPT>` keeps a public file as a `reference.file` record, on the same rail as a lab report: encrypted blob, SHA-256, the data set, CDC's URL, each variable with its label (DECISIONS 235).
+   - `bean import nhanes <file.XPT>` keeps a public file as a `reference.file` record, on the same rail as a lab report: encrypted blob, SHA-256, the data set, CDC's URL, each variable with its label (DECISIONS 236).
    - One record per file, not one per release: CDC publishes files, and each is pinned on its own.
    - The person who imports it signs for having kept it. It is never written as CDC's claim.
    - `internal/xpt` reads SAS transport itself. On ten CDC files it gives the same bits as pandas for every value.
 3. **`bean compare`. Done.**
-   - `bean compare -sex <s> -age <from>-<to> [-where <rule>]... <ids> | -type 'lab.*'` (DECISIONS 236 to 239, [COMPARE.md](COMPARE.md)).
+   - `bean compare -sex <s> -age <from>-<to> [-where <rule>]... <ids> | -type 'lab.*'` (DECISIONS 237 to 240 and 246 to 248, [COMPARE.md](COMPARE.md)).
    - The cohort is "people like me", stated as rules: sex and age, then any of ethnicity, body measures and a day's food. Every rule is in the claim, and n is on every row.
    - Twelve tests: total and HDL cholesterol, hemoglobin A1c and the blood count.
    - `-save` writes a `comparison.percentile` claim, `about` the reading and each file, with the cohort, the method, the files' digests and the result. It does not copy the reading's value.

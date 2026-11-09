@@ -26,7 +26,7 @@ bean uses a kept file only when its SHA-256 is the one on record. A download tha
 | `TCHOL_J` | Total cholesterol | `lab.cholesterol-total` |
 | `HDL_J` | HDL cholesterol | `lab.hdl-cholesterol` |
 | `GHB_J` | Glycohemoglobin | `lab.hemoglobin-a1c` |
-| `CBC_J` | Complete blood count | `lab.wbc`, `lab.rbc`, `lab.hemoglobin`, `lab.hematocrit`, `lab.mcv`, `lab.mch`, `lab.mchc`, `lab.rdw`, `lab.platelets` |
+| `CBC_J` | Complete blood count | `lab.wbc` or `lab.white-blood-cell-count`, `lab.rbc` or `lab.red-blood-cell-count`, `lab.hemoglobin`, `lab.hematocrit`, `lab.mcv`, `lab.mch`, `lab.mchc`, `lab.rdw`, `lab.platelets` or `lab.platelet-count` |
 | `BMX_J` | Body measures | A rule on BMI or waist |
 | `DR1TOT_J` | What each person ate on one day, as nutrient totals | A rule on food |
 
@@ -98,7 +98,7 @@ Limits beyond those:
 - No interval of uncertainty is computed. The survey's design variables are in `DEMO_J` for it.
 - NHANES fills in a number for a value below a detection limit, and marks it in a comment-code variable. The files of the twelve tests here have no such variable; a test whose file has one needs a rule for it first.
 - The twelve tests are measured in everyone examined. Tests that need fasting (glucose, triglycerides, LDL) or that NHANES measured in part of the sample are not here yet: they need other weights.
-- A lab's name for a test maps to an NHANES variable by a table in the code ([`internal/nhanes`](../internal/nhanes/nhanes.go)). Each row is a claim that the two measure the same thing in the same unit. Today the table has the names the Labcorp report prints.
+- A lab's name for a test maps to an NHANES variable by a table in the code ([`internal/nhanes`](../internal/nhanes/nhanes.go)). Each row is a claim that the two measure the same thing in the same unit. Today the table has the names and units that the Labcorp and the Quest report print for the twelve tests. Mean platelet volume is left out on purpose: it differs too much between makes of analyzer.
 
 ## Save, share, compute again
 

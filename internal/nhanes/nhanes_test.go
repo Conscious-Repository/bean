@@ -93,8 +93,8 @@ next:
 
 func TestCompareAgainstPlain(t *testing.T) {
 	files := load(t, "testdata", synthetic...)
-	tc, _ := AnalyteFor("lab.cholesterol-total")
-	hdl, _ := AnalyteFor("lab.hdl-cholesterol")
+	tc, _, _ := AnalyteFor("lab.cholesterol-total", "mg/dL")
+	hdl, _, _ := AnalyteFor("lab.hdl-cholesterol", "mg/dL")
 	for _, c := range []Cohort{
 		cohort(t, "male", 30, 39),
 		cohort(t, "female", 6, 80),
@@ -163,7 +163,7 @@ func TestWeight(t *testing.T) {
 
 func TestRefusals(t *testing.T) {
 	files := load(t, "testdata", synthetic...)
-	tc, _ := AnalyteFor("lab.cholesterol-total")
+	tc, _, _ := AnalyteFor("lab.cholesterol-total", "mg/dL")
 	good := cohort(t, "male", 30, 39)
 	if _, err := Compare(files, tc, good, 190); err != nil {
 		t.Fatal(err)
@@ -231,13 +231,23 @@ func TestAnalytes(t *testing.T) {
 		if !InCycle(a.Dataset) || Known[a.Dataset] == "" || a.Unit == "" || a.Label == "" {
 			t.Errorf("%+v: no cycle, digest or unit", a)
 		}
-		if seen[a.Type] || !strings.HasPrefix(a.Type, "lab.") {
-			t.Errorf("%s: twice, or not a lab type", a.Type)
+		if seen[a.Type+" "+a.Unit] || !strings.HasPrefix(a.Type, "lab.") {
+			t.Errorf("%s in %s: twice, or not a lab type", a.Type, a.Unit)
 		}
-		seen[a.Type] = true
-		if got, ok := AnalyteFor(a.Type); !ok || got.Variable != a.Variable {
+		seen[a.Type+" "+a.Unit] = true
+		if got, ok, _ := AnalyteFor(a.Type, a.Unit); !ok || got != a {
 			t.Errorf("%s: %+v", a.Type, got)
 		}
+	}
+	// One type in two units, as two labs print it; another unit is not a row.
+	if a, ok, units := AnalyteFor("lab.hemoglobin-a1c", "% of total Hgb"); !ok || a.Variable != "LBXGH" || len(units) != 2 {
+		t.Errorf("%+v %v %v", a, ok, units)
+	}
+	if _, ok, units := AnalyteFor("lab.hemoglobin-a1c", "mmol/mol"); ok || len(units) != 2 {
+		t.Errorf("another unit: %v %v", ok, units)
+	}
+	if _, ok, units := AnalyteFor("lab.tsh", "mIU/L"); ok || len(units) != 0 {
+		t.Errorf("no row: %v %v", ok, units)
 	}
 	// The checker in Python holds the same digests.
 	py, err := os.ReadFile("../../tools/compare/reproduce.py")
@@ -249,7 +259,7 @@ func TestAnalytes(t *testing.T) {
 			t.Errorf("tools/compare/reproduce.py does not have the digest of %s", name)
 		}
 	}
-	if _, ok := AnalyteFor("lab.glucose"); ok {
+	if _, _, units := AnalyteFor("lab.glucose", "mg/dL"); len(units) != 0 {
 		t.Error("glucose has no row: fasting is not known")
 	}
 	for d := range CohortFiles {
@@ -278,7 +288,7 @@ func TestRealFiles(t *testing.T) {
 			t.Errorf("%s: %v", a.Variable, err)
 		}
 	}
-	tc, _ := AnalyteFor("lab.cholesterol-total")
+	tc, _, _ := AnalyteFor("lab.cholesterol-total", "mg/dL")
 	for _, c := range []struct {
 		cohort Cohort
 		want   Result

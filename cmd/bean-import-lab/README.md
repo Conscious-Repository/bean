@@ -1,12 +1,14 @@
 # Lab report importer
 
-Reads lab report PDFs in the layouts it knows. Today that is one layout, the
-Labcorp patient report, described in `labcorp.go`; a second layout gets a
-file of its own. Any other report is refused.
+Reads lab report PDFs in the layouts it knows: the Labcorp patient report
+(`labcorp.go`) and the Quest Diagnostics report (`quest.go`). Each layout
+has a file of its own. Any other report is refused.
 
-Supports the observed Labcorp patient-report layout, not arbitrary blood-test
-PDFs or image-only scans. PDF input requires `pdftotext` (Poppler); equivalent
-`pdftotext -layout` text is accepted. Tests contain only synthetic reports.
+Supports the observed layouts, not arbitrary blood-test PDFs or image-only
+scans. PDF input requires `pdftotext` (Poppler). For a Labcorp report,
+equivalent `pdftotext -layout` text is accepted; for a Quest report,
+equivalent `pdftotext -bbox-layout` output (`.html`). Tests contain only
+synthetic reports.
 
 Run it with `bean import lab [-tz <zone>] [-corrections] <report>`. bean
 copies the input privately, works out the blob id, runs this importer, checks
@@ -48,7 +50,17 @@ characters. Specimen IDs containing a slash are rejected to keep the
 specimen/test identity unambiguous. Unsupported report layouts need a new
 fixture and an adapter update.
 
-## How a report is read
+## Which layout
+
+The importer reads the PDF with `pdftotext -layout` first. A page footer
+line `Quest, Quest Diagnostics, the associated logo and all associated Quest
+Diagnostics marks are the trademarks of Quest Diagnostics.` and a column
+header `Test Name  In Range  Out Of Range  Reference Range  Lab` (or `Test
+Name  Result  Reference Range  Lab`) make it a Quest report. Anything else
+goes to the Labcorp grammar, which refuses what it does not know. A Quest
+report given as `-layout` text is refused: give the PDF.
+
+## How a Labcorp report is read
 
 Since 0.3.0 the report is read by a grammar (docs/DECISIONS.md 222, 224). Every
 line of the extracted text must be one of the kinds below, or the report is
@@ -215,6 +227,114 @@ Not settled without a real report: the field, boilerplate and disclaimer
 shapes come from the synthetic fixture. Test with your own report before you
 rely on it; a refusal names the line, so the grammar can grow.
 
+## How a Quest report is read
+
+Since 0.5.0, by word position (`bbox.go`, `quest.go`, `questread.go`;
+DECISIONS 235). In the `-layout` text of a Quest report the columns drift
+from page to page and row to row. `pdftotext -bbox-layout` gives each word
+and its box in points, which is exact. Words whose tops lie within 1 point
+are one line, left to right. Two words printed over each other are refused.
+
+Every line is one of these kinds, or the report is refused and the error
+names the page and how far down the line is:
+
+- Page boilerplate: `Report Status: Final` and the patient's name under it,
+  at the top right; the footer `CLIENT SERVICES: <phone>  SPECIMEN: <id>
+  PAGE n OF m` (the page part may be a line of its own); the trademark line.
+  Every page must have its page number, `n` must be the page and `m` the
+  page count, and every footer must name the report's specimen. Another
+  report status (`Preliminary`) is refused.
+- The block under `Patient Information  Specimen Information  Client
+  Information`. Each word goes to the column whose heading it starts under.
+  The specimen column holds fields only: `Specimen:`, `Requisition:`, `Lab
+  Ref #:`, `Collected:`, `Received:`, `Reported:` (`MM/DD/YYYY / HH:MM
+  <zone>`, time and zone optional). The patient column holds `DOB:`, `AGE:`,
+  `Gender:`, `Fasting:` (`Y` or `N`), `Phone:`, `Patient ID:`, `Health ID:`
+  and one line with the name. The client column is not read. Only the
+  specimen, the three times and Fasting are read, and they must agree on
+  every page. A word across two columns is refused.
+- A column header: `Test Name  In Range  Out Of Range  Reference Range  Lab`,
+  or `Test Name  Result  Reference Range  Lab`. Each sets the columns of the
+  rows under it: a column starts at the x of its first header word, and a
+  word belongs to the column whose start it is at or right of, give or take
+  1 point. On the real report the columns sit at the same x on every page.
+- A section title: one phrase in the patient column, directly after the
+  block and directly before a column header (`Endocrinology`). It is the
+  group of the rows under it.
+- At the margin: `COMMENTS:` and its text (a report note); `Endnote n`, and
+  the lines under it to the end of the page, its text; `Physician Comments:`
+  and the lines under it (report notes); `PERFORMING SITE:` and its lab
+  lines, `<code>  <name>, <address> Laboratory Director: <name>, CLIA:
+  <number>`. The name is the text before the first comma. Any other line at
+  the margin is refused.
+- In a table, by where the line starts. Rows start at an indent: 28.9, 39.7
+  and 50.6 points in the main table, 26.3 in the alternate one. Comments
+  start from 56 points (30 in the alternate table) on, in any shape, and
+  belong to the test above them, across pages. A line between is refused.
+
+A row is read from the left: the name is the words one space apart from
+the indent; every other word goes to its column. A word after a gap in the
+name column, a word across two columns, or a name that runs into the value
+columns while the row has values, is refused. The Lab column holds one lab
+code. A comment, endnote or note line that starts left of the value columns
+and holds a value after a gap in a value column is refused: it reads as a
+row, and as text its reading would be lost.
+
+Rows form a tree by indent. A row with a value is a test. A row without
+one is a group heading, and the rows indented under it are its group,
+except:
+
+- A row with no value, no code and nothing under it, one indent deeper and
+  directly after a heading, is the rest of the heading's name
+  (`COMPREHENSIVE METABOLIC` and `PANEL`).
+- A heading with one row under it, a test with nothing under it, is that
+  test with its name wrapped (`SEX HORMONE BINDING` and `GLOBULIN`). So a
+  real group of one test is read as one test with the two names joined.
+  The review shows it.
+
+A test takes its group's lab code unless it prints its own. A test with
+rows under it, a row with a range and no value, a heading with a comment
+under it, and a row with no value and nothing under it are refused. A row
+that is one phrase, with no column, directly under a comment and with no
+row under it, is more of that comment: a long note may start at a row
+indent (it does on the real report), and a phrase holds no value.
+
+Values: In Range holds a value, or `SEE NOTE:`; Out Of Range a value and a
+flag (`H`, `L`, `HH`, `LL`, `A`); Result a value and an optional flag. A
+value is what the Labcorp grammar takes (below). A value in two columns, a
+flag in In Range, or a value in Out Of Range with no flag is refused.
+`SEE NOTE:` is Quest's way to say the value is in the note: the test is
+kept with no value and the note as its `lab_comment`; with no note under
+it, it is refused. The printed digits are kept as `raw_value`.
+
+Reference Range: a range (`50-195`, `0.40-4.50`, `<150`, `>280`, `> OR =
+40`, `< or = 12.9`), then a unit, then `(calc)`, each optional. A result
+word alone (`NEGATIVE`) is a range too. The unit's first word is a unit as
+the Labcorp grammar takes it; up to three words of letters may follow (`% of
+total Hgb`, `ng/mL RBC`). Anything else is refused. `(calc)` gives
+`context.calculated: true`. A test with no range whose first comment is
+`Reference Range <range>` or `Reference range: <range>` takes that range.
+
+Identity: the native id is the specimen, the groups and the test name, so
+the same test in two panels with two readings (Albumin) is two readings of
+one type. The same reading printed twice (same name, value, flag, unit,
+range, lab, comment) is one. Two names for one type, or one test twice in
+one group with two readings, are refused. A comment that cites `See
+Endnote n` gets the endnote's text; a cited endnote the report does not
+print is refused, and one no comment cites is a report note.
+
+Time: `Collected:` prints a zone. `EST`, `EDT`, `CST`, `CDT`, `MST`, `MDT`,
+`PST`, `PDT`, `AKST`, `AKDT` and `HST` give the minute at their fixed
+offset. Any other zone gives the day, and `raw_time` keeps the printed
+time. `-tz` is not needed; a `-tz` whose offset at that instant differs
+from the printed zone's is refused.
+
+The positions come from a real report: `testdata/quest-layout.html` keeps
+every word where it was, with every name, id, date, address, value, flag
+and comment replaced, the values digit for digit, the flags on other rows.
+Tests read it directly. There is no synthetic Quest PDF; the PDF path is
+checked against the real report only.
+
 ## Privacy, limits and failure
 
 Recognized patient-name/birth-date/ID headers are excluded. Free-text medical
@@ -225,7 +345,8 @@ signatures do not prove Labcorp/device origin or measurement accuracy.
 
 Inputs and extracted text are each limited to 32 MiB. PDF extraction runs against
 a private copy of the input, has a 30-second timeout, a one-second pipe-close wait bound and bounded output.
-Extracted reports allow at most 100,000 lines and 10,000 result rows. Reports
+Extracted reports allow at most 100,000 lines and 10,000 result rows; word
+positions at most 1,000 pages and 1,000,000 words. Reports
 are staged before stdout; an invalid result or oversize output emits no prefix.
 Each partial record reserves 4 KiB within the 1 MiB record limit for Bean to
 add its identity, signature, import time and dedupe fields.

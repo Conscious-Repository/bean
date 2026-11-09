@@ -241,22 +241,22 @@ var wherePattern = regexp.MustCompile(`^([A-Z][A-Z0-9_]{0,7})\.([A-Z][A-Z0-9_]{0
 // reference files by data set.
 func compareOne(s *core.Store, l *core.Loaded, files map[string]*refFile, r *core.Record, cohort nhanes.Cohort) comparison {
 	c := comparison{reading: r}
-	a, ok := nhanes.AnalyteFor(r.Type)
-	if !ok {
+	v, isNumber := r.Value["n"].(float64)
+	unit, _ := r.Value["unit"].(string)
+	a, ok, units := nhanes.AnalyteFor(r.Type, unit)
+	if len(units) == 0 {
 		c.refused = noReference
 		return c
 	}
-	c.analyte = a
-	v, isNumber := r.Value["n"].(float64)
-	unit, _ := r.Value["unit"].(string)
 	if !isNumber {
 		c.refused = "the reading is not a number"
 		return c
 	}
-	if unit != a.Unit {
-		c.refused = fmt.Sprintf("the reading is in %q, and bean compares this type only in %s", unit, a.Unit)
+	if !ok {
+		c.refused = fmt.Sprintf("the reading is in %q, and bean compares this type only in %s", unit, strings.Join(units, " or "))
 		return c
 	}
+	c.analyte = a
 	if !(v > 0) {
 		c.refused = "the reading is not above zero"
 		return c

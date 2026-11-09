@@ -79,7 +79,7 @@ var CohortFiles = map[string]CohortFile{
 // Analyte maps the record type of one lab test to its NHANES variable.
 // Every row is a claim that the two measure the same quantity in the same
 // unit. Add a row only from a real report and the file's own label. A
-// second lab's name for a test is a second row.
+// second lab's name or unit for a test is a second row.
 type Analyte struct {
 	// Type is the bean record type, as an importer writes it, and Unit the
 	// unit of a reading that equals the variable's unit.
@@ -89,14 +89,20 @@ type Analyte struct {
 	Dataset, Variable, Label string
 }
 
-// Analytes are the tests bean compares. All of them were measured in the
-// whole examined sample, so they use the examination weight.
+// Analytes are the tests bean compares, under the names and units that the
+// Labcorp and the Quest report print. All of them were measured in the
+// whole examined sample, so they use the examination weight. Mean platelet
+// volume is left out on purpose: it differs by a fifth and more between
+// makes of analyzer, so a percentile of it would mislead.
 var Analytes = []Analyte{
 	{"lab.cholesterol-total", "mg/dL", "TCHOL_J", "LBXTC", "mg/dL"},
 	{"lab.hdl-cholesterol", "mg/dL", "HDL_J", "LBDHDD", "mg/dL"},
 	{"lab.hemoglobin-a1c", "%", "GHB_J", "LBXGH", "%"},
+	{"lab.hemoglobin-a1c", "% of total Hgb", "GHB_J", "LBXGH", "%"},
 	{"lab.wbc", "x10E3/uL", "CBC_J", "LBXWBCSI", "1000 cells/uL"},
+	{"lab.white-blood-cell-count", "Thousand/uL", "CBC_J", "LBXWBCSI", "1000 cells/uL"},
 	{"lab.rbc", "x10E6/uL", "CBC_J", "LBXRBCSI", "million cells/uL"},
+	{"lab.red-blood-cell-count", "Million/uL", "CBC_J", "LBXRBCSI", "million cells/uL"},
 	{"lab.hemoglobin", "g/dL", "CBC_J", "LBXHGB", "g/dL"},
 	{"lab.hematocrit", "%", "CBC_J", "LBXHCT", "%"},
 	{"lab.mcv", "fL", "CBC_J", "LBXMCVSI", "fL"},
@@ -104,16 +110,23 @@ var Analytes = []Analyte{
 	{"lab.mchc", "g/dL", "CBC_J", "LBXMC", "g/dL"},
 	{"lab.rdw", "%", "CBC_J", "LBXRDW", "%"},
 	{"lab.platelets", "x10E3/uL", "CBC_J", "LBXPLTSI", "1000 cells/uL"},
+	{"lab.platelet-count", "Thousand/uL", "CBC_J", "LBXPLTSI", "1000 cells/uL"},
 }
 
-// AnalyteFor returns the analyte that a record type names.
-func AnalyteFor(typ string) (Analyte, bool) {
-	for _, a := range Analytes {
-		if a.Type == typ {
-			return a, true
+// AnalyteFor returns the row for a record type and the unit of a reading.
+// units lists the units the type has rows for: it is empty when bean has
+// no reference data for the type.
+func AnalyteFor(typ, unit string) (a Analyte, ok bool, units []string) {
+	for _, row := range Analytes {
+		if row.Type != typ {
+			continue
+		}
+		units = append(units, row.Unit)
+		if row.Unit == unit {
+			a, ok = row, true
 		}
 	}
-	return Analyte{}, false
+	return a, ok, units
 }
 
 // Method names the computation. A change to what Compare computes is a new
