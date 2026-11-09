@@ -37,6 +37,7 @@ internal/nhanes/          the files, the table of tests, and the method of
                           bean compare; testdata/ has synthetic files
 cmd/bean-import-csv/      CSV importer
 cmd/bean-import-lab/  Lab report PDF importer (labcorp.go: the one layout it knows)
+examples/blood/           the whole loop on a synthetic report, as one script
 tools/genvectors/         writes vectors/
 tools/check*.py           independent checks of the vectors
 tools/second/             a second verifier in Python, and the conformance cases

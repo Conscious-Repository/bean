@@ -50,9 +50,9 @@ In order. Each step is done only when its test passes.
    - A bundle proves that what it holds is authentic and exactly what the person listed. It does not prove completeness, and every check says so.
    - A shared comparison computes again from its bundle (`reproduce.py <bundle>`).
 6. **Quickstart and release to peers.**
-   - `examples/blood/` holds a synthetic report with values a person could have, a script that downloads the NHANES files and runs steps 1 to 5, and the expected output.
-   - The README gets a five-minute path, and the repository opens to the people who will try it.
-   - When it opens, require the CI check on `main`. A private repository on the free plan cannot, so until then a PR merges only after CI passes on its exact head.
+   - Done: `examples/blood/run.sh` runs steps 1 to 5 on a synthetic report with values a person could have: import, fetch the NHANES files, compare, share, check without bean. It fails if a number differs from `expected.txt`. `make example` runs it offline on synthetic reference files, in CI.
+   - Done: the README has the five-minute path.
+   - Open, and the owner's to do: confirm the NHANES digests from a second connection; open the repository to the people who will try it; then require the CI check on `main`. A private repository on the free plan cannot, so until then a PR merges only after CI passes on its exact head.
 
 Not this week: Apple Health readings beyond what exists, `bean-import-csv -map`, `-to <npub>` encryption, `bean attest` and `bean trust`, NIP-46, nutrition.
 

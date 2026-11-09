@@ -26,6 +26,18 @@ New here: [docs/ONBOARDING.md](docs/ONBOARDING.md) goes from install to an impor
 - **You outlive your keys.** 24 words on paper recover your identity on a new machine and retire a lost key.
 - **Leave at any time.** `bean export` writes everything as plaintext. `bean restore -export` reads it back.
 
+## Try it in five minutes
+
+One script runs the whole loop on a synthetic lab report, in a throwaway folder: import the report, fetch public survey data from the US CDC, compare, share, and check the result without bean.
+
+```
+git clone https://github.com/Conscious-Repository/bean.git
+cd bean
+examples/blood/run.sh
+```
+
+It needs Go and `curl`, and downloads about 7 MB from CDC. With Python and `pip install -r tools/requirements.txt` it also runs the checks that use no bean. [examples/blood](examples/blood/README.md) walks through what it does.
+
 ## Install
 
 | You need | For | Install on macOS |

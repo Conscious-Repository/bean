@@ -1,0 +1,33 @@
+Specimen ID: 000-000-0000-0  Date Collected: 11/02/2026 0815 Local
+Date Reported: 11/04/2026
+
+CBC With Differential/Platelet
+      Test                                              Current Result and Flag             Previous Result and Date                       Units              Reference Interval
+      WBC                          01                    6.1                                                                                x10E3/uL            3.4-10.8
+      RBC                          01                    5.02                                                                               x10E6/uL            4.14-5.80
+      Hemoglobin                   01                    15.1                                                                               g/dL                13.0-17.7
+      Hematocrit                   01                    44.6                                                                               %                   37.5-51.0
+      MCV                          01                    89                                                                                 fL                  79-97
+      MCH                          01                    30.1                                                                               pg                  26.6-33.0
+      MCHC                         01                    33.9                                                                               g/dL                31.5-35.7
+      RDW                          01                    12.8                                                                               %                   11.6-15.4
+      Platelets                    01                    248                                                                                x10E3/uL            150-450
+
+Comp. Metabolic Panel (14)
+      Test                                              Current Result and Flag             Previous Result and Date                       Units              Reference Interval
+      Glucose                      01                    91                                                                                 mg/dL               70-99
+      Creatinine                   01                    0.98                                                                               mg/dL               0.76-1.27
+      Sodium                       01                    140                                                                                mmol/L              134-144
+
+Lipid Panel
+      Test                                              Current Result and Flag             Previous Result and Date                       Units              Reference Interval
+      Cholesterol, Total           01                    187                                                                                mg/dL               100-199
+      Triglycerides                01                    96                                                                                 mg/dL               0-149
+      HDL Cholesterol              01                    52                                                                                 mg/dL               >39
+
+Hemoglobin A1c
+      Test                                              Current Result and Flag             Previous Result and Date                       Units              Reference Interval
+      Hemoglobin A1c               01                    5.3                                                                                %                   4.8-5.6
+
+Performing Labs
+01: BN - Labcorp Burlington, 1447 York Court, Burlington, NC 27215
