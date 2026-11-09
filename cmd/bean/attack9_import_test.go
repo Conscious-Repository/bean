@@ -24,7 +24,7 @@ func TestAttack9ArchiveRefusedAfterStore(t *testing.T) {
 	src := filepath.Join(t.TempDir(), "hrv.csv")
 	os.WriteFile(src, []byte("time,value\n2026-10-20T03:00:00Z,42.5\n"), 0o600)
 	before := countFiles(t, filepath.Join(dir, "blobs"))
-	out, errs, code := runPath(t, dir, path, "import", "csv", "-type", "hrv.rmssd", "-system", strings.Repeat("s", 65), src)
+	out, errs, code := runPath(t, dir, path, "import", "-yes", "csv", "-type", "hrv.rmssd", "-system", strings.Repeat("s", 65), src)
 	t.Logf("exit %d\nstdout: %sstderr: %s", code, out, errs)
 	after := countFiles(t, filepath.Join(dir, "blobs"))
 	o, e, _ := run(t, dir, "", "gc")
@@ -56,7 +56,7 @@ func TestAttack9CtrlCRaceExitCode(t *testing.T) {
 	var sample string
 	for i := 0; i < 30; i++ {
 		tmp := t.TempDir()
-		cmd := exec.Command(os.Args[0], "import", "slow", f)
+		cmd := exec.Command(os.Args[0], "import", "-yes", "slow", f)
 		cmd.Env = append(os.Environ(), "BEAN_TEST_MAIN=1", "BEAN_DIR="+dir, "BEAN_NOW=", "TMPDIR="+tmp,
 			"PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}

@@ -49,7 +49,7 @@ func checkRoundTrip(t *testing.T, text string, rep *Report) {
 
 // Successful staged output must remain valid after Bean adds its envelope,
 // and every result must be read from where the parser says it was.
-func FuzzLabcorp(f *testing.F) {
+func FuzzLab(f *testing.F) {
 	f.Add(fixture())
 	f.Add("hello\nworld\n")
 	f.Add(strings.ReplaceAll(fixture(), "01/02/2025", "01/02/0000"))

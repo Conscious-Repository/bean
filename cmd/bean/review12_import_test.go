@@ -13,7 +13,7 @@ func r12import(t *testing.T, dir, path, name, body string, args ...string) (stri
 	if err := os.WriteFile(src, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	a := append(append([]string{"import", "csv"}, args...), src)
+	a := append(append([]string{"import", "-yes", "csv"}, args...), src)
 	out, errs, code := runPath(t, dir, path, a...)
 	t.Logf("$ bean %s\n%s%s(exit %d)", strings.Join(a[:len(a)-1], " "), out, errs, code)
 	return out, errs, code

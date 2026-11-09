@@ -24,7 +24,7 @@ func startImport(t *testing.T, script string, setpgid bool) (*exec.Cmd, int) {
 	pidFile := filepath.Join(t.TempDir(), "child")
 	f := filepath.Join(t.TempDir(), "report.txt")
 	os.WriteFile(f, []byte("SYNTHETIC glucose 101\n"), 0o600)
-	cmd := exec.Command(os.Args[0], "import", "grp", f)
+	cmd := exec.Command(os.Args[0], "import", "-yes", "grp", f)
 	cmd.Env = append(os.Environ(), "BEAN_TEST_MAIN=1", "BEAN_DIR="+dir, "BEAN_NOW=", "TMPDIR="+t.TempDir(), "CHILD_PID="+pidFile,
 		"PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	if setpgid {
@@ -76,7 +76,7 @@ func TestChildHoldingOutputCannotHangImport(t *testing.T) {
 	pidFile := filepath.Join(t.TempDir(), "child")
 	f := filepath.Join(t.TempDir(), "report.txt")
 	os.WriteFile(f, []byte("SYNTHETIC\n"), 0o600)
-	cmd := exec.Command(os.Args[0], "import", "grp", f)
+	cmd := exec.Command(os.Args[0], "import", "-yes", "grp", f)
 	cmd.Env = append(os.Environ(), "BEAN_TEST_MAIN=1", "BEAN_DIR="+dir, "BEAN_NOW=", "TMPDIR="+t.TempDir(), "CHILD_PID="+pidFile,
 		"PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	start := time.Now()

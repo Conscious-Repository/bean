@@ -29,7 +29,7 @@ package main
 //     column on, the values of a row that had none, else a comment, unless
 //     it starts in the units or reference column
 //   - after "Disclaimer", "Icon Legend" or "Performing Labs": a lab list
-//     line ("01: BN - Labcorp ..., ..."), one token of text at the margin,
+//     line ("01: BN - <lab name>, ..."), one token of text at the margin,
 //     the legend line, an end heading, or "Patient Details" and its
 //     column-aligned lines
 //
@@ -80,7 +80,7 @@ type Report struct {
 	Reported  string // "MM/DD/YYYY"
 	Received  string // "MM/DD/YYYY"
 	Fasting   string
-	Labs      map[string]string // "01" -> "Labcorp San Diego"
+	Labs      map[string]string // "01" -> the performing lab's name
 	LabsTorn  bool              // a Performing Labs line that reLab cannot read
 	Notes     []string          // report-level notes ("Please note" sections)
 	Results   []*Result
@@ -170,8 +170,6 @@ func safeText(s string) bool {
 
 // Column header.
 
-var headerNames = [5]string{"Test", "Current Result and Flag", "Previous Result and Date", "Units", "Reference Interval"}
-
 // columns are the start columns of the header's five names.
 type columns [5]int
 
@@ -195,7 +193,7 @@ func parseHeader(toks []token) (columns, bool) {
 }
 
 // bounds are where each column's band starts. The result column starts
-// slack columns left of its name, as values are printed from there. Labcorp
+// slack columns left of its name, as values are printed from there. The known layout
 // centers units and reference intervals under their names, and right-aligns
 // numbers, so the other bands meet halfway between one name's end and the
 // next name's start (DECISIONS 230).
@@ -233,13 +231,6 @@ func (c columns) tokenBand(t token) (int, error) {
 
 // nameAt reports whether col is where a test name starts.
 func (c columns) nameAt(col int) bool { return col >= c[0]-1 && col <= c[0]+1 }
-
-// commentLead is how far right of the test column a comment may start.
-// Labcorp prints comments 43 columns right of it on every page, while the
-// result column moves. A line between the test column and there is refused:
-// a wrapped test name would sit there, and the reading above would be stored
-// under half its name.
-const commentLead = 40
 
 // commentFrom is the first column a comment may start in.
 func (c columns) commentFrom() int { return c[0] + commentLead }
@@ -432,23 +423,6 @@ type fieldSpec struct {
 	value *regexp.Regexp // nil: any text a name may hold (safeText)
 }
 
-var fieldSpecs = []fieldSpec{
-	{"Patient ID", regexp.MustCompile(`^[!-~]+$`)},
-	{"Age", regexp.MustCompile(`^\d{1,3}$`)},
-	{"Account Number", regexp.MustCompile(`^[!-~]+$`)},
-	{"Specimen ID", regexp.MustCompile(`^[!-~]+$`)},
-	{"Sex", regexp.MustCompile(`^[A-Za-z]+$`)},
-	{"Ordering Physician", nil},
-	{"Date Collected", regexp.MustCompile(`^(\d\d/\d\d/\d{4})(?: (\d{4}) Local)?$`)},
-	{"Date Received", regexp.MustCompile(`^\d\d/\d\d/\d{4}(?: \d{4} (?:Local|[A-Z]{2,4}))?$`)},
-	{"Date Entered", regexp.MustCompile(`^\d\d/\d\d/\d{4}(?: \d{4} (?:Local|[A-Z]{2,4}))?$`)},
-	{"Date Reported", regexp.MustCompile(`^(\d\d/\d\d/\d{4})(?: \d{4} [A-Z]{2,4})?$`)},
-	{"Fasting", regexp.MustCompile(`^(?:Yes|No|Not Given)$`)},
-	{"Ordered Items", regexp.MustCompile(`^[ -~]+$`)},
-	{"Control ID", regexp.MustCompile(`^[!-~]+$`)},
-	{"Alternate Control Number", regexp.MustCompile(`^[!-~]*$`)},
-}
-
 // fieldLabel returns the field whose label and colon start s, or nil.
 func fieldLabel(s string) *fieldSpec {
 	for i := range fieldSpecs {
@@ -482,52 +456,6 @@ func parseField(s string) (*fieldSpec, []string) {
 	}
 	return f, m
 }
-
-// Page boilerplate.
-
-var (
-	reDOB          = regexp.MustCompile(`^DOB: \d\d/\d\d/\d{4}$`)
-	reCopyright    = regexp.MustCompile(`^©\d{4} Laboratory Corporation of America® Holdings$`)
-	reRightsCall   = regexp.MustCompile(`^If you have received this document in error please call \d{3}-\d{3}-\d{4}$`)
-	reConfidential = regexp.MustCompile(`^This document contains private and confidential health information(?: protected by state and federal law)?\.?$`)
-	reCreated      = regexp.MustCompile(`^Date Created and Stored \d\d/\d\d/\d\d \d{4} [A-Z]{2,4} Final Report Page \d{1,4} of \d{1,4}$`)
-)
-
-const (
-	rightsLine = "All Rights Reserved - Enterprise Report Version 2.00"
-)
-
-// boilerplate reports whether a line is one of the page header and footer
-// lines, whole.
-func boilerplate(toks []token) bool {
-	first := toks[0]
-	switch {
-	case len(toks) == 3 && first.start == 0 && safeText(first.text) && reDOB.MatchString(toks[1].text) && toks[2].text == "Patient Report":
-		return true // the patient's name; it is not read
-	case first.start == 0 && reCopyright.MatchString(first.text):
-		return len(toks) == 1 || len(toks) == 2 && reConfidential.MatchString(toks[1].text)
-	case first.start == 0 && first.text == rightsLine:
-		return len(toks) == 1 || len(toks) == 2 && reRightsCall.MatchString(toks[1].text)
-	case len(toks) == 1 && first.start > 0 && reCreated.MatchString(first.text):
-		return true
-	}
-	return false
-}
-
-// End of the results.
-
-var endHeadings = map[string]bool{"Disclaimer": true, "Icon Legend": true, "Performing Labs": true}
-
-// legendItems are the words of the Icon Legend line; its icons do not come
-// through pdftotext.
-var legendItems = map[string]bool{"Out of Reference Range": true, "Critical or Alert": true}
-
-var (
-	reLab     = regexp.MustCompile(`^(\d\d): [A-Z0-9]{2,3} - ([^,]+), [ -~]+$`)
-	reLabLike = regexp.MustCompile(`^\d\d: `)
-)
-
-var detailsNames = []string{"Patient Details", "Physician Details", "Specimen Details"}
 
 // detailsHeading reads the "Patient Details" heading: some of the three
 // names, in order, the first at the margin. It returns their columns.
@@ -730,7 +658,7 @@ func (p *parser) header(n int, l string, toks []token) error {
 	if !ok {
 		return fmt.Errorf("line %d: unsupported result column header: it must name %s, in that order", n, strings.Join(headerNames[:], ", "))
 	}
-	// Each header sets the columns of the rows under it: Labcorp's columns
+	// Each header sets the columns of the rows under it: the known layout's columns
 	// move by a few characters from one page or panel to the next.
 	p.cols, p.colsAt, p.region = c, n, inResults
 	return nil
@@ -1024,7 +952,7 @@ var reCode = regexp.MustCompile(` (\d\d)$`)
 func (p *parser) finish() (*Report, error) {
 	rep := p.rep
 	if rep.Specimen == "" || rep.Collected == "" {
-		return nil, fmt.Errorf("not a Labcorp patient report: no specimen id or collection date")
+		return nil, fmt.Errorf("not a lab report in a layout this importer knows: no specimen id or collection date")
 	}
 	if len(rep.Results) == 0 {
 		return nil, fmt.Errorf("no results found")
@@ -1159,14 +1087,6 @@ func nameMayHoldValue(name string) bool {
 		}
 	}
 	return false
-}
-
-// notPerformedPhrases are how a lab says it has no value for a test. The
-// list is short on purpose: a row with no value and any other comment is
-// refused.
-var notPerformedPhrases = []string{
-	"test not performed", "not performed",
-	"test cancelled", "test canceled", "cancelled", "canceled",
 }
 
 // notPerformed reports whether a comment line starts with one of

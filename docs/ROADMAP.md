@@ -20,15 +20,13 @@ Exchange and comparison are programs that write ordinary signed claims. They cha
 
 ## Next: the first shareable loop (by 2026-11-15)
 
-**Done means:** a person who has never used bean clones the repo and runs one script on a synthetic Labcorp report. The script does three things. It imports the report, keeping the PDF. It compares the total cholesterol reading with NHANES 2017–2018. It writes a share bundle. On a second machine, without a bean log, they check every signature in the bundle and get the same percentile from an independent implementation. The first user runs the same steps on their own report, privately. No real health data enters the repository.
+**Done means:** a person who has never used bean clones the repo and runs one script on a synthetic lab report. The script does three things. It imports the report, keeping the PDF. It compares the total cholesterol reading with NHANES 2017–2018. It writes a share bundle. On a second machine, without a bean log, they check every signature in the bundle and get the same percentile from an independent implementation. The first user runs the same steps on their own report, privately. No real health data enters the repository.
 
 In order. Each step is done only when its test passes.
 
-1. **Real import, privately (day 1).**
-   - Run `bean import labcorp` on a real report.
-   - The strict grammar (DECISIONS 219 to 229) will likely refuse something. For each refusal, rebuild that line's shape in a synthetic fixture, then add or loosen a rule with a test.
-   - The real text never enters the repository. The README "How a report is read" grows with each new shape.
-   - Optional, small: `bean import labcorp` prints the table it read and waits for a yes. `-yes` skips the wait for scripts. The person holding the PDF is the last check on a parser of PDF text.
+1. **Real import, privately (day 1). Done.**
+   - A real report imports: 71 readings, each checked by hand against the PDF (DECISIONS 230, 231). Its layout, with synthetic content, is `cmd/bean-import-lab/testdata/real-layout.txt`. The real text never enters the repository.
+   - `bean import` shows what it read and asks before it saves; `-yes` skips that for scripts (DECISIONS 234).
 2. **Reference data: NHANES 2017–2018 total cholesterol.**
    - A reference adapter keeps the public files as blobs, each pinned by SHA-256: `TCHOL_J.XPT` (`LBXTC`, mg/dL) and `DEMO_J.XPT` (`RIAGENDR`, `RIDAGEYR`, `WTMEC2YR`, `SDMVPSU`, `SDMVSTRA`).
    - It writes one `reference.dataset` claim per release: source URL, cycle, license, variables, and file digests.
@@ -54,25 +52,28 @@ In order. Each step is done only when its test passes.
 6. **Quickstart and release to peers.**
    - `examples/blood/` holds a synthetic report, a script that runs steps 1 to 5, and the expected output.
    - The README gets a five-minute path, and the repository opens to the people who will try it.
+   - When it opens, require the CI check on `main`. A private repository on the free plan cannot, so until then a PR merges only after CI passes on its exact head.
 
 Not this week: Apple Health readings beyond what exists, `bean-import-csv -map`, `-to <npub>` encryption, `bean attest` and `bean trust`, NIP-46, nutrition.
 
 ## After the loop
 
-1. **Freeze at `v` 0** (CORE.md section 6). After two weeks of real use (lab results, Apple Health, chat and agent logging) with no change to CORE.md, every DEFAULT in SPEC.md is final.
-2. **Longitudinal comparison.** A reading over time against what published studies saw over the same interval: baseline, cadence, follow-up and attrition. This needs a time-course matching contract first.
-3. **Summary-statistics references.** Many studies publish only aggregates. A reference may be a published table, with its citation, as well as participant-level files. Access-restricted datasets stay outside the repository.
-4. **Comparison packages.** Standardize the interface of a comparison (inputs, method, cohort, status), and let others publish datasets and methods for it. Extension 1's replay rules wait until two kinds of comparison exist.
-5. **Nutrition as exposure.** `food` and `food.estimate` exist. Next comes a source-backed estimate (USDA FoodData Central) with its uncertainty, kept apart from what the person said they ate. No causal claims.
-6. **Share and trust, further.** `-to <npub>` encryption of a bundle, expiring links, `bean attest <id>`, and `bean trust <identity or npub> <1-100>`. Readers compute trust; the core does not.
-7. **Release.** A `go install` path and a neutral home ([GOVERNANCE-PROPOSAL.md](GOVERNANCE-PROPOSAL.md)).
-8. **NIP-46 remote signing,** so that the nsec never sits on the host.
-9. **Device capture** (Extension 2). Wait for a real instrument, not a synthetic one.
-10. **More importers,** from real export files, never from memory. `bean-import-csv -map "<column>=<type>[:<unit>]"`, so that one row can make several records. Apple Health heart rate and daily series wait for rules that reconcile exports.
+1. **Read PDFs by word position.** `pdftotext -bbox-layout` gives each word's box; columns come from where the header words sit, not from counted spaces. Most attacks on the layout grammar (DECISIONS 219 to 231) were artifacts of `-layout` spacing.
+2. **Unknown layouts, with an assistant if the person wants.** The person's own assistant, or a local model, proposes each reading with the page and words it read it from. bean checks every value against those words in the PDF and refuses what is not printed there; the person confirms the table, and the readings are theirs, with the extractor in context. bean ships no model and no key. A scanned PDF has no words to check against: the person confirms each value. Design it on a second real report from another lab, never from memory.
+3. **Freeze at `v` 0** (CORE.md section 6). After two weeks of real use (lab results, Apple Health, chat and agent logging) with no change to CORE.md, every DEFAULT in SPEC.md is final.
+4. **Longitudinal comparison.** A reading over time against what published studies saw over the same interval: baseline, cadence, follow-up and attrition. This needs a time-course matching contract first.
+5. **Summary-statistics references.** Many studies publish only aggregates. A reference may be a published table, with its citation, as well as participant-level files. Access-restricted datasets stay outside the repository.
+6. **Comparison packages.** Standardize the interface of a comparison (inputs, method, cohort, status), and let others publish datasets and methods for it. Extension 1's replay rules wait until two kinds of comparison exist.
+7. **Nutrition as exposure.** `food` and `food.estimate` exist. Next comes a source-backed estimate (USDA FoodData Central) with its uncertainty, kept apart from what the person said they ate. No causal claims.
+8. **Share and trust, further.** `-to <npub>` encryption of a bundle, expiring links, `bean attest <id>`, and `bean trust <identity or npub> <1-100>`. Readers compute trust; the core does not.
+9. **Release.** A `go install` path and a neutral home ([GOVERNANCE-PROPOSAL.md](GOVERNANCE-PROPOSAL.md)).
+10. **NIP-46 remote signing,** so that the nsec never sits on the host.
+11. **Device capture** (Extension 2). Wait for a real instrument, not a synthetic one.
+12. **More importers,** from real export files, never from memory. `bean-import-csv -map "<column>=<type>[:<unit>]"`, so that one row can make several records. Apple Health heart rate and daily series wait for rules that reconcile exports.
 
 ## Limits to say out loud
 
-- **The Labcorp importer is not proven on real reports.** Seven attack rounds found ways to make it store a wrong value, fewer each round, but not none. It refuses what it cannot read, so it will refuse unfamiliar layouts.
+- **The lab importer is proven on one real report.** Thirteen attack rounds found ways to make it store a wrong value, fewer each round, but not none. It refuses what it cannot read, so it refuses unfamiliar layouts, and it shows what it read before it saves.
 - **A signature proves who signed, not that the number is right.** It does not prove that a lab or device produced the number, nor anyone's credentials.
 - **A shared subset proves authenticity, not completeness.** Record files are readable JSON; only blobs are encrypted. Share by bundle, never by copying the log folder. The subject id is stable, so two bundles from one person can be linked.
 - **Regulatory.** Storing, verifying and displaying are kept apart from interpreting. A percentile against public data is a function that needs its own review before any clinical use. bean does not interpret, predict or advise.

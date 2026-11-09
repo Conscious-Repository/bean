@@ -32,7 +32,7 @@ Conventions for what goes in the log, so that a month of entries lines up for `s
 | `bp` | text `120/80` | `systolic`, `diastolic` as numbers, `pulse` |
 | `note` | text | Anything else. Use `about` to attach it to an entry. |
 
-`<test>` in `lab.<test>` is the test name as the lab prints it, in lowercase with `-` for spaces and punctuation: "BUN/Creatinine Ratio" is `lab.bun-creatinine-ratio`. `bean-import-labcorp` writes these types.
+`<test>` in `lab.<test>` is the test name as the lab prints it, in lowercase with `-` for spaces and punctuation: "BUN/Creatinine Ratio" is `lab.bun-creatinine-ratio`. `bean-import-lab` writes these types.
 
 `lab.report` is not a result. Its `value.blob` is the report as the lab gave it, PDF or text, and `context` has the file's `sha256`, its `bytes`, and `assurance: unsigned-report`: you kept this file, which does not prove the lab wrote it. An amended report is a new `lab.report`; its changed values need `-corrections`. A `lab.<test>` reading names its report by `context.report_sha256`, not as a blob.
 

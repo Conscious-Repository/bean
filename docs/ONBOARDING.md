@@ -7,7 +7,7 @@ From nothing to a working log: install, identity, a checked lab import, an AI as
 - A Mac with [Homebrew](https://brew.sh). Linux works with the same tools.
 - Access to this repository on GitHub. It is private for now: sign in first, with `gh auth login` or an SSH key.
 - An encrypted disk. On a Mac, turn on FileVault. bean signs records but does not encrypt the record files.
-- A Labcorp patient report as a PDF, if you have one. Superpower results are Labcorp reports. To practice, use `cmd/bean-import-labcorp/testdata/real-layout.txt`: a real layout with synthetic content.
+- A lab report PDF, if you have one. bean reads the layouts it knows; today, the Labcorp patient report. To practice, use `cmd/bean-import-lab/testdata/real-layout.txt`: a real layout with synthetic content.
 - Pen and paper for 24 words.
 
 ## Working with an AI assistant
@@ -20,7 +20,7 @@ Give the assistant these rules first:
 
 > Help me set up bean by following docs/ONBOARDING.md. Rules:
 >
-> 1. Never ask for my 24 words. Never run `bean init`, `bean rotate` or `bean restore`: I run them myself, in a terminal you cannot read. If I start to type or paste the words to you, stop me.
+> 1. Never ask for my 24 words. Never run `bean init`, `bean rotate` or `bean restore`: I run them myself, in a terminal you cannot read. If I start to type or paste the words to you, stop me. I also run `bean import` myself: it shows my values for me to check. Never pass `-yes` for me.
 > 2. Do not look at my health data. Do not open my lab reports or log files, and do not run `bean ls`, `bean show`, `bean export` or `bean blob get` unless I ask. Use exit codes and counts: the `added` line of an import, the `summary` line of `bean verify`.
 > 3. If an import is refused, ask for the shape of the line, as the guide shows, not its contents.
 > 4. Keep my data on my machine. Do not upload files or paste my records anywhere. Connecting you to my log through MCP is where my records start to reach your provider: do it only when I say so, read-only first (`bean mcp`, no `-write` or `-blobs`). Ask before `-write` or `-blobs`.
@@ -36,7 +36,7 @@ echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.zshrc && source ~/.zshrc
 bean version
 ```
 
-Poppler provides `pdftotext`, which reads PDFs. `go install` puts `bean`, `bean-import-labcorp`, `bean-import-apple-health` and `bean-import-csv` in `$(go env GOPATH)/bin`, or in `$GOBIN` if you set it. `bean version` should say `bean 0.6.0 (records v 0)` or later. An older version means another `bean` comes first on your `PATH`: `which -a bean` lists them. `package crypto/hkdf is not in GOROOT` means your Go is too old: `brew upgrade go`.
+Poppler provides `pdftotext`, which reads PDFs. `go install` puts `bean`, `bean-import-lab`, `bean-import-apple-health` and `bean-import-csv` in `$(go env GOPATH)/bin`, or in `$GOBIN` if you set it. `bean version` should say `bean 0.6.0 (records v 0)` or later. An older version means another `bean` comes first on your `PATH`: `which -a bean` lists them. `package crypto/hkdf is not in GOROOT` means your Go is too old: `brew upgrade go`.
 
 ## 2. Create your log
 
@@ -70,33 +70,42 @@ bean verify
 
 ## 4. Import a lab report
 
+**Yourself:**
+
 ```
-bean import labcorp -tz America/Chicago ~/Downloads/lab-result.pdf
+bean import lab -tz America/Chicago ~/Downloads/lab-result.pdf
 ```
 
 `-tz` is the zone where the blood was drawn: `America/New_York`, `America/Chicago`, `America/Denver`, `America/Los_Angeles`, `Europe/London`. Not `CST`. Without it, only the day is recorded.
 
-Output:
+bean reads the report and shows what it read, before it writes anything:
+
+```
+Read from lab-result.pdf:
+  lab.wbc  5.5 x10E3/uL
+  lab.chloride  95 mmol/L  Low
+  lab.glucose  not performed
+  ...
+Save 71 readings and keep the file? [y/N]
+```
+
+Compare each value, unit and flag with the PDF. The importer reads the PDF's text layout; you are the last check. Values show as printed (`1.190`, `3.0`). A test the lab did not perform shows `not performed`. Type `y` to save. Anything else writes nothing.
+
+Then:
 
 ```
 kept lab.report sha256:5eea…: file sha256 10d7…, stored as sha256:6192…
 added 71, skipped 0
-bean-import-labcorp: 71 results, 2 without a value. Importing the same report again adds nothing; a result whose value changed needs -corrections
+bean-import-lab: 71 results, 2 without a value. Importing the same report again adds nothing; a result whose value changed needs -corrections
 ```
 
-- `kept`: the PDF is stored, encrypted, before anything else. The first id is the record that keeps it: `bean purge <id>` erases the PDF. `file sha256` matches `shasum -a 256` of your PDF. `stored as` is the encrypted copy, which `bean blob get` reads.
+- `kept`: the PDF is stored, encrypted, before the readings. The first id is the record that keeps it: `bean purge <id>` erases the PDF. `file sha256` matches `shasum -a 256` of your PDF. `stored as` is the encrypted copy, which `bean blob get` reads.
 - `added`: the results.
 - The last line is the importer's summary.
 
-Run the same import again: `already kept ...` and `added 0, skipped 71`.
+Run the same import again: `already kept ...` and `added 0, skipped 71`. If the report says the collection time was not given, only the day is recorded.
 
-**Yourself:** check the results against the PDF.
-
-```
-bean ls -type 'lab.*' | sort -k3
-```
-
-One line per result, sorted by test name, plus one `lab.report` line for the PDF. Compare each value, unit and flag. The importer reads the PDF's text layout; you are the last check. A number shows in its shortest form (`61` for `61.0`); `bean show <id>` has the printed form as `raw_value`. A test the lab did not perform shows `not performed`. If the report says the collection time was not given, only the day is recorded.
+`-yes` saves without the review, for scripts. Without a terminal and without `-yes`, `bean import` writes nothing and shows no value: that is what happens when an AI assistant runs it.
 
 ### If the import is refused
 

@@ -68,6 +68,12 @@ Four rules changed. bean never wrote a record that the new rules reject. Most ef
   - a tombstone with blobs names `blobs`;
   - a record of an `hlog.*` core type says only `old format`.
 
+### Lab importer and onboarding (2026-11-09)
+
+- `bean import labcorp` is now `bean import lab`, and the binary is `bean-import-lab` (adapter `bean-import-lab@0.4.0`). Readings keep `source.system` `labcorp`, so an import made before dedupes with one made now.
+- `bean import` shows what it read and asks before it saves. In a script, pass `-yes`. Without a terminal and without `-yes` it writes nothing.
+- `bean mcp` offers `read_blob` only with `-blobs`, and `log_entry` refuses lab results. `bean restore -export` rebuilds a log from an export.
+
 ### Seventh audit (2026-11-07)
 
 Reads change only on frozen logs and for a reading whose correction is hidden; no record changes between valid and invalid (DECISIONS 203 to 224).
