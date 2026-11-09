@@ -8,11 +8,15 @@ It describes a position in a sample. It does not say whether a value is healthy,
 
 [NHANES](https://wwwn.cdc.gov/nchs/nhanes/) is a survey by the US National Center for Health Statistics (CDC). About 9,000 people of all ages are interviewed, examined and have blood drawn. The files are public, one row per person, joined by the number `SEQN`. bean reads the 2017-2018 cycle: file names ending in `_J`.
 
-Download the files you need from `https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/<NAME>.xpt` and keep each one:
+Download the files you need from CDC and keep each one. bean never goes online: you fetch, bean keeps.
 
 ```
-bean import nhanes DEMO_J.XPT
+for f in DEMO_J TCHOL_J HDL_J GHB_J CBC_J BMX_J DR1TOT_J; do
+  curl -fLO https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/$f.xpt && bean import -yes nhanes $f.xpt
+done
 ```
+
+`-yes` skips the review: these files hold no reading of yours. Together they are about 18 MB.
 
 | File | Holds | Needed for |
 |---|---|---|
@@ -24,7 +28,9 @@ bean import nhanes DEMO_J.XPT
 | `BMX_J` | Body measures | A rule on BMI or waist |
 | `DR1TOT_J` | What each person ate on one day, as nutrient totals | A rule on food |
 
-Each file is kept encrypted, as a `reference.file` record with its SHA-256. You sign for having kept it. That does not make it CDC's claim: anyone can check the SHA-256 against the copy CDC serves. The importer says whether the file is the one CDC served on 2026-11-09 ([the digests](../internal/nhanes/nhanes.go)). A file it does not know still works, and every comparison with it says so.
+Each file is kept encrypted, as a `reference.file` record with its SHA-256. You sign for having kept it. That does not make it CDC's claim: anyone can check the SHA-256 against the copy CDC serves. The importer says whether the file is the one bean has on record ([the digests](../internal/nhanes/nhanes.go)). A file it does not know still works, and every comparison with it says so.
+
+The digests on record come from one download, on 2026-11-09, through a proxy that could read the traffic. Until a second person has confirmed them from their own connection, treat "the file bean knows" as "the file one download saw", and check for yourself: `shasum -a 256 DEMO_J.xpt` against the table in the code. CDC does not publish digests of these files.
 
 ## Compare
 
@@ -102,21 +108,35 @@ bean compare -sex male -age 30-39 -type 'lab.*' -save
 
 The record holds the percentile, and in `context`:
 
-- `reading`: the id of your reading. The value is not copied, so deleting the reading leaves no copy of it here. Purge the comparison too if its percentile should go.
+- `reading`: the id of your reading. The id is a hash of the reading, so the claim pins its value without holding it, and deleting the reading leaves no copy of it here. Purge the comparison too if its percentile should go.
 - `reference`: the variable, its label and unit, the weight, and each file by data set, SHA-256, size and the id of your record that keeps it.
 - `cohort`: every rule, with the label the file gives its variable.
 - `method`: `nhanes-weighted-percentile`, version 1.
 - `result`: n, the three shares and five percentiles.
 - `status` and `reasons`.
 
-Anyone with the record, the reading and the files from CDC can compute it again without bean:
+**A saved comparison says who you compared yourself with.** The cohort (sex, age range, and any rule on ethnicity, body or food) is in the record, which is plain JSON like every record. Anyone who reads your log, or a share that holds the comparison, reads it. bean says so when it saves.
+
+### Check one without bean
+
+Anyone with the records and the files can check a comparison and compute it again, with no bean and no account:
 
 ```
-bean ls -json > records.jsonl
-python3 tools/compare/reproduce.py records.jsonl DEMO_J.XPT TCHOL_J.XPT
+python3 tools/compare/reproduce.py <export folder>
+python3 tools/compare/reproduce.py records.jsonl DEMO_J.xpt TCHOL_J.xpt
 ```
 
-[`tools/compare/reproduce.py`](../tools/compare/reproduce.py) is a second implementation in Python with pandas. It shares no code with bean and reads only what the record says. It checks each file's SHA-256 and every number of the result, and exits 1 if one differs. `make compare` runs it against bean on synthetic files in CI, and on CDC's files when `BEAN_NHANES_DIR` names a folder of them.
+The first form takes a `bean export` folder as it is: it holds the records and the kept files. The second takes the output of `bean ls -json` and files fetched from CDC, which is the stronger check: the files then come from the publisher, not from the person who made the claim.
+
+[`tools/compare/reproduce.py`](../tools/compare/reproduce.py) is a second implementation in Python. It shares no code with bean and has no table of its own: it reads only what the claim says. For each comparison it checks that:
+
+1. the claim and the reading are what their ids say, and their signatures are good (the checks of the second verifier, `tools/second/beanverify.py`);
+2. each file has the SHA-256 the claim names;
+3. each variable has, in its file, the label the claim gives it;
+4. the method below gives every number of the result;
+5. numpy's own weighted quantile and sums agree.
+
+It prints the reading next to the variable it was set against, for example `lab.cholesterol-total 187 mg/dL against LBXTC 'Total Cholesterol (mg/dL)'`. Whether those two measure the same thing is a judgement, and the line puts it in front of you. A good signature shows which key signed; whether that key speaks for the person is answered by `bean verify` on the log. `make compare` runs all of this against bean on synthetic files in CI, and on CDC's files when `BEAN_NHANES_DIR` names a folder of them.
 
 An assistant can read saved comparisons through `bean mcp` like any record. It cannot write one.
 

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Conscious-Repository/bean/internal/xpt"
+	"github.com/Conscious-Repository/bean/internal/xpt/xpttest"
 )
 
 // The files in testdata are synthetic: made here, with the layout and the
@@ -107,7 +107,7 @@ func syntheticFiles() (map[string][]byte, error) {
 		{"DR1TOT_J", []string{"SEQN", "WTDRD1", "DR1DRSTZ", "DR1TKCAL", "DR1TPROT", "DR1TFIBE"},
 			[]string{"Respondent sequence number", "Dietary day one sample weight", "Dietary recall status", "Energy (kcal)", "Protein (gm)", "Dietary fiber (gm)"}, diet},
 	} {
-		data, err := xpt.Write(f.name, created, f.names, f.labels, f.rows)
+		data, err := xpttest.Write(f.name, created, f.names, f.labels, f.rows)
 		if err != nil {
 			return nil, err
 		}

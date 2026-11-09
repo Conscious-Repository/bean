@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/Conscious-Repository/bean/internal/xpt"
+	"github.com/Conscious-Repository/bean/internal/xpt/xpttest"
 )
 
 func load(t *testing.T, dir string, names ...string) map[string]*xpt.File {
@@ -216,7 +217,7 @@ func TestRefusals(t *testing.T) {
 		t.Errorf("compared in the wrong unit: %v", err)
 	}
 	// Lab and demographics files of two releases.
-	fewer, err := xpt.Write("DEMO_J", "09NOV26:00:00:00", []string{"SEQN", "RIAGENDR", "RIDAGEYR", "WTMEC2YR"}, []string{"", "", "", ""}, [][]float64{{1, 1, 30, 1}})
+	fewer, err := xpttest.Write("DEMO_J", "09NOV26:00:00:00", []string{"SEQN", "RIAGENDR", "RIDAGEYR", "WTMEC2YR"}, []string{"", "", "", ""}, [][]float64{{1, 1, 30, 1}})
 	if err != nil {
 		t.Fatal(err)
 	}

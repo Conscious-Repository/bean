@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Conscious-Repository/bean/internal/xpt"
+	"github.com/Conscious-Repository/bean/internal/xpt/xpttest"
 )
 
 const blob = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
@@ -47,7 +47,7 @@ func TestRecord(t *testing.T) {
 
 func TestRefuses(t *testing.T) {
 	file := func(dataset string, names, labels []string, rows [][]float64) []byte {
-		data, err := xpt.Write(dataset, "09NOV26:00:00:00", names, labels, rows)
+		data, err := xpttest.Write(dataset, "09NOV26:00:00:00", names, labels, rows)
 		if err != nil {
 			t.Fatal(err)
 		}

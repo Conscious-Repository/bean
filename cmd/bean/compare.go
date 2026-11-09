@@ -41,6 +41,7 @@ const (
 	reasonPopulation = "NHANES is a sample of people living in the United States in the survey years, not a reference range, and like you only in what the cohort states"
 	reasonCohort     = "you chose the cohort: bean does not know whether you belong to it"
 	reasonSmall      = "the cohort is small: fewer than %d people"
+	reasonAuthor     = "the reading was signed by an agent or another key, not by you"
 	reasonTopAge     = "NHANES records every age of 80 and over as 80"
 	reasonUnknown    = "bean does not know this copy of %s: its SHA-256 is not the one CDC served when this bean was made"
 )
@@ -54,6 +55,7 @@ type comparison struct {
 	analyte nhanes.Analyte
 	// refused says why there is no result; then nothing else is set.
 	refused string
+	by      string // who signed the reading, when not the person
 	result  nhanes.Result
 	reasons []string
 	files   []*refFile // the analyte's file, the demographics file, then each rule's file
@@ -114,11 +116,21 @@ func cmdCompare(s *core.Store, args []string) {
 		readings = append(readings, r)
 	}
 	files := map[string]*refFile{}
+	labels := l.AgentLabels()
 	var rows []comparison
 	for _, r := range readings {
-		rows = append(rows, compareOne(s, l, files, r, cohort))
+		c := compareOne(s, l, files, r, cohort)
+		// A reading that someone else signed is marked as in bean ls, and
+		// the comparison says so: the person did not write its value.
+		if c.by = byText(r, l.ID, labels); c.by != "" && c.refused == "" {
+			c.reasons = append(c.reasons, reasonAuthor)
+		}
+		rows = append(rows, c)
 	}
 	printComparisons(os.Stdout, rows, cohort, *typ == "")
+	if warnFrozen(l) {
+		os.Exit(4)
+	}
 	done := 0
 	for _, c := range rows {
 		if c.refused == "" {
@@ -145,6 +157,9 @@ func cmdCompare(s *core.Store, args []string) {
 	}
 	for _, id := range res.IDs {
 		fmt.Println("saved", id)
+	}
+	if res.Added > 0 {
+		fmt.Println("Each saved comparison states the cohort you chose, in a record anyone with the log or a share of it can read.")
 	}
 	fmt.Printf("added %d, already there %d\n", res.Added, res.Skipped-len(res.Changed))
 	// The same inputs give the same result, so this is a fault to report,
@@ -305,6 +320,12 @@ func referenceFile(s *core.Store, l *core.Loaded, files map[string]*refFile, dat
 	return f, nil
 }
 
+// readingText is the reading's value as bean ls shows it, with who signed
+// it when that is not the person.
+func readingText(c comparison) string {
+	return strings.TrimSpace(valueText(c.reading) + "  " + c.by)
+}
+
 // num prints a number the short way.
 func num(x float64) string { return strconv.FormatFloat(x, 'g', -1, 64) }
 
@@ -326,11 +347,11 @@ func printComparisons(w io.Writer, rows []comparison, cohort nhanes.Cohort, all 
 			continue
 		}
 		if c.refused != "" {
-			fmt.Fprintf(tw, "%s\t%s\t-\t-\t-\t-\t-\t-\tnot comparable: %s\t%s\n", r.Type, safe(valueText(r)), safe(c.refused), r.ID[7:19])
+			fmt.Fprintf(tw, "%s\t%s\t-\t-\t-\t-\t-\t-\tnot comparable: %s\t%s\n", r.Type, safe(readingText(c)), safe(c.refused), r.ID[7:19])
 			continue
 		}
 		res := c.result
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s%%\t%s%%\t%s to %s\t%s\t%d\tqualified\t%s\n", r.Type, safe(valueText(r)),
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s%%\t%s%%\t%s to %s\t%s\t%d\tqualified\t%s\n", r.Type, safe(readingText(c)),
 			num(res.Percentile), num(res.Below), num(res.Equal), num(res.P25), num(res.P75), num(res.P50), res.N, r.ID[7:19])
 		for _, reason := range c.reasons {
 			if !reasons[reason] {

@@ -6,13 +6,15 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/Conscious-Repository/bean/internal/xpt/xpttest"
 )
 
 const created = "01JAN26:00:00:00"
 
 func sample(t *testing.T) []byte {
 	t.Helper()
-	data, err := Write("TEST_J", created, []string{"SEQN", "X"}, []string{"Sequence number", "A value (mg/dL)"},
+	data, err := xpttest.Write("TEST_J", created, []string{"SEQN", "X"}, []string{"Sequence number", "A value (mg/dL)"},
 		[][]float64{{1, 157}, {2, math.NaN()}, {3, 4.06}, {4, -0.1}, {5, 0}, {6, 13481.04209}, {7, 1e-70}, {8, 1e70}})
 	if err != nil {
 		t.Fatal(err)
@@ -60,7 +62,7 @@ func TestKnownBytes(t *testing.T) {
 		if err != nil || got != c.want {
 			t.Errorf("% x: got %v %v, want %v", c.b, got, err, c.want)
 		}
-		back, err := toIBM(c.want)
+		back, err := xpttest.ToIBM(c.want)
 		if err != nil || !bytes.Equal(back[:], c.b) {
 			t.Errorf("%v: wrote % x, want % x", c.want, back, c.b)
 		}
@@ -75,7 +77,7 @@ func TestKnownBytes(t *testing.T) {
 func TestRefuses(t *testing.T) {
 	good := sample(t)
 	change := func(f func(b []byte) []byte) []byte { return f(bytes.Clone(good)) }
-	obs := bytes.Index(good, []byte(obsHeader)) + 80
+	obs := bytes.Index(good, []byte(xpttest.ObsHeader)) + 80
 	cases := map[string][]byte{
 		"empty":                {},
 		"not a transport file": []byte(strings.Repeat("x", 4000)),
@@ -100,7 +102,7 @@ func TestRefuses(t *testing.T) {
 	// belong to no row: they must be blank. (A file cut at a record
 	// boundary reads as a shorter file: the format has no row count. The
 	// SHA-256 of the file is what catches that.)
-	three, err := Write("TEST_J", created, []string{"A", "B", "C"}, []string{"", "", ""}, [][]float64{{1, 2, 3}})
+	three, err := xpttest.Write("TEST_J", created, []string{"A", "B", "C"}, []string{"", "", ""}, [][]float64{{1, 2, 3}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +178,7 @@ func TestRealFiles(t *testing.T) {
 }
 
 func FuzzParse(f *testing.F) {
-	data, _ := Write("TEST_J", created, []string{"SEQN", "X"}, []string{"a", "b"}, [][]float64{{1, 2}, {3, math.NaN()}})
+	data, _ := xpttest.Write("TEST_J", created, []string{"SEQN", "X"}, []string{"a", "b"}, [][]float64{{1, 2}, {3, math.NaN()}})
 	f.Add(data)
 	f.Fuzz(func(t *testing.T, data []byte) {
 		x, err := Parse(data)

@@ -83,7 +83,7 @@ func record(raw []byte, blob string) (map[string]any, string, error) {
 	}
 	cycle, ok := nhanes.CycleOf(x.Dataset)
 	if !ok {
-		return nil, "", fmt.Errorf("%s is not a file of a survey cycle bean reads (%s)", x.Dataset, cycle2017)
+		return nil, "", fmt.Errorf("%s is not a file of a survey cycle bean reads (2017-2018, names ending in _J)", x.Dataset)
 	}
 	if seqn, ok := x.Variable("SEQN"); !ok || !seqn.Numeric {
 		return nil, "", fmt.Errorf("%s has no SEQN, the number that joins NHANES files", x.Dataset)
@@ -137,6 +137,3 @@ func record(raw []byte, blob string) (map[string]any, string, error) {
 	}
 	return rec, note, nil
 }
-
-// cycle2017 names what CycleOf accepts, for the refusal.
-const cycle2017 = "2017-2018, names ending in _J"

@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # run.sh: saves comparisons with bean on the synthetic NHANES files, then
 # checks that an independent Python implementation (reproduce.py, with
-# pandas) computes every number of every one again. It then changes one
-# number of a claim and checks that reproduce.py notices.
+# pandas and numpy) accepts every record and computes every number of
+# every comparison again: from the records and the files, and from a bean
+# export folder alone. It then checks that reproduce.py notices a changed
+# result, a changed reading and a changed file.
 #
 # With BEAN_NHANES_DIR set to a folder of CDC's own files, it runs the same
 # check on them.
@@ -30,31 +32,53 @@ compare -sex male -age 20-80 -where BMX_J.BMXBMI=22-30
 compare -sex female -age 18-80 -where DR1TOT_J.DR1TPROT=60-140 -where DR1TOT_J.DR1TFIBE=10-40
 compare -sex male -age 18-80 -where DEMO_J.RIDRETH3=3 -where BMX_J.BMXBMI=18-35 -where DR1TOT_J.DR1TKCAL=1500-3000
 bean ls -json >"$T/records.jsonl"
-"$PY" -I "$HERE/reproduce.py" "$T/records.jsonl" "$DATA"/*.XPT >"$T/out.txt"; code=$?
-got=$(grep -c '^reproduced ' "$T/out.txt")
-if [ "$code" != 0 ] || [ "$got" != "$n" ]; then
-  echo "DIFFER: reproduce.py exit $code, reproduced $got of $n"; grep -v '^reproduced ' "$T/out.txt" | head -20; exit 1
-fi
-# One changed number in one claim must be noticed.
-"$PY" -I - "$T/records.jsonl" "$T/changed.jsonl" <<'PYEOF'
+repro() { "$PY" -I "$HERE/reproduce.py" "$@"; }
+# all <what> <paths>: every comparison must be reproduced.
+all() {
+  what=$1; shift
+  repro "$@" >"$T/out.txt"; code=$?
+  got=$(grep -c '^reproduced ' "$T/out.txt")
+  if [ "$code" != 0 ] || [ "$got" != "$n" ]; then
+    echo "DIFFER $what: reproduce.py exit $code, reproduced $got of $n"; grep -v '^reproduced ' "$T/out.txt" | head -20; exit 1
+  fi
+}
+all "records and files" "$T/records.jsonl" "$DATA"/*.XPT
+# Leaving: an export folder is all that a person without bean needs.
+bean export "$T/export" >/dev/null 2>&1 || { echo "export failed"; exit 1; }
+all "an export folder" "$T/export"
+# none <what> <paths>: nothing may be reproduced, and the exit code is 1.
+none() {
+  what=$1; shift
+  repro "$@" >"$T/out.txt"; code=$?
+  if [ "$code" != 1 ] || grep -q '^reproduced ' "$T/out.txt"; then
+    echo "DIFFER: reproduce.py accepted $what (exit $code)"; head -5 "$T/out.txt"; exit 1
+  fi
+}
+# change <type> <python statement on r>: rewrites the first record of that
+# type, as stored bytes with the old id and signature, and keeps only it and
+# the records it needs.
+change() {
+  "$PY" -I - "$T/records.jsonl" "$T/changed.jsonl" "$1" "$2" <<'PYEOF'
 import json, sys
-done = False
-with open(sys.argv[1]) as f, open(sys.argv[2], "w") as out:
-    for line in f:
-        r = json.loads(line)
-        if r["type"] == "comparison.percentile" and not done:
-            r["context"]["result"]["p50"] += 1
-            done = True
-        out.write(json.dumps(r) + "\n")
+src, dst, typ, stmt = sys.argv[1:5]
+records = [json.loads(l) for l in open(src)]
+claim = next(r for r in records if r["type"] == "comparison.percentile")
+reading = next(r for r in records if r["id"] == claim["context"]["reading"])
+r = claim if typ == "claim" else reading
+exec(stmt)
+with open(dst, "w") as out:
+    for x in (claim, reading):
+        out.write(json.dumps(x, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n")
 PYEOF
-"$PY" -I "$HERE/reproduce.py" "$T/changed.jsonl" "$DATA"/*.XPT >"$T/changed.txt"; code=$?
-if [ "$code" != 1 ] || [ "$(grep -c '^DIFFERS ' "$T/changed.txt")" != 1 ]; then
-  echo "DIFFER: reproduce.py did not notice a changed result (exit $code)"; exit 1
-fi
-# A file that is not the one the claim names must be refused.
+}
+change claim 'pass'
+repro "$T/changed.jsonl" "$DATA"/*.XPT >"$T/out.txt" || { echo "DIFFER: the unchanged pair of records was refused"; cat "$T/out.txt"; exit 1; }
+# A changed number, in the result or in the reading, breaks the record's id.
+change claim 'r["context"]["result"]["p50"] += 1'
+none "a changed result" "$T/changed.jsonl" "$DATA"/*.XPT
+change reading 'r["value"]["n"] += 1'
+none "a changed reading" "$T/changed.jsonl" "$DATA"/*.XPT
+# A changed file has another SHA-256 than the claim names.
 "$PY" -I -c 'import sys; d = bytearray(open(sys.argv[1], "rb").read()); d[-200] ^= 1; open(sys.argv[2], "wb").write(d)' "$DATA/DEMO_J.XPT" "$T/DEMO_J.XPT"
-"$PY" -I "$HERE/reproduce.py" "$T/records.jsonl" "$DATA/TCHOL_J.XPT" "$DATA/HDL_J.XPT" "$DATA/BMX_J.XPT" "$DATA/DR1TOT_J.XPT" "$T/DEMO_J.XPT" >"$T/wrong.txt"; code=$?
-if [ "$code" != 1 ] || grep -q '^reproduced ' "$T/wrong.txt"; then
-  echo "DIFFER: reproduce.py accepted a file with another SHA-256 (exit $code)"; exit 1
-fi
-echo "compare: reproduce.py computes all $n comparisons again from $(basename "$DATA"), and notices a changed result and a changed file"
+none "a file with another SHA-256" "$T/records.jsonl" "$DATA/TCHOL_J.XPT" "$DATA/HDL_J.XPT" "$DATA/BMX_J.XPT" "$DATA/DR1TOT_J.XPT" "$T/DEMO_J.XPT"
+echo "compare: reproduce.py checks and computes all $n comparisons again from $(basename "$DATA"), also from an export alone, and refuses a changed result, reading and file"

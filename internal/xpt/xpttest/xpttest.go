@@ -1,4 +1,6 @@
-package xpt
+// Package xpttest writes SAS transport files for tests. It is not part of
+// any command: bean only reads these files.
+package xpttest
 
 import (
 	"bytes"
@@ -7,9 +9,20 @@ import (
 	"math"
 )
 
-// Write makes a transport file of numeric variables. It exists to build
-// synthetic test files; a missing value is NaN. created is the time in the
-// form 01JAN26:00:00:00.
+const (
+	recordLen  = 80
+	namestrLen = 140
+
+	libraryHeader = "HEADER RECORD*******LIBRARY HEADER RECORD!!!!!!!000000000000000000000000000000  "
+	memberHeader  = "HEADER RECORD*******MEMBER  HEADER RECORD!!!!!!!000000000000000001600000000140  "
+	dscrptrHeader = "HEADER RECORD*******DSCRPTR HEADER RECORD!!!!!!!000000000000000000000000000000  "
+	namestrPrefix = "HEADER RECORD*******NAMESTR HEADER RECORD!!!!!!!000000"
+	// ObsHeader starts the observations.
+	ObsHeader = "HEADER RECORD*******OBS     HEADER RECORD!!!!!!!000000000000000000000000000000  "
+)
+
+// Write makes a transport file of numeric variables. A missing value is
+// NaN. created is the time in the form 01JAN26:00:00:00.
 func Write(dataset, created string, names, labels []string, rows [][]float64) ([]byte, error) {
 	if len(dataset) < 1 || len(dataset) > 8 || len(created) != 16 || len(names) < 1 || len(names) != len(labels) {
 		return nil, errors.New("bad data set name, time or variable list")
@@ -26,7 +39,7 @@ func Write(dataset, created string, names, labels []string, rows [][]float64) ([
 	}
 	b.WriteString(libraryHeader)
 	stamp("SASLIB", "SAS")
-	b.WriteString(memberPrefix + "000000000000000001600000000140  ")
+	b.WriteString(memberHeader)
 	b.WriteString(dscrptrHeader)
 	stamp("SASDATA", dataset)
 	fmt.Fprintf(&b, "%s%04d%s", namestrPrefix, len(names), "00000000000000000000  ")
@@ -45,13 +58,13 @@ func Write(dataset, created string, names, labels []string, rows [][]float64) ([
 		b.Write(n)
 	}
 	pad()
-	b.WriteString(obsHeader)
+	b.WriteString(ObsHeader)
 	for _, row := range rows {
 		if len(row) != len(names) {
 			return nil, errors.New("a row with the wrong number of values")
 		}
 		for _, x := range row {
-			v, err := toIBM(x)
+			v, err := ToIBM(x)
 			if err != nil {
 				return nil, err
 			}
@@ -62,8 +75,8 @@ func Write(dataset, created string, names, labels []string, rows [][]float64) ([
 	return b.Bytes(), nil
 }
 
-// toIBM writes a double as an IBM System/360 double, exactly or not at all.
-func toIBM(x float64) ([8]byte, error) {
+// ToIBM writes a double as an IBM System/360 double, exactly or not at all.
+func ToIBM(x float64) ([8]byte, error) {
 	var out [8]byte
 	switch {
 	case math.IsNaN(x):

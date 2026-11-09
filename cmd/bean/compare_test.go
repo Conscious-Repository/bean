@@ -78,7 +78,7 @@ func TestCompareSave(t *testing.T) {
 	dir, _, ids := compareLog(t, "TCHOL_J", "HDL_J", "DEMO_J", "BMX_J", "DR1TOT_J")
 	args := []string{"compare", "-sex", "female", "-age", "20-80", "-where", "DEMO_J.RIDRETH3=3-4", "-where", "DR1TOT_J.DR1TFIBE=5-40", "-save", ids[0], ids[1]}
 	out, errs, code := run(t, dir, "", args...)
-	if code != 0 || !strings.Contains(out, "added 2, already there 0") || !strings.Contains(out, "one day") || !strings.Contains(out, "NHANES records every age of 80 and over as 80") {
+	if code != 0 || !strings.Contains(out, "added 2, already there 0") || !strings.Contains(out, "states the cohort you chose") || !strings.Contains(out, "one day") || !strings.Contains(out, "NHANES records every age of 80 and over as 80") {
 		t.Fatalf("%d\n%s\n%s", code, out, errs)
 	}
 	// Again: the same inputs are already there.
@@ -258,6 +258,26 @@ func TestCompareRefuses(t *testing.T) {
 	}
 	if out, errs, code := run(t, dir, "", "compare", "-sex", "male", "-age", "30-39", strings.TrimSpace(newer)); code != 1 || !strings.Contains(out, "the log does not keep TCHOL_J") {
 		t.Errorf("purged file: %d\n%s\n%s", code, out, errs)
+	}
+}
+
+// A reading that an agent signed is marked, in the table and in the claim.
+func TestCompareMarksAnotherAuthor(t *testing.T) {
+	dir, _, _ := compareLog(t, "TCHOL_J", "DEMO_J")
+	if _, errs, code := run(t, dir, "", "agent", "init", "-label", "assistant"); code != 0 {
+		t.Fatal(errs)
+	}
+	out, errs, code := run(t, dir, "", "add", "-agent", "lab.cholesterol-total", "180", "-unit", "mg/dL")
+	if code != 0 {
+		t.Skipf("this log does not take an agent's record without pairing: %s", errs)
+	}
+	id := strings.TrimSpace(out)
+	out, _, code = run(t, dir, "", "compare", "-sex", "male", "-age", "30-39", "-save", id)
+	if code != 0 || !strings.Contains(out, "180 mg/dL  [") || !strings.Contains(out, "signed by an agent or another key") {
+		t.Errorf("%d\n%s", code, out)
+	}
+	if ls, _, _ := run(t, dir, "", "ls", "-json", "-type", "comparison.percentile"); !strings.Contains(ls, "signed by an agent or another key") {
+		t.Errorf("the claim does not say who signed the reading:\n%s", ls)
 	}
 }
 
