@@ -94,6 +94,40 @@ func runPath(t *testing.T, dir, path string, args ...string) (string, string, in
 	return run(t, dir, "", args...)
 }
 
+// A Quest report is read by word position. There is no synthetic Quest PDF,
+// so this imports the importer's fixture: pdftotext -bbox-layout output of
+// a real report's layout with synthetic content, which the importer reads
+// as it reads that output of the PDF.
+func TestCLIImportQuest(t *testing.T) {
+	path := importerOnPath(t)
+	dir := t.TempDir()
+	run(t, dir, "", "init")
+	b, err := os.ReadFile("../bean-import-lab/testdata/quest-layout.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	report := filepath.Join(t.TempDir(), "quest.html")
+	os.WriteFile(report, b, 0o600)
+	out, errs, code := runPath(t, dir, path, "import", "-yes", "lab", report)
+	if code != 0 || !strings.Contains(out, "kept lab.report sha256:") || !strings.Contains(out, "added 77, skipped 0") || !strings.Contains(out, "77 results, 1 without a value") {
+		t.Fatalf("import: %d\n%s\n%s", code, out, errs)
+	}
+	if ls, _, _ := run(t, dir, "", "ls", "-type", "lab.albumin"); strings.Count(ls, "lab.albumin") != 2 {
+		t.Errorf("albumin in two panels:\n%s", ls)
+	}
+	blob := strings.Fields(out[strings.Index(out, "stored as ")+len("stored as "):])[0]
+	if got, _, code := run(t, dir, "", "blob", "get", blob); code != 0 || got != string(b) {
+		t.Errorf("blob get: %d", code)
+	}
+	out, errs, code = runPath(t, dir, path, "import", "-yes", "lab", report)
+	if code != 0 || !strings.Contains(out, "added 0, skipped 77") {
+		t.Errorf("reimport: %d\n%s\n%s", code, out, errs)
+	}
+	if out, _, code := run(t, dir, "", "verify"); code != 0 {
+		t.Errorf("verify: %d\n%s", code, out)
+	}
+}
+
 func TestCLIImportKeepsFileFirst(t *testing.T) {
 	path := importerOnPath(t)
 	dir := t.TempDir()

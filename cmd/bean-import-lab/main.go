@@ -1,10 +1,13 @@
 // Command bean-import-lab turns a lab report PDF in a layout it knows into
 // JSONL partial records (SPEC.md 9). It never signs and never holds the
 // dedupe key. The layouts it knows are in files of their own: labcorp.go,
-// the Labcorp patient report. Any other report is refused.
+// the Labcorp patient report, and quest.go, the Quest Diagnostics report.
+// Any other report is refused.
 //
 // Input is the PDF, which it reads with `pdftotext -layout` (poppler), or
-// a text file that pdftotext already made. One record per result row:
+// a text file that pdftotext already made. A Quest report is read by word
+// position, with `pdftotext -bbox-layout`, from the PDF or from that
+// output. One record per result row:
 //
 //   - type: "lab." plus a slug of the test name as printed ("LDL Chol Calc
 //     (NIH)" is lab.ldl-chol-calc-nih). No LOINC mapping yet; the report
@@ -47,7 +50,7 @@ import (
 	"github.com/Conscious-Repository/bean/core"
 )
 
-const version = "bean-import-lab@0.4.0"
+const version = "bean-import-lab@0.5.0"
 
 func main() {
 	fs := flag.NewFlagSet("bean-import-lab", flag.ContinueOnError)
@@ -55,7 +58,7 @@ func main() {
 	blob := fs.String("blob", "", "blob id of the PDF, from bean blob put")
 	tz := fs.String("tz", "", "IANA zone of the collection site, for example America/Chicago")
 	if err := fs.Parse(os.Args[1:]); err != nil || fs.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: bean-import-lab [-blob <blob id>] [-tz <zone>] <report.pdf | report.txt>")
+		fmt.Fprintln(os.Stderr, "usage: bean-import-lab [-blob <blob id>] [-tz <zone>] <report.pdf | report.txt | report.html>")
 		os.Exit(2)
 	}
 	if *blob == "" {
@@ -81,7 +84,10 @@ func main() {
 			os.Exit(2)
 		}
 	}
-	rep, err := parseReport(text)
+	rep, err := readReport(text, raw)
+	if err == nil {
+		err = rep.checkZone(loc)
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "bean-import-lab: %s\n", err)
 		os.Exit(1)
@@ -103,7 +109,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, "bean-import-lab: invalid blob reference")
 			os.Exit(2)
 		}
-		records = append([]map[string]any{archiveRecord(raw, *blob)}, records...)
+		records = append([]map[string]any{archiveFor(rep.system(), raw, *blob)}, records...)
 	}
 	if err := writeRecords(os.Stdout, records); err != nil {
 		fmt.Fprintln(os.Stderr, "bean-import-lab: output failed; partial output possible")
@@ -176,34 +182,89 @@ func readSource(name string) (string, []byte, error) {
 		}
 		return string(data), data, nil
 	}
+	text, err := pdftotext(data, "-layout")
+	if err != nil {
+		return "", nil, err
+	}
+	return text, data, nil
+}
+
+// pdftotext runs pdftotext with mode (-layout or -bbox-layout) on a private
+// copy of the PDF, bounded in time and output.
+func pdftotext(data []byte, mode string) (string, error) {
 	bin, err := exec.LookPath("pdftotext")
 	if err != nil {
-		return "", nil, errors.New("pdftotext not found; install poppler or supply extracted layout text")
+		return "", errors.New("pdftotext not found; install poppler or supply extracted layout text")
 	}
 	dir, err := os.MkdirTemp("", "bean-lab-report-*")
 	if err != nil {
-		return "", nil, errors.New("cannot stage report")
+		return "", errors.New("cannot stage report")
 	}
 	defer os.RemoveAll(dir)
 	snapshot := filepath.Join(dir, "source.pdf")
 	if err = os.WriteFile(snapshot, data, 0600); err != nil {
-		return "", nil, errors.New("cannot stage report")
+		return "", errors.New("cannot stage report")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, bin, "-layout", "-enc", "UTF-8", snapshot, "-")
+	cmd := exec.CommandContext(ctx, bin, mode, "-enc", "UTF-8", snapshot, "-")
 	// A converter descendant may inherit the pipes after the direct child exits.
 	cmd.WaitDelay = time.Second
 	out := &boundedText{limit: maxReportText}
 	cmd.Stdout = out
 	cmd.Stderr = io.Discard
 	if err = cmd.Run(); err != nil {
-		return "", nil, errors.New("PDF extraction failed, timed out or exceeded output limit")
+		return "", errors.New("PDF extraction failed, timed out or exceeded output limit")
 	}
 	if !utf8.Valid(out.Bytes()) {
-		return "", nil, errors.New("bad string: pdftotext output is not UTF-8")
+		return "", errors.New("bad string: pdftotext output is not UTF-8")
 	}
-	return out.String(), data, nil
+	return out.String(), nil
+}
+
+// readReport reads a report in a layout this importer knows. A Labcorp
+// report is read from its -layout text by a grammar (parse.go). A Quest
+// report is read by word position (questread.go), from the PDF or from
+// pdftotext -bbox-layout output; its -layout text is refused, as its columns
+// drift there. Any other report is refused.
+func readReport(text string, raw []byte) (*Report, error) {
+	switch {
+	case isBBoxDoc(text):
+		pages, err := parseBBox(text)
+		if err != nil {
+			return nil, err
+		}
+		if !questPages(pages) {
+			return nil, errors.New("not a lab report in a layout this importer knows: the word positions are not a Quest Diagnostics report")
+		}
+		return parseQuest(pages)
+	case !questDetect(text):
+		return parseReport(text)
+	case !bytes.HasPrefix(raw, []byte("%PDF")):
+		return nil, errors.New("a Quest Diagnostics report is read by where each word is printed, which -layout text does not keep: give the PDF")
+	}
+	bbox, err := pdftotext(raw, "-bbox-layout")
+	if err != nil {
+		return nil, err
+	}
+	pages, err := parseBBox(bbox)
+	if err != nil {
+		return nil, err
+	}
+	return parseQuest(pages)
+}
+
+// questPages reports whether word positions are a Quest report: its
+// trademark line and a results column header.
+func questPages(pages []bpage) bool {
+	trademark, header := false, false
+	for _, p := range pages {
+		for _, l := range p.lines {
+			trademark = trademark || l.text() == questTrademark
+			header = header || headerOf(l) != nil
+		}
+	}
+	return trademark && header
 }
 
 type boundedText struct {
@@ -242,6 +303,9 @@ func slug(s string) string {
 // prints may be another one (receipt), so only the day is recorded and the
 // printed time is kept as raw_time.
 func (rep *Report) observed(loc *time.Location) (map[string]any, string) {
+	if rep.System == questSystem {
+		return rep.questObserved()
+	}
 	if loc != nil && !rep.collectionTimeUnsure() {
 		if t, err := time.ParseInLocation("01/02/2006 1504", rep.Collected, loc); err == nil && uniqueLocalTime(t, rep.Collected) {
 			start := t.Format(time.RFC3339)
@@ -317,6 +381,7 @@ func (rep *Report) records(reportSHA string, loc *time.Location) []map[string]an
 		collectionDay = "may be the receipt day: the report says it used the receipt date when no collection date was supplied"
 	}
 	reportNote := strings.Join(rep.Notes, " ")
+	system := rep.system()
 	occurrence := map[string]int{}
 	var out []map[string]any
 	for _, r := range rep.Results {
@@ -348,7 +413,15 @@ func (rep *Report) records(reportSHA string, loc *time.Location) []map[string]an
 				ctx[k] = v
 			}
 		}
+		if r.Calculated {
+			ctx["calculated"] = true
+		}
+		// A Quest test may be printed in two groups with two readings, such
+		// as Albumin in two panels: the groups are part of its identity.
 		native := rep.Specimen + "/" + r.Name
+		if len(r.group) > 0 {
+			native = rep.Specimen + "/" + strings.Join(r.group, "/") + "/" + r.Name
+		}
 		rec := map[string]any{
 			"type":    "lab." + slug(r.Name),
 			"value":   value,
