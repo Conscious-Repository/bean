@@ -51,6 +51,12 @@ type Result struct {
 	Value, Flag, Units   string
 	Ref, Previous        string
 	Comment              []string
+	Calculated           bool // the report marks the value "(calc)"
+	// A Quest row: "SEE NOTE:" in place of a value, the groups it is in,
+	// and where it was read, for an error.
+	seeNote bool
+	group   []string
+	where   string
 	// Where the row was read: its name on line row, the code-column token
 	// as read (text "" when none), Value, Flag, Units and Ref by
 	// atValue...atRef, and the tokens of Previous on line prevLine.
@@ -75,6 +81,7 @@ const (
 
 // Report is the parsed report.
 type Report struct {
+	System    string // the lab, as source.system; "" is Labcorp
 	Specimen  string
 	Collected string // "MM/DD/YYYY" or "MM/DD/YYYY HHMM"
 	Reported  string // "MM/DD/YYYY"
@@ -84,6 +91,15 @@ type Report struct {
 	LabsTorn  bool              // a Performing Labs line that reLab cannot read
 	Notes     []string          // report-level notes ("Please note" sections)
 	Results   []*Result
+	// A Quest report prints the zone of its times, and the time as printed.
+	zone, printedTime string
+}
+
+func (rep *Report) system() string {
+	if rep.System != "" {
+		return rep.System
+	}
+	return system
 }
 
 // A line longer than this is not a layout line.

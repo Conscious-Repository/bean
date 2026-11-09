@@ -16,6 +16,11 @@ const archiveType = "lab.report"
 // Its digest describes plaintext; blob identifies the caller-preserved encrypted
 // source. This does not verify the caller's blob reference or the lab's origin.
 func archiveRecord(raw []byte, blob string) map[string]any {
+	return archiveFor(system, raw, blob)
+}
+
+// archiveFor is archiveRecord for the lab named system.
+func archiveFor(system string, raw []byte, blob string) map[string]any {
 	if blob == "" {
 		return nil
 	}
@@ -40,6 +45,9 @@ func archiveRecord(raw []byte, blob string) map[string]any {
 func reportMedia(raw []byte) string {
 	if bytes.HasPrefix(raw, []byte("%PDF")) {
 		return "application/pdf"
+	}
+	if isBBoxDoc(string(raw)) {
+		return "application/xhtml+xml" // pdftotext -bbox-layout output
 	}
 	return "text/plain"
 }
