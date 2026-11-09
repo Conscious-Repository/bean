@@ -230,13 +230,7 @@ func cmdShare(s *core.Store, args []string) {
 		w := os.Stderr
 		fmt.Fprintf(w, "To share, into %s:\n", out)
 		for _, r := range shared {
-			line := fmt.Sprintf("  %s  %s  %s", whenText(r), r.Type, safe(strings.TrimSpace(valueText(r)+"  "+byText(r, l.ID, labels))))
-			if cohort, ok := r.Context["cohort"].(map[string]any); ok {
-				if text, _ := cohort["text"].(string); text != "" {
-					line += "  (compared with: " + safe(text) + ")"
-				}
-			}
-			line += "  " + r.ID[7:19]
+			line := fmt.Sprintf("  %s  %s  %s  %s", whenText(r), r.Type, safe(strings.TrimSpace(recordText(r, l.Report.Records)+"  "+byText(r, l.ID, labels))), r.ID[7:19])
 			if by := broughtBy[r.ID]; by != "" {
 				line += "  (comes along: " + by[7:19] + " is about it)"
 			}
@@ -475,12 +469,20 @@ func checkBundle(dir string) ([]string, bool) {
 		bad("the folder cannot be read: %s", err)
 		return done(nil)
 	}
+	// Anything else in the folder is not part of the bundle. It is never
+	// read, so it cannot change the verdict, and it is named: pointing bean
+	// at a bundle with -dir leaves a local folder there.
+	var ignored []string
 	for _, e := range top {
 		switch name := e.Name(); {
 		case strings.HasPrefix(name, "."):
-		case (name == "objects" || name == "files") && e.IsDir():
+		case name == "objects":
+		case name == "files":
+			if !e.IsDir() {
+				bad("files is not a folder: a link or a file in its place is not followed")
+			}
 		default:
-			bad("%s is in the bundle, and a bundle holds only objects and files, as folders", name)
+			ignored = append(ignored, "not part of the bundle, and not read: "+name)
 		}
 	}
 	if len(problems) > 0 {
@@ -729,6 +731,34 @@ func checkBundle(dir string) ([]string, bool) {
 	)
 	if n, _ := share.Context["note"].(string); n != "" {
 		lines = append(lines, "note: "+n)
+	}
+	lines = append(lines, ignored...)
+	// What it holds, shown only when every check passed: a reader should
+	// not read values out of a bundle that failed.
+	if len(problems) == 0 {
+		lines = append(lines, "It holds:")
+		var rows []*core.Record
+		for id := range listed {
+			rows = append(rows, rp.Records[id])
+		}
+		sort.Slice(rows, func(i, j int) bool {
+			wi, wj := core.When(rows[i]), core.When(rows[j])
+			if !wi.Equal(wj) {
+				return wi.Before(wj)
+			}
+			return rows[i].ID < rows[j].ID
+		})
+		for _, r := range rows {
+			by := ""
+			switch {
+			case r.Author == person:
+			case paired[r.Author]:
+				by = "  [signed by a paired agent]"
+			default:
+				by = "  [signed by another key]"
+			}
+			lines = append(lines, fmt.Sprintf("  %s  %s  %s%s  %s", whenText(r), r.Type, recordText(r, rp.Records), by, r.ID[7:19]))
+		}
 	}
 	lines = append(lines, bundleCaveats...)
 	return done(lines)

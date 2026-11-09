@@ -21,12 +21,19 @@ bean shows the list and asks before it writes: each record, the cohort of a comp
 
 The bundle is written whole or not at all: it is built beside its place, checked as its reader will check it, and moved there. Only then does the share record go into your log, as type `share`: your own record of what you disclosed and when. `bean ls -type share` lists them. A share that fails leaves no bundle and no record.
 
-## What the reader can and cannot tell
+## Reading a bundle someone sent you
 
 ```
 bean check-bundle for-ana
-python3 tools/second/checkbundle.py for-ana
 ```
+
+One command checks the bundle and, when it passes, shows what it holds: each record with its time, type and value, and each comparison in words, such as `percentile 46 of lab.cholesterol-total 187 mg/dL, among male, age 30-39 (n 339)`. Nothing is shown from a bundle that fails. You need no log of your own for this, and the check changes nothing in the folder.
+
+`python3 tools/second/checkbundle.py for-ana` does the same check without bean.
+
+Read a bundle with `check-bundle`, not by pointing `-dir` at it: a bundle is someone else's records, not your log. If you did, no harm is done: bean leaves a `local` folder there, which the check names and does not read.
+
+## What the reader can and cannot tell
 
 They can tell that:
 
@@ -61,7 +68,7 @@ python3 tools/compare/reproduce.py for-ana DEMO_J.xpt TCHOL_J.xpt
 
 ## The bundle, exactly
 
-A bundle is a folder with two entries, both real folders: `objects/`, and `files/` when it holds files. A link in their place, or any third entry, fails the check. A name that starts with a dot is not part of a bundle, here or in `files/`, as in a log: a file browser leaves such files behind.
+A bundle is a folder with two entries, both real folders: `objects/`, and `files/` when it holds files. A link or a file in their place fails the check. Anything else in the folder is not part of the bundle: a checker never reads it, so it cannot change the verdict, and `bean check-bundle` names it. A name that starts with a dot is skipped in silence, there and in `files/`, as in a log: a file browser leaves such files behind.
 
 `objects/` holds record files in the layout of a log ([SPEC.md](../SPEC.md) 7.1): `objects/<first two hex digits of the id>/<the other 62>.json`, each the stored bytes of one record. `files/` holds shared files, each named by the 64 hex digits of its SHA-256. There is no `blobs/` and no `local/`: no encrypted file and no key travels.
 

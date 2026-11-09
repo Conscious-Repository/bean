@@ -100,17 +100,14 @@ def id_list(ctx, key):
 def check(folder):
     problems = []
     # The folder: objects/ and files/ are real folders, not links that lead
-    # out of the bundle, and nothing else is there. Names that start with a
-    # dot are not part of a bundle, as in a log.
+    # out of the bundle.
     if not real_dir(os.path.join(folder, "objects")):
         return ["%s is not a bundle: it has no objects folder" % folder], None
-    for name in sorted(os.listdir(folder)):
-        if name.startswith("."):
-            continue
-        if name not in ("objects", "files") or not real_dir(os.path.join(folder, name)):
-            problems.append("%s is in the bundle, and a bundle holds only objects and files, as folders" % name)
-    if problems:
-        return problems, None
+    # Anything else in the folder is not part of the bundle: it is never
+    # read, so it cannot change the verdict.
+    files_entry = os.path.join(folder, "files")
+    if os.path.lexists(files_entry) and not real_dir(files_entry):
+        return ["files is not a folder: a link or a file in its place is not followed"], None
     # Rule 1.
     files = read_records(folder, problems)
     records, newer = {}, False
@@ -261,7 +258,8 @@ def check(folder):
             problems.append("files/%s is not the file the share record lists" % name)
     for name in sorted(want):
         problems.append("files/%s is listed, and is not in the bundle" % name)
-    return problems, (share, person, len(listed), included, named, signed, corrections)
+    holds = sorted((records[i] for i in listed if i in records), key=lambda r: r["id"])
+    return problems, (share, person, len(listed), included, named, signed, corrections, holds)
 
 
 def main(argv):
@@ -273,7 +271,7 @@ def main(argv):
     except (OSError, KeyError, TypeError, ValueError, AttributeError, IndexError) as err:
         problems, facts = ["the bundle cannot be read as one: %s: %s" % (type(err).__name__, err)], None
     if facts:
-        share, person, n, included, named, signed, corrections = facts
+        share, person, n, included, named, signed, corrections, holds = facts
         obs = (share.get("times") or {}).get("observed") or {}
         print("share %s" % share["id"])
         print("signed by identity %s, with key %s, at %s" % (person, share["kid"], safe(str(obs.get("start", "-")))))
@@ -283,6 +281,11 @@ def main(argv):
         note = (share.get("context") or {}).get("note")
         if isinstance(note, str) and note:
             print("note: " + safe(note))
+        if not problems:
+            # Shown only when every check passed.
+            print("It holds:")
+            for r in holds:
+                print("  %s  %s  %s" % (r["type"], safe(beanverify.canonical(r.get("value", {}))), r["id"][7:19]))
         for line in CAVEATS:
             print(line)
     for p in sorted(problems):

@@ -110,7 +110,7 @@ func cmdList(s *core.Store, args []string) {
 		if l.Report.InDoubt(r.ID) {
 			by = strings.TrimSpace(by + " [in doubt]")
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", whenText(r), r.Type, safe(valueText(r)), safe(by), r.ID[7:19])
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", whenText(r), r.Type, safe(recordText(r, l.Report.Records)), safe(by), r.ID[7:19])
 	}
 	tw.Flush()
 	if warnFrozen(l) {
@@ -316,12 +316,40 @@ func blobText(r *core.Record) string {
 	if u, ok := r.Value["unit"].(string); ok && u != "" {
 		return "series " + short + " " + u
 	}
+	// A kept reference file says which data set it is.
+	if d, ok := r.Context["dataset"].(string); ok && d != "" {
+		return "file " + d + " " + short
+	}
 	for _, ref := range r.Blobs {
 		if ref.Hash == b && ref.MediaType != "" {
 			return "file " + ref.MediaType + " " + short
 		}
 	}
 	return "file " + short
+}
+
+// recordText is valueText, and for a comparison what it compares and with
+// whom: "percentile 46 of lab.cholesterol-total 187 mg/dL, among male, age
+// 30-39 (n 339)". records is where its reading is looked up.
+func recordText(r *core.Record, records map[string]*core.Record) string {
+	cohort, _ := r.Context["cohort"].(map[string]any)
+	among, _ := cohort["text"].(string)
+	p, isNumber := r.Value["n"].(float64)
+	if !strings.HasPrefix(r.Type, "comparison.") || among == "" || !isNumber {
+		return valueText(r)
+	}
+	out := "percentile " + strconv.FormatFloat(p, 'g', -1, 64)
+	reading, _ := r.Context["reading"].(string)
+	if of := records[reading]; of != nil {
+		out += " of " + of.Type + " " + valueText(of)
+	}
+	out += ", among " + among
+	if result, ok := r.Context["result"].(map[string]any); ok {
+		if n, ok := result["n"].(float64); ok {
+			out += " (n " + strconv.FormatFloat(n, 'g', -1, 64) + ")"
+		}
+	}
+	return out
 }
 
 // valueText is a one-line view of value and context.note.

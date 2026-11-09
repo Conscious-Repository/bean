@@ -169,7 +169,7 @@ It builds the bundle beside its place, checks it as its reader will, and moves i
 
 ### `check-bundle <folder>`
 
-Checks a bundle and changes nothing in it. It needs no log, and reads only the bundle's `objects` and `files` folders. It prints any record that fails, then the share record's id, the identity and key that signed it, how many records and files it holds, who signed the records (the person, an agent the person paired, or another key), and how many are corrections of a record that is not in the bundle. Then `bundle ok`, exit 0, or `bundle FAILED: <n> problems`, exit 1. It says each time what no bundle can show: that it is complete, that a value is true, who the identity is, and that the key that signed is still the person's. `tools/second/checkbundle.py` does the same check without bean.
+Checks a bundle, shows what it holds when it passes, and changes nothing in it. It needs no log, and reads only the bundle's `objects` and `files` folders; anything else in the folder is named and not read. It prints any record that fails, then the share record's id, the identity and key that signed it, how many records and files it holds, who signed the records (the person, an agent the person paired, or another key), and how many are corrections of a record that is not in the bundle. When every check passed it lists the records under `It holds:`, a comparison in words with its reading, cohort and n. Then `bundle ok`, exit 0, or `bundle FAILED: <n> problems`, exit 1. It says each time what no bundle can show: that it is complete, that a value is true, who the identity is, and that the key that signed is still the person's. `tools/second/checkbundle.py` does the same check without bean.
 
 ## AI and agents
 
