@@ -146,7 +146,7 @@ Runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdin
 | `query_records` | Records by type and time. |
 | `stats` | Count, minimum, maximum, mean, median and spread of one type, by day, week or month if asked. Readings by different authors or in different units are in separate `groups`. |
 | `get_record` | One non-deleted, valid record, including superseded history, its status and replies. Blob IDs are metadata. |
-| `read_blob` | With `-blobs` only. Only blobs of current records of yours or of a paired agent; superseded-only history and a stranger's record do not grant content access. Text is returned; for binary files only size. |
+| `read_blob` | With `-blobs` only. Takes the blob id in full or as its first 6 or more hex digits. Only blobs of current records of yours or of a paired agent; superseded-only history and a stranger's record do not grant content access. Text is returned; for binary files only size. |
 | `log_entry` | With `-write` only. Adds a record signed by the agent key, of a type from the vocabulary only: the built-in one plus `vocabulary.md` in the bean folder, if it exists (cmd/bean/vocabulary.md, "Your own types"). It can also comment on a record (`about`) or replace one of the agent's own records (`corrects`). It refuses `lab.*`, `apple-health.*` and `csv.file`: only an importer that keeps the source file writes those. |
 
 With `-write`, the first start makes the agent key of this machine and, on your own machine, trusts it. `-label` names that agent (default: `agent@<computer name>`). Without `-label`, a key that already exists keeps its name. A label that differs from the key's pairing is refused with exit 1, as in `agent init`.

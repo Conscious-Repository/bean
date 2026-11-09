@@ -58,7 +58,7 @@ If the build fails with `package crypto/hkdf is not in GOROOT`, your Go is too o
    echo 'export BEAN_DIR=~/health' >> ~/.zshrc && source ~/.zshrc
    ```
 
-2. Create your identity. Run this yourself, not through an AI assistant, because it prints your recovery words:
+2. Create your identity. Run this yourself, in a terminal window that no AI assistant is connected to, because it prints your recovery words:
 
    ```bash
    bean init -nostr new
@@ -166,12 +166,12 @@ The CSV needs a header row and a `value` column. A `time` column (RFC 3339) and 
 |---|---|
 | `bean mcp` | List your record types, query and summarize your records, and read one record in full. |
 | `bean mcp -write -label assistant` | Also log entries, signed with this machine's agent key. |
-| `bean mcp -blobs` | Also read the text of stored files, such as a kept lab report, which includes your name and birth date. |
+| `bean mcp -blobs` | Also read the text of stored text files, such as a lab report imported as a `.txt`, which includes your name and birth date. For a PDF it gets only the file's size. |
 
-Start read-only. AI clients do not read your shell profile, so use absolute paths rather than `~` or `BEAN_DIR`. With Claude Code:
+Start read-only. AI clients do not read your shell profile, so use absolute paths rather than `~` or `BEAN_DIR`. With Claude Code (`-s user` makes it available in every folder):
 
 ```bash
-claude mcp add bean -- "$(which bean)" -dir "$HOME/health" mcp
+claude mcp add -s user bean -- "$(which bean)" -dir "$HOME/health" mcp
 ```
 
 With Claude Desktop, add this to `~/Library/Application Support/Claude/claude_desktop_config.json` and restart the app (use the output of `which bean` and your own home folder):
@@ -256,7 +256,7 @@ If you lose your laptop:
    bean -dir ~/health restore -nostr new
    ```
 
-   It shows what the old key signed and stops. Read the list. **If nobody else had the old key,** run it again with `-seal-all`, then type or paste the 24 words and press Ctrl-D. **If the key may have been stolen,** add `-no-seal <id>` for each record that is not yours, or `-no-seal-file <file>` for many. `-list` shows every record. A record that you keep stays valid permanently, and you cannot undo a deletion that you keep.
+   It shows what the old key signed and stops. Read the list. **If nobody else had the old key,** run it again with `-seal-all`, then type the 24 words and press Ctrl-D. Clear the terminal and its scrollback afterwards (Cmd-K in Terminal.app). **If the key may have been stolen,** add `-no-seal <id>` for each record that is not yours, or `-no-seal-file <file>` for many. `-list` shows every record. A record that you keep stays valid permanently, and you cannot undo a deletion that you keep.
 
 4. Put back your backup of the deleted-imports file:
 

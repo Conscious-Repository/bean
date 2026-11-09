@@ -37,7 +37,9 @@ Read
   verify                        Check every file and signature.
 
 AI and agents
-  mcp [-write] [-label <name>]  Run the MCP server for an AI client.
+  mcp [-write] [-blobs] [-label <name>]
+                                Run the MCP server for an AI client. Read-only
+                                unless -write; stored files only with -blobs.
   agent init [-label <name>]    Make the agent key of this machine.
   agent pair <npub> [-label <name>]
                                 Trust an agent key. Run it on your own machine.
@@ -51,6 +53,7 @@ Copies and keys
                                 Shows what the old key signed: you choose.
   restore [flags]               Rebuild your log on a new machine from the
                                 24 words and a backup. Same flags as rotate.
+                                -export <folder> rebuilds it from an export.
   migrate <empty folder>        Start a new identity from a frozen log, with your
                                 own records. Shows 24 new words once.
 
@@ -77,7 +80,7 @@ var syntax = map[string]string{
 	"ls":            "ls [-type <t>] [-since <time>] [-until <time>] [-author me|agent|<id>|<npub>] [-all] [-json]",
 	"show":          "show <id>",
 	"verify":        "verify",
-	"mcp":           "mcp [-write] [-label <name>]",
+	"mcp":           "mcp [-write] [-blobs] [-label <name>]",
 	"agent":         "agent init [-label <name>] [-identity <id>] | agent pair <npub> [-label <name>]",
 	"sync":          "sync <source folder>",
 	"export":        "export <empty folder>",
@@ -115,7 +118,7 @@ func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
 func fail(err error) {
 	fmt.Fprintf(os.Stderr, "bean: %s\n", safe(err.Error()))
 	if errors.Is(err, core.ErrNotInitialized) {
-		fmt.Fprintf(os.Stderr, "bean: no log in %s: run bean init, or point -dir or BEAN_DIR at your log\n", logDir)
+		fmt.Fprintf(os.Stderr, "bean: no log in %s: point -dir or BEAN_DIR at your log, run bean init to start a new one, or run bean restore with your 24 words to rebuild yours\n", logDir)
 	}
 	code := 1
 	msg := err.Error()

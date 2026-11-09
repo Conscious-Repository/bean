@@ -149,9 +149,9 @@ func cmdRotate(s *core.Store, args []string, restore bool) {
 		return
 	}
 	if restore {
-		fmt.Fprintln(os.Stderr, "sync every copy of the log you still have into this folder first. paste the 24 words, then end input:")
+		fmt.Fprintln(os.Stderr, "sync every copy of the log you still have into this folder first. Type the 24 words, then press Ctrl-D. Afterwards clear the terminal and its scrollback (Cmd-K in Terminal.app):")
 	} else {
-		fmt.Fprintln(os.Stderr, "sync all devices before you rotate. paste the 24 words, then end input:")
+		fmt.Fprintln(os.Stderr, "sync all devices before you rotate. Type the 24 words, then press Ctrl-D. Afterwards clear the terminal and its scrollback (Cmd-K in Terminal.app):")
 	}
 	text, err := io.ReadAll(os.Stdin)
 	if err != nil {
