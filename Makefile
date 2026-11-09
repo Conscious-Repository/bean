@@ -4,18 +4,21 @@
 PY ?= python3
 FUZZTIME ?= 2m
 
-.PHONY: help check build fmt vet test lint vuln vectors second differential demo fuzz smoke
+.PHONY: help check build fmt vet test lint vuln vectors second compare bundles example differential demo fuzz smoke
 
 help:
-	@echo "make check         every check a commit needs (fmt vet build test lint vuln vectors second differential demo)"
+	@echo "make check         every check a commit needs (fmt vet build test lint vuln vectors second compare bundles example differential demo)"
 	@echo "make test          go test -race -failfast ./..."
 	@echo "make vectors       regenerate vectors/ and check them byte for byte and with Python"
 	@echo "make second        compare bean with the second verifier and the conformance folders"
+	@echo "make compare       compute every saved comparison again with Python and pandas"
+	@echo "make bundles       check share bundles, good and damaged, with bean and with Python"
+	@echo "make example       run examples/blood offline, on synthetic reference files"
 	@echo "make differential  compare this build with OLD (default origin/main)"
 	@echo "make fuzz          run each fuzz target for FUZZTIME (default 2m)"
 	@echo "make smoke         build a large log and time the commands"
 
-check: fmt vet build test lint vuln vectors second differential demo
+check: fmt vet build test lint vuln vectors second compare bundles example differential demo
 
 build:
 	go build ./...
@@ -50,6 +53,23 @@ vectors:
 second:
 	PY=$(PY) bash tools/second/run.sh
 
+# An independent implementation in Python must compute every number of every
+# comparison that bean saves on the synthetic NHANES files. With
+# BEAN_NHANES_DIR set to a folder of CDC's own files, on those too.
+compare:
+	PY=$(PY) bash tools/compare/run.sh
+
+# bean check-bundle and the Python checker, which follows docs/SHARE.md, must
+# give the same verdict on every bundle, good and damaged.
+bundles:
+	PY=$(PY) bash tools/second/bundles.sh
+
+# The quickstart must run from a fresh clone and give the numbers it was
+# written with. Here it runs offline on the synthetic reference files;
+# examples/blood/run.sh without --synthetic fetches CDC's.
+example:
+	bash examples/blood/run.sh --synthetic >/dev/null
+
 # The build of this tree must print what the build of OLD (default
 # origin/main) prints on every corpus log. Set ALLOW only for a difference
 # that the change means to make, and say so in the commit.
@@ -70,6 +90,7 @@ fuzz:
 	go test ./cmd/bean-import-csv -run '^$$' -fuzz '^FuzzConvert$$' -fuzztime $(FUZZTIME) -fuzzminimizetime 5s
 	go test ./cmd/bean-import-lab -run '^$$' -fuzz '^FuzzLab$$' -fuzztime $(FUZZTIME) -fuzzminimizetime 5s
 	go test ./cmd/bean-import-apple-health -run '^$$' -fuzz '^FuzzAppleExport$$' -fuzztime $(FUZZTIME) -fuzzminimizetime 5s
+	go test ./internal/xpt -run '^$$' -fuzz '^FuzzParse$$' -fuzztime $(FUZZTIME) -fuzzminimizetime 5s
 
 smoke:
 	tools/smoke.sh

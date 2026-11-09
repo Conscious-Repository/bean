@@ -10,6 +10,60 @@ import "errors"
 // the record that keeps a file before it stores the file: a record Append
 // would refuse must not leave the file stored with no record naming it.
 func (s *Store) CheckPartial(line []byte) error {
+	_, _, err := s.SignPartial(line)
+	return err
+}
+
+// SignPartial completes and signs one partial record line with the person's
+// key, as Append would, checks it as CheckPartial does, and writes nothing.
+// It returns the record's id and its bytes. AddSigned stores those bytes
+// later. bean share uses the pair: the share record goes into the bundle
+// first, and into the log only once the bundle is written and checked, so a
+// failure leaves no record of a disclosure that did not happen.
+func (s *Store) SignPartial(line []byte) (string, []byte, error) {
+	unlock, err := s.lock()
+	if err != nil {
+		return "", nil, err
+	}
+	defer unlock()
+	l, err := s.load(false)
+	if err != nil {
+		return "", nil, err
+	}
+	w, err := s.writerFor(l, false)
+	if err != nil {
+		return "", nil, err
+	}
+	if err := l.canWrite(w); err != nil {
+		return "", nil, err
+	}
+	var key []byte
+	if w.secret != nil {
+		key = DedupeKey(w.secret)
+	}
+	obj, src, err := s.completePartial(w, line, key, 1)
+	if err != nil {
+		return "", nil, err
+	}
+	if _, _, err := inputRef(src, "supersedes_ref", key, 1); err != nil {
+		return "", nil, err
+	}
+	id, data, err := SignRecord(obj, w.signer)
+	if err != nil {
+		return "", nil, err
+	}
+	fr := CheckFile(PathOf(id), data)
+	if fr.Err != nil {
+		return "", nil, fr.Err
+	}
+	return id, data, l.canWriteRecord(fr.Record)
+}
+
+// AddSigned stores a record that SignPartial signed: the same bytes, under
+// the same id. It takes only a record that the person's current key signed
+// as the person, and runs the write checks again, since the log may have
+// changed in between.
+func (s *Store) AddSigned(id string, data []byte) error {
 	unlock, err := s.lock()
 	if err != nil {
 		return err
@@ -26,26 +80,18 @@ func (s *Store) CheckPartial(line []byte) error {
 	if err := l.canWrite(w); err != nil {
 		return err
 	}
-	var key []byte
-	if w.secret != nil {
-		key = DedupeKey(w.secret)
-	}
-	obj, src, err := s.completePartial(w, line, key, 1)
-	if err != nil {
-		return err
-	}
-	if _, _, err := inputRef(src, "supersedes_ref", key, 1); err != nil {
-		return err
-	}
-	id, data, err := SignRecord(obj, w.signer)
-	if err != nil {
-		return err
-	}
 	fr := CheckFile(PathOf(id), data)
 	if fr.Err != nil {
 		return fr.Err
 	}
-	return l.canWriteRecord(fr.Record)
+	if fr.Record.Author != w.author || fr.Record.Kid != w.signer.Public() {
+		return errors.New("not a record that this log's key signed")
+	}
+	if err := l.canWriteRecord(fr.Record); err != nil {
+		return err
+	}
+	_, err = writeIfAbsent(s.path(PathOf(id)), data, 0o600)
+	return err
 }
 
 // BlobIDOf returns the id that PutBlob would give plaintext, and writes

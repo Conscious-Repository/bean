@@ -191,6 +191,9 @@ func toolLogEntry(s *core.Store, a toolArgs) (any, error) {
 	if importerOnly(a.Type) {
 		return nil, fmt.Errorf("%s records come only from an importer that keeps the source file; an assistant cannot write them. Log the person's words as a note instead", a.Type)
 	}
+	if computedOnly(a.Type) {
+		return nil, fmt.Errorf("%s records come only from bean compare and bean share, run by the person; an assistant cannot write them. Log what you have to say as a note instead", a.Type)
+	}
 	var value string
 	switch v := a.Value.(type) {
 	case string:
@@ -235,7 +238,16 @@ func toolLogEntry(s *core.Store, a toolArgs) (any, error) {
 // A lab value typed by an assistant would sit next to the lab's own, with
 // nothing behind it but the assistant's word.
 func importerOnly(typ string) bool {
-	return strings.HasPrefix(typ, "lab.") || strings.HasPrefix(typ, "apple-health.") || typ == "csv.file"
+	return strings.HasPrefix(typ, "lab.") || strings.HasPrefix(typ, "apple-health.") || typ == "csv.file" || strings.HasPrefix(typ, "reference.")
+}
+
+// computedOnly reports the types that the MCP tool does not write: a
+// comparison, which bean compare computes from kept files, and the record
+// of a share, which is the person's word on what they disclosed. This
+// guards the tool, not the log: a program with the person's shell can
+// write any type with bean add.
+func computedOnly(typ string) bool {
+	return strings.HasPrefix(typ, "comparison.") || typ == shareType
 }
 
 // mcpOpts are the tools the server offers: log_entry with write, read_blob

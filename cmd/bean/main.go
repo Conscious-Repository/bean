@@ -36,6 +36,17 @@ Read
   blob get <id>                 Write a stored file to stdout.
   verify                        Check every file and signature.
 
+Compare
+  compare -sex <s> -age <from>-<to> [-where <rule>]... [-save] <id>... | -type <type>
+                                Show where a reading lies among people like the
+                                ones you describe, in public survey data (NHANES).
+
+Share
+  share -out <folder> [-files] [-note <text>] <id>... | -type <type>
+                                Write chosen records into a folder that anyone
+                                can check without your log or keys.
+  check-bundle <folder>         Check a bundle someone sent you.
+
 AI and agents
   mcp [-write] [-blobs] [-label <name>]
                                 Run the MCP server for an AI client. Read-only
@@ -80,6 +91,9 @@ var syntax = map[string]string{
 	"ls":            "ls [-type <t>] [-since <time>] [-until <time>] [-author me|agent|<id>|<npub>] [-all] [-json]",
 	"show":          "show <id>",
 	"verify":        "verify",
+	"share":         "share -out <new folder> [-files] [-note <text>] [-yes] <id>... | -type <type> [-since <time>] [-until <time>]",
+	"check-bundle":  "check-bundle <folder>",
+	"compare":       "compare -sex male|female -age <from>-<to> [-where <DATASET>.<VARIABLE>=<value>|<from>-<to>]... [-unknown-files] [-save] <id>... | -type <type>",
 	"mcp":           "mcp [-write] [-blobs] [-label <name>]",
 	"agent":         "agent init [-label <name>] [-identity <id>] | agent pair <npub> [-label <name>]",
 	"sync":          "sync <source folder>",
@@ -266,6 +280,12 @@ func main() {
 		}
 	case "ls":
 		cmdList(s, rest)
+	case "compare":
+		cmdCompare(s, rest)
+	case "share":
+		cmdShare(s, rest)
+	case "check-bundle":
+		cmdCheckBundle(rest)
 	case "show":
 		cmdShow(s, rest)
 	case "add":
@@ -334,6 +354,16 @@ func main() {
 		if len(rest) != 1 {
 			usage()
 		}
+		// sync copies every record of the source into this log, for good.
+		// That is right for another copy of this log, and wrong for anyone
+		// else's folder, such as a bundle someone sent.
+		if me, err := s.Identity(); err == nil {
+			if _, err := os.Stat(filepath.Join(rest[0], "objects")); err == nil {
+				if _, err := os.Stat(filepath.Join(rest[0], filepath.FromSlash(core.PathOf(me)))); err != nil {
+					fail(fmt.Errorf("%s is not a copy of your log: it does not hold your identity record. bean sync copies every record of its source into your log, for good. To read a bundle someone sent you, run bean check-bundle %s", rest[0], rest[0]))
+				}
+			}
+		}
 		src := core.Open(rest[0])
 		src.Now = s.Now
 		res, err := s.Sync(src)
@@ -396,6 +426,13 @@ func main() {
 	default:
 		usage()
 	}
+	// A command that can correct or delete a reading, or bring such a
+	// change from another copy, also deletes the saved comparisons of that
+	// reading (compare.go). bean add does it itself, for a correction only.
+	switch cmd {
+	case "purge", "append", "import", "sync", "import-export":
+		sweepComparisons(s)
+	}
 }
 
 // reportChanged prints one changed: line per reading that has a new value and
@@ -433,7 +470,7 @@ func reportChanged(changed []core.Changed, fix string) error {
 var needsLog = map[string]bool{
 	"whoami": true, "add": true, "append": true, "blob": true, "ls": true, "show": true,
 	"verify": true, "mcp": true, "import": true, "export": true, "rotate": true,
-	"purge": true, "gc": true, "migrate": true,
+	"purge": true, "gc": true, "migrate": true, "compare": true, "share": true,
 }
 
 // hasLog reports whether the folder holds a log: an identity, or synced

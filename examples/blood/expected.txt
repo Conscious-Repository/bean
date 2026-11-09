@@ -1,0 +1,26 @@
+# men of 30 to 39
+lab.cholesterol-total  187 mg/dL  46  44.2%  3.5%  164 to 213  188  339
+lab.hdl-cholesterol  52 mg/dL  71.6  71.1%  1%  40 to 54  46  339
+lab.hematocrit  44.6 %  49.4  49.1%  0.6%  43.1 to 46.6  44.7  342
+lab.hemoglobin  15.1 g/dL  46.8  43.6%  6.5%  14.6 to 15.8  15.1  342
+lab.hemoglobin-a1c  5.3 %  45.3  40.3%  10%  5.1 to 5.6  5.3  342
+lab.mch  30.1 pg  55.4  54.3%  2.1%  28.9 to 30.8  29.9  342
+lab.mchc  33.9 g/dL  47.3  46.1%  2.5%  33.4 to 34.5  34  342
+lab.mcv  89 fL  59.5  58.1%  2.8%  85.4 to 90.5  87.9  342
+lab.platelets  248 x10E3/uL  60.7  60.2%  1%  205 to 266  232  342
+lab.rbc  5.02 x10E6/uL  36.6  36.4%  0.3%  4.92 to 5.34  5.14  342
+lab.rdw  12.8 %  21.1  19.7%  2.8%  12.9 to 13.7  13.3  342
+lab.wbc  6.1 x10E3/uL  30.3  29.9%  0.8%  5.9 to 8.8  6.8  342
+# and a BMI from 20 to 27
+lab.cholesterol-total  187 mg/dL  53.7  50.6%  6.3%  161 to 204  184  113
+lab.hdl-cholesterol  52 mg/dL  48.9  47.7%  2.4%  41 to 63  52  113
+lab.hematocrit  44.6 %  54.9  54.6%  0.6%  42.9 to 46.1  44.3  115
+lab.hemoglobin  15.1 g/dL  51.4  48.6%  5.6%  14.6 to 15.6  15.1  115
+lab.hemoglobin-a1c  5.3 %  57  51.6%  10.7%  4.9 to 5.5  5.2  115
+lab.mch  30.1 pg  45  44.4%  1.3%  29.4 to 31.2  30.4  115
+lab.mchc  33.9 g/dL  47  44.8%  4.4%  33.4 to 34.5  34  115
+lab.mcv  89 fL  51.5  48.8%  5.3%  85.8 to 91.6  89  115
+lab.platelets  248 x10E3/uL  69.7  69.7%  0%  205 to 266  219  115
+lab.rbc  5.02 x10E6/uL  51.4  51.4%  0%  4.81 to 5.2  4.99  115
+lab.rdw  12.8 %  22.7  20.2%  4.9%  12.8 to 13.6  13.1  115
+lab.wbc  6.1 x10E3/uL  42.6  42%  1.2%  5.6 to 7.7  6.4  115

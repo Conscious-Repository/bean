@@ -34,7 +34,7 @@ func importerOnPath(t *testing.T) string {
 	labcorpOnce.Do(func() {
 		labcorpDir, labcorpErr = os.MkdirTemp("", "bean-import-bin-*")
 		if labcorpErr == nil {
-			for _, name := range []string{"bean-import-lab", "bean-import-apple-health", "bean-import-csv"} {
+			for _, name := range []string{"bean-import-lab", "bean-import-apple-health", "bean-import-csv", "bean-import-nhanes"} {
 				out, err := exec.Command("go", "build", "-o", filepath.Join(labcorpDir, name), "../"+name).CombinedOutput()
 				if err != nil {
 					labcorpErr = &buildError{string(out)}

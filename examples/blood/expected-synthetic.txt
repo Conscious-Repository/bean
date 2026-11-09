@@ -1,0 +1,6 @@
+# men of 30 to 39
+lab.cholesterol-total  187 mg/dL  44.3  43.7%  1.2%  176 to 203  190  86  small cohort, file not on record
+lab.hdl-cholesterol  52 mg/dL  44.6  43.7%  1.9%  45 to 57  53  86  small cohort, file not on record
+# and a BMI from 20 to 27
+lab.cholesterol-total  187 mg/dL  51.4  49.9%  3.1%  175 to 199  187  35  small cohort, file not on record
+lab.hdl-cholesterol  52 mg/dL  37.6  36%  3.2%  45 to 58  53  35  small cohort, file not on record

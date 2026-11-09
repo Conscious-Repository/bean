@@ -26,6 +26,18 @@ New here: [docs/ONBOARDING.md](docs/ONBOARDING.md) goes from install to an impor
 - **You outlive your keys.** 24 words on paper recover your identity on a new machine and retire a lost key.
 - **Leave at any time.** `bean export` writes everything as plaintext. `bean restore -export` reads it back.
 
+## Try it in five minutes
+
+One script runs the whole loop on a synthetic lab report, in a throwaway folder: import the report, fetch public survey data from the US CDC, compare, share, and check the result without bean.
+
+```
+git clone https://github.com/Conscious-Repository/bean.git
+cd bean
+examples/blood/run.sh
+```
+
+It needs Go and `curl`, and downloads about 7 MB from CDC. With Python and `pip install -r tools/requirements.txt` it also runs the checks that use no bean. [examples/blood](examples/blood/README.md) walks through what it does.
+
 ## Install
 
 | You need | For | Install on macOS |
@@ -41,7 +53,7 @@ cd bean
 go install ./cmd/...
 ```
 
-This puts `bean`, `bean-import-lab`, `bean-import-apple-health` and `bean-import-csv` in `$(go env GOPATH)/bin`, usually `~/go/bin`. If your shell cannot find `bean`, add that folder to your `PATH`:
+This puts `bean`, `bean-import-lab`, `bean-import-apple-health`, `bean-import-csv` and `bean-import-nhanes` in `$(go env GOPATH)/bin`, usually `~/go/bin`. If your shell cannot find `bean`, add that folder to your `PATH`:
 
 ```
 echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.zshrc && source ~/.zshrc
@@ -97,7 +109,7 @@ bean add note "drank 1 L of water, gone by 5 pm" -about 1b59a1
 bean add food "toast" -photo breakfast.jpg
 ```
 
-- `-at` says when it happened. Without it, the time is now.
+- `-at` says when it happened. Without it, the time is now, also for a correction: give `-corrects` the old record's time with `-at`.
 - `-about <id>` attaches a record to another one. An id can be shortened to its first 6 or more hex digits.
 - `-photo` attaches an image, stored encrypted.
 - The [type vocabulary](cmd/bean/vocabulary.md) lists the usual types and units, so that your records line up over time. To add types of your own, put a `vocabulary.md` in your bean folder ([Your own types](cmd/bean/vocabulary.md#your-own-types)).
@@ -114,8 +126,8 @@ bean ls -json -type weight                # records as stored, for jq or a scrip
 Correct or delete:
 
 ```
-bean add weight 81.2 -unit kg -corrects 31fe48    # replaces your record 31fe48
-bean purge 1b59a1                                 # deletes record 1b59a1 from every copy
+bean add weight 81.2 -unit kg -corrects 31fe48 -at 2026-10-27   # replaces your record 31fe48
+bean purge 1b59a1                                               # deletes record 1b59a1 from every copy
 ```
 
 ## Import your data
@@ -160,6 +172,47 @@ bean import csv -type hrv.rmssd -unit ms export.csv
 ```
 
 The CSV needs a header row and a `value` column. A `time` column (RFC 3339) and an `id` column are optional. Other columns are kept as context. The file is kept first, so a better importer can read it again later. [docs/COMMANDS.md](docs/COMMANDS.md) lists what the CSV importer refuses.
+
+## Compare with people like you
+
+`bean compare` shows where a reading lies among people you describe, in public survey data (NHANES, from the US CDC). You say who: sex, age, and if you like ethnicity, BMI, or what they ate that day. It runs on your machine, on files you downloaded and keep.
+
+```
+for f in DEMO_J TCHOL_J; do
+  curl -fLO https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/$f.xpt && bean import -yes nhanes $f.xpt
+done
+bean compare -sex male -age 30-39 -type 'lab.*'
+bean compare -sex male -age 30-39 -where DEMO_J.RIDRETH3=3 -where BMX_J.BMXBMI=20-27 -type 'lab.*'
+```
+
+```
+Compared with NHANES 2017-2018: male, age 30-39.
+READING                VALUE      PERCENTILE  LOWER  SAME  MIDDLE HALF  MEDIAN  N    NOTE  ID
+lab.cholesterol-total  187 mg/dL  46          44.2%  3.5%  164 to 213   188     339        fca23ea91778
+```
+
+- It says where a value lies in a sample, and how many people the sample has. It does not say whether a value is healthy, and it does not advise.
+- Every number comes with its caveats and with how many people it rests on. A cohort of fewer than 30 people gives no number.
+- `-save` keeps a result as a signed record that names each file by its SHA-256, the cohort and the method. Anyone can compute it again without bean: `tools/compare/reproduce.py` does, in Python.
+- Twelve blood tests today: total and HDL cholesterol, hemoglobin A1c and the blood count.
+
+[docs/COMPARE.md](docs/COMPARE.md) has the files to download, the rules, the limits and the method.
+
+## Share with someone
+
+`bean share` writes records you choose into a folder that anyone can check without your log, your keys or an account.
+
+```
+bean share -out for-ana -note "my lipids" -type 'comparison.*'
+bean check-bundle for-ana          # what Ana runs: it checks the folder, then shows what it holds
+```
+
+- It shows what will leave and asks first. Only the records you choose go, with what they are about. Files go only with `-files`, and a lab report only when you name it.
+- The reader can tell that each record is yours and unchanged, and that nothing was added or removed. They can check it without bean: `tools/second/checkbundle.py`.
+- The reader cannot tell that it is complete: it is what you chose. Nor that the key that signed is still yours, if you changed keys since. bean says so on every check.
+- A bundle is not encrypted, and once sent it cannot be taken back.
+
+[docs/SHARE.md](docs/SHARE.md) has what goes in, the limits and the format.
 
 ## Log from an AI assistant
 
@@ -300,6 +353,8 @@ bean protects who wrote what, and protects your identity against a stolen device
 | [docs/ONBOARDING.md](docs/ONBOARDING.md) | First run, step by step, alone or with an AI. |
 | [docs/COMMANDS.md](docs/COMMANDS.md) | Every command, flag and exit code. |
 | [docs/IMPORTERS.md](docs/IMPORTERS.md) | Write an importer for your own source; community importers. |
+| [docs/COMPARE.md](docs/COMPARE.md) | Compare a reading with people like you: files, rules, limits, method. |
+| [docs/SHARE.md](docs/SHARE.md) | Share chosen records as a bundle anyone can check: what goes in, limits, format. |
 | [cmd/bean/vocabulary.md](cmd/bean/vocabulary.md) | The usual record types and units. |
 | [SECURITY.md](SECURITY.md) | What is protected, and the keys. |
 | [CORE.md](CORE.md) | The protocol, in short. |
