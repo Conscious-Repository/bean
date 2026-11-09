@@ -1,0 +1,235 @@
+package main
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// objectPath is where a bundle or a log keeps the record with this id.
+func objectPath(dir, id string) string {
+	return filepath.Join(dir, "objects", id[7:9], id[9:]+".json")
+}
+
+func TestShare(t *testing.T) {
+	dir, _, ids := compareLog(t, "TCHOL_J", "DEMO_J")
+	note, _, _ := run(t, dir, "", "add", "note", "after a week of oats", "-about", ids[0])
+	note = strings.TrimSpace(note)
+	out := filepath.Join(t.TempDir(), "bundle")
+
+	// Without a terminal and without -yes nothing is written, and nothing
+	// of the records is shown: an assistant cannot disclose for the person.
+	stdout, errs, code := run(t, dir, "y\n", "share", "-out", out, note)
+	if code != 1 || !strings.Contains(errs, "share needs a terminal") || strings.Contains(stdout+errs, "oats") {
+		t.Fatalf("no terminal: %d\n%s\n%s", code, stdout, errs)
+	}
+	if _, err := os.Stat(out); err == nil {
+		t.Fatal("a bundle was written without review")
+	}
+	if ls, _, _ := run(t, dir, "", "ls", "-type", "share"); ls != "" {
+		t.Fatalf("a share record was written without review:\n%s", ls)
+	}
+
+	// A note comes with the reading it is about, and nothing else does.
+	stdout, errs, code = run(t, dir, "", "share", "-yes", "-note", "for my doctor", "-out", out, note)
+	if code != 0 || !strings.Contains(stdout, "shared 2 records and 0 files") || !strings.Contains(stdout, "share record sha256:") {
+		t.Fatalf("share: %d\n%s\n%s", code, stdout, errs)
+	}
+	for id, want := range map[string]bool{note: true, ids[0]: true, ids[1]: false, ids[2]: false} {
+		if _, err := os.Stat(objectPath(out, id)); (err == nil) != want {
+			t.Errorf("%s in the bundle: %v, want %v", id[7:19], err == nil, want)
+		}
+	}
+	// The bundle holds the record files as the log stores them, and no key.
+	have, _ := os.ReadFile(objectPath(out, ids[0]))
+	stored, _ := os.ReadFile(objectPath(dir, ids[0]))
+	if string(have) != string(stored) || len(have) == 0 {
+		t.Error("the bundle's record is not the stored record")
+	}
+	if _, err := os.Stat(filepath.Join(out, "local")); err == nil {
+		t.Error("the bundle holds a local folder")
+	}
+	// The share record is in the log too: what was disclosed, and when.
+	ls, _, _ := run(t, dir, "", "ls", "-json", "-type", "share")
+	var share struct {
+		ID      string `json:"id"`
+		Context struct {
+			Records   []string `json:"records"`
+			Note      string   `json:"note"`
+			Statement string   `json:"statement"`
+		} `json:"context"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(ls)), &share); err != nil {
+		t.Fatalf("%v\n%s", err, ls)
+	}
+	if len(share.Context.Records) != 2 || share.Context.Note != "for my doctor" || !strings.Contains(share.Context.Statement, "not a complete history") {
+		t.Errorf("share record: %+v", share)
+	}
+	if _, err := os.Stat(objectPath(out, share.ID)); err != nil {
+		t.Error("the bundle does not hold its share record")
+	}
+
+	// Anyone can check it, with no log: from an empty folder.
+	nowhere := t.TempDir()
+	stdout, errs, code = run(t, nowhere, "", "check-bundle", out)
+	for _, want := range []string{"bundle ok", "share " + share.ID, "records: 2 listed; files: 0 included, 0 named and not included", "signed: 2 by the person, 0 by an agent", "note: for my doctor", "not a complete history", "not that a value is true"} {
+		if code != 0 || !strings.Contains(stdout, want) {
+			t.Errorf("check-bundle: %d, no %q in\n%s\n%s", code, want, stdout, errs)
+		}
+	}
+	// The check changes nothing in the bundle.
+	if _, err := os.Stat(filepath.Join(out, "local")); err == nil {
+		t.Error("check-bundle wrote into the bundle")
+	}
+	if _, errs, code := run(t, dir, "", "verify"); code != 0 {
+		t.Errorf("the log after a share: %s", errs)
+	}
+}
+
+func TestShareFilesAndComparison(t *testing.T) {
+	dir, _, ids := compareLog(t, "TCHOL_J", "DEMO_J")
+	if out, errs, code := run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", "-save", ids[0]); code != 0 {
+		t.Fatalf("%s\n%s", out, errs)
+	}
+	ls, _, _ := run(t, dir, "", "ls", "-json", "-type", "comparison.percentile")
+	var cmp struct {
+		ID string `json:"id"`
+	}
+	json.Unmarshal([]byte(strings.TrimSpace(ls)), &cmp)
+
+	// A comparison comes with its reading and the records of its files.
+	// Without -files the files are named, not shared.
+	named := filepath.Join(t.TempDir(), "named")
+	if out, errs, code := run(t, dir, "", "share", "-yes", "-out", named, cmp.ID); code != 0 || !strings.Contains(out, "shared 4 records and 0 files") {
+		t.Fatalf("%d\n%s\n%s", code, out, errs)
+	}
+	if _, err := os.Stat(filepath.Join(named, "files")); err == nil {
+		t.Error("files were shared without -files")
+	}
+	if out, _, code := run(t, t.TempDir(), "", "check-bundle", named); code != 0 || !strings.Contains(out, "files: 0 included, 2 named and not included") {
+		t.Errorf("%d\n%s", code, out)
+	}
+	// With -files each file is there in plaintext, named by its SHA-256.
+	full := filepath.Join(t.TempDir(), "full")
+	if out, errs, code := run(t, dir, "", "share", "-yes", "-files", "-out", full, cmp.ID); code != 0 || !strings.Contains(out, "shared 4 records and 2 files") {
+		t.Fatalf("%d\n%s\n%s", code, out, errs)
+	}
+	entries, _ := os.ReadDir(filepath.Join(full, "files"))
+	if len(entries) != 2 {
+		t.Fatalf("%d files", len(entries))
+	}
+	want, _ := os.ReadFile(refData + "TCHOL_J.XPT")
+	found := false
+	for _, e := range entries {
+		got, _ := os.ReadFile(filepath.Join(full, "files", e.Name()))
+		found = found || string(got) == string(want)
+		if fileDigest(filepath.Join(full, "files", e.Name())) != e.Name() {
+			t.Errorf("files/%s is not named by its SHA-256", e.Name())
+		}
+	}
+	if !found {
+		t.Error("the shared file is not the plaintext")
+	}
+	if out, _, code := run(t, t.TempDir(), "", "check-bundle", full); code != 0 || !strings.Contains(out, "files: 2 included, 0 named and not included") {
+		t.Errorf("%d\n%s", code, out)
+	}
+
+	// Damage, one change at a time: each is refused.
+	copyOf := func() string {
+		d := filepath.Join(t.TempDir(), "d")
+		if err := os.CopyFS(d, os.DirFS(full)); err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
+	for name, change := range map[string]func(d string){
+		"a record removed": func(d string) { os.Remove(objectPath(d, ids[0])) },
+		"a record added": func(d string) {
+			data, _ := os.ReadFile(objectPath(dir, ids[1]))
+			os.MkdirAll(filepath.Dir(objectPath(d, ids[1])), 0o700)
+			os.WriteFile(objectPath(d, ids[1]), data, 0o600)
+		},
+		"a value changed": func(d string) {
+			data, _ := os.ReadFile(objectPath(d, ids[0]))
+			os.WriteFile(objectPath(d, ids[0]), []byte(strings.Replace(string(data), `"n":193`, `"n":163`, 1)), 0o600)
+		},
+		"a file changed": func(d string) {
+			p := filepath.Join(d, "files", entries[0].Name())
+			data, _ := os.ReadFile(p)
+			data[len(data)-200] ^= 1
+			os.WriteFile(p, data, 0o600)
+		},
+		"a file removed": func(d string) { os.Remove(filepath.Join(d, "files", entries[0].Name())) },
+		"a file added":   func(d string) { os.WriteFile(filepath.Join(d, "files", strings.Repeat("a", 64)), []byte("x"), 0o600) },
+		"a link for a file": func(d string) {
+			p := filepath.Join(d, "files", entries[0].Name())
+			os.Remove(p)
+			os.Symlink(refData+"TCHOL_J.XPT", p)
+		},
+	} {
+		d := copyOf()
+		change(d)
+		if out, _, code := run(t, t.TempDir(), "", "check-bundle", d); code != 1 || !strings.Contains(out, "bundle FAILED") || strings.Contains(out, "bundle ok") {
+			t.Errorf("%s: exit %d\n%s", name, code, out)
+		}
+	}
+}
+
+func TestShareRefuses(t *testing.T) {
+	dir, _, ids := compareLog(t)
+	out := filepath.Join(t.TempDir(), "bundle")
+	newer, _, _ := run(t, dir, "", "add", "lab.cholesterol-total", "201", "-unit", "mg/dL", "-corrects", ids[0])
+	run(t, dir, "", "purge", ids[1])
+	full := filepath.Join(t.TempDir(), "full")
+	os.MkdirAll(full, 0o700)
+	os.WriteFile(filepath.Join(full, "x"), []byte("x"), 0o600)
+	for name, c := range map[string]struct {
+		args []string
+		code int
+		want string
+	}{
+		"no folder":          {[]string{"-yes", ids[2]}, 2, "usage"},
+		"nothing chosen":     {[]string{"-yes", "-out", out}, 2, "usage"},
+		"since without type": {[]string{"-yes", "-out", out, "-since", "2026-01-01", ids[2]}, 2, "usage"},
+		"a corrected record": {[]string{"-yes", "-out", out, ids[0]}, 1, "cannot be shared"},
+		"a deleted record":   {[]string{"-yes", "-out", out, ids[1]}, 1, "bean:"},
+		"an unknown id":      {[]string{"-yes", "-out", out, "abcdef123456"}, 1, "bean:"},
+		"no such type":       {[]string{"-yes", "-out", out, "-type", "cgm.*"}, 1, "no current record of type"},
+		"a folder in use":    {[]string{"-yes", "-out", full, ids[2]}, 1, "is not empty"},
+	} {
+		stdout, errs, code := run(t, dir, "", append([]string{"share"}, c.args...)...)
+		if code != c.code || !strings.Contains(stdout+errs, c.want) {
+			t.Errorf("%s: exit %d, want %d and %q\n%s\n%s", name, code, c.code, c.want, stdout, errs)
+		}
+		if _, err := os.Stat(out); err == nil {
+			t.Errorf("%s: a bundle was written", name)
+			os.RemoveAll(out)
+		}
+	}
+	if ls, _, _ := run(t, dir, "", "ls", "-type", "share"); ls != "" {
+		t.Errorf("a refused share left a record:\n%s", ls)
+	}
+	// The correction can be shared, and a share record cannot.
+	if stdout, errs, code := run(t, dir, "", "share", "-yes", "-out", out, strings.TrimSpace(newer)); code != 0 {
+		t.Fatalf("%d\n%s\n%s", code, stdout, errs)
+	}
+	ls, _, _ := run(t, dir, "", "ls", "-json", "-type", "share")
+	var share struct {
+		ID string `json:"id"`
+	}
+	json.Unmarshal([]byte(strings.TrimSpace(ls)), &share)
+	if _, errs, code := run(t, dir, "", "share", "-yes", "-out", filepath.Join(t.TempDir(), "again"), share.ID); code != 1 || !strings.Contains(errs, "cannot be shared") {
+		t.Errorf("a share of a share: %d\n%s", code, errs)
+	}
+	// check-bundle refuses what is not a bundle.
+	for name, d := range map[string]string{"an empty folder": t.TempDir(), "a log": dir, "no folder": filepath.Join(t.TempDir(), "none")} {
+		if stdout, _, code := run(t, t.TempDir(), "", "check-bundle", d); code != 1 || !strings.Contains(stdout, "bundle FAILED") {
+			t.Errorf("%s: %d\n%s", name, code, stdout)
+		}
+	}
+	if !computedOnly("share") {
+		t.Error("an assistant can write a share record")
+	}
+}

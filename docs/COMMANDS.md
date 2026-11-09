@@ -153,6 +153,23 @@ Each row has the reading, its value, the percentile, the shares of the cohort wi
 
 A comparison says where a value lies in a sample. It does not say whether the value is healthy.
 
+## Share
+
+### `share -out <folder> [-files] [-note <text>] [-yes] <id>... | -type <type> [-since <time>] [-until <time>]`
+
+Writes chosen records into a new or empty folder, a bundle, that anyone can check without your log or keys. [SHARE.md](SHARE.md) says what goes in, what a reader can tell, and the format.
+
+- Give record ids, or `-type` with optional `-since` and `-until`. Only current records about you can be shared. A record brings the record it is about.
+- `-files` also writes the files those records keep, in plaintext. Without it a file is named in the bundle and not shared.
+- `-note` is a line for the reader, kept in the share record.
+- It lists what will leave and asks `Share <n> records? [y/N]`. `-yes` skips that. Without a terminal and without `-yes` it writes nothing.
+
+It adds one `share` record to your log, the signed list of what the bundle holds, and writes it into the bundle too. Then it checks the bundle as its reader will. A bundle is not encrypted, and once sent it cannot be taken back.
+
+### `check-bundle <folder>`
+
+Checks a bundle and changes nothing in it. It needs no log. It prints any record that fails, then the share record's id, the identity and key that signed it, how many records and files it holds, and who signed the records: the person, an agent the person paired, or another key. Then `bundle ok`, exit 0, or `bundle FAILED: <n> problems`, exit 1. It says each time that a bundle is selected records, not a complete history, and that a signature shows who signed, not that a value is true. `tools/second/checkbundle.py` does the same check without bean.
+
 ## AI and agents
 
 ### `mcp [-write] [-blobs] [-label <name>]`

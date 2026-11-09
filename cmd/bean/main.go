@@ -42,6 +42,12 @@ Compare
                                 Show where a reading lies among people like the
                                 ones you describe, in public survey data (NHANES).
 
+Share
+  share -out <folder> [-files] [-note <text>] <id>... | -type <type>
+                                Write chosen records into a folder that anyone
+                                can check without your log or keys.
+  check-bundle <folder>         Check a bundle someone sent you.
+
 AI and agents
   mcp [-write] [-blobs] [-label <name>]
                                 Run the MCP server for an AI client. Read-only
@@ -86,6 +92,8 @@ var syntax = map[string]string{
 	"ls":            "ls [-type <t>] [-since <time>] [-until <time>] [-author me|agent|<id>|<npub>] [-all] [-json]",
 	"show":          "show <id>",
 	"verify":        "verify",
+	"share":         "share -out <new folder> [-files] [-note <text>] [-yes] <id>... | -type <type> [-since <time>] [-until <time>]",
+	"check-bundle":  "check-bundle <folder>",
 	"compare":       "compare -sex male|female -age <from>-<to> [-where <DATASET>.<VARIABLE>=<value>|<from>-<to>]... [-unknown-files] [-save] <id>... | -type <type>",
 	"mcp":           "mcp [-write] [-blobs] [-label <name>]",
 	"agent":         "agent init [-label <name>] [-identity <id>] | agent pair <npub> [-label <name>]",
@@ -275,6 +283,10 @@ func main() {
 		cmdList(s, rest)
 	case "compare":
 		cmdCompare(s, rest)
+	case "share":
+		cmdShare(s, rest)
+	case "check-bundle":
+		cmdCheckBundle(rest)
 	case "show":
 		cmdShow(s, rest)
 	case "add":
@@ -454,7 +466,7 @@ func reportChanged(changed []core.Changed, fix string) error {
 var needsLog = map[string]bool{
 	"whoami": true, "add": true, "append": true, "blob": true, "ls": true, "show": true,
 	"verify": true, "mcp": true, "import": true, "export": true, "rotate": true,
-	"purge": true, "gc": true, "migrate": true, "compare": true,
+	"purge": true, "gc": true, "migrate": true, "compare": true, "share": true,
 }
 
 // hasLog reports whether the folder holds a log: an identity, or synced

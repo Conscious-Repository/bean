@@ -185,6 +185,22 @@ lab.cholesterol-total  187 mg/dL  46          44.2%  3.5%  164 to 213   188     
 
 [docs/COMPARE.md](docs/COMPARE.md) has the files to download, the rules, the limits and the method.
 
+## Share with someone
+
+`bean share` writes records you choose into a folder that anyone can check without your log, your keys or an account.
+
+```
+bean share -out for-ana -note "my lipids this year" -type 'lab.*' -since 2026-01-01
+bean check-bundle for-ana
+```
+
+- It shows what will leave and asks first. Only the records you choose go, with what they are about. Files go only with `-files`.
+- The reader can tell that each record is yours and unchanged, and that nothing was added or removed. They can check it without bean: `tools/second/checkbundle.py`.
+- The reader cannot tell that it is complete: it is what you chose. bean says so on every check.
+- A bundle is not encrypted, and once sent it cannot be taken back.
+
+[docs/SHARE.md](docs/SHARE.md) has what goes in, the limits and the format.
+
 ## Log from an AI assistant
 
 `bean mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server. Any AI client that supports MCP can use it to read your log, and to add to it if you let it.
@@ -325,6 +341,7 @@ bean protects who wrote what, and protects your identity against a stolen device
 | [docs/COMMANDS.md](docs/COMMANDS.md) | Every command, flag and exit code. |
 | [docs/IMPORTERS.md](docs/IMPORTERS.md) | Write an importer for your own source; community importers. |
 | [docs/COMPARE.md](docs/COMPARE.md) | Compare a reading with people like you: files, rules, limits, method. |
+| [docs/SHARE.md](docs/SHARE.md) | Share chosen records as a bundle anyone can check: what goes in, limits, format. |
 | [cmd/bean/vocabulary.md](cmd/bean/vocabulary.md) | The usual record types and units. |
 | [SECURITY.md](SECURITY.md) | What is protected, and the keys. |
 | [CORE.md](CORE.md) | The protocol, in short. |

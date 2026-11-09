@@ -192,7 +192,7 @@ func toolLogEntry(s *core.Store, a toolArgs) (any, error) {
 		return nil, fmt.Errorf("%s records come only from an importer that keeps the source file; an assistant cannot write them. Log the person's words as a note instead", a.Type)
 	}
 	if computedOnly(a.Type) {
-		return nil, fmt.Errorf("%s records come only from bean compare, which computes them from kept files; an assistant cannot write them. Log your reading of a comparison as a note about it instead", a.Type)
+		return nil, fmt.Errorf("%s records come only from bean compare and bean share, run by the person; an assistant cannot write them. Log what you have to say as a note instead", a.Type)
 	}
 	var value string
 	switch v := a.Value.(type) {
@@ -241,10 +241,13 @@ func importerOnly(typ string) bool {
 	return strings.HasPrefix(typ, "lab.") || strings.HasPrefix(typ, "apple-health.") || typ == "csv.file" || strings.HasPrefix(typ, "reference.")
 }
 
-// computedOnly reports the types that only bean compare writes. A
-// percentile typed by an assistant would look like a computed one, with no
-// file and no method behind it.
-func computedOnly(typ string) bool { return strings.HasPrefix(typ, "comparison.") }
+// computedOnly reports the types that only bean itself writes: a
+// comparison, and the record of a share. A percentile typed by an assistant
+// would look like a computed one, with no file and no method behind it, and
+// a share record is the person's word on what they disclosed.
+func computedOnly(typ string) bool {
+	return strings.HasPrefix(typ, "comparison.") || typ == shareType
+}
 
 // mcpOpts are the tools the server offers: log_entry with write, read_blob
 // with blobs.

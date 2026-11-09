@@ -43,11 +43,12 @@ In order. Each step is done only when its test passes.
 4. **Independent reproduction. Done.**
    - `tools/compare/reproduce.py` (Python, pandas) computes every number of a saved claim again from the claim, the reading and the files. It shares no code with bean and has no table of its own.
    - `make compare` fails if one number differs, in CI on synthetic files; with `BEAN_NHANES_DIR` it runs on CDC's files.
-5. **`bean share` and `bean check-bundle`.**
-   - `bean share <ids> -out bundle/` writes the chosen record files and the plaintext blobs they name. It adds the identity records needed to verify them and a manifest signed by the person.
-   - `bean check-bundle <dir>` verifies the bundle without a log, and so does the Python second verifier.
-   - A bundle proves that what it holds is authentic. It does not prove completeness: it is the selected records, not "all records from a week". The tool says so.
-   - A bundle is a disclosure: once sent, it cannot be taken back.
+5. **`bean share` and `bean check-bundle`. Done.**
+   - `bean share -out <folder> <ids> | -type <type>` writes the chosen records, the records they are about, the identity records that verify them, and one `share` record signed by the person that lists exactly what the bundle holds. Files go only with `-files`, as plaintext named by SHA-256 (DECISIONS 251, [SHARE.md](SHARE.md)).
+   - A bundle is a small log, so the checks of a log apply unchanged. `bean check-bundle <folder>` needs no log, and `tools/second/checkbundle.py`, which follows SHARE.md and shares no code with bean, gives the same verdict: `make bundles` checks 21 bundles, good and damaged.
+   - The person sees what leaves and confirms. The share record stays in the log as the record of the disclosure.
+   - A bundle proves that what it holds is authentic and exactly what the person listed. It does not prove completeness, and every check says so.
+   - A shared comparison computes again from its bundle (`reproduce.py <bundle>`).
 6. **Quickstart and release to peers.**
    - `examples/blood/` holds a synthetic report with values a person could have, a script that downloads the NHANES files and runs steps 1 to 5, and the expected output.
    - The README gets a five-minute path, and the repository opens to the people who will try it.
@@ -76,7 +77,7 @@ The first question a person asks is not "where is my cholesterol" but "how do I 
 5. **Summary-statistics references.** Many studies publish only aggregates. A reference may be a published table, with its citation, as well as participant-level files. Access-restricted datasets stay outside the repository.
 6. **Comparison packages.** Standardize the interface of a comparison (inputs, method, cohort, status), and let others publish datasets and methods for it. Extension 1's replay rules wait until two kinds of comparison exist.
 7. **Nutrition as exposure.** `food` and `food.estimate` exist. Next comes a source-backed estimate (USDA FoodData Central) with its uncertainty, kept apart from what the person said they ate. No causal claims.
-8. **Share and trust, further.** `-to <npub>` encryption of a bundle, expiring links, `bean attest <id>`, and `bean trust <identity or npub> <1-100>`. Readers compute trust; the core does not.
+8. **Share and trust, further.** `-to <npub>` encryption of a bundle, a share that does not carry the stable identity id, expiring links, `bean attest <id>`, and `bean trust <identity or npub> <1-100>`. Readers compute trust; the core does not.
 9. **Release.** A `go install` path and a neutral home ([GOVERNANCE-PROPOSAL.md](GOVERNANCE-PROPOSAL.md)).
 10. **NIP-46 remote signing,** so that the nsec never sits on the host.
 11. **Device capture** (Extension 2). Wait for a real instrument, not a synthetic one.
