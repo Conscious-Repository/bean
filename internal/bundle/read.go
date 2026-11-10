@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
@@ -20,8 +21,9 @@ import (
 const notRecord = "%s is not a record file: not a plain file, or too large"
 
 // maxRecords is the most that the records of a bundle in memory may hold
-// together.
-const maxRecords = 1 << 30
+// together. Reading a record takes many times its size, and a page has
+// little memory: the records of a year of readings are a few MiB.
+const maxRecords = 32 << 20
 
 // ReadDir reads a bundle from a folder. It reads the record files, plain
 // files two levels below objects/ as in a log, and lists files/. It reads
@@ -92,7 +94,7 @@ func ReadDir(dir string) Input {
 	}
 	found, err := os.ReadDir(filepath.Join(dir, "files"))
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		in.Problems = append(in.Problems, fmt.Sprintf("the files cannot be read: %s", err))
+		in.FilesFault = fmt.Sprintf("the files cannot be read: %s", err)
 	}
 	for _, f := range found {
 		if strings.HasPrefix(f.Name(), ".") {
@@ -182,45 +184,51 @@ func FromZip(name string, data []byte) Input {
 	return from(name, src)
 }
 
-// from finds the bundle among files that are not on a disk, and reads it
-// as ReadDir reads a folder.
+// from reads a bundle from files that are not on a disk, as ReadDir reads a
+// folder. It does not search for the bundle: the files are the bundle's own
+// folder, or one folder that is the bundle, and anything else is refused.
+// So nothing lies beside the bundle that a reader might take for part of it.
 func from(name string, src map[string]source) Input {
-	// The bundle's folder is the one that holds objects/<two names>. A zip
-	// made on a Mac carries a second tree of its own, which is not one.
-	roots := map[string]bool{}
-	for path := range src {
-		if strings.HasPrefix(path, "__MACOSX/") {
-			continue
-		}
-		if i := strings.LastIndex("/"+path, "/objects/"); i >= 0 {
-			if rest := path[i+len("objects/"):]; strings.Count(rest, "/") == 1 {
-				roots[path[:i]] = true
-			}
-		}
+	fatal := func(format string, a ...any) Input {
+		return Input{Fatal: []string{fmt.Sprintf(format, a...)}}
 	}
-	// A folder inside the bundle that looks like one is not another bundle.
-	sorted := slices.Sorted(maps.Keys(roots))
-	if len(sorted) == 0 {
-		return Input{Fatal: []string{fmt.Sprintf("%s is not a bundle: it has no objects folder", name)}}
-	}
-	root := sorted[0]
-	for _, other := range sorted[1:] {
-		if !strings.HasPrefix(other, root) {
-			return Input{Fatal: []string{fmt.Sprintf("%s holds more than one bundle: choose the folder of one", name)}}
+	// What a Mac adds when it packs a folder is not the sender's: a second
+	// tree, and names that start with a dot at the top.
+	paths := slices.DeleteFunc(slices.Sorted(maps.Keys(src)), func(path string) bool {
+		return strings.HasPrefix(path, "__MACOSX/") || strings.HasPrefix(path, ".") && !strings.HasPrefix(path, "./") && !strings.HasPrefix(path, "../")
+	})
+	top := map[string]bool{}
+	for _, path := range paths {
+		// A name that no folder can hold, "..", "." or an empty one, reads
+		// one way here and another way once it is unpacked.
+		if !fs.ValidPath(path) || src[path].size < 0 {
+			return fatal("%s holds a name or a size that no folder can hold", name)
 		}
+		first, _, _ := strings.Cut(path, "/")
+		top[first] = true
+	}
+	root := ""
+	if !top["objects"] {
+		if len(top) != 1 {
+			return fatal("%s is not a bundle: choose the bundle's own folder, the one that holds objects", name)
+		}
+		root = slices.Collect(maps.Keys(top))[0] + "/"
 	}
 	in := Input{Records: map[string][]byte{}}
 	ignored, notPlain, files := map[string]bool{}, map[string]bool{}, map[string]File{}
 	var total int64
-	for _, path := range slices.Sorted(maps.Keys(src)) {
-		if !strings.HasPrefix(path, root) {
-			continue
+	hasObjects := false
+	for _, path := range paths {
+		rel, inside := strings.CutPrefix(path, root)
+		if !inside {
+			return fatal("%s is not a bundle: choose the bundle's own folder, the one that holds objects", name)
 		}
 		s := src[path]
-		parts := strings.Split(path[len(root):], "/")
+		parts := strings.Split(rel, "/")
+		hasObjects = hasObjects || parts[0] == "objects" && len(parts) > 1
 		// A name that starts with a dot is skipped where ReadDir skips one.
-		inside := parts[0] == "objects" || parts[0] == "files"
-		if dot := func(i int) bool { return len(parts) > i && strings.HasPrefix(parts[i], ".") }; dot(0) || inside && (dot(1) || parts[0] == "objects" && dot(2)) {
+		known := parts[0] == "objects" || parts[0] == "files"
+		if dot := func(i int) bool { return len(parts) > i && strings.HasPrefix(parts[i], ".") }; dot(0) || known && (dot(1) || parts[0] == "objects" && dot(2)) {
 			continue
 		}
 		switch {
@@ -229,19 +237,19 @@ func from(name string, src map[string]source) Input {
 			// all: a zip file can state small sizes and unpack to more
 			// than a machine has.
 			if total += s.size; total > maxRecords {
-				return Input{Fatal: []string{fmt.Sprintf("%s holds more records than can be checked here: more than %d MiB", name, maxRecords>>20)}}
+				return fatal("%s holds more records than can be checked here: more than %d MiB", name, maxRecords>>20)
 			}
 			data, err := readAll(s)
 			if err != nil {
-				notPlain[path[len(root):]] = true
+				notPlain[rel] = true
 				continue
 			}
-			in.Records[path[len(root):]] = data
+			in.Records[rel] = data
 		case parts[0] == "objects":
 			// A file where a folder belongs, or a folder where a record does.
 			notPlain[strings.Join(parts[:min(3, len(parts))], "/")] = true
 		case parts[0] == "files" && len(parts) == 1:
-			return Input{Fatal: []string{"files is not a folder: a link or a file in its place is not followed"}}
+			return fatal("files is not a folder: a link or a file in its place is not followed")
 		case parts[0] == "files" && len(parts) == 2:
 			files[parts[1]] = File{Name: parts[1], Regular: s.regular, Size: s.size, Digest: func() string {
 				r, err := s.open()
@@ -256,6 +264,9 @@ func from(name string, src map[string]source) Input {
 		default:
 			ignored[parts[0]] = true
 		}
+	}
+	if !hasObjects {
+		return fatal("%s is not a bundle: it has no objects folder", name)
 	}
 	for _, p := range slices.Sorted(maps.Keys(notPlain)) {
 		in.Problems = append(in.Problems, fmt.Sprintf(notRecord, p))

@@ -519,8 +519,36 @@ func TestBundleFromMemory(t *testing.T) {
 		}
 		m["for-ana/files"] = []byte("x")
 	}))), "files is not a folder")
-	fails("two bundles", bundle.Check(bundle.FromFiles("x", change(func(m map[string][]byte) { m["other/objects/ab/cd.json"] = []byte("{}") }))), "more than one bundle")
+	// The files are the bundle's own folder, or one folder that is the
+	// bundle. Anything beside it is refused, not passed over: a reader
+	// could take it for part of what was checked.
+	for _, beside := range []string{"other/objects/ab/cd.json", "REPORT.pdf", "elsewhere/files/x", "For-Ana/files/x"} {
+		fails("beside the bundle: "+beside, bundle.Check(bundle.FromFiles("x", change(func(m map[string][]byte) { m[beside] = []byte("{}") }))), "choose the bundle's own folder")
+	}
 	fails("no bundle", bundle.Check(bundle.FromFiles("x", map[string][]byte{"notes.txt": []byte("x")})), "is not a bundle")
+	fails("a folder with no objects", bundle.Check(bundle.FromFiles("x", map[string][]byte{"for-ana/notes.txt": []byte("x")})), "has no objects folder")
+	// A name that no folder can hold reads one way here and another way
+	// once it is unpacked, so it is refused.
+	for _, odd := range []string{"for-ana/files/./x", "for-ana/./files/x", "for-ana/../for-ana/files/x", "for-ana/objects/../files/x", "/for-ana/files/x", "for-ana//files/x", "for-ana/objects/zz/./evil.json", "./for-ana/files/x", "../x"} {
+		fails("an odd name: "+odd, bundle.Check(bundle.FromZip("x.zip", zipOf(files, func(zw *zip.Writer) {
+			w, _ := zw.Create(odd)
+			w.Write([]byte("{}"))
+		}))), "no folder can hold")
+	}
+	// A zip entry can state a size that is no size.
+	fails("a size that is no size", bundle.Check(bundle.FromZip("x.zip", zipOf(files, func(zw *zip.Writer) {
+		zw.CreateRaw(&zip.FileHeader{Name: "for-ana/objects/ab/huge.json", UncompressedSize64: 1 << 63})
+	}))), "no folder can hold")
+	// A second copy of the bundle inside its folder is not part of it. It
+	// is named, so that a reader does not take it for checked.
+	inside := bundle.Check(bundle.FromFiles("x", change(func(m map[string][]byte) {
+		for name, data := range files {
+			m["for-ana/copy/"+strings.TrimPrefix(name, "for-ana/")] = bytes.ToUpper(data)
+		}
+	})))
+	if !inside.OK || !slices.Contains(inside.Ignored, "copy") {
+		t.Errorf("a copy inside the bundle's folder: ok %v, not part of it %v", inside.OK, inside.Ignored)
+	}
 	fails("not a zip file", bundle.Check(bundle.FromZip("x.zip", []byte("not a zip"))), "cannot be read as a zip file")
 	// Two entries with one name: which one a reader sees depends on the
 	// tool that reads the zip, so neither is read.
@@ -528,13 +556,10 @@ func TestBundleFromMemory(t *testing.T) {
 		w, _ := zw.Create(record)
 		w.Write([]byte("{}"))
 	}))), "two files with one name")
-	// What lies beside the bundle's folder, or under a name the bundle does
-	// not use, is named and not read, and changes nothing.
-	beside := bundle.Check(bundle.FromFiles("x", change(func(m map[string][]byte) {
-		m["for-ana/local/identity"] = []byte("x")
-		m["elsewhere/notes.txt"] = []byte("x")
-	})))
-	if text := strings.Join(beside.Lines(), "\n"); !beside.OK || !strings.Contains(text, "not part of the bundle, and not read: local") || strings.Contains(text, "elsewhere") {
-		t.Errorf("what lies beside the bundle:\n%s", text)
+	// What lies in the bundle's folder under a name the bundle does not use
+	// is named and not read, and changes nothing.
+	extra := bundle.Check(bundle.FromFiles("x", change(func(m map[string][]byte) { m["for-ana/local/identity"] = []byte("x") })))
+	if text := strings.Join(extra.Lines(), "\n"); !extra.OK || !strings.Contains(text, "not part of the bundle, and not read: local") {
+		t.Errorf("what else lies in the bundle's folder:\n%s", text)
 	}
 }

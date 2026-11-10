@@ -47,7 +47,8 @@ func build(out string) error {
 	// of this machine, no state of this checkout and nothing of this run
 	// ends up in the page.
 	cmd := exec.Command("go", "build", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -buildid=", "-o", wasmPath, "github.com/Conscious-Repository/bean/tools/page/check")
-	cmd.Env = append(os.Environ(), "GOOS=js", "GOARCH=wasm", "CGO_ENABLED=0")
+	// And no setting of this machine's Go changes the program.
+	cmd.Env = append(os.Environ(), "GOOS=js", "GOARCH=wasm", "CGO_ENABLED=0", "GOFLAGS=", "GOWASM=", "GOEXPERIMENT=")
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("go build: %w", err)

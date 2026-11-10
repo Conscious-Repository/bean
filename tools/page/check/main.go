@@ -37,7 +37,11 @@ func check(_ js.Value, args []js.Value) (out any) {
 	}
 	files := map[string][]byte{}
 	for i := range args[2].Length() {
-		files[args[2].Index(i).String()] = bytesOf(args[3].Index(i))
+		path := args[2].Index(i).String()
+		if _, twice := files[path]; twice {
+			panic("two files with one name")
+		}
+		files[path] = bytesOf(args[3].Index(i))
 	}
 	return encode(bundle.Check(bundle.FromFiles(name, files)))
 }
@@ -61,7 +65,7 @@ func encode(res bundle.Result) string {
 		bundle.Result
 		Lines []string `json:"lines"`
 	}{res, safe(lines)}
-	shown.Head, shown.Tail, shown.Problems, shown.Note = safe(res.Head), safe(res.Tail), safe(res.Problems), view.Safe(res.Note)
+	shown.Head, shown.Tail, shown.Problems, shown.Ignored, shown.Note = safe(res.Head), safe(res.Tail), safe(res.Problems), safe(res.Ignored), view.Safe(res.Note)
 	if res.Rows != nil {
 		shown.Rows = make([]bundle.Row, len(res.Rows))
 		for i, r := range res.Rows {

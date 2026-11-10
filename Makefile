@@ -4,22 +4,23 @@
 PY ?= python3
 FUZZTIME ?= 2m
 
-.PHONY: help check build fmt vet test lint vuln vectors second compare bundles page example differential demo fuzz smoke
+.PHONY: help check build fmt vet test lint vuln vectors second compare bundles page pagetest example differential demo fuzz smoke
 
 help:
-	@echo "make check         every check a commit needs (fmt vet build test lint vuln vectors second compare bundles example differential demo)"
+	@echo "make check         every check a commit needs (fmt vet build test lint vuln vectors second compare bundles pagetest example differential demo)"
 	@echo "make test          go test -race -failfast ./..."
 	@echo "make vectors       regenerate vectors/ and check them byte for byte and with Python"
 	@echo "make second        compare bean with the second verifier and the conformance folders"
 	@echo "make compare       compute every saved comparison again with Python and pandas"
 	@echo "make bundles       check share bundles, good and damaged, with bean, with Python and with the page"
 	@echo "make page          build bean-check.html, the page that checks a bundle in a browser"
+	@echo "make pagetest      try that page in a real browser (needs node with Playwright)"
 	@echo "make example       run examples/blood offline, on synthetic reference files"
 	@echo "make differential  compare this build with OLD (default origin/main)"
 	@echo "make fuzz          run each fuzz target for FUZZTIME (default 2m)"
 	@echo "make smoke         build a large log and time the commands"
 
-check: fmt vet build test lint vuln vectors second compare bundles example differential demo
+check: fmt vet build test lint vuln vectors second compare bundles pagetest example differential demo
 
 build:
 	go build ./...
@@ -73,6 +74,12 @@ bundles:
 # commit and the same Go give the same bytes; it prints their SHA-256.
 page:
 	go run ./tools/page -o bean-check.html
+
+# The page's own script, buttons and content policy, in a real browser
+# opened from the disk. CI has no browser to drive, so this runs where
+# Playwright is.
+pagetest:
+	bash tools/page/smoke.sh
 
 # The quickstart must run from a fresh clone and give the numbers it was
 # written with. Here it runs offline on the synthetic reference files;

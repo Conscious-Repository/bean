@@ -37,15 +37,17 @@ A comparison is shown as its claim states it. The check proves who signed the cl
 
 ### In a browser, with no install
 
-A reader with no terminal opens one page, `bean-check.html`, and chooses the bundle's folder or a zip file of it. The page says whether the bundle passed, shows your note and each record, then who signed and what no bundle can show. Nothing is shown from a bundle that fails.
+A reader with no terminal opens one page, `bean-check.html`, and chooses the bundle's folder or a zip file of it. The page gives one of three verdicts: the bundle passed, it failed, or nothing was checked (the wrong folder, not a zip file). When it passed, the page shows your note and each record, then who signed and what no bundle can show. Nothing is shown from a bundle that did not pass, and no earlier verdict stays on the page.
 
 - The page is one file. It holds the same check as `bean check-bundle`, built for a browser, and loads nothing else. It works from a disk, with no connection.
-- It cannot use the network: its content policy forbids every request. What a reader opens in it is not sent anywhere.
+- It sends nothing: its script makes no request, and its content policy blocks every load, so what a reader opens in it has nowhere to go. A policy cannot stop a page from leaving for another address; this page's script never does, and holds no link.
 - `make page` builds it. The same commit and the same Go give the same bytes, and the build prints their SHA-256. It is not in the repository: it is 3.7 MB of built program.
-- Send the folder as a zip file; the page reads it packed.
+- Send the folder as a zip file; the page reads it packed. What the page is given must be the bundle's own folder, or one folder that is the bundle: anything beside it is refused, and anything else inside it is named as not checked.
+- A zip file can read differently in different tools. So a pass covers what the page read. To open a file that a bundle carries, the reader unpacks the zip file and checks the unpacked folder; the page says so.
 - A page that came with a bundle is only as good as whoever sent both: a forged page can call anything good. When it matters, the reader gets the page from the project, or builds it, and compares its SHA-256. The page says so itself.
 - What only a disk can hold, a link or a pipe in the folder, a browser does not hand to a page. `check-bundle` judges those; the page judges the bytes it gets.
-- It was tried in Chromium, on a wide screen and a phone's. Firefox and Safari have what it needs and were not tried.
+- A bundle whose records hold more than 32 MiB together is refused by the page: a browser has little memory. `check-bundle` has no such limit.
+- It was tried in Chromium, opened from a disk, on a wide screen and a phone's (`make pagetest`). Firefox and Safari have what it needs and were not tried.
 
 Read a bundle with `check-bundle`, not by pointing `-dir` at it: a bundle is someone else's records, not your log. If you did, no harm is done: bean leaves a `local` folder there, which the check names and does not read.
 

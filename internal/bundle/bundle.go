@@ -75,7 +75,7 @@ type Input struct {
 	// else is looked at then.
 	Fatal []string
 	// Problems are faults found while reading: a record file that is not a
-	// plain file, a files folder that cannot be listed.
+	// plain file.
 	Problems []string
 	// Ignored names what else the folder holds. It is not part of the
 	// bundle and was not read.
@@ -84,6 +84,8 @@ type Input struct {
 	Records map[string][]byte
 	// Files are the entries of files/.
 	Files []File
+	// FilesFault says why files/ could not be listed, or "".
+	FilesFault string
 }
 
 // Row is one shared record, as a reader sees it.
@@ -98,12 +100,21 @@ type Row struct {
 // Result is what a check found.
 type Result struct {
 	OK bool `json:"ok"`
+	// Unread reports that what was given could not be read as a bundle at
+	// all: the wrong folder, not a zip file. Nothing was checked.
+	Unread bool `json:"unread"`
 	// Head is what the check says before the records: who shared, when, and
 	// the counts.
 	Head []string `json:"head"`
 	// Note is what the person wrote for the reader, set when every check
 	// passed. Head holds it too.
 	Note string `json:"note"`
+	// Ignored names what lay in the bundle's folder and is not part of the
+	// bundle: it was not read and not checked. Head holds it too.
+	Ignored []string `json:"ignored"`
+	// Files is how many files the bundle carries, set when every check
+	// passed.
+	Files int `json:"files"`
 	// Rows are the shared records. They are set only when every check
 	// passed: a reader should not read values out of a bundle that failed.
 	Rows []Row `json:"rows"`
@@ -146,7 +157,7 @@ func Check(in Input) Result {
 		return res
 	}
 	if len(in.Fatal) > 0 {
-		res.Problems = slices.Clone(in.Fatal)
+		res.Problems, res.Unread = slices.Clone(in.Fatal), true
 		return done()
 	}
 	res.Problems = slices.Clone(in.Problems)
@@ -342,6 +353,9 @@ func Check(in Input) Result {
 	}
 	// Rule 5: files/ holds exactly the included files.
 	included := len(want)
+	if in.FilesFault != "" {
+		bad("%s", in.FilesFault)
+	}
 	for _, f := range in.Files {
 		size, ok := want[f.Name]
 		if !ok {
@@ -381,9 +395,11 @@ func Check(in Input) Result {
 	for _, name := range in.Ignored {
 		res.Head = append(res.Head, "not part of the bundle, and not read: "+name)
 	}
+	res.Ignored = in.Ignored
 	// What it holds, shown only when every check passed.
 	if len(res.Problems) == 0 {
 		res.Note, _ = share.Context["note"].(string)
+		res.Files = included
 		var rows []*core.Record
 		for id := range listed {
 			rows = append(rows, rp.Records[id])
