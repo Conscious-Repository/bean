@@ -503,7 +503,9 @@ func TestBundleFromMemory(t *testing.T) {
 		t.Fatalf("no record or no file in the bundle: %q %q", record, file)
 	}
 	fails("a record removed", bundle.Check(bundle.FromFiles("x", change(func(m map[string][]byte) { delete(m, record) }))), "is listed, and is not in the bundle")
-	fails("a record changed", bundle.Check(bundle.FromFiles("x", change(func(m map[string][]byte) { m[record] = bytes.Replace(m[record], []byte(`"n":193`), []byte(`"n":139`), 1) }))), "fails a check of a log")
+	fails("a record changed", bundle.Check(bundle.FromFiles("x", change(func(m map[string][]byte) {
+		m[record] = bytes.Replace(m[record], []byte(`"n":193`), []byte(`"n":139`), 1)
+	}))), "fails a check of a log")
 	fails("a file changed", bundle.Check(bundle.FromZip("x", zipOf(change(func(m map[string][]byte) { m[file] = append(slices.Clone(m[file]), 'x') }), nil))), "is not the file the share record lists")
 	fails("a file added", bundle.Check(bundle.FromFiles("x", change(func(m map[string][]byte) { m["for-ana/files/extra"] = []byte("x") }))), "does not list it")
 	fails("a folder where a file belongs", bundle.Check(bundle.FromFiles("x", change(func(m map[string][]byte) { m[file+"/inside"] = m[file]; delete(m, file) }))), "is not a plain file")
