@@ -71,7 +71,9 @@ func cmdImport(s *core.Store, args []string) {
 	source, file := rest[0], rest[len(rest)-1]
 	pass := rest[1 : len(rest)-1]
 	o.review = os.Stdin
-	o.terminal = isTerminal(os.Stdin)
+	// The review is printed and answered: both ends must be a person's
+	// terminal, or the readings would land in a pipe.
+	o.terminal = isTerminal(os.Stdin) && isTerminal(os.Stdout)
 	bin, err := importerPath(source)
 	if err != nil {
 		fail(err)

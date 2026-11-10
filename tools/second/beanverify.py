@@ -637,7 +637,7 @@ def verify(files, blobfiles):
     lines.sort()
     lines.append("summary: %d valid, %d invalid, %d skipped, %d held, %d duplicate" % (nvalid, ninvalid, skipped, nheld, dups))
     code = 1 if ninvalid or incomplete else 0
-    return lines, code, {"valid": {i for i in R if valid(i)}, "errors": {i: e for i, e in errors.items() if e}, "purged": purged}
+    return lines, code, {"valid": {i for i in R if valid(i)}, "errors": {i: e for i, e in errors.items() if e}, "purged": purged, "records": R, "unknown": unknown}
 
 def load_dir(d):
     """The plain files exactly one directory below objects/ and blobs/

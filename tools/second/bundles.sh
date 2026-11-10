@@ -195,6 +195,21 @@ for f in go py; do grep -q 'cannot show that it is still the person.s key' "$T/$
 # With the rotation's record beside it, the same bundle fails.
 damage "$T/thief"; S2=$(grep -l '"type":"bean.succession"' "$L"/objects/*/*.json | head -1); f="$T/d/objects/$(basename "$(dirname "$S2")")"; mkdir -p "$f"; cp "$S2" "$f/"; both "the same, with the rotation's record added" "$T/d" bad
 
+# A record that names one file twice shares it once, and counts it once.
+BH=$(b ls -json -type reference.file | "$PY" -I -c 'import sys, json; print(json.loads(sys.stdin.readline())["value"]["blob"])')
+printf '{"type":"note","value":{"text":"one file, named twice"},"times":{"observed":null},"source":{"system":"self","adapter":"t@1","ref":null},"blobs":[{"hash":"%s","media_type":"application/octet-stream","role":"a"},{"hash":"%s","media_type":"application/octet-stream","role":"b"}]}\n' "$BH" "$BH" | b append >/dev/null 2>&1 || { echo "append failed"; exit 1; }
+TW=$(b ls -json -type note | "$PY" -I -c 'import sys, json; print(next(r["id"] for r in map(json.loads, sys.stdin) if r["value"].get("text") == "one file, named twice"))')
+share "$T/twice" -files "$TW";               both "a record that names one file twice" "$T/twice" ok
+grep -q '^records: 1 listed; files: 1 included, 0 named and not included' "$T/go.txt" || { echo "DIFFER: a file named twice is not counted once"; rc=1; }
+
+# An agent that the person unpaired since: its reading still goes, and both
+# checkers count it as another key's, with no pairing in the proof.
+PF=$(grep -l '"type":"agent.pair"' "$L"/objects/*/*.json | head -1)
+"$PY" -I -c 'import sys, json; r = json.load(open(sys.argv[1])); print(json.dumps({"type": "agent.pair", "value": {"key": r["value"]["key"], "status": "unpaired"}, "times": {"observed": None}, "source": {"system": "self", "adapter": "t@1", "ref": None}, "refs": [{"rel": "supersedes", "id": r["id"]}]}))' "$PF" | b append >/dev/null 2>&1 || { echo "append failed"; exit 1; }
+share "$T/unpaired" "$A1";                  both "a reading of an agent unpaired since" "$T/unpaired" ok
+grep -q '^signed: 0 by the person, 0 by an agent the person paired, 1 by another key' "$T/go.txt" || { echo "DIFFER: an unpaired agent's reading is counted as a paired one"; rc=1; }
+grep -q '"type":"agent.pair"' "$T"/unpaired/objects/*/*.json && { echo "DIFFER: a pairing that was undone went as proof"; rc=1; }
+
 both "a folder that is not a bundle" "$T/bin" bad
 both "a whole log, not a bundle" "$L" bad
 

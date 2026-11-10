@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # run.sh: saves comparisons with bean on the synthetic NHANES files, then
 # checks that an independent Python implementation (reproduce.py, with
-# pandas and numpy) accepts every record and computes every number of
+# pandas) accepts every record and computes every number of
 # every comparison again: from the records and the files, and from a bean
 # export folder alone. It then checks that reproduce.py notices a changed
 # result, a changed reading and a changed file.

@@ -110,14 +110,25 @@ func TestShareKeepsFilesHomeAndBundlesOut(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(out, "files")); err == nil {
 		t.Error("the lab report was shared by type")
 	}
-	// Named by its id, with -files, the report goes.
-	ls, _, _ := run(t, dir, "", "ls", "-json", "-type", "lab.report")
-	var rep struct {
-		ID string `json:"id"`
+	// A note about the report brings the report's record along, never its
+	// file: only a record named by its id takes its file with it.
+	note, _, _ := run(t, dir, "", "add", "note", "ask about this report", "-about", reportID(t, dir))
+	about := filepath.Join(t.TempDir(), "about")
+	stdout, errs, code = run(t, dir, "", "share", "-yes", "-files", "-out", about, strings.TrimSpace(note))
+	if code != 0 || !strings.Contains(stdout, "shared 2 records and 0 files") || !strings.Contains(errs, "not shared: the file that") {
+		t.Fatalf("a note about the report: %d\n%s\n%s", code, stdout, errs)
 	}
-	json.Unmarshal([]byte(strings.TrimSpace(ls)), &rep)
+	if _, err := os.Stat(filepath.Join(about, "files")); err == nil {
+		t.Error("the lab report left with a note about it")
+	}
+	// Every bundle has a note for a person who has only the folder, and the
+	// check does not read it.
+	if readme, err := os.ReadFile(filepath.Join(about, "README.txt")); err != nil || !strings.Contains(string(readme), "bean check-bundle") {
+		t.Errorf("no read-me in the bundle: %v", err)
+	}
+	// Named by its id, with -files, the report goes.
 	named := filepath.Join(t.TempDir(), "named")
-	if stdout, errs, code := run(t, dir, "", "share", "-yes", "-files", "-out", named, rep.ID); code != 0 || !strings.Contains(stdout, "shared 1 records and 1 files") {
+	if stdout, errs, code := run(t, dir, "", "share", "-yes", "-files", "-out", named, reportID(t, dir)); code != 0 || !strings.Contains(stdout, "shared 1 records and 1 files") {
 		t.Fatalf("%d\n%s\n%s", code, stdout, errs)
 	}
 	// Another person's log refuses to sync a bundle, and is unchanged.
@@ -130,6 +141,29 @@ func TestShareKeepsFilesHomeAndBundlesOut(t *testing.T) {
 	if after, _, _ := run(t, sam, "", "ls", "-all"); after != before {
 		t.Errorf("a refused sync changed the log:\n%s", after)
 	}
+	// A bundle with an empty file where the reader's identity record would
+	// be is refused too: the record must be there whole.
+	me, _, _ := run(t, sam, "", "whoami")
+	samID := strings.Fields(me)[1]
+	planted := filepath.Join(t.TempDir(), "planted")
+	os.CopyFS(planted, os.DirFS(out))
+	os.MkdirAll(filepath.Dir(objectPath(planted, samID)), 0o700)
+	os.WriteFile(objectPath(planted, samID), nil, 0o600)
+	if _, errs, code := run(t, sam, "", "sync", planted); code != 1 || !strings.Contains(errs, "is not a copy of your log") {
+		t.Errorf("sync of a bundle with a planted file: %d\n%s", code, errs)
+	}
+	// A device's folder holds only what the device signed, and says whose it
+	// is: that syncs.
+	device := t.TempDir()
+	if _, errs, code := run(t, device, "", "agent", "init", "-label", "ring", "-identity", samID); code != 0 {
+		t.Fatalf("agent init -identity: %s", errs)
+	}
+	if _, errs, code := run(t, device, "", "add", "-agent", "heart.resting", "61", "-unit", "/min"); code != 0 {
+		t.Fatalf("a device reading: %s", errs)
+	}
+	if stdout, errs, code := run(t, sam, "", "sync", device); code != 0 || !strings.Contains(stdout, "copied 1 records") {
+		t.Errorf("sync of a device folder: %d\n%s\n%s", code, stdout, errs)
+	}
 	// The person's own copy still syncs.
 	copyDir := t.TempDir()
 	if err := os.CopyFS(filepath.Join(copyDir, "objects"), os.DirFS(filepath.Join(dir, "objects"))); err != nil {
@@ -138,6 +172,19 @@ func TestShareKeepsFilesHomeAndBundlesOut(t *testing.T) {
 	if _, errs, code := run(t, dir, "", "sync", copyDir); code != 0 {
 		t.Errorf("sync of an own copy: %d\n%s", code, errs)
 	}
+}
+
+// reportID is the id of the log's one lab.report record.
+func reportID(t *testing.T, dir string) string {
+	t.Helper()
+	ls, _, _ := run(t, dir, "", "ls", "-json", "-type", "lab.report")
+	var rep struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(ls)), &rep); err != nil || rep.ID == "" {
+		t.Fatalf("no lab.report: %v\n%s", err, ls)
+	}
+	return rep.ID
 }
 
 // treeDigest is a digest of every path and every file's bytes under dir.
@@ -202,7 +249,7 @@ func TestShareFilesAndComparison(t *testing.T) {
 	// A comparison comes with its reading and the records of its files.
 	// Without -files the files are named, not shared.
 	named := filepath.Join(t.TempDir(), "named")
-	if out, errs, code := run(t, dir, "", "share", "-yes", "-out", named, cmp.ID); code != 0 || !strings.Contains(out, "shared 4 records and 0 files") {
+	if out, errs, code := run(t, dir, "", "share", "-yes", "-out", named, cmp.ID); code != 0 || !strings.Contains(out, "shared 4 records and 0 files") || strings.Count(errs, "Add -files to share it.") != 2 {
 		t.Fatalf("%d\n%s\n%s", code, out, errs)
 	}
 	if _, err := os.Stat(filepath.Join(named, "files")); err == nil {

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/Conscious-Repository/bean/core"
+	"github.com/Conscious-Repository/bean/internal/nhanes"
 )
 
 // bean share writes chosen records, and with -files the files they keep,
@@ -38,11 +39,39 @@ import (
 const (
 	shareType   = "share"
 	shareSystem = "bean-share"
+	// bundleReadme is written beside objects/ in every bundle. It holds no
+	// value and nothing a checker reads: it tells a person who has only the
+	// folder what it is and how to read it.
+	bundleReadme = `This folder is a bean bundle: health records that one person chose to share.
+
+It is not a document to open. The records are small signed files under
+objects/, and files/ holds any files shared with them. To read it, check it:
+a check proves that every record is what the person signed and that nothing
+was added or removed, and then lists what the bundle holds.
+
+  With bean (https://github.com/Conscious-Repository/bean):
+      bean check-bundle <this folder>
+
+  Without bean, with Python 3:
+      python3 tools/second/checkbundle.py <this folder>
+
+Do not read values from this folder before it passes a check, and do not
+trust this note: anyone who carried the folder could have changed it. A
+check does not read it.
+
+What a check cannot show: that these are all of the person's records, that a
+value is true, who the person is, or that the key that signed is still
+theirs. Ask the person for their current key when it matters.
+`
 )
 
-// isPairing reports a pairing that the person signed about themselves.
+// isPairing reports a pairing in force that the person signed about
+// themselves: an agent.pair claim that does not say "unpaired", as bean ls
+// reads one. A device's own kind of pairing comes with device capture
+// (docs/EXTENSIONS.md 11), in both places at once.
 func isPairing(r *core.Record, person string) bool {
-	return (r.Type == "agent.pair" || r.Type == "device.pair") && r.Author == person && r.Subject == person
+	status, _ := r.Value["status"].(string)
+	return r.Type == "agent.pair" && r.Author == person && r.Subject == person && r.ValueKey() != "" && status != "unpaired"
 }
 
 // statedDigest is the SHA-256 that a record states for the one file it
@@ -67,9 +96,12 @@ func onChain(rp *core.Report, r *core.Record, person string) bool {
 	return r.IsIdentity() && (r.ID == person || r.Subject == person) && rp.Valid[r.ID] && !rp.OffTree(r)
 }
 
-// notShareable says why a record cannot go into a bundle, or "".
-func notShareable(l *core.Loaded, r *core.Record) string {
+// notShareable says why a record cannot go into a bundle, or "". deleted is
+// what the person deleted (deletedByPerson).
+func notShareable(l *core.Loaded, deleted map[string]bool, r *core.Record) string {
 	switch {
+	case staleComparison(l, deleted, r):
+		return "the reading it compares was corrected or deleted"
 	case r.Type == shareType:
 		return "it is the record of a share, which is not shared again"
 	case neverListed(r):
@@ -89,6 +121,7 @@ type sharedFile struct {
 	blob, record, mediaType, recordType string
 	digest                              string // SHA-256 of the plaintext, with -files
 	data                                []byte // the plaintext, with -files
+	public                              bool   // a reference file the person kept: -files alone shares it
 }
 
 func cmdShare(s *core.Store, args []string) {
@@ -119,6 +152,8 @@ func cmdShare(s *core.Store, args []string) {
 	if err := bundleTarget(out); err != nil {
 		fail(err)
 	}
+	// A comparison whose reading is gone must not leave: clean up first.
+	sweepComparisons(s)
 	recs, l, err := s.List(f)
 	if err != nil {
 		fail(err)
@@ -130,8 +165,10 @@ func cmdShare(s *core.Store, args []string) {
 		warnFrozen(l)
 		os.Exit(4)
 	}
-	// What the person chose.
+	deleted := deletedByPerson(l)
+	// What the person chose, and which of it they named one by one.
 	chosen := map[string]*core.Record{}
+	named := map[string]bool{}
 	// A type picks readings, never a record that keeps a file: 'lab.*' must
 	// not sweep up the lab report itself, with the person's name in it. Such
 	// a record is shared when it is named by its id.
@@ -139,7 +176,7 @@ func cmdShare(s *core.Store, args []string) {
 	if *typ != "" {
 		for _, r := range recs {
 			switch {
-			case notShareable(l, r) != "":
+			case notShareable(l, deleted, r) != "":
 			case len(r.Blobs) > 0:
 				keepsFile++
 			default:
@@ -155,10 +192,10 @@ func cmdShare(s *core.Store, args []string) {
 		if err != nil {
 			fail(err)
 		}
-		if why := notShareable(l, r); why != "" {
+		if why := notShareable(l, deleted, r); why != "" {
 			fail(fmt.Errorf("%s cannot be shared: %s", r.ID, why))
 		}
-		chosen[r.ID] = r
+		chosen[r.ID], named[r.ID] = r, true
 	}
 	// A record is read with the record it is about: a comparison with its
 	// reading, an estimate with its meal. That one comes along, and only
@@ -172,8 +209,8 @@ func cmdShare(s *core.Store, args []string) {
 			case chosen[target] != nil:
 			case t == nil:
 				leftOut = append(leftOut, fmt.Sprintf("  not shared: %s, which %s is about: it is not in this log", target[7:19], id[7:19]))
-			case notShareable(l, t) != "":
-				leftOut = append(leftOut, fmt.Sprintf("  not shared: %s, which %s is about: %s", target[7:19], id[7:19], notShareable(l, t)))
+			case notShareable(l, deleted, t) != "":
+				leftOut = append(leftOut, fmt.Sprintf("  not shared: %s, which %s is about: %s", target[7:19], id[7:19], notShareable(l, deleted, t)))
 			default:
 				broughtBy[target] = id
 			}
@@ -190,13 +227,24 @@ func cmdShare(s *core.Store, args []string) {
 		}
 		return shared[i].ID < shared[j].ID
 	})
-	// The files those records keep.
+	// The files those records keep. With -files a file travels only when the
+	// person named its record by id, or when it is a public reference file
+	// that the person kept: never because a record came along, or was picked
+	// by type. A lab report holds a name and a birth date, and a note about
+	// it must not carry it out.
 	var kept []sharedFile
 	distinct := map[string]bool{}
+	seen := map[string]bool{}
 	for _, r := range shared {
+		public := r.Type == nhanes.FileType && r.Author == l.ID
+		travels := *files && (named[r.ID] || public)
 		for _, b := range r.Blobs {
-			sf := sharedFile{blob: b.Hash, record: r.ID, mediaType: b.MediaType, recordType: r.Type}
-			if *files {
+			if seen[b.Hash+" "+r.ID] {
+				continue // a record may name one file twice
+			}
+			seen[b.Hash+" "+r.ID] = true
+			sf := sharedFile{blob: b.Hash, record: r.ID, mediaType: b.MediaType, recordType: r.Type, public: public}
+			if travels {
 				data, err := s.GetBlob(b.Hash)
 				if err != nil {
 					fail(fmt.Errorf("the file of %s cannot be read: %w", r.ID[7:19], err))
@@ -236,6 +284,24 @@ func cmdShare(s *core.Store, args []string) {
 	// written: an assistant that runs this through a tool cannot disclose
 	// for the person.
 	labels := l.AgentLabels()
+	// What stays home is said with or without the review.
+	for _, sf := range kept {
+		switch {
+		case sf.data != nil:
+		case sf.public:
+			leftOut = append(leftOut, fmt.Sprintf("  not shared: the file that %s (%s) keeps. Add -files to share it.", sf.record[7:19], sf.recordType))
+		default:
+			leftOut = append(leftOut, fmt.Sprintf("  not shared: the file that %s (%s) keeps. With -files, name that record by its id to share its file.", sf.record[7:19], sf.recordType))
+		}
+	}
+	if keepsFile > 0 {
+		leftOut = append(leftOut, fmt.Sprintf("  not shared: %d records of that type that keep a file. Name one by its id to share it.", keepsFile))
+	}
+	if *yes {
+		for _, line := range leftOut {
+			fmt.Fprintln(os.Stderr, strings.TrimSpace(line))
+		}
+	}
 	if !*yes {
 		if !isTerminal(os.Stdin) || !isTerminal(os.Stderr) {
 			fail(errors.New("share needs a terminal: run bean share yourself to see what leaves, or pass -yes to write without review"))
@@ -243,24 +309,19 @@ func cmdShare(s *core.Store, args []string) {
 		w := os.Stderr
 		fmt.Fprintf(w, "To share, into %s:\n", out)
 		for _, r := range shared {
-			line := fmt.Sprintf("  %s  %s  %s  %s", whenText(r), r.Type, safe(strings.TrimSpace(recordText(r, l.Report.Records)+"  "+byText(r, l.ID, labels))), r.ID[7:19])
+			line := fmt.Sprintf("  %s  %s  %s  %s", whenText(r), r.Type, safe(strings.TrimSpace(recordText(r, currentRecord(l))+"  "+byText(r, l.ID, labels))), r.ID[7:19])
 			if by := broughtBy[r.ID]; by != "" {
 				line += "  (comes along: " + by[7:19] + " is about it)"
 			}
 			fmt.Fprintln(w, line)
 		}
-		for _, line := range leftOut {
-			fmt.Fprintln(w, line)
-		}
 		for _, sf := range kept {
-			if *files {
+			if sf.data != nil {
 				fmt.Fprintf(w, "  THE WHOLE FILE that %s (%s) keeps, as you imported it: %s, %d bytes, in plaintext. A lab report holds your name and birth date.\n", sf.record[7:19], sf.recordType, safe(sf.mediaType), len(sf.data))
-			} else {
-				fmt.Fprintf(w, "  the file that %s (%s) keeps: named, not shared (-files shares it)\n", sf.record[7:19], sf.recordType)
 			}
 		}
-		if keepsFile > 0 {
-			fmt.Fprintf(w, "  not shared: %d records of that type that keep a file. Name one by its id to share it.\n", keepsFile)
+		for _, line := range leftOut {
+			fmt.Fprintln(w, line)
 		}
 		fmt.Fprintf(w, "  also: your %d identity records and %d pairings, and the share record itself\n", len(proof)-pairings, pairings)
 		fmt.Fprintln(w, "A bundle is a disclosure: it is not encrypted, and once sent it cannot be taken back. Each record carries your identity id, so two bundles of yours can be linked.")
@@ -273,7 +334,7 @@ func cmdShare(s *core.Store, args []string) {
 			fail(err)
 		}
 		for _, r := range shared {
-			if now := l.Report.Records[r.ID]; now == nil || notShareable(l, now) != "" {
+			if now := l.Report.Records[r.ID]; now == nil || notShareable(l, deleted, now) != "" {
 				fail(fmt.Errorf("nothing was written: %s changed while you decided. Run bean share again", r.ID[7:19]))
 			}
 		}
@@ -289,7 +350,7 @@ func cmdShare(s *core.Store, args []string) {
 	// The files that travel, and no others: a file that stays home is named
 	// by its own record, and needs no word here.
 	for _, sf := range kept {
-		if *files {
+		if sf.data != nil {
 			fileList = append(fileList, map[string]any{"blob": sf.blob, "record": sf.record, "sha256": sf.digest, "bytes": float64(len(sf.data))})
 		}
 	}
@@ -321,6 +382,8 @@ func cmdShare(s *core.Store, args []string) {
 	if err != nil {
 		fail(err)
 	}
+	// Ctrl-C must not leave a folder of plaintext behind.
+	untrap := removeOnSignal(tmp)
 	gone := func(err error) {
 		os.RemoveAll(tmp)
 		fail(fmt.Errorf("nothing was shared: %w", err))
@@ -343,10 +406,16 @@ func cmdShare(s *core.Store, args []string) {
 			gone(err)
 		}
 		for _, sf := range kept {
+			if sf.data == nil {
+				continue
+			}
 			if err := os.WriteFile(filepath.Join(tmp, "files", sf.digest), sf.data, 0o600); err != nil {
 				gone(err)
 			}
 		}
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "README.txt"), []byte(bundleReadme), 0o600); err != nil {
+		gone(err)
 	}
 	if lines, ok := checkBundle(tmp); !ok {
 		for _, line := range lines {
@@ -360,6 +429,7 @@ func cmdShare(s *core.Store, args []string) {
 	if err := os.Rename(tmp, out); err != nil {
 		gone(err)
 	}
+	untrap()
 	if err := s.AddSigned(shareID, shareBytes); err != nil {
 		fail(fmt.Errorf("the bundle is written, in %s, and its share record could not be added to your log: %w", out, err))
 	}
@@ -541,7 +611,7 @@ func checkBundle(dir string) ([]string, bool) {
 		return done(lines)
 	}
 	person := share.Author
-	if !core.IsID(person) || share.Subject != person || share.Source.System != shareSystem {
+	if !core.IsID(person) || share.Subject != person {
 		bad("the share record is not signed by a person about themselves")
 		return done(lines)
 	}
@@ -624,10 +694,14 @@ func checkBundle(dir string) ([]string, bool) {
 	// identity records and pairings that the share record names. A record
 	// that an agent or another key signed is valid, and counted apart: the
 	// person chose to share it, and did not write it.
-	paired := map[string]bool{}
+	paired := map[string]string{} // key -> the label the person gave it
 	for id := range proof {
 		if r := rp.Records[id]; r != nil && isPairing(r, person) && rp.Valid[id] {
-			paired[r.ValueKey()] = true
+			label, _ := r.Value["label"].(string)
+			if label == "" {
+				label = "agent"
+			}
+			paired[r.ValueKey()] = label
 		}
 	}
 	byPerson, byAgent, byOther := 0, 0, 0
@@ -651,7 +725,7 @@ func checkBundle(dir string) ([]string, bool) {
 			bad("%s is listed, and is a %s record, which is not shared", id, r.Type)
 		case r.Author == person:
 			byPerson++
-		case paired[r.Author]:
+		case paired[r.Author] != "":
 			byAgent++
 		default:
 			byOther++
@@ -676,7 +750,12 @@ func checkBundle(dir string) ([]string, bool) {
 		if r == nil {
 			continue
 		}
+		once := map[string]bool{}
 		for _, b := range r.Blobs {
+			if once[b.Hash] {
+				continue // a record may name one file twice
+			}
+			once[b.Hash] = true
 			e, ok := account[b.Hash+" "+id]
 			if !ok {
 				named++
@@ -733,6 +812,9 @@ func checkBundle(dir string) ([]string, bool) {
 	if n, _ := share.Context["note"].(string); n != "" {
 		lines = append(lines, "note: "+n)
 	}
+	for _, key := range slices.Sorted(maps.Keys(paired)) {
+		lines = append(lines, fmt.Sprintf("paired by the person: %s, key %s", paired[key], core.Npub(key)))
+	}
 	lines = append(lines, ignored...)
 	// What it holds, shown only when every check passed: a reader should
 	// not read values out of a bundle that failed.
@@ -749,20 +831,65 @@ func checkBundle(dir string) ([]string, bool) {
 			}
 			return rows[i].ID < rows[j].ID
 		})
+		inBundle := func(id string) *core.Record {
+			if listed[id] {
+				return rp.Records[id]
+			}
+			return nil
+		}
+		var caveats []string
 		for _, r := range rows {
 			by := ""
 			switch {
 			case r.Author == person:
-			case paired[r.Author]:
-				by = "  [signed by a paired agent]"
+			case paired[r.Author] != "":
+				by = "  [" + paired[r.Author] + "]"
 			default:
-				by = "  [signed by another key]"
+				by = "  [signed by another key: " + core.Npub(r.Author) + "]"
 			}
-			lines = append(lines, fmt.Sprintf("  %s  %s  %s%s  %s", whenText(r), r.Type, recordText(r, rp.Records), by, r.ID[7:19]))
+			lines = append(lines, fmt.Sprintf("  %s  %s  %s%s  %s", sharedWhen(r), r.Type, recordText(r, inBundle), by, r.ID[7:19]))
+			list, _ := r.Context["caveats"].([]any)
+			for _, x := range list {
+				if text, _ := x.(string); text != "" && strings.HasPrefix(r.Type, "comparison.") && !slices.Contains(caveats, text) {
+					caveats = append(caveats, text)
+				}
+			}
+		}
+		// A comparison is shown as its claim states it. This check proves
+		// who signed the claim, not its arithmetic.
+		if len(caveats) > 0 {
+			lines = append(lines, "The comparisons above are shown as claimed, and are not computed again here: tools/compare/reproduce.py does that. Their own caveats:")
+			for _, text := range caveats {
+				lines = append(lines, "  - "+text)
+			}
 		}
 	}
 	lines = append(lines, bundleCaveats...)
 	return done(lines)
+}
+
+// sharedWhen is a record's observed time as the record states it, with its
+// own offset from UTC: a reader in another time zone sees the time the
+// sender recorded, not a shifted one.
+func sharedWhen(r *core.Record) string {
+	obs, ok := r.Observed.(map[string]any)
+	if !ok {
+		return "-"
+	}
+	start, _ := obs["start"].(string)
+	t, err := time.Parse(time.RFC3339Nano, start)
+	if err != nil {
+		return start
+	}
+	switch obs["precision"] {
+	case "year":
+		return t.Format("2006")
+	case "month":
+		return t.Format("2006-01")
+	case "day":
+		return t.Format("2006-01-02")
+	}
+	return t.Format("2006-01-02 15:04 -07:00")
 }
 
 // bundleCaveats are what no bundle can show. Every check prints them.

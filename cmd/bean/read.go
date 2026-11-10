@@ -110,11 +110,22 @@ func cmdList(s *core.Store, args []string) {
 		if l.Report.InDoubt(r.ID) {
 			by = strings.TrimSpace(by + " [in doubt]")
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", whenText(r), r.Type, safe(recordText(r, l.Report.Records)), safe(by), r.ID[7:19])
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", whenText(r), r.Type, safe(recordText(r, currentRecord(l))), safe(by), r.ID[7:19])
 	}
 	tw.Flush()
 	if warnFrozen(l) {
 		os.Exit(4)
+	}
+}
+
+// currentRecord looks a record up in the log, and returns it only when a
+// reader should see it.
+func currentRecord(l *core.Loaded) func(id string) *core.Record {
+	return func(id string) *core.Record {
+		if r := l.Report.Records[id]; r != nil && l.Current(id) {
+			return r
+		}
+		return nil
 	}
 }
 
@@ -336,8 +347,11 @@ func blobText(r *core.Record) string {
 
 // recordText is valueText, and for a comparison what it compares and with
 // whom: "percentile 46 of lab.cholesterol-total 187 mg/dL, among male, age
-// 30-39 (n 339)". records is where its reading is looked up.
-func recordText(r *core.Record, records map[string]*core.Record) string {
+// 30-39 (n 339)". reading returns the comparison's reading when the caller
+// may show it: a current record, never one that was corrected or deleted.
+// The cohort is the claim's own text, so it is cut to a length that cannot
+// draw a second row.
+func recordText(r *core.Record, reading func(id string) *core.Record) string {
 	cohort, _ := r.Context["cohort"].(map[string]any)
 	among, _ := cohort["text"].(string)
 	p, isNumber := r.Value["n"].(float64)
@@ -345,9 +359,13 @@ func recordText(r *core.Record, records map[string]*core.Record) string {
 		return valueText(r)
 	}
 	out := "percentile " + strconv.FormatFloat(p, 'g', -1, 64)
-	reading, _ := r.Context["reading"].(string)
-	if of := records[reading]; of != nil {
+	id, _ := r.Context["reading"].(string)
+	if of := reading(id); of != nil {
 		out += " of " + of.Type + " " + valueText(of)
+	}
+	among = strings.Join(strings.Fields(among), " ")
+	if rs := []rune(among); len(rs) > 160 {
+		among = string(rs[:157]) + "..."
 	}
 	out += ", among " + among
 	if result, ok := r.Context["result"].(map[string]any); ok {
@@ -366,7 +384,11 @@ func valueText(r *core.Record) string {
 	case v == nil:
 		out = ""
 	case v["n"] != nil:
-		n, _ := v["n"].(float64)
+		n, isNumber := v["n"].(float64)
+		if !isNumber { // not a number at all: show it as it is written
+			out = string(core.Canonical(v))
+			break
+		}
 		out = strconv.FormatFloat(n, 'g', -1, 64)
 		if u, ok := v["unit"].(string); ok && u != "" {
 			out += " " + u

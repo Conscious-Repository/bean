@@ -34,8 +34,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import beanverify  # noqa: E402
 
 IDENTITY = ("bean.genesis", "bean.succession", "bean.seal")
-PAIR = ("agent.pair", "device.pair")
-NOT_SHARED = IDENTITY + PAIR + ("bean.tombstone", "share")
+NOT_SHARED = IDENTITY + ("agent.pair", "device.pair", "bean.tombstone", "share")
 MAX_RECORD = 16 << 20
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 CAVEATS = (
@@ -111,20 +110,11 @@ def check(folder):
         return ["files is not a folder: a link or a file in its place is not followed"], None
     # Rule 1.
     files = read_records(folder, problems)
-    records, newer = {}, False
-    for path, data in files.items():
-        try:
-            r, unknown = beanverify.check_file(path, data)
-        except beanverify.Fail:
-            continue  # verify reports it below
-        if unknown:
-            newer = True
-        else:
-            records[r["id"]] = r
     # No encrypted file travels in a bundle, so a log's verifier says "blob
     # missing" for every valid record that names one. That, and only that,
     # is not a fault here: rule 4 accounts for each such file.
     lines, _, info = beanverify.verify(files, {})
+    records, newer = info["records"], bool(info["unknown"])
     missing = {i for i, e in info["errors"].items() if e.startswith("blob missing: ")}
     if len(missing) != len(info["errors"]):
         problems.append("a record file fails a check of a log")
@@ -139,7 +129,7 @@ def check(folder):
         return problems + ["a bundle holds exactly one share record, and it is valid; this one holds %d" % len(shares)], None
     share = shares[0]
     person = share["author"]
-    if not is_id(person) or share.get("subject") != person or share["source"].get("system") != "bean-share":
+    if not is_id(person) or share.get("subject") != person:
         return problems + ["the share record is not signed by a person about themselves"], None
     # Its lists, read strictly.
     ctx = share.get("context") if isinstance(share.get("context"), dict) else {}
@@ -189,9 +179,11 @@ def check(folder):
     # Rule 3.
 
     def pairing(r):
-        return r["type"] in PAIR and r["author"] == person and r.get("subject") == person
+        # A pairing in force: an agent.pair that does not say "unpaired".
+        v = r.get("value") if isinstance(r.get("value"), dict) else {}
+        return r["type"] == "agent.pair" and r["author"] == person and r.get("subject") == person and isinstance(v.get("key"), str) and v.get("key") and v.get("status") != "unpaired"
 
-    paired = {records[i].get("value", {}).get("key") for i in proof if i in records and pairing(records[i]) and i in valid}
+    paired = {records[i]["value"]["key"]: (records[i]["value"].get("label") or "agent") for i in proof if i in records and pairing(records[i]) and i in valid}
     signed = [0, 0, 0]  # by the person, by a paired agent, by another key
     for i, r in sorted(records.items()):
         if i == share["id"]:
@@ -223,7 +215,11 @@ def check(folder):
     for i in sorted(listed & set(records)):
         r = records[i]
         blobs = r.get("blobs", []) or []
+        once = set()
         for b in blobs:
+            if b["hash"] in once:
+                continue  # a record may name one file twice
+            once.add(b["hash"])
             e = account.pop((b["hash"], i), None)
             if e is None:
                 named += 1
@@ -257,8 +253,8 @@ def check(folder):
             problems.append("files/%s is not the file the share record lists" % name)
     for name in sorted(want):
         problems.append("files/%s is listed, and is not in the bundle" % name)
-    holds = sorted((records[i] for i in listed if i in records), key=lambda r: r["id"])
-    return problems, (share, person, len(listed), included, named, signed, corrections, holds)
+    holds = sorted((records[i] for i in listed if i in records), key=lambda r: (str(((r.get("times") or {}).get("observed") or {}).get("start", "")), r["id"]))
+    return problems, (share, person, len(listed), included, named, signed, corrections, holds, paired)
 
 
 def main(argv):
@@ -270,7 +266,7 @@ def main(argv):
     except (OSError, KeyError, TypeError, ValueError, AttributeError, IndexError) as err:
         problems, facts = ["the bundle cannot be read as one: %s: %s" % (type(err).__name__, err)], None
     if facts:
-        share, person, n, included, named, signed, corrections, holds = facts
+        share, person, n, included, named, signed, corrections, holds, paired = facts
         obs = (share.get("times") or {}).get("observed") or {}
         print("share %s" % share["id"])
         print("signed by identity %s, with key %s, at %s" % (person, share["kid"], safe(str(obs.get("start", "-")))))
@@ -283,8 +279,12 @@ def main(argv):
         if not problems:
             # Shown only when every check passed.
             print("It holds:")
+            # Each record as it is written: when, what, its value, and who
+            # signed it when that is not the person.
             for r in holds:
-                print("  %s  %s  %s" % (r["type"], safe(beanverify.canonical(r.get("value", {}))), r["id"][7:19]))
+                when = ((r.get("times") or {}).get("observed") or {}).get("start", "-")
+                by = "" if r["author"] == person else "  [%s]" % paired[r["author"]] if r["author"] in paired else "  [signed by another key: %s]" % r["author"]
+                print("  %s  %s  %s%s  %s" % (safe(when), r["type"], safe(beanverify.canonical(r.get("value", {}))), safe(by), r["id"][7:19]))
         for line in CAVEATS:
             print(line)
     for p in sorted(problems):

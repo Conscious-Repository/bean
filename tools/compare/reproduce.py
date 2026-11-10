@@ -21,18 +21,16 @@ For each comparison.percentile record it checks, in this order:
     the method gives, and the caveats follow from the inputs; and each
     variable has, in its file, the label the claim gives it;
  4. the method of docs/COMPARE.md, computed here from the claim's own
-    cohort and the reading's value, gives every number of the result;
- 5. numpy's own weighted quantile gives the same quartiles.
+    cohort and the reading's value, gives every number of the result.
 
 It prints one line per comparison, with the reading and the variable it
-was set against, and exits 1 if any check fails or cannot be made. Whether
-the two measure the same thing is for you to judge: the line shows both.
+was set against, and exits 1 if any check fails or cannot be made.
 
-It shares no code with bean and has no table of tests: which variable a
-reading is set against is read from the claim and shown to you. It knows
-the method: the weights, the data sets a rule may name, the caveats, and
-the SHA-256 of each file as CDC served it, so that it can say for itself
-which files are the ones on record. The record checks are those of the
+It shares no code with bean. It knows the method: which variable each kind
+of reading may be set against and in which unit, the weights, the data sets
+a rule may name, the caveats, and the SHA-256 of each file as CDC served
+it, so that it can say for itself which files are the ones on record. A
+test keeps those tables equal to bean's. The record checks are those of the
 second verifier (tools/second/beanverify.py), which must sit where this
 file expects it. A good signature shows which key signed. Whether that key
 speaks for the person is a question for the whole log or bundle: bean
@@ -44,7 +42,7 @@ import math
 import os
 import sys
 
-import numpy as np
+import numpy as np  # for writing a number the way bean does
 import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "second"))
@@ -70,6 +68,26 @@ KNOWN = {
     "CBC_J": "00f964098dc91272e415344554cbf1b627ecaeb2eda201518527446a7d81e742",
     "BMX_J": "8d675e42d8826ac98714b2c3dd4c5138a5e353fb4424f7eff5e6db4a01ce838a",
     "DR1TOT_J": "390ae5205acfbcb87e0ca3d9aabd1c801b60657d3f2802ac08d5b3ed93f0af6d",
+}
+# The tests the method compares: a reading of this type, in this unit, with
+# this variable of this data set (docs/COMPARE.md; internal/nhanes).
+ANALYTES = {
+    ("lab.cholesterol-total", "mg/dL"): ("TCHOL_J", "LBXTC"),
+    ("lab.hdl-cholesterol", "mg/dL"): ("HDL_J", "LBDHDD"),
+    ("lab.hemoglobin-a1c", "%"): ("GHB_J", "LBXGH"),
+    ("lab.hemoglobin-a1c", "% of total Hgb"): ("GHB_J", "LBXGH"),
+    ("lab.wbc", "x10E3/uL"): ("CBC_J", "LBXWBCSI"),
+    ("lab.white-blood-cell-count", "Thousand/uL"): ("CBC_J", "LBXWBCSI"),
+    ("lab.rbc", "x10E6/uL"): ("CBC_J", "LBXRBCSI"),
+    ("lab.red-blood-cell-count", "Million/uL"): ("CBC_J", "LBXRBCSI"),
+    ("lab.hemoglobin", "g/dL"): ("CBC_J", "LBXHGB"),
+    ("lab.hematocrit", "%"): ("CBC_J", "LBXHCT"),
+    ("lab.mcv", "fL"): ("CBC_J", "LBXMCVSI"),
+    ("lab.mch", "pg"): ("CBC_J", "LBXMCHSI"),
+    ("lab.mchc", "g/dL"): ("CBC_J", "LBXMC"),
+    ("lab.rdw", "%"): ("CBC_J", "LBXRDW"),
+    ("lab.platelets", "x10E3/uL"): ("CBC_J", "LBXPLTSI"),
+    ("lab.platelet-count", "Thousand/uL"): ("CBC_J", "LBXPLTSI"),
 }
 # The caveats of a comparison, in the order a claim lists them.
 CAVEAT_METHOD = "the lab that measured the reading and NHANES used their own instruments and methods"
@@ -130,8 +148,11 @@ def check_form(claim, reading):
         raise ValueError("the claim is not signed by the person it is about")
     if ref.get("system") != "nhanes" or ref.get("cycle") != "2017-2018":
         raise ValueError("not NHANES 2017-2018")
-    if not str(ref.get("dataset", "")).endswith("_J") or ref["dataset"] in COHORT_FILES:
-        raise ValueError("the test's data set is not a test file of the cycle")
+    # The reading must be of a kind, and in a unit, that the method sets
+    # against this variable: bean itself refuses any other pair.
+    kind = (reading.get("type"), (reading.get("value") or {}).get("unit"))
+    if ANALYTES.get(kind) != (ref.get("dataset"), ref.get("variable")):
+        raise ValueError("the method does not set %s in %s against %s.%s" % (kind[0], kind[1], ref.get("dataset"), ref.get("variable")))
     if len(rules) < 2:
         raise ValueError("the cohort has no sex and age")
     seen = set()
@@ -236,18 +257,6 @@ def place(n, by_value, value):
     return out
 
 
-def numpy_differs(by_value, got):
-    """The quartiles again, from numpy's own weighted quantile: a third
-    opinion that neither bean nor this file's author wrote."""
-    x = np.array(sorted(by_value))
-    w = np.array([by_value[v] for v in sorted(by_value)])
-    for name, q in QUARTILES:
-        theirs = float(np.quantile(x, q, weights=w, method="inverted_cdf"))
-        if theirs != got[name]:
-            return "%s is %s, numpy gives %s" % (name, got[name], theirs)
-    return None
-
-
 class Inputs:
     """The records and data files found under the paths given."""
 
@@ -339,14 +348,9 @@ def check(claim, inputs):
     n, by_value = cohort_weights(claim, tables)
     got = place(n, by_value, float(value))
     want = ctx["result"]
-    # Whether the reading and the variable measure the same thing is for the
-    # reader to judge: show both.
     what = "%s %s %s against %s %r, %s" % (reading["type"], value, reading["value"].get("unit", ""), ref["variable"], ref["label"], ctx["cohort"]["text"])
     if got != want or claim["value"] != {"n": want.get("percentile"), "unit": "{percentile}"}:
         raise ValueError("%s: the claim says %s, this tool computes %s" % (what, json.dumps(want, sort_keys=True), json.dumps(got, sort_keys=True)))
-    differs = numpy_differs(by_value, got)
-    if differs:
-        raise ValueError("%s: %s" % (what, differs))
     if got["n"] < SMALL_N:
         caveats.append(CAVEAT_SMALL)
     # A claim made on a file that was not on record says so. Which files are

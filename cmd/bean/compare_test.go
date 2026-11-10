@@ -305,16 +305,78 @@ func TestCompareDoesNotOutliveItsReading(t *testing.T) {
 	if out, _, code := run(t, dir, "", "verify"); code != 0 || !strings.Contains(out, "0 invalid") {
 		t.Errorf("verify: %d\n%s", code, out)
 	}
-	// A comparison the person deleted is not saved again, and bean says so.
+	// A comparison the person deleted can be saved again when they ask: it
+	// is a computation, not an import.
 	ls, _, _ := run(t, dir, "", "ls", "-json", "-type", "comparison.percentile")
 	var r struct {
 		ID string `json:"id"`
 	}
 	json.Unmarshal([]byte(strings.TrimSpace(ls)), &r)
 	run(t, dir, "", "purge", r.ID)
-	out, _, code = run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", "-save", newer)
-	if code != 1 || !strings.Contains(out, "not saved: you deleted this comparison") || strings.Contains(out, "already there 1") || count() != 0 {
-		t.Errorf("a deleted comparison: %d, %d comparisons\n%s", code, count(), out)
+	if count() != 0 {
+		t.Fatalf("%d comparisons after purging the last", count())
+	}
+	save(newer)
+	// A reading that comes back, because its correction was deleted, can be
+	// compared and saved again: the cleanup that deleted its comparison was
+	// bean's, not the person's.
+	run(t, dir, "", "purge", newer)
+	if stdout, errs, code := run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", "-save", ids[0]); code != 0 || !strings.Contains(stdout, "added 1, already there 0") {
+		t.Errorf("a reading that came back: %d\n%s\n%s", code, stdout, errs)
+	}
+}
+
+// A deletion that arrives with a copy made by another tool takes the saved
+// comparison with it at the next bean verify, which is what the docs say to
+// run after such a copy. Until then no command shows the deleted value, and
+// the comparison cannot be shared.
+func TestCompareAfterADeletionArrives(t *testing.T) {
+	dir, _, ids := compareLog(t, "TCHOL_J", "DEMO_J")
+	// Another copy of the log, made before the comparison is saved, deletes
+	// the reading: it has no comparison to clean up itself.
+	other := t.TempDir()
+	if err := os.CopyFS(other, os.DirFS(dir)); err != nil {
+		t.Fatal(err)
+	}
+	if out, errs, code := run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", "-save", ids[0]); code != 0 {
+		t.Fatalf("%s\n%s", out, errs)
+	}
+	// CopyFS does not keep the modes of the key files: the copy's own bean
+	// would refuse them. Purge there with the copy's keys made private again.
+	filepath.WalkDir(filepath.Join(other, "local"), func(p string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			os.Chmod(p, 0o600)
+		}
+		return nil
+	})
+	if _, errs, code := run(t, other, "", "purge", ids[0]); code != 0 {
+		t.Fatalf("purge in the copy: %s", errs)
+	}
+	// The tombstone comes over as a file, the way rsync brings it.
+	filepath.WalkDir(filepath.Join(other, "objects"), func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		rel, _ := filepath.Rel(other, p)
+		if _, err := os.Stat(filepath.Join(dir, rel)); err != nil {
+			data, _ := os.ReadFile(p)
+			os.MkdirAll(filepath.Dir(filepath.Join(dir, rel)), 0o700)
+			os.WriteFile(filepath.Join(dir, rel), data, 0o600)
+		}
+		return nil
+	})
+	// Before any cleanup: ls still lists the comparison, without the deleted
+	// value.
+	ls, _, _ := run(t, dir, "", "ls")
+	if !strings.Contains(ls, "comparison.percentile") || strings.Contains(ls, "193 mg/dL") {
+		t.Errorf("ls before the cleanup:\n%s", ls)
+	}
+	// verify cleans up.
+	if _, errs, code := run(t, dir, "", "verify"); code != 0 || !strings.Contains(errs, "deleted 1 saved comparisons") {
+		t.Errorf("verify: %d\n%s", code, errs)
+	}
+	if ls, _, _ := run(t, dir, "", "ls", "-type", "comparison.percentile"); ls != "" {
+		t.Errorf("the comparison outlived its reading:\n%s", ls)
 	}
 }
 
@@ -359,6 +421,26 @@ func TestCompareIsNotForTheMCPTool(t *testing.T) {
 	py, err := os.ReadFile("../../tools/compare/reproduce.py")
 	if err != nil {
 		t.Fatal(err)
+	}
+	// The table of tests is the same in both, row for row.
+	for _, a := range nhanes.Analytes {
+		row := fmt.Sprintf(`(%q, %q): (%q, %q),`, a.Type, a.Unit, a.Dataset, a.Variable)
+		if !strings.Contains(string(py), row) {
+			t.Errorf("tools/compare/reproduce.py does not have the row %s", row)
+		}
+	}
+	if got := strings.Count(string(py), `"): ("`); got != len(nhanes.Analytes) {
+		t.Errorf("tools/compare/reproduce.py has %d rows of tests, bean has %d", got, len(nhanes.Analytes))
+	}
+	// And what no bundle can show is said in the same words by both checkers.
+	second, err := os.ReadFile("../../tools/second/checkbundle.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, text := range bundleCaveats {
+		if !strings.Contains(string(second), `"`+text+`"`) {
+			t.Errorf("tools/second/checkbundle.py does not have the caveat %q", text)
+		}
 	}
 	for _, text := range []string{caveatMethod, caveatPopulation, caveatCohort, caveatTopAge, caveatAuthor, fmt.Sprintf(caveatSmall, nhanes.SmallN), strings.Replace(caveatUnknown, "%s", "%s", 1), nhanes.CohortFiles["DR1TOT_J"].Reason} {
 		if !strings.Contains(string(py), `"`+text+`"`) {
