@@ -23,4 +23,4 @@ At the end it compares its numbers with [`expected.txt`](expected.txt) and fails
 
 A comparison says where a value lies in a sample. It does not say whether the value is healthy. [docs/COMPARE.md](../../docs/COMPARE.md) and [docs/SHARE.md](../../docs/SHARE.md) have the limits.
 
-To do the same with your own report, follow [docs/ONBOARDING.md](../../docs/ONBOARDING.md): your identity then has 24 recovery words that you write on paper, and you review what an import read before it saves.
+To do the same with your own report, follow [docs/ONBOARDING.md](../../docs/ONBOARDING.md). Your identity then has 24 recovery words that you write on paper, and you review what an import read before it saves.

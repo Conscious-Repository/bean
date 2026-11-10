@@ -1,6 +1,6 @@
 # Importers
 
-An importer turns one kind of file into bean records. It is a separate program, named `bean-import-<name>`, in any language. `bean import <name> [flags] <file>` finds it next to `bean` or on your `PATH`, runs it, and does the rest: it keeps the file, checks what the importer wrote, shows it to you, and signs only what you confirm.
+An importer turns one kind of file into bean records. It is a separate program, named `bean-import-<name>`, in any language. `bean import <name> [flags] <file>` finds it next to `bean` or on your `PATH` and runs it. bean does the rest: it keeps the file, checks what the importer wrote, shows it to you, and signs only what you confirm.
 
 bean does not need to know your source. Anyone can write an importer for theirs, and anyone can check what it writes.
 
