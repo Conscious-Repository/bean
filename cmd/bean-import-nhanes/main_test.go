@@ -25,8 +25,7 @@ func TestRecord(t *testing.T) {
 	for _, want := range []string{
 		`"type":"reference.file"`, `"value":{"blob":"` + blob + `"}`, `"observed":null`,
 		`"system":"nhanes"`, `"adapter":"bean-import-nhanes@`, `"ref_input":["bean/v0/ref","tuple","nhanes","reference.file",null,{"blob":"` + blob + `"},0]`,
-		`"dataset":"TCHOL_J"`, `"cycle":"2017-2018"`, `"bytes":33440`, `"assurance":"unsigned-file"`,
-		`"url":"https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/TCHOL_J.xpt"`,
+		`"dataset":"TCHOL_J"`, `"bytes":33440`, `"assurance":"unsigned-file"`,
 		`"blobs":[{"hash":"` + blob + `","media_type":"application/x-sas-xport","role":"raw-export"}]`,
 	} {
 		if !bytes.Contains(data, []byte(want)) {

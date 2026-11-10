@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -110,11 +109,22 @@ func cmdList(s *core.Store, args []string) {
 		if l.Report.InDoubt(r.ID) {
 			by = strings.TrimSpace(by + " [in doubt]")
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", whenText(r), r.Type, safe(recordText(r, l.Report.Records)), safe(by), r.ID[7:19])
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", whenText(r), r.Type, safe(recordText(r, currentRecord(l))), safe(by), r.ID[7:19])
 	}
 	tw.Flush()
 	if warnFrozen(l) {
 		os.Exit(4)
+	}
+}
+
+// currentRecord looks a record up in the log, and returns it only when a
+// reader should see it.
+func currentRecord(l *core.Loaded) func(id string) *core.Record {
+	return func(id string) *core.Record {
+		if r := l.Report.Records[id]; r != nil && l.Current(id) {
+			return r
+		}
+		return nil
 	}
 }
 
@@ -308,104 +318,4 @@ func whenText(r *core.Record) string {
 		return t.Local().Format("2006-01-02 15:04") // same zone as -since and -until
 	}
 	return start
-}
-
-// blobText is a one-line view of a {"blob": id} value. SPEC 3.4 uses that
-// shape for a series, with its unit, and for a large payload such as a
-// kept lab report, without one. bean knows no series format (SPEC 9.4), so
-// only a value with a unit is called a series; anything else is a file,
-// with the media type its record states.
-func blobText(r *core.Record) string {
-	b, _ := r.Value["blob"].(string)
-	short := strings.TrimPrefix(b, "sha256:")
-	short = short[:min(12, len(short))]
-	if u, ok := r.Value["unit"].(string); ok && u != "" {
-		return "series " + short + " " + u
-	}
-	// A kept reference file says which data set it is.
-	if d, ok := r.Context["dataset"].(string); ok && d != "" {
-		return "file " + d + " " + short
-	}
-	for _, ref := range r.Blobs {
-		if ref.Hash == b && ref.MediaType != "" {
-			return "file " + ref.MediaType + " " + short
-		}
-	}
-	return "file " + short
-}
-
-// recordText is valueText, and for a comparison what it compares and with
-// whom: "percentile 46 of lab.cholesterol-total 187 mg/dL, among male, age
-// 30-39 (n 339)". records is where its reading is looked up.
-func recordText(r *core.Record, records map[string]*core.Record) string {
-	cohort, _ := r.Context["cohort"].(map[string]any)
-	among, _ := cohort["text"].(string)
-	p, isNumber := r.Value["n"].(float64)
-	if !strings.HasPrefix(r.Type, "comparison.") || among == "" || !isNumber {
-		return valueText(r)
-	}
-	out := "percentile " + strconv.FormatFloat(p, 'g', -1, 64)
-	reading, _ := r.Context["reading"].(string)
-	if of := records[reading]; of != nil {
-		out += " of " + of.Type + " " + valueText(of)
-	}
-	out += ", among " + among
-	if result, ok := r.Context["result"].(map[string]any); ok {
-		if n, ok := result["n"].(float64); ok {
-			out += " (n " + strconv.FormatFloat(n, 'g', -1, 64) + ")"
-		}
-	}
-	return out
-}
-
-// valueText is a one-line view of value and context.note.
-func valueText(r *core.Record) string {
-	v := r.Value
-	var out string
-	switch {
-	case v == nil:
-		out = ""
-	case v["n"] != nil:
-		n, _ := v["n"].(float64)
-		out = strconv.FormatFloat(n, 'g', -1, 64)
-		if u, ok := v["unit"].(string); ok && u != "" {
-			out += " " + u
-		}
-	case v["s"] != nil:
-		out, _ = v["s"].(string)
-	case v["b"] != nil:
-		out = fmt.Sprint(v["b"])
-	case v["blob"] != nil:
-		out = blobText(r)
-	case r.Type == "bean.genesis" || r.Type == "bean.succession":
-		out = r.ValueKey()
-	case r.Type == "agent.pair" || r.Type == "device.pair":
-		label, _ := v["label"].(string)
-		out = strings.TrimSpace(label + " " + core.Npub(r.ValueKey()))
-	case len(v) == 1 && v["n"] == nil:
-		if _, has := v["n"]; has {
-			out = "no value"
-			// A lab says why it has no value: show that, not a bare blank.
-			if c, _ := r.Context["lab_comment"].(string); strings.HasPrefix(strings.ToLower(c), "test not performed") || strings.HasPrefix(strings.ToLower(c), "not performed") {
-				out = "not performed"
-			}
-			break
-		}
-		out = string(core.Canonical(v))
-	default:
-		out = string(core.Canonical(v))
-	}
-	if flag, ok := r.Context["flag"].(string); ok && flag != "" {
-		out += "  " + flag // a lab's High or Low
-	}
-	if note, ok := r.Context["note"].(string); ok && note != "" {
-		if out != "" {
-			out += "  "
-		}
-		out += "# " + note
-	}
-	if rs := []rune(out); len(rs) > 80 {
-		out = string(rs[:77]) + "..."
-	}
-	return out
 }

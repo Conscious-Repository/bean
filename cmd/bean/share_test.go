@@ -1,11 +1,20 @@
 package main
 
 import (
+	"archive/zip"
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/Conscious-Repository/bean/core"
+	"github.com/Conscious-Repository/bean/internal/bundle"
 )
 
 // objectPath is where a bundle or a log keeps the record with this id.
@@ -110,14 +119,25 @@ func TestShareKeepsFilesHomeAndBundlesOut(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(out, "files")); err == nil {
 		t.Error("the lab report was shared by type")
 	}
-	// Named by its id, with -files, the report goes.
-	ls, _, _ := run(t, dir, "", "ls", "-json", "-type", "lab.report")
-	var rep struct {
-		ID string `json:"id"`
+	// A note about the report brings the report's record along, never its
+	// file: only a record named by its id takes its file with it.
+	note, _, _ := run(t, dir, "", "add", "note", "ask about this report", "-about", reportID(t, dir))
+	about := filepath.Join(t.TempDir(), "about")
+	stdout, errs, code = run(t, dir, "", "share", "-yes", "-files", "-out", about, strings.TrimSpace(note))
+	if code != 0 || !strings.Contains(stdout, "shared 2 records and 0 files") || !strings.Contains(errs, "not shared: the file that") {
+		t.Fatalf("a note about the report: %d\n%s\n%s", code, stdout, errs)
 	}
-	json.Unmarshal([]byte(strings.TrimSpace(ls)), &rep)
+	if _, err := os.Stat(filepath.Join(about, "files")); err == nil {
+		t.Error("the lab report left with a note about it")
+	}
+	// Every bundle has a note for a person who has only the folder, and the
+	// check does not read it.
+	if readme, err := os.ReadFile(filepath.Join(about, "README.txt")); err != nil || !strings.Contains(string(readme), "bean check-bundle") {
+		t.Errorf("no read-me in the bundle: %v", err)
+	}
+	// Named by its id, with -files, the report goes.
 	named := filepath.Join(t.TempDir(), "named")
-	if stdout, errs, code := run(t, dir, "", "share", "-yes", "-files", "-out", named, rep.ID); code != 0 || !strings.Contains(stdout, "shared 1 records and 1 files") {
+	if stdout, errs, code := run(t, dir, "", "share", "-yes", "-files", "-out", named, reportID(t, dir)); code != 0 || !strings.Contains(stdout, "shared 1 records and 1 files") {
 		t.Fatalf("%d\n%s\n%s", code, stdout, errs)
 	}
 	// Another person's log refuses to sync a bundle, and is unchanged.
@@ -130,6 +150,29 @@ func TestShareKeepsFilesHomeAndBundlesOut(t *testing.T) {
 	if after, _, _ := run(t, sam, "", "ls", "-all"); after != before {
 		t.Errorf("a refused sync changed the log:\n%s", after)
 	}
+	// A bundle with an empty file where the reader's identity record would
+	// be is refused too: the record must be there whole.
+	me, _, _ := run(t, sam, "", "whoami")
+	samID := strings.Fields(me)[1]
+	planted := filepath.Join(t.TempDir(), "planted")
+	os.CopyFS(planted, os.DirFS(out))
+	os.MkdirAll(filepath.Dir(objectPath(planted, samID)), 0o700)
+	os.WriteFile(objectPath(planted, samID), nil, 0o600)
+	if _, errs, code := run(t, sam, "", "sync", planted); code != 1 || !strings.Contains(errs, "is not a copy of your log") {
+		t.Errorf("sync of a bundle with a planted file: %d\n%s", code, errs)
+	}
+	// A device's folder holds only what the device signed, and says whose it
+	// is: that syncs.
+	device := t.TempDir()
+	if _, errs, code := run(t, device, "", "agent", "init", "-label", "ring", "-identity", samID); code != 0 {
+		t.Fatalf("agent init -identity: %s", errs)
+	}
+	if _, errs, code := run(t, device, "", "add", "-agent", "heart.resting", "61", "-unit", "/min"); code != 0 {
+		t.Fatalf("a device reading: %s", errs)
+	}
+	if stdout, errs, code := run(t, sam, "", "sync", device); code != 0 || !strings.Contains(stdout, "copied 1 records") {
+		t.Errorf("sync of a device folder: %d\n%s\n%s", code, stdout, errs)
+	}
 	// The person's own copy still syncs.
 	copyDir := t.TempDir()
 	if err := os.CopyFS(filepath.Join(copyDir, "objects"), os.DirFS(filepath.Join(dir, "objects"))); err != nil {
@@ -138,6 +181,19 @@ func TestShareKeepsFilesHomeAndBundlesOut(t *testing.T) {
 	if _, errs, code := run(t, dir, "", "sync", copyDir); code != 0 {
 		t.Errorf("sync of an own copy: %d\n%s", code, errs)
 	}
+}
+
+// reportID is the id of the log's one lab.report record.
+func reportID(t *testing.T, dir string) string {
+	t.Helper()
+	ls, _, _ := run(t, dir, "", "ls", "-json", "-type", "lab.report")
+	var rep struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal([]byte(strings.TrimSpace(ls)), &rep); err != nil || rep.ID == "" {
+		t.Fatalf("no lab.report: %v\n%s", err, ls)
+	}
+	return rep.ID
 }
 
 // treeDigest is a digest of every path and every file's bytes under dir.
@@ -202,7 +258,7 @@ func TestShareFilesAndComparison(t *testing.T) {
 	// A comparison comes with its reading and the records of its files.
 	// Without -files the files are named, not shared.
 	named := filepath.Join(t.TempDir(), "named")
-	if out, errs, code := run(t, dir, "", "share", "-yes", "-out", named, cmp.ID); code != 0 || !strings.Contains(out, "shared 4 records and 0 files") {
+	if out, errs, code := run(t, dir, "", "share", "-yes", "-out", named, cmp.ID); code != 0 || !strings.Contains(out, "shared 4 records and 0 files") || strings.Count(errs, "Add -files to share it.") != 2 {
 		t.Fatalf("%d\n%s\n%s", code, out, errs)
 	}
 	if _, err := os.Stat(filepath.Join(named, "files")); err == nil {
@@ -342,5 +398,168 @@ func TestShareRefuses(t *testing.T) {
 	// a refused share left.
 	if stdout, _, code := run(t, dir, "", "verify"); code != 0 {
 		t.Errorf("verify after refused shares: %d\n%s", code, stdout)
+	}
+}
+
+// fileDigest is the SHA-256 of a file, or "" when it cannot be read.
+func fileDigest(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
+// TestBundleFromMemory checks a bundle that is not on a disk, as the page
+// that checks one in a browser gets it: files in memory, or a zip file. It
+// must read as its folder reads.
+func TestBundleFromMemory(t *testing.T) {
+	dir, _, ids := compareLog(t, "TCHOL_J", "DEMO_J")
+	out := filepath.Join(t.TempDir(), "for-ana")
+	if stdout, errs, code := run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", "-save", ids[0]); code != 0 {
+		t.Fatalf("%s\n%s", stdout, errs)
+	}
+	// A comparison with its reading, the records of its two files, and the
+	// files themselves.
+	if stdout, errs, code := run(t, dir, "", "share", "-yes", "-files", "-note", "for Ana", "-out", out, "-type", "comparison.*"); code != 0 || !strings.Contains(stdout, "shared 4 records and 2 files") {
+		t.Fatalf("%d\n%s\n%s", code, stdout, errs)
+	}
+	want, ok := checkBundle(out)
+	if !ok {
+		t.Fatalf("the folder fails: %v", want)
+	}
+	// The folder's files, under the folder's own name.
+	files := map[string][]byte{}
+	filepath.WalkDir(out, func(path string, d os.DirEntry, err error) error {
+		if err == nil && d.Type().IsRegular() {
+			rel, _ := filepath.Rel(filepath.Dir(out), path)
+			files[filepath.ToSlash(rel)], _ = os.ReadFile(path)
+		}
+		return nil
+	})
+	zipOf := func(files map[string][]byte, more func(*zip.Writer)) []byte {
+		var buf bytes.Buffer
+		zw := zip.NewWriter(&buf)
+		for _, name := range slices.Sorted(maps.Keys(files)) {
+			w, _ := zw.Create(name)
+			w.Write(files[name])
+		}
+		if more != nil {
+			more(zw)
+		}
+		zw.Close()
+		return buf.Bytes()
+	}
+	same := func(name string, res bundle.Result) {
+		t.Helper()
+		if got := res.Lines(); !res.OK || !slices.Equal(got, want) {
+			t.Errorf("%s does not read as its folder:\n%s", name, strings.Join(got, "\n"))
+		}
+	}
+	same("files in memory", bundle.Check(bundle.FromFiles("for-ana", files)))
+	same("a zip file", bundle.Check(bundle.FromZip("for-ana.zip", zipOf(files, nil))))
+	if res := bundle.Check(bundle.FromFiles("for-ana", files)); res.Note != "for Ana" || len(res.Rows) != 4 {
+		t.Errorf("note %q, %d rows", res.Note, len(res.Rows))
+	}
+	// A zip made on a Mac carries a tree of its own and files that start
+	// with a dot. Neither is part of the bundle.
+	same("a zip file from a Mac", bundle.Check(bundle.FromZip("for-ana.zip", zipOf(files, func(zw *zip.Writer) {
+		for name := range files {
+			w, _ := zw.Create("__MACOSX/" + filepath.Dir(name) + "/._" + filepath.Base(name))
+			w.Write([]byte("x"))
+		}
+		w, _ := zw.Create("for-ana/.DS_Store")
+		w.Write([]byte("x"))
+	}))))
+	// The bundle's own files, with no folder around them.
+	bare := map[string][]byte{}
+	for name, data := range files {
+		bare[strings.TrimPrefix(name, "for-ana/")] = data
+	}
+	same("files with no folder around them", bundle.Check(bundle.FromFiles("for-ana", bare)))
+
+	fails := func(name string, res bundle.Result, word string) {
+		t.Helper()
+		if text := strings.Join(res.Lines(), "\n"); res.OK || res.Rows != nil || res.Note != "" || !strings.Contains(text, word) {
+			t.Errorf("%s: ok %v, want %q in:\n%s", name, res.OK, word, text)
+		}
+	}
+	change := func(edit func(m map[string][]byte)) map[string][]byte {
+		m := maps.Clone(files)
+		edit(m)
+		return m
+	}
+	var record, file string
+	for name := range files {
+		if strings.HasPrefix(name, "for-ana/objects/") && strings.Contains(string(files[name]), `"type":"lab.cholesterol-total"`) {
+			record = name
+		}
+		if strings.HasPrefix(name, "for-ana/files/") {
+			file = name
+		}
+	}
+	if record == "" || file == "" {
+		t.Fatalf("no record or no file in the bundle: %q %q", record, file)
+	}
+	fails("a record removed", bundle.Check(bundle.FromFiles("x", change(func(m map[string][]byte) { delete(m, record) }))), "is listed, and is not in the bundle")
+	fails("a record changed", bundle.Check(bundle.FromFiles("x", change(func(m map[string][]byte) {
+		m[record] = bytes.Replace(m[record], []byte(`"n":193`), []byte(`"n":139`), 1)
+	}))), "fails a check of a log")
+	fails("a file changed", bundle.Check(bundle.FromZip("x", zipOf(change(func(m map[string][]byte) { m[file] = append(slices.Clone(m[file]), 'x') }), nil))), "is not the file the share record lists")
+	fails("a file added", bundle.Check(bundle.FromFiles("x", change(func(m map[string][]byte) { m["for-ana/files/extra"] = []byte("x") }))), "does not list it")
+	fails("a folder where a file belongs", bundle.Check(bundle.FromFiles("x", change(func(m map[string][]byte) { m[file+"/inside"] = m[file]; delete(m, file) }))), "is not a plain file")
+	fails("a file where a record's folder belongs", bundle.Check(bundle.FromFiles("x", change(func(m map[string][]byte) { m["for-ana/objects/stray"] = []byte("x") }))), "objects/stray is not a record file")
+	fails("a record too large to be one", bundle.Check(bundle.FromFiles("x", change(func(m map[string][]byte) { m["for-ana/objects/ab/big.json"] = make([]byte, core.MaxSuccessionSize+1) }))), "objects/ab/big.json is not a record file")
+	fails("a file named files", bundle.Check(bundle.FromFiles("x", change(func(m map[string][]byte) {
+		for name := range m {
+			if strings.HasPrefix(name, "for-ana/files/") {
+				delete(m, name)
+			}
+		}
+		m["for-ana/files"] = []byte("x")
+	}))), "files is not a folder")
+	// The files are the bundle's own folder, or one folder that is the
+	// bundle. Anything beside it is refused, not passed over: a reader
+	// could take it for part of what was checked.
+	for _, beside := range []string{"other/objects/ab/cd.json", "REPORT.pdf", "elsewhere/files/x", "For-Ana/files/x"} {
+		fails("beside the bundle: "+beside, bundle.Check(bundle.FromFiles("x", change(func(m map[string][]byte) { m[beside] = []byte("{}") }))), "choose the bundle's own folder")
+	}
+	fails("no bundle", bundle.Check(bundle.FromFiles("x", map[string][]byte{"notes.txt": []byte("x")})), "is not a bundle")
+	fails("a folder with no objects", bundle.Check(bundle.FromFiles("x", map[string][]byte{"for-ana/notes.txt": []byte("x")})), "has no objects folder")
+	// A name that no folder can hold reads one way here and another way
+	// once it is unpacked, so it is refused.
+	for _, odd := range []string{"for-ana/files/./x", "for-ana/./files/x", "for-ana/../for-ana/files/x", "for-ana/objects/../files/x", "/for-ana/files/x", "for-ana//files/x", "for-ana/objects/zz/./evil.json", "./for-ana/files/x", "../x"} {
+		fails("an odd name: "+odd, bundle.Check(bundle.FromZip("x.zip", zipOf(files, func(zw *zip.Writer) {
+			w, _ := zw.Create(odd)
+			w.Write([]byte("{}"))
+		}))), "no folder can hold")
+	}
+	// A zip entry can state a size that is no size.
+	fails("a size that is no size", bundle.Check(bundle.FromZip("x.zip", zipOf(files, func(zw *zip.Writer) {
+		zw.CreateRaw(&zip.FileHeader{Name: "for-ana/objects/ab/huge.json", UncompressedSize64: 1 << 63})
+	}))), "no folder can hold")
+	// A second copy of the bundle inside its folder is not part of it. It
+	// is named, so that a reader does not take it for checked.
+	inside := bundle.Check(bundle.FromFiles("x", change(func(m map[string][]byte) {
+		for name, data := range files {
+			m["for-ana/copy/"+strings.TrimPrefix(name, "for-ana/")] = bytes.ToUpper(data)
+		}
+	})))
+	if !inside.OK || !slices.Contains(inside.Ignored, "copy") {
+		t.Errorf("a copy inside the bundle's folder: ok %v, not part of it %v", inside.OK, inside.Ignored)
+	}
+	fails("not a zip file", bundle.Check(bundle.FromZip("x.zip", []byte("not a zip"))), "cannot be read as a zip file")
+	// Two entries with one name: which one a reader sees depends on the
+	// tool that reads the zip, so neither is read.
+	fails("a zip file with one name twice", bundle.Check(bundle.FromZip("x.zip", zipOf(files, func(zw *zip.Writer) {
+		w, _ := zw.Create(record)
+		w.Write([]byte("{}"))
+	}))), "two files with one name")
+	// What lies in the bundle's folder under a name the bundle does not use
+	// is named and not read, and changes nothing.
+	extra := bundle.Check(bundle.FromFiles("x", change(func(m map[string][]byte) { m["for-ana/local/identity"] = []byte("x") })))
+	if text := strings.Join(extra.Lines(), "\n"); !extra.OK || !strings.Contains(text, "not part of the bundle, and not read: local") {
+		t.Errorf("what else lies in the bundle's folder:\n%s", text)
 	}
 }

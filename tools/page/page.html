@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- This page may run its own script and nothing else, and may load
+     nothing: every fetch, image, frame, form and connection is blocked. A
+     policy cannot block leaving the page for another address; this page's
+     script never does that, and holds no link. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Check a bean bundle</title>
+<style>
+:root {
+  --bg: #fbfaf7; --fg: #1d1c1a; --muted: #5f5c55; --line: #dcd8cf; --card: #ffffff;
+  --ok: #17603a; --ok-bg: #e4f3ea; --bad: #9a1f1f; --bad-bg: #fbe6e4; --accent: #1f4f8a;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161614; --fg: #ecebe6; --muted: #a5a299; --line: #3a3832; --card: #1f1e1b;
+    --ok: #8fd6aa; --ok-bg: #153524; --bad: #f1a29b; --bad-bg: #421b19; --accent: #9cc3f2;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 60rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+h1 { font-size: 1.6rem; margin: 0 0 .5rem; }
+h2 { font-size: 1.05rem; margin: 2rem 0 .5rem; }
+p { margin: .5rem 0; max-width: 46rem; }
+.muted { color: var(--muted); }
+.drop { margin: 1.25rem 0; padding: 1.25rem; border: 2px dashed var(--line); border-radius: .5rem; background: var(--card); }
+.drop.over { border-color: var(--accent); }
+button { font: inherit; padding: .5rem .9rem; margin: .25rem .5rem .25rem 0; border: 1px solid var(--accent); border-radius: .4rem; background: var(--accent); color: var(--bg); cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
+.verdict { margin: 1.5rem 0 1rem; padding: 1rem 1.25rem; border-radius: .5rem; border: 1px solid; }
+.verdict strong { display: block; font-size: 1.2rem; }
+.verdict div div { margin-top: .25rem; }
+.verdict.ok { color: var(--ok); background: var(--ok-bg); }
+.verdict.bad { color: var(--bad); background: var(--bad-bg); }
+ul { margin: .5rem 0; padding-left: 1.25rem; max-width: 52rem; }
+li { margin: .3rem 0; }
+pre { margin: .5rem 0; padding: .75rem 1rem; background: var(--card); border: 1px solid var(--line); border-radius: .4rem; white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace; }
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: .4rem; background: var(--card); }
+table { border-collapse: collapse; width: 100%; font-size: .95rem; }
+th, td { text-align: left; vertical-align: top; padding: .45rem .75rem; border-bottom: 1px solid var(--line); }
+th { font-weight: 600; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+td.when, td.id { white-space: nowrap; }
+td.by { min-width: 7rem; }
+td.id, td.type { font: 13px/1.6 ui-monospace, Menlo, Consolas, monospace; }
+footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--line); font-size: .9rem; }
+[hidden] { display: none !important; }
+/* On a narrow screen each record is a block, not a row. */
+@media (max-width: 40rem) {
+  thead { display: none; }
+  table, tbody, tr, td { display: block; }
+  tr { padding: .5rem .75rem; border-bottom: 1px solid var(--line); }
+  tr:last-child { border-bottom: 0; }
+  td { padding: .1rem 0; border: 0; white-space: normal !important; min-width: 0 !important; overflow-wrap: anywhere; }
+  td.text { font-size: 1.05rem; }
+  td.by::before { content: "Signed by "; color: var(--muted); }
+  td.id::before { content: "Id "; color: var(--muted); font: .9rem system-ui, sans-serif; }
+}
+@media print { .drop, footer { display: none; } body { background: #fff; color: #000; } }
+</style>
+</head>
+<body>
+<main>
+<h1>Check a bean bundle</h1>
+<p>A bundle is a folder of health records that one person chose to share. This page checks that every record is what that person signed and that nothing was added or removed. Then it shows what the bundle holds.</p>
+<p class="muted">The check runs on this device. This page sends nothing: its script makes no request, and its policy blocks every load.</p>
+
+<div class="drop" id="drop">
+  <button id="pick-folder" disabled>Choose the bundle's folder</button>
+  <button id="pick-zip" disabled>Choose a .zip file</button>
+  <span class="muted" id="status">Getting ready…</span>
+  <input type="file" id="folder" webkitdirectory hidden>
+  <input type="file" id="zip" accept=".zip,application/zip" hidden>
+</div>
+
+<section id="result" hidden>
+  <div class="verdict" id="verdict"><strong id="verdict-title"></strong><div id="verdict-text"></div></div>
+  <p id="note-box" hidden>The sender's note: <q id="note"></q></p>
+  <div id="problems-box" hidden>
+    <h2 id="problems-title">What failed</h2>
+    <ul id="problems"></ul>
+  </div>
+  <div id="rows-box" hidden>
+    <h2>What it holds</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>When</th><th>What</th><th>Value</th><th>Signed by</th><th>Id</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+  </div>
+  <div id="head-box" hidden>
+    <h2>Who shared it, and what was counted</h2>
+    <pre id="head"></pre>
+  </div>
+  <div id="tail-box" hidden>
+    <h2>Keep in mind</h2>
+    <ul id="tail"></ul>
+  </div>
+</section>
+
+<footer class="muted">
+  <p>This page is one file. It holds the same check as the command <code>bean check-bundle</code>, built with <!--GO-->. A second check that shares no code with it is <code>tools/second/checkbundle.py</code>.</p>
+  <p>A page that came with a bundle is only as good as whoever sent both. When it matters, get this page from the bean project, or build it (<code>make page</code>), and compare its SHA-256.</p>
+</footer>
+</main>
+
+<script id="loader">/*LOADER*/</script>
+<script id="program" type="application/gzip+base64">/*PROGRAM*/</script>
+<script id="app">
+"use strict";
+const $ = (id) => document.getElementById(id);
+// More than a bundle can be: someone chose the wrong folder.
+const MAX_FILES = 100000, MAX_BYTES = 1 << 30;
+let go; // the check, once it has started
+
+// start loads the check that this page carries. It asks the network for
+// nothing.
+async function start() {
+  const packed = Uint8Array.from(atob($("program").textContent.trim()), (c) => c.charCodeAt(0));
+  const stream = new Blob([packed]).stream().pipeThrough(new DecompressionStream("gzip"));
+  const program = await new Response(stream).arrayBuffer();
+  go = new Go();
+  const { instance } = await WebAssembly.instantiate(program, go.importObject);
+  go.run(instance); // it stays, to answer beanCheck
+  if (typeof globalThis.beanCheck !== "function") throw new Error("the check did not start");
+}
+
+// fill draws lines as a list. A line that starts with "  - " belongs to
+// the line before it.
+function fill(list, items) {
+  list.replaceChildren();
+  let sub = null;
+  for (const text of items) {
+    const li = document.createElement("li");
+    if (text.startsWith("  - ") && list.lastChild) {
+      li.textContent = text.slice(4);
+      if (!sub) list.lastChild.append(sub = document.createElement("ul"));
+      sub.append(li);
+      continue;
+    }
+    sub = null;
+    li.textContent = text;
+    list.append(li);
+  }
+}
+
+// clean makes a file's or a folder's name safe to put into a sentence of
+// this page: no character that can reorder or hide text, and not too long.
+function clean(name) {
+  const text = String(name).replace(/[^\p{L}\p{N} ._()+,-]/gu, "?");
+  return "\u201c" + (text.length > 60 ? text.slice(0, 57) + "..." : text) + "\u201d";
+}
+
+// show draws a result. Everything from a bundle is put in as text, never
+// as markup. There are three verdicts: passed, failed, and not checked.
+function show(name, res, packed) {
+  $("result").hidden = false;
+  $("verdict").className = "verdict " + (res.ok ? "ok" : "bad");
+  const lines = [];
+  if (res.ok) {
+    $("verdict-title").textContent = "This bundle passed the check.";
+    lines.push("Every record of the bundle in " + clean(name) + " is what the person signed, and nothing was added to the bundle or removed from it.");
+    if (res.ignored && res.ignored.length) lines.push("Not part of the bundle, and not checked: " + res.ignored.join(", ") + ".");
+    if (packed && res.files) lines.push("It carries " + res.files + (res.files === 1 ? " file" : " files") + ". To open one, unpack the zip file and check the unpacked folder here: another tool can read a zip file differently.");
+  } else if (res.unread) {
+    $("verdict-title").textContent = "Nothing was checked.";
+    lines.push(clean(name) + " could not be read as a bundle. Nothing is known about it.");
+  } else {
+    $("verdict-title").textContent = "This bundle FAILED the check.";
+    lines.push("Do not rely on anything in " + clean(name) + ". Ask the sender for a new copy.");
+  }
+  $("verdict-text").replaceChildren(...lines.map((text) => {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div;
+  }));
+  $("note-box").hidden = !(res.ok && res.note);
+  $("note").textContent = res.note || "";
+  $("problems-box").hidden = res.ok;
+  $("problems-title").textContent = res.unread ? "Why" : "What failed";
+  fill($("problems"), res.problems || []);
+  const rows = res.ok && res.rows ? res.rows : null;
+  $("rows-box").hidden = !rows;
+  $("rows").replaceChildren(...(rows || []).map((r) => {
+    const tr = document.createElement("tr");
+    for (const [cls, text] of [["when", r.when], ["type", r.type], ["text", r.text], ["by", r.by || "the person"], ["id", r.id]]) {
+      const td = document.createElement("td");
+      td.className = cls;
+      td.textContent = text;
+      tr.append(td);
+    }
+    return tr;
+  }));
+  $("tail-box").hidden = !(res.tail && res.tail.length);
+  fill($("tail"), res.tail || []);
+  $("head-box").hidden = !(res.head && res.head.length);
+  $("head").textContent = (res.head || []).join("\n");
+  $("verdict").scrollIntoView({ block: "nearest" });
+}
+
+// unread shows that there was no check. This page never calls a bundle
+// good by default, and never leaves an earlier verdict standing.
+function unread(name, why) {
+  show(name, { ok: false, unread: true, problems: [why] });
+}
+
+async function checkZip(file) {
+  if (file.size > MAX_BYTES) return unread(file.name, "this file is too large to be a bundle");
+  const data = new Uint8Array(await file.arrayBuffer());
+  show(file.name, JSON.parse(beanCheck(file.name, data, null, null)), true);
+}
+
+// checkFolder hands over every path, and the bytes of what can be part of
+// a bundle: what lies under objects/ and files/. Nothing else is read.
+async function checkFolder(name, list) {
+  if (!list.length) return unread(name, "the folder holds no files");
+  if (list.length > MAX_FILES) return unread(name, "this folder holds too many files to be a bundle: choose the bundle's own folder");
+  const paths = [], datas = [];
+  let total = 0;
+  for (const { path, file } of list) {
+    const part = /(^|\/)(objects|files)\//.test(path);
+    if (part && (total += file.size) > MAX_BYTES) return unread(name, "this folder is too large to be a bundle: choose the bundle's own folder");
+    paths.push(path);
+    datas.push(part ? new Uint8Array(await file.arrayBuffer()) : new Uint8Array(0));
+  }
+  show(name, JSON.parse(beanCheck(name, null, paths, datas)), false);
+}
+
+// run does one check at a time. It takes the last verdict off the page
+// first, and turns anything that goes wrong into "nothing was checked".
+let busy = true; // until the check has loaded
+async function run(name, work) {
+  if (busy) return;
+  busy = true;
+  $("result").hidden = true;
+  $("status").textContent = "Checking " + clean(name) + "…";
+  for (const b of document.querySelectorAll("button")) b.disabled = true;
+  // Let the page draw that, before the check keeps it busy.
+  await new Promise((next) => setTimeout(next, 30));
+  try {
+    await work();
+    $("status").textContent = "You can check another.";
+  } catch (err) {
+    unread(name, go.exited
+      ? "the check stopped, most likely because this is too large for a browser. Reload this page before you check anything else."
+      : "the check could not be done: " + (err && err.message ? err.message : err));
+    $("status").textContent = "";
+  }
+  if (go.exited) {
+    $("status").textContent = "Reload this page to check again.";
+    return; // the buttons stay off
+  }
+  for (const b of document.querySelectorAll("button")) b.disabled = false;
+  busy = false;
+}
+
+$("pick-folder").onclick = () => $("folder").click();
+$("pick-zip").onclick = () => $("zip").click();
+$("folder").onchange = (ev) => {
+  const files = [...ev.target.files];
+  ev.target.value = "";
+  const name = files.length ? files[0].webkitRelativePath.split("/")[0] || "the folder" : "the folder";
+  run(name, () => checkFolder(name, files.map((file) => ({ path: file.webkitRelativePath || file.name, file }))));
+};
+$("zip").onchange = (ev) => {
+  const file = ev.target.files[0];
+  ev.target.value = "";
+  if (file) run(file.name, () => checkZip(file));
+};
+// A zip file can be dropped. A folder cannot: a page opened from a disk is
+// not given a dropped folder's files, so the button is the one way.
+const drop = $("drop");
+addEventListener("dragover", (ev) => { ev.preventDefault(); drop.classList.add("over"); });
+addEventListener("dragleave", () => drop.classList.remove("over"));
+addEventListener("drop", (ev) => {
+  ev.preventDefault();
+  drop.classList.remove("over");
+  const items = [...ev.dataTransfer.items].filter((i) => i.kind === "file");
+  const entry = items.length === 1 && items[0].webkitGetAsEntry ? items[0].webkitGetAsEntry() : null;
+  const file = items.length === 1 ? items[0].getAsFile() : null;
+  if (!file || (entry && entry.isDirectory)) {
+    return run("what you dropped", async () => unread("what you dropped", "drop one .zip file. For a folder, use the button."));
+  }
+  run(file.name, () => checkZip(file));
+});
+
+start().then(() => {
+  for (const b of document.querySelectorAll("button")) b.disabled = false;
+  busy = false;
+  $("status").textContent = "Or drop a .zip file here.";
+}, (err) => {
+  $("status").textContent = "This browser cannot run the check (" + (err && err.message ? err.message : err) + "). Use a current Chrome, Edge, Firefox or Safari.";
+});
+</script>
+</body>
+</html>

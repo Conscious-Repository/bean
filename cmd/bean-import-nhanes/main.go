@@ -112,10 +112,6 @@ func record(raw []byte, blob string) (map[string]any, string, error) {
 			"sha256": digest, "bytes": float64(len(raw)),
 			"assurance": "unsigned-file",
 			"dataset":   x.Dataset,
-			"cycle":     nhanes.Years,
-			"publisher": "US National Center for Health Statistics (CDC), NHANES",
-			"url":       nhanes.URL + x.Dataset + ".xpt",
-			"license":   "public domain (a work of the US Government); NCHS asks users not to try to identify participants",
 		},
 		"blobs": []any{map[string]any{"hash": blob, "role": "raw-export", "media_type": "application/x-sas-xport"}},
 	}

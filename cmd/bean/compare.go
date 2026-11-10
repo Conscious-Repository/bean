@@ -54,14 +54,15 @@ const (
 type comparison struct {
 	reading *core.Record
 	analyte nhanes.Analyte
-	// refused says in a few words why there is no result, and help in a
-	// sentence what to do about it, when there is something to do.
-	refused, help string
-	unmapped      bool   // bean has no reference data for the type
-	by            string // who signed the reading, when not the person
-	result        nhanes.Result
-	caveats       []string
-	files         []*refFile // the analyte's file, the demographics file, then each rule's file
+	// refused says in a few words why there is no result, and help in
+	// sentences what to do about it, when there is something to do.
+	refused  string
+	help     []string
+	unmapped bool   // bean has no reference data for the type
+	by       string // who signed the reading, when not the person
+	result   nhanes.Result
+	caveats  []string
+	files    []*refFile // the analyte's file, the demographics file, then each rule's file
 }
 
 // refFile is a kept NHANES file.
@@ -149,23 +150,29 @@ func cmdCompare(s *core.Store, args []string) {
 		fmt.Println("Not saved. Pass -save to keep these comparisons as signed records.")
 		return
 	}
+	// The same inputs give the same claim, so one that the log already holds
+	// is not saved twice. A comparison carries no import ref: it is not an
+	// import, and a deleted one may be saved again when the person asks.
+	have := map[string]bool{}
+	for id, r := range l.Report.Records {
+		if r.Type == compareType && r.Author == l.ID && l.Current(id) {
+			have[string(core.Canonical(r.Raw["context"]))] = true
+		}
+	}
 	var in bytes.Buffer
-	deleted := 0
+	already := 0
 	for _, c := range rows {
 		if c.refused != "" {
 			continue
 		}
-		line := core.Canonical(comparisonRecord(c, cohort))
-		// A comparison the person deleted stays deleted: say so, where
-		// Append would only skip it.
-		if purged, err := s.InputPurged(line); err != nil {
-			fail(err)
-		} else if purged {
-			fmt.Printf("not saved: you deleted this comparison of %s before (bean purge)\n", c.reading.ID[7:19])
-			deleted++
+		rec := comparisonRecord(c, cohort)
+		if key := string(core.Canonical(rec["context"])); have[key] {
+			already++
 			continue
+		} else {
+			have[key] = true
 		}
-		in.Write(line)
+		in.Write(core.Canonical(rec))
 		in.WriteByte('\n')
 	}
 	res, err := s.Append(&in)
@@ -178,15 +185,7 @@ func cmdCompare(s *core.Store, args []string) {
 	if res.Added > 0 {
 		fmt.Println("Each saved comparison states the cohort you chose and, with the public files, gives the reading's value away, in a record anyone with the log or a share of it can read.")
 	}
-	fmt.Printf("added %d, already there %d\n", res.Added, res.Skipped-len(res.Changed))
-	// The same inputs give the same result, so another result under the
-	// same inputs is a fault to report, not a value to replace.
-	for _, c := range res.Changed {
-		fmt.Fprintf(os.Stderr, "bean: the log already has a comparison of these inputs with another result (%s): nothing was written for it\n", c.ID[7:19])
-	}
-	if len(res.Changed) > 0 || deleted > 0 {
-		os.Exit(1)
-	}
+	fmt.Printf("added %d, already there %d\n", res.Added, already)
 }
 
 // parseCohort reads -sex, -age and each -where. Sex and age are required:
@@ -245,24 +244,30 @@ func compareOne(s *core.Store, l *core.Loaded, files map[string]*refFile, allowU
 		return c
 	}
 	c.analyte = a
+	// Every file it needs, so that one run names all that are missing.
 	parsed := map[string]*xpt.File{}
+	var missing, help []string
 	for _, name := range append([]string{a.Dataset, nhanes.Demo}, cohort.Datasets()...) {
-		if parsed[name] != nil {
+		if parsed[name] != nil || slices.Contains(missing, name) {
 			continue
 		}
-		f, refused, help := referenceFile(s, l, files, allowUnknown, name)
+		f, why := referenceFile(s, l, files, allowUnknown, name)
 		if f == nil {
-			c.refused, c.help = refused, help
-			return c
+			missing, help = append(missing, name), append(help, why)
+			continue
 		}
 		parsed[name] = f.file
 		c.files = append(c.files, f)
+	}
+	if len(missing) > 0 {
+		c.refused, c.help = "needs "+strings.Join(missing, ", "), help
+		return c
 	}
 	res, err := nhanes.Compare(parsed, a, cohort, v)
 	c.result = res
 	if errors.Is(err, nhanes.ErrSmall) {
 		c.refused = fmt.Sprintf("fewer than %d people", nhanes.MinN)
-		c.help = fmt.Sprintf("bean gives no number for a cohort of fewer than %d people. Widen a range or drop a rule.", nhanes.MinN)
+		c.help = []string{fmt.Sprintf("bean gives no number for a cohort of fewer than %d people. Widen a range or drop a rule.", nhanes.MinN)}
 		return c
 	}
 	if err != nil {
@@ -294,11 +299,10 @@ func compareOne(s *core.Store, l *core.Loaded, files map[string]*refFile, allowU
 // takes the copy whose SHA-256 is the one on record. Another copy may be a
 // download that was cut short, which reads as a smaller file and gives
 // another number: it is used only with -unknown-files, and only when it is
-// the one such copy. Without a file it returns why, in a few words, and
-// what to do.
-func referenceFile(s *core.Store, l *core.Loaded, files map[string]*refFile, allowUnknown bool, dataset string) (f *refFile, refused, help string) {
+// the one such copy. Without a file it returns what to do.
+func referenceFile(s *core.Store, l *core.Loaded, files map[string]*refFile, allowUnknown bool, dataset string) (*refFile, string) {
 	if f := files[dataset]; f != nil {
-		return f, "", ""
+		return f, ""
 	}
 	var known, others []*core.Record
 	for _, id := range slices.Sorted(maps.Keys(l.Report.Records)) {
@@ -318,11 +322,11 @@ func referenceFile(s *core.Store, l *core.Loaded, files map[string]*refFile, all
 	case len(known) > 0:
 		r = known[0]
 	case len(others) == 0:
-		return nil, "needs " + dataset, "The log does not keep " + dataset + ". " + get
+		return nil, "The log does not keep " + dataset + ". " + get
 	case !allowUnknown:
-		return nil, "needs " + dataset, fmt.Sprintf("The kept copy of %s is not the file on record (its SHA-256 is %v): it may be cut short or changed. %s Or pass -unknown-files to use this copy.", dataset, others[0].Context["sha256"], get)
+		return nil, fmt.Sprintf("The kept copy of %s is not the file on record (its SHA-256 is %v): it may be cut short or changed. %s Or pass -unknown-files to use this copy.", dataset, others[0].Context["sha256"], get)
 	case len(others) > 1:
-		return nil, "needs " + dataset, fmt.Sprintf("The log keeps %d copies of %s that are not the file on record, and bean cannot choose.", len(others), dataset)
+		return nil, fmt.Sprintf("The log keeps %d copies of %s that are not the file on record, and bean cannot choose.", len(others), dataset)
 	default:
 		r = others[0]
 	}
@@ -330,18 +334,46 @@ func referenceFile(s *core.Store, l *core.Loaded, files map[string]*refFile, all
 	digest, _ := r.Context["sha256"].(string)
 	data, err := s.GetBlob(blob)
 	if err != nil {
-		return nil, "needs " + dataset, fmt.Sprintf("The kept copy of %s cannot be read: %s", dataset, err)
+		return nil, fmt.Sprintf("The kept copy of %s cannot be read: %s", dataset, err)
 	}
 	if sum := sha256.Sum256(data); hex.EncodeToString(sum[:]) != digest {
-		return nil, "needs " + dataset, "The kept copy of " + dataset + " no longer matches its record."
+		return nil, "The kept copy of " + dataset + " no longer matches its record."
 	}
 	x, err := xpt.Parse(data)
 	if err != nil || x.Dataset != dataset {
-		return nil, "needs " + dataset, fmt.Sprintf("The kept copy of %s does not read as that file (%v).", dataset, err)
+		return nil, fmt.Sprintf("The kept copy of %s does not read as that file (%v).", dataset, err)
 	}
-	f = &refFile{record: r, dataset: dataset, digest: digest, onRecord: digest == nhanes.Known[dataset], file: x}
+	f := &refFile{record: r, dataset: dataset, digest: digest, onRecord: digest == nhanes.Known[dataset], file: x}
 	files[dataset] = f
-	return f, "", ""
+	return f, ""
+}
+
+// readingGone reports a reading that the person corrected or deleted: one
+// that a record supersedes, a tombstone names, or this copy hides. A reading
+// that only became a duplicate of another copy's same reading is not gone,
+// and one this copy has never seen may not have arrived yet.
+func readingGone(l *core.Loaded, deleted map[string]bool, id string) bool {
+	return deleted[id] || l.Hidden[id] || len(l.Report.Superseded[id]) > 0 || l.Report.KeptSuperseded[id]
+}
+
+// deletedByPerson returns the target of each of the person's tombstones. A
+// target that is already erased is in no other list.
+func deletedByPerson(l *core.Loaded) map[string]bool {
+	deleted := map[string]bool{}
+	for _, r := range l.Report.Records {
+		if r.Type == "bean.tombstone" && r.Author == l.ID && r.Subject == l.ID && (l.Report.Valid[r.ID] || l.Report.Held[r.ID]) {
+			for _, target := range r.Targets("purges") {
+				deleted[target] = true
+			}
+		}
+	}
+	return deleted
+}
+
+// staleComparison reports a saved comparison whose reading is gone.
+func staleComparison(l *core.Loaded, deleted map[string]bool, r *core.Record) bool {
+	reading, _ := r.Context["reading"].(string)
+	return strings.HasPrefix(r.Type, "comparison.") && readingGone(l, deleted, reading)
 }
 
 // sweepComparisons deletes the person's saved comparisons whose reading is
@@ -356,35 +388,22 @@ func sweepComparisons(s *core.Store) {
 	if err != nil || l.ID == "" || l.Local == nil || l.IsTooNew() || l.IsFrozen() {
 		return
 	}
-	// What the person deleted: the target of each of their tombstones. A
-	// target that is already erased is in no other list.
-	deleted := map[string]bool{}
-	for _, r := range l.Report.Records {
-		if r.Type == "bean.tombstone" && r.Author == l.ID && r.Subject == l.ID && (l.Report.Valid[r.ID] || l.Report.Held[r.ID]) {
-			for _, target := range r.Targets("purges") {
-				deleted[target] = true
-			}
-		}
-	}
+	deleted := deletedByPerson(l)
 	var stale []string
 	for _, id := range slices.Sorted(maps.Keys(l.Report.Records)) {
-		r := l.Report.Records[id]
-		if !strings.HasPrefix(r.Type, "comparison.") || r.Author != l.ID || r.Subject != l.ID || !l.Current(id) {
-			continue
-		}
-		reading, _ := r.Context["reading"].(string)
-		if seen := l.Report.Records[reading]; deleted[reading] || l.Hidden[reading] || (seen != nil && !l.Current(reading)) {
+		if r := l.Report.Records[id]; r.Author == l.ID && r.Subject == l.ID && l.Current(id) && staleComparison(l, deleted, r) {
 			stale = append(stale, id)
 		}
 	}
-	for _, id := range stale {
-		if _, err := s.Purge(id, "its reading was corrected or deleted"); err != nil {
-			fmt.Fprintf(os.Stderr, "bean: a comparison of a reading that is gone could not be deleted (%s): %s\n", id[7:19], safe(err.Error()))
-			return
-		}
+	if len(stale) == 0 {
+		return
 	}
-	if len(stale) > 0 {
-		fmt.Fprintf(os.Stderr, "bean: deleted %d saved comparisons: their readings were corrected or deleted. Run bean compare again for the current readings\n", len(stale))
+	n, err := s.PurgeMany(stale, "its reading was corrected or deleted")
+	if n > 0 {
+		fmt.Fprintf(os.Stderr, "bean: deleted %d saved comparisons: their readings were corrected or deleted. Run bean compare again for the current readings\n", n)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "bean: a comparison of a reading that is gone could not be deleted: %s\n", safe(err.Error()))
 	}
 }
 
@@ -415,7 +434,9 @@ func printComparisons(w io.Writer, rows []comparison, cohort nhanes.Cohort, all 
 				n = strconv.Itoa(c.result.N)
 			}
 			fmt.Fprintf(tw, "%s\t%s\t-\t-\t-\t-\t-\t%s\tnot comparable: %s\t%s\n", r.Type, value, n, safe(c.refused), r.ID[7:19])
-			once(&help, c.help)
+			for _, text := range c.help {
+				once(&help, text)
+			}
 		default:
 			res := c.result
 			var note []string
@@ -459,11 +480,9 @@ func printComparisons(w io.Writer, rows []comparison, cohort nhanes.Cohort, all 
 func comparisonRecord(c comparison, cohort nhanes.Cohort) map[string]any {
 	refs := []any{map[string]any{"rel": "about", "id": c.reading.ID}}
 	var files, caveats, rules []any
-	native := []string{c.reading.ID}
 	for _, f := range c.files {
 		refs = append(refs, map[string]any{"rel": "about", "id": f.record.ID})
 		files = append(files, map[string]any{"dataset": f.dataset, "sha256": f.digest})
-		native = append(native, f.digest)
 	}
 	for _, text := range c.caveats {
 		caveats = append(caveats, text)
@@ -478,21 +497,16 @@ func comparisonRecord(c comparison, cohort nhanes.Cohort) map[string]any {
 			}
 		}
 		rules = append(rules, map[string]any{"dataset": r.Dataset, "variable": r.Variable, "label": label, "min": r.Min, "max": r.Max})
-		native = append(native, r.String())
 	}
 	wd, wv := cohort.Weight()
-	native = append(native, c.analyte.Variable, wv, nhanes.MethodID+"@"+nhanes.MethodVersion)
 	lv, _ := c.files[0].file.Variable(c.analyte.Variable)
 	res := c.result
 	return map[string]any{
-		"type":  compareType,
-		"value": map[string]any{"n": res.Percentile, "unit": "{percentile}"},
-		"times": map[string]any{"observed": c.reading.Raw["times"].(map[string]any)["observed"]},
-		"refs":  refs,
-		"source": map[string]any{
-			"system": compareSystem, "adapter": core.Adapter,
-			"ref_input": core.RefInputNative(compareSystem, strings.Join(native, " "), 0),
-		},
+		"type":   compareType,
+		"value":  map[string]any{"n": res.Percentile, "unit": "{percentile}"},
+		"times":  map[string]any{"observed": c.reading.Raw["times"].(map[string]any)["observed"]},
+		"refs":   refs,
+		"source": map[string]any{"system": compareSystem, "adapter": core.Adapter, "ref": nil},
 		"context": map[string]any{
 			"caveats": caveats,
 			"reading": c.reading.ID,

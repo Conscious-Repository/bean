@@ -388,16 +388,44 @@ type KeptBlob struct {
 
 // PurgeAll is Purge with the full result.
 func (s *Store) PurgeAll(id, reason string) (PurgeResult, error) {
-	var res PurgeResult
 	unlock, err := s.lock()
 	if err != nil {
-		return res, err
+		return PurgeResult{}, err
 	}
 	defer unlock()
 	l, err := s.load(false)
 	if err != nil {
-		return res, err
+		return PurgeResult{}, err
 	}
+	return s.purgeLoaded(l, id, reason)
+}
+
+// PurgeMany purges each of ids as Purge does, under one lock and one load
+// of the log, and returns how many it purged. It stops at the first that
+// fails. Purging many records one by one reads the whole log for each.
+func (s *Store) PurgeMany(ids []string, reason string) (int, error) {
+	unlock, err := s.lock()
+	if err != nil {
+		return 0, err
+	}
+	defer unlock()
+	l, err := s.load(false)
+	if err != nil {
+		return 0, err
+	}
+	for n, id := range ids {
+		if _, err := s.purgeLoaded(l, id, reason); err != nil {
+			return n, err
+		}
+	}
+	return len(ids), nil
+}
+
+// purgeLoaded purges one record of the loaded log. The caller holds the
+// lock. It keeps l.Files true to the folder, so a second call on the same
+// load sees what the first erased.
+func (s *Store) purgeLoaded(l *Loaded, id, reason string) (PurgeResult, error) {
+	var res PurgeResult
 	if l.Local == nil {
 		return res, ErrNotInitialized
 	}

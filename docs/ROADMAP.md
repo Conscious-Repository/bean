@@ -56,6 +56,18 @@ In order. Each step is done only when its test passes.
 
 Not this week: Apple Health readings beyond what exists, `bean-import-csv -map`, `-to <npub>` encryption, `bean attest` and `bean trust`, NIP-46, nutrition.
 
+## What it is for, and where it stands
+
+bean is meant to become the canonical log of what a person's measuring hardware acquires. Until that hardware is here, it has to be worth using for what people already have: import it, share parts of it with a doctor or a peer in a way they can check, and compare it with public data. Measured against that on 2026-11-10 (DECISIONS 262 to 268):
+
+| Use | Today | What is missing first |
+|---|---|---|
+| Import what exists | Works: two lab layouts, Apple Health, CSV. | More layouts, each from a real file. |
+| Compare with public data | Works for twelve blood tests, on files the person downloads. | The reference pack below, so that nothing large is downloaded. |
+| Share with a peer | Works with friction: each reads the other's bundle, in a browser or with bean or Python; nothing sets two people's results side by side. | A bundle encrypted to its reader. |
+| Share with a doctor | Works with friction: the doctor opens one page in a browser and chooses the folder or its zip file, with no install. The page has to reach them first: today the person builds it (`make page`) and sends it along, and a page that comes with a bundle is only as good as its sender. | The page published with a release, with its SHA-256. |
+| A device's readings | Not built. A device can sign as a paired key today, and such readings list, share and check; but it runs the whole of bean, a pairing for devices and the device clock (EXTENSIONS 11) are not there, the Python checker takes minutes on thousands of device-signed records, and every command reads the whole log. | A real instrument. Then device capture, from what it shows. |
+
 ## After the loop: compare without the download
 
 Today a person downloads the survey files to compare with them. That is right for someone who wants every rule and every check in their own hands, and too much for most people, who will meet bean inside a phone app. The way to drop the download without sending anyone's number anywhere:
@@ -67,7 +79,7 @@ Today a person downloads the survey files to compare with them. That is right fo
 - **Other sources, the same shape.** A pack built from AION devices' pooled data, with a floor on n and only for people who agreed: nobody outside can rebuild it, so comparisons with it carry that as a caveat. A table from a published study, with its citation. A friend's bundle.
 - **Custody is a separate choice.** A host that holds a person's data and computes for them is the easy path for many, and makes that host a handler of health values, with what follows from that. It uses the same method and writes the same claim, signed by the host.
 
-Not planned: homomorphic encryption or multi-party computation. They answer a question this design does not ask, which is how to compute on values that the one computing must not see. Here the public table goes to the value, not the value to the table.
+Not now: computing on encrypted values (homomorphic encryption, multi-party computation). A reference pack does not need it: the public table goes to the value, not the value to the table. It is the right tool for one thing that may come: statistics across peers who each keep their values to themselves, with no host that sees them. That is a real path for peer-to-peer growth and stays open. It waits for a concrete case, such as a group of people who want their own shared distribution, and for the simpler steps before it: a bundle encrypted to its reader, then a pack built from people who agreed.
 
 ## After that: people like me
 
@@ -91,7 +103,7 @@ The first question a person asks is not "where is my cholesterol" but "how do I 
 6. **Comparison packages.** Standardize the interface of a comparison (inputs, method, cohort, caveats), and let others publish datasets and methods for it. Extension 1's replay rules wait until two kinds of comparison exist.
 7. **Nutrition as exposure.** `food` and `food.estimate` exist. Next comes a source-backed estimate (USDA FoodData Central) with its uncertainty, kept apart from what the person said they ate. No causal claims.
 8. **Share and trust, further.** `check-bundle -key <key>` to compare the signing key with one the person gave, `-to <npub>` encryption of a bundle, a share that does not carry the stable identity id, expiring links, `bean attest <id>`, and `bean trust <identity or npub> <1-100>`. Readers compute trust; the core does not.
-9. **Release.** A `go install` path and a neutral home ([GOVERNANCE-PROPOSAL.md](GOVERNANCE-PROPOSAL.md)).
+9. **Release.** A `go install` path and a neutral home ([GOVERNANCE-PROPOSAL.md](GOVERNANCE-PROPOSAL.md)). Each release publishes `bean-check.html`, the page that checks a bundle in a browser, with its SHA-256 and the Go that built it.
 10. **NIP-46 remote signing,** so that the nsec never sits on the host.
 11. **Device capture** (Extension 2). Wait for a real instrument, not a synthetic one.
 12. **More importers,** from real export files, never from memory. `bean-import-csv -map "<column>=<type>[:<unit>]"`, so that one row can make several records. Apple Health heart rate and daily series wait for rules that reconcile exports.
@@ -129,4 +141,4 @@ The first question a person asks is not "where is my cholesterol" but "how do I 
 
 ## Not planned
 
-Hosted or custodial accounts, a central data platform, a UI beyond a static report, relay publishing of records, encryption of record files at rest (use an encrypted volume), Whoop and Oura importers until there is a real export, zero-knowledge proofs, homomorphic encryption, and distributed trust scores.
+A central data platform that a person cannot leave, a UI beyond a static report, relay publishing of records, encryption of record files at rest (use an encrypted volume), Whoop and Oura importers until there is a real export, zero-knowledge proofs, and distributed trust scores. Custody by a host a person chooses, and computing on encrypted values, are not in this list: see "compare without the download" above.

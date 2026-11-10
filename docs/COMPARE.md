@@ -110,7 +110,7 @@ Limits beyond those:
 bean compare -sex male -age 30-39 -type 'lab.*' -save
 ```
 
-`-save` writes one `comparison.percentile` record per result, signed by you. Without it nothing is written: try cohorts freely, and save what you will act on or share. The same inputs twice add nothing.
+`-save` writes one `comparison.percentile` record per result, signed by you. Without it nothing is written: try cohorts freely, and save what you will act on or share. The same inputs twice add nothing. A comparison you deleted is saved again when you ask again.
 
 The record holds the percentile, and in `context` only what is needed to compute it again:
 
@@ -123,7 +123,7 @@ The record holds the percentile, and in `context` only what is needed to compute
 
 **A saved comparison says who you compared yourself with, and gives the value away.** The cohort (sex, age range, and any rule on ethnicity, body or food) is in the record, which is plain JSON like every record. And the shares of the cohort below and at your value, with the public files, let anyone work the value out. Anyone who reads your log, or a share that holds the comparison, has both. bean says so when it saves.
 
-**A comparison does not outlive its reading.** When you correct or delete a reading (`add -corrects`, `import -corrections`, `purge`), or such a change arrives with `sync`, bean deletes the saved comparisons of that reading and says how many. The deletion is a record, so every copy obeys it. Run `bean compare` again for the corrected reading. A comparison you deleted yourself is not saved again: bean says `not saved`. To correct a lab value, import the corrected report with `-corrections`; `bean add -corrects` needs `-at` with the reading's own time, or the correction is dated now.
+**A comparison does not outlive its reading.** When you correct or delete a reading (`add -corrects`, `import -corrections`, `purge`), or such a change arrives with `sync`, bean deletes the saved comparisons of that reading and says how many. The deletion is a record, so every copy obeys it. Run `bean compare` again for the corrected reading. The cleanup also runs with `bean verify`, which is what to run after copying a log with another tool, and before a share. Until it has run, no command shows the old reading's value, and the comparison cannot be shared. To correct a lab value, import the corrected report with `-corrections`; `bean add -corrects` needs `-at` with the reading's own time, or the correction is dated now.
 
 ### Check one without bean
 
@@ -140,17 +140,16 @@ A folder is read whole, so a `bean export` or a bundle shared with `-files` is e
 
 The tool finds each file by its SHA-256, so the bytes are the same wherever you got them. What fetching from CDC yourself adds is the knowledge that CDC serves a file with that digest.
 
-[`tools/compare/reproduce.py`](../tools/compare/reproduce.py) is a second implementation in Python. It shares no code with bean and has no table of tests: which variable a reading is set against comes from the claim, and is shown to you. For each comparison it checks that:
+[`tools/compare/reproduce.py`](../tools/compare/reproduce.py) is a second implementation in Python. It shares no code with bean. It holds the same small tables as bean (which variable each kind of reading may be set against and in which unit, the weights, the caveats, the files' digests), and a test keeps them equal. For each comparison it checks that:
 
 1. the claim and the reading are what their ids say, and their signatures are good (the checks of the second verifier, `tools/second/beanverify.py`);
 2. each file has the SHA-256 the claim names;
-3. the claim is one the method could have made: the cohort starts with one sex and an age range, its text says what its rules say, the weight is the one step 4 gives, the caveats are the ones the inputs give, and each variable has, in its file, the label the claim gives it;
-4. the method below gives every number of the result;
-5. numpy's own weighted quantile gives the same quartiles.
+3. the claim is one the method could have made: the reading is of a kind and in a unit that the method sets against that variable, the cohort starts with one sex and an age range, its text says what its rules say, the weight is the one step 4 gives, the caveats are the ones the inputs give, and each variable has, in its file, the label the claim gives it;
+4. the method below gives every number of the result.
 
-A signature alone is not enough for 3: anyone can sign a record of this type by hand. A claim that computes but says "female, age 20-29" over rules that say otherwise is refused.
+A signature alone is not enough for 3: anyone can sign a record of this type by hand. A claim that computes but says "female, age 20-29" over rules that say otherwise is refused, and so is one that sets a weight in kilograms against cholesterol.
 
-It prints the reading next to the variable it was set against, for example `lab.cholesterol-total 187 mg/dL against LBXTC 'Total Cholesterol (mg/dL)'`. Whether those two measure the same thing is a judgement, and the line puts it in front of you. It says for itself which files are not the ones on record. A good signature shows which key signed; whether that key speaks for the person is answered by `bean verify` on the log, or by `bean check-bundle` on a bundle. `make compare` runs all of this against bean on synthetic files in CI, and on CDC's files when `BEAN_NHANES_DIR` names a folder of them.
+It prints the reading next to the variable it was set against, for example `lab.cholesterol-total 187 mg/dL against LBXTC 'Total Cholesterol (mg/dL)'`. It says for itself which files are not the ones on record. A good signature shows which key signed; whether that key speaks for the person is answered by `bean verify` on the log, or by `bean check-bundle` on a bundle. `make compare` runs all of this against bean on synthetic files in CI, and on CDC's files when `BEAN_NHANES_DIR` names a folder of them.
 
 ## The method, version 1
 

@@ -13,8 +13,9 @@ bean share -out with-files -files 7b8b81           # also the files those record
 - **The records you name**, by id or by `-type` (with `-since` and `-until`). Only current records about you: not a corrected one, not a deleted one, and not one that another identity signed, since a bundle carries only your identity records.
 - **What they are about, one step.** A record is read with the record it is about, so that one comes along: the reading of a comparison, the meal of an estimate, the entry a note comments on. What that one is about in turn stays home unless you name it. The review marks each record that comes along, and says which it could not bring and why.
 - **Nothing else of yours.** Not the rest of the log, not a lab report unless you name it. A reading names its report by a hash, and the report stays home.
-- **Files only with `-files`.** A record that keeps a file (a lab report, a photo, a reference file) is shared without the file. With `-files` each file goes in whole, as plaintext: for a lab report that is the report as you imported it, with your name and birth date.
+- **A file only when you name its record.** A record that keeps a file (a lab report, a photo) is shared without the file. With `-files`, the file of a record you named by its id goes in whole, as plaintext: for a lab report that is the report as you imported it, with your name and birth date. A file never goes because its record came along with another, or was picked by type. The one exception is a public reference file you kept, such as an NHANES file: with `-files` it goes with the comparison that used it.
 - **A type never picks a record that keeps a file.** `-type 'lab.*'` shares your lab readings, not the lab report. Name such a record by its id when you mean to share it.
+- **A read-me.** `README.txt` tells someone who has only the folder what it is and how to check it. It holds no value, and a check does not read it.
 - **Your identity records**: the ones that show which keys speak for you, and the pairing of an agent whose record you share.
 - **One share record**, signed by you: the list of exactly what the bundle holds, your `-note`, and the time.
 
@@ -28,9 +29,25 @@ The bundle is written whole or not at all: it is built beside its place, checked
 bean check-bundle for-ana
 ```
 
-One command checks the bundle and, when it passes, shows what it holds: each record with its time, type and value, and each comparison in words, such as `percentile 46 of lab.cholesterol-total 187 mg/dL, among male, age 30-39 (n 339)`. Nothing is shown from a bundle that fails. You need no log of your own for this, and the check changes nothing in the folder.
+One command checks the bundle and, when it passes, shows what it holds: each record with its time as the sender recorded it, its type and value, and who signed it when that is not the sender; each comparison in words, such as `percentile 46 of lab.cholesterol-total 187 mg/dL, among male, age 30-39 (n 339)`, with its caveats below. Nothing is shown from a bundle that fails. You need no log of your own for this, and the check changes nothing in the folder.
 
-`python3 tools/second/checkbundle.py for-ana` does the same check without bean.
+A comparison is shown as its claim states it. The check proves who signed the claim, not its arithmetic: `tools/compare/reproduce.py` computes it again ([COMPARE.md](COMPARE.md)).
+
+`python3 tools/second/checkbundle.py for-ana` runs the same five rules without bean. Its listing is plainer: each record's time, type and raw value.
+
+### In a browser, with no install
+
+A reader with no terminal opens one page, `bean-check.html`, and chooses the bundle's folder or a zip file of it. The page gives one of three verdicts: the bundle passed, it failed, or nothing was checked (the wrong folder, not a zip file). When it passed, the page shows your note and each record, then who signed and what no bundle can show. Nothing is shown from a bundle that did not pass, and no earlier verdict stays on the page.
+
+- The page is one file. It holds the same check as `bean check-bundle`, built for a browser, and loads nothing else. It works from a disk, with no connection.
+- It sends nothing: its script makes no request, and its content policy blocks every load, so what a reader opens in it has nowhere to go. A policy cannot stop a page from leaving for another address; this page's script never does, and holds no link.
+- `make page` builds it. The same commit and the same Go give the same bytes, and the build prints their SHA-256. It is not in the repository: it is 3.7 MB of built program.
+- Send the folder as a zip file; the page reads it packed. What the page is given must be the bundle's own folder, or one folder that is the bundle: anything beside it is refused, and anything else inside it is named as not checked.
+- A zip file can read differently in different tools. So a pass covers what the page read. To open a file that a bundle carries, the reader unpacks the zip file and checks the unpacked folder; the page says so.
+- A page that came with a bundle is only as good as whoever sent both: a forged page can call anything good. When it matters, the reader gets the page from the project, or builds it, and compares its SHA-256. The page says so itself.
+- What only a disk can hold, a link or a pipe in the folder, a browser does not hand to a page. `check-bundle` judges those; the page judges the bytes it gets.
+- A bundle whose records hold more than 32 MiB together is refused by the page: a browser has little memory. `check-bundle` has no such limit.
+- It was tried in Chromium, opened from a disk, on a wide screen and a phone's (`make pagetest`). Firefox and Safari have what it needs and were not tried.
 
 Read a bundle with `check-bundle`, not by pointing `-dir` at it: a bundle is someone else's records, not your log. If you did, no harm is done: bean leaves a `local` folder there, which the check names and does not read.
 
@@ -56,7 +73,8 @@ And you should know:
 
 - **A bundle is a disclosure.** It is not encrypted, and once sent it cannot be taken back. Deleting or correcting a record later does not reach a bundle you sent: send a new one.
 - **Keep the folder you sent** if you want to know later what was in it. The share record in your log lists ids; a record you deleted since is gone from your log, and the bundle is the only copy.
-- **Send it as one file.** A bundle is a folder: zip it. Without `-files` it is a few kilobytes; with the NHANES files about 18 MB.
+- **One share holds up to about 14,000 records.** Its list must fit one record. Share a long series in parts, by `-since` and `-until`.
+- **Send it as one file, by a way you trust.** A bundle is a folder: zip it. Without `-files` it is a few kilobytes; with the NHANES files about 18 MB. bean does not encrypt it. Whoever carries the file can read it, so send it over a channel that encrypts end to end, or encrypt the zip to your reader first with a tool you both have. A bundle encrypted to its reader's key is on the roadmap.
 - **Two bundles of yours can be linked.** Every record carries your identity id.
 - **Your identity records say how many records you had at each key change.** A key change lists the ids of the records it seals. The ids are hashes and give no content away, but their number shows.
 - **A correction travels without what it corrects.** A record that replaces an earlier one is shared alone; the earlier one stays home. The check says how many such corrections a bundle holds.
@@ -64,11 +82,12 @@ And you should know:
 
 ## Check a shared comparison
 
-A comparison shared with `-files` can be computed again from the bundle alone, and without them from the bundle and the files from CDC:
+A comparison shared with `-files` can be computed again from the bundle alone, and without them from the bundle and the files: fetched from CDC, or your own kept copies in a `bean export`.
 
 ```
 python3 tools/compare/reproduce.py with-files
 python3 tools/compare/reproduce.py for-ana DEMO_J.xpt TCHOL_J.xpt
+python3 tools/compare/reproduce.py for-ana ~/bean-export/blobs
 ```
 
 ## The bundle, exactly
@@ -83,7 +102,6 @@ The share record is an ordinary record:
 |---|---|
 | `type` | `share` |
 | `author`, `subject` | the person's identity id, both |
-| `source.system` | `bean-share` |
 | `value` | `{"n": <number of records listed>, "unit": "{record}"}` |
 | `times.observed` | when it was written, to the minute |
 | `context.records` | the ids of the shared records |
@@ -96,15 +114,15 @@ A bundle passes when all of this holds. A list in the share record that is not a
 1. Every file under `objects/` is a plain file of at most 16 MiB, two levels down, and passes the checks of a log with nothing left over: no error, no warning, no record of a newer format, no frozen identity, no key change with a part missing. Two things a log's verifier reports are expected, and only these:
    - a record that names a stored file is not at fault because the encrypted file is absent: a bundle never holds one;
    - a listed record that replaces an earlier record (`supersedes`) is held when that earlier record is not in the bundle. The check counts these.
-2. Exactly one `share` record is there. It is valid, its `author` equals its `subject` and is an identity id, its `source.system` is `bean-share`, and its `value.n` is the number of ids in `context.records`.
+2. Exactly one `share` record is there. It is valid, its `author` equals its `subject` and is an identity id, and its `value.n` is the number of ids in `context.records`.
 3. Every other record is one that `context.records` lists or one that `context.proof` names, never both, and every id in either list is there.
    - A listed record is valid, has the person as its `subject`, and is not an identity record, a tombstone, a pairing or a share record.
-   - A proof record is valid, and is an identity record (`bean.genesis`, `bean.succession`, `bean.seal`) on the person's chain, or a pairing (`agent.pair`, `device.pair`) that the person signed about themselves.
+   - A proof record is valid, and is an identity record (`bean.genesis`, `bean.succession`, `bean.seal`) on the person's chain, or a pairing in force: an `agent.pair` that the person signed about themselves and that does not say `"status": "unpaired"`.
 4. Every entry of `context.files` is for a stored file that its listed record names, once. When that record has one stored file, names it in `value.blob` and states `context.sha256`, the entry's `sha256` is equal to it.
 5. `files/` holds exactly the files that the entries list, each a plain file, not a link, with the entry's `bytes` and with the SHA-256 of its name.
 
-A listed record that an agent or another key signed is valid by rule 1 and passes: the person chose to share it. The check counts such records apart: by the person, by an agent whose pairing is in the proof, by another key.
+A listed record that an agent or another key signed is valid by rule 1 and passes: the person chose to share it. The check counts such records apart: by the person, by an agent whose pairing is in the proof, by another key. It names each paired key with the label the person gave it, and marks each such row.
 
 A checker reads `objects/` and `files/` and nothing else of the folder, opens nothing that is not a plain file, and writes nothing.
 
-`bean check-bundle` and `tools/second/checkbundle.py` both implement these five rules, and share no code. One author wrote both, so their agreement shows that the rules can be followed twice, not that a stranger has checked them. `make bundles` makes bundles with bean, good and damaged, with records forged by a stranger and share records mis-signed by the person, and fails if the two disagree on any.
+`bean check-bundle` and `tools/second/checkbundle.py` both implement these five rules, and share no code. The page `bean-check.html` is not a third implementation: it is `check-bundle`'s own check (`internal/bundle`), built for a browser. One author wrote both, so their agreement shows that the rules can be followed twice, not that a stranger has checked them. `make bundles` makes bundles with bean, good and damaged, with records forged by a stranger and share records mis-signed by the person, and fails if the two disagree on any.

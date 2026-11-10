@@ -129,7 +129,17 @@ type multiFlag []string
 func (m *multiFlag) String() string     { return strings.Join(*m, ",") }
 func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
 
+// sweepOnExit is the log of a command that can correct or delete a reading,
+// or bring such a change from another copy. Such a command deletes the saved
+// comparisons of that reading before it exits, also when it fails part way:
+// what it wrote before the failure stays written (compare.go).
+var sweepOnExit *core.Store
+
 func fail(err error) {
+	if s := sweepOnExit; s != nil {
+		sweepOnExit = nil
+		sweepComparisons(s)
+	}
 	fmt.Fprintf(os.Stderr, "bean: %s\n", safe(err.Error()))
 	if errors.Is(err, core.ErrNotInitialized) {
 		fmt.Fprintf(os.Stderr, "bean: no log in %s: point -dir or BEAN_DIR at your log, run bean init to start a new one, or run bean restore with your 24 words to rebuild yours\n", logDir)
@@ -181,6 +191,10 @@ func main() {
 	}
 	cmd, rest := args[0], args[1:]
 	current = cmd
+	switch cmd {
+	case "purge", "append", "import", "sync", "import-export", "verify":
+		sweepOnExit = s
+	}
 	if _, known := syntax[cmd]; !known {
 		fmt.Fprintf(os.Stderr, "bean: unknown command %q\nrun bean help for all commands\n", cmd)
 		os.Exit(2)
@@ -306,6 +320,10 @@ func main() {
 		for _, l := range lines {
 			fmt.Println(safe(l))
 		}
+		// verify is what the docs say to run after copying a log with
+		// another tool: a deletion that came with the copy takes the saved
+		// comparisons of its reading with it.
+		sweepComparisons(s)
 		os.Exit(code)
 	case "purge":
 		pf := flag.NewFlagSet("purge", flag.ContinueOnError)
@@ -354,15 +372,8 @@ func main() {
 		if len(rest) != 1 {
 			usage()
 		}
-		// sync copies every record of the source into this log, for good.
-		// That is right for another copy of this log, and wrong for anyone
-		// else's folder, such as a bundle someone sent.
-		if me, err := s.Identity(); err == nil {
-			if _, err := os.Stat(filepath.Join(rest[0], "objects")); err == nil {
-				if _, err := os.Stat(filepath.Join(rest[0], filepath.FromSlash(core.PathOf(me)))); err != nil {
-					fail(fmt.Errorf("%s is not a copy of your log: it does not hold your identity record. bean sync copies every record of its source into your log, for good. To read a bundle someone sent you, run bean check-bundle %s", rest[0], rest[0]))
-				}
-			}
+		if err := ownCopy(s, rest[0]); err != nil {
+			fail(err)
 		}
 		src := core.Open(rest[0])
 		src.Now = s.Now
@@ -426,13 +437,41 @@ func main() {
 	default:
 		usage()
 	}
-	// A command that can correct or delete a reading, or bring such a
-	// change from another copy, also deletes the saved comparisons of that
-	// reading (compare.go). bean add does it itself, for a correction only.
-	switch cmd {
-	case "purge", "append", "import", "sync", "import-export":
-		sweepComparisons(s)
+	if sweepOnExit != nil {
+		sweepComparisons(sweepOnExit)
 	}
+}
+
+// ownCopy refuses a sync source that is not a copy of this log. sync copies
+// every record of its source into the log, for good, which is right for the
+// person's own copies and wrong for anyone else's folder, such as a bundle
+// someone sent. A copy says whose it is in local/identity; one with no
+// local folder, such as objects/ copied by rsync, must hold the person's
+// own identity record, whole. This catches a mistake. It does not stop
+// someone who builds a folder to pass it: sync only from your own copies.
+func ownCopy(s *core.Store, src string) error {
+	me, err := s.Identity()
+	if err != nil {
+		return nil // no identity here yet: an agent-only copy takes a first sync
+	}
+	if _, err := os.Stat(filepath.Join(src, "objects")); err != nil {
+		return nil // sync itself says that the folder holds no log
+	}
+	no := fmt.Errorf("%s is not a copy of your log. bean sync copies every record of its source into your log, for good. To read a bundle someone sent you, run bean check-bundle %s", src, src)
+	if theirs, err := os.ReadFile(filepath.Join(src, "local", "identity")); err == nil {
+		if strings.TrimSpace(string(theirs)) != me {
+			return no
+		}
+		return nil
+	}
+	data, err := os.ReadFile(filepath.Join(src, filepath.FromSlash(core.PathOf(me))))
+	if err != nil || len(data) > core.MaxRecordSize {
+		return no
+	}
+	if fr := core.CheckFile(core.PathOf(me), data); fr.Err != nil || fr.Record == nil || fr.Record.Type != "bean.genesis" {
+		return no
+	}
+	return nil
 }
 
 // reportChanged prints one changed: line per reading that has a new value and
