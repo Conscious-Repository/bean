@@ -4,7 +4,7 @@
 PY ?= python3
 FUZZTIME ?= 2m
 
-.PHONY: help check build fmt vet test lint vuln vectors second compare bundles example differential demo fuzz smoke
+.PHONY: help check build fmt vet test lint vuln vectors second compare bundles page example differential demo fuzz smoke
 
 help:
 	@echo "make check         every check a commit needs (fmt vet build test lint vuln vectors second compare bundles example differential demo)"
@@ -12,7 +12,8 @@ help:
 	@echo "make vectors       regenerate vectors/ and check them byte for byte and with Python"
 	@echo "make second        compare bean with the second verifier and the conformance folders"
 	@echo "make compare       compute every saved comparison again with Python and pandas"
-	@echo "make bundles       check share bundles, good and damaged, with bean and with Python"
+	@echo "make bundles       check share bundles, good and damaged, with bean, with Python and with the page"
+	@echo "make page          build bean-check.html, the page that checks a bundle in a browser"
 	@echo "make example       run examples/blood offline, on synthetic reference files"
 	@echo "make differential  compare this build with OLD (default origin/main)"
 	@echo "make fuzz          run each fuzz target for FUZZTIME (default 2m)"
@@ -28,6 +29,7 @@ fmt:
 
 vet:
 	go vet ./...
+	GOOS=js GOARCH=wasm go vet ./tools/page/check
 
 test:
 	# Do not time the scale test under race instrumentation.
@@ -60,9 +62,17 @@ compare:
 	PY=$(PY) bash tools/compare/run.sh
 
 # bean check-bundle and the Python checker, which follows docs/SHARE.md, must
-# give the same verdict on every bundle, good and damaged.
+# give the same verdict on every bundle, good and damaged. The page that
+# checks a bundle in a browser is built and must print what bean prints.
+# This needs node, to run the page's check without a browser.
 bundles:
 	PY=$(PY) bash tools/second/bundles.sh
+
+# One file that checks a bundle in a browser, with no install and no
+# network: the check of bean check-bundle, built for a browser. The same
+# commit and the same Go give the same bytes; it prints their SHA-256.
+page:
+	go run ./tools/page -o bean-check.html
 
 # The quickstart must run from a fresh clone and give the numbers it was
 # written with. Here it runs offline on the synthetic reference files;

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/Conscious-Repository/bean/core"
+	"github.com/Conscious-Repository/bean/internal/bundle"
 	"github.com/Conscious-Repository/bean/internal/nhanes"
 )
 
@@ -37,7 +38,6 @@ import (
 // once sent, it cannot be taken back.
 
 const (
-	shareType   = "share"
 	shareSystem = "bean-share"
 	// bundleReadme is written beside objects/ in every bundle. It holds no
 	// value and nothing a checker reads: it tells a person who has only the
@@ -55,6 +55,11 @@ was added or removed, and then lists what the bundle holds.
   Without bean, with Python 3:
       python3 tools/second/checkbundle.py <this folder>
 
+  With no install, in a browser: open the page bean-check.html and choose
+  this folder, or a zip file of it. The page runs the same check on your
+  own device and sends nothing. Get the page from the bean project when it
+  matters: a page that came with this folder is only as good as its sender.
+
 Do not read values from this folder before it passes a check, and do not
 trust this note: anyone who carried the folder could have changed it. A
 check does not read it.
@@ -65,46 +70,15 @@ theirs. Ask the person for their current key when it matters.
 `
 )
 
-// isPairing reports a pairing in force that the person signed about
-// themselves: an agent.pair claim that does not say "unpaired", as bean ls
-// reads one. A device's own kind of pairing comes with device capture
-// (docs/EXTENSIONS.md 11), in both places at once.
-func isPairing(r *core.Record, person string) bool {
-	status, _ := r.Value["status"].(string)
-	return r.Type == "agent.pair" && r.Author == person && r.Subject == person && r.ValueKey() != "" && status != "unpaired"
-}
-
-// statedDigest is the SHA-256 that a record states for the one file it
-// keeps (context.sha256, as lab.report does), or "".
-func statedDigest(r *core.Record, blob string) string {
-	if len(r.Blobs) != 1 || r.Value["blob"] != blob {
-		return ""
-	}
-	s, _ := r.Context["sha256"].(string)
-	return s
-}
-
-// neverListed reports the kinds of record that a share does not list:
-// identity records and pairings travel as proof, and a deletion or the
-// record of a share is not shared.
-func neverListed(r *core.Record) bool {
-	return r.IsIdentity() || r.Type == "bean.tombstone" || r.Type == "agent.pair" || r.Type == "device.pair" || r.Type == shareType
-}
-
-// onChain reports an identity record of the person that their chain holds.
-func onChain(rp *core.Report, r *core.Record, person string) bool {
-	return r.IsIdentity() && (r.ID == person || r.Subject == person) && rp.Valid[r.ID] && !rp.OffTree(r)
-}
-
 // notShareable says why a record cannot go into a bundle, or "". deleted is
 // what the person deleted (deletedByPerson).
 func notShareable(l *core.Loaded, deleted map[string]bool, r *core.Record) string {
 	switch {
 	case staleComparison(l, deleted, r):
 		return "the reading it compares was corrected or deleted"
-	case r.Type == shareType:
+	case r.Type == bundle.ShareType:
 		return "it is the record of a share, which is not shared again"
-	case neverListed(r):
+	case bundle.NeverListed(r):
 		return "it is a " + r.Type + " record: your identity and pairing records travel with every bundle, and are not chosen"
 	case r.Subject != l.ID:
 		return "it is not about you"
@@ -251,7 +225,7 @@ func cmdShare(s *core.Store, args []string) {
 				}
 				sum := sha256.Sum256(data)
 				sf.digest, sf.data = hex.EncodeToString(sum[:]), data
-				if stated := statedDigest(r, b.Hash); stated != "" && stated != sf.digest {
+				if stated := bundle.StatedDigest(r, b.Hash); stated != "" && stated != sf.digest {
 					fail(fmt.Errorf("the file of %s does not match the SHA-256 in its record", r.ID[7:19]))
 				}
 				distinct[sf.digest] = true
@@ -272,9 +246,9 @@ func cmdShare(s *core.Store, args []string) {
 		r := l.Report.Records[id]
 		switch {
 		case !l.Report.Valid[id]:
-		case onChain(l.Report, r, l.ID):
+		case bundle.OnChain(l.Report, r, l.ID):
 			proof = append(proof, r)
-		case isPairing(r, l.ID) && authors[r.ValueKey()] && l.Current(id):
+		case bundle.IsPairing(r, l.ID) && authors[r.ValueKey()] && l.Current(id):
 			proof = append(proof, r)
 			pairings++
 		}
@@ -362,7 +336,7 @@ func cmdShare(s *core.Store, args []string) {
 		ctx["note"] = *note
 	}
 	line := core.Canonical(map[string]any{
-		"type":    shareType,
+		"type":    bundle.ShareType,
 		"value":   map[string]any{"n": float64(len(shared)), "unit": "{record}"},
 		"times":   map[string]any{"observed": map[string]any{"start": s.Now().Truncate(time.Minute).Format(time.RFC3339), "precision": "minute"}},
 		"source":  map[string]any{"system": shareSystem, "adapter": core.Adapter, "ref": nil},
@@ -456,20 +430,6 @@ func bundleTarget(out string) error {
 	return nil
 }
 
-// fileDigest is the SHA-256 of a file, or "" when it cannot be read.
-func fileDigest(path string) string {
-	f, err := os.Open(path)
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return ""
-	}
-	return hex.EncodeToString(h.Sum(nil))
-}
-
 func cmdCheckBundle(args []string) {
 	if len(args) != 1 {
 		usage()
@@ -483,418 +443,11 @@ func cmdCheckBundle(args []string) {
 	}
 }
 
-// bundleRecords reads the record files of a bundle: plain files two levels
-// below objects/, as in a log. It reads nothing else of the folder, opens
-// nothing that is not a plain file, and reads no file larger than a record
-// can be. bad lists what it did not read.
-func bundleRecords(dir string) (files map[string][]byte, bad []string, err error) {
-	files = map[string][]byte{}
-	shards, err := os.ReadDir(filepath.Join(dir, "objects"))
-	if err != nil {
-		return nil, nil, err
-	}
-	for _, sh := range shards {
-		if strings.HasPrefix(sh.Name(), ".") {
-			continue
-		}
-		if !sh.IsDir() {
-			bad = append(bad, "objects/"+sh.Name())
-			continue
-		}
-		entries, err := os.ReadDir(filepath.Join(dir, "objects", sh.Name()))
-		if err != nil {
-			return nil, nil, err
-		}
-		for _, e := range entries {
-			rel := "objects/" + sh.Name() + "/" + e.Name()
-			if strings.HasPrefix(e.Name(), ".") {
-				continue
-			}
-			info, err := e.Info()
-			if err != nil || !e.Type().IsRegular() || info.Size() > core.MaxSuccessionSize {
-				bad = append(bad, rel)
-				continue
-			}
-			data, err := os.ReadFile(filepath.Join(dir, "objects", sh.Name(), e.Name()))
-			if err != nil {
-				return nil, nil, err
-			}
-			files[rel] = data
-		}
-	}
-	return files, bad, nil
-}
-
-// checkBundle checks a bundle by the five rules of docs/SHARE.md, and
-// changes nothing in it. It returns the lines to print and whether the
-// bundle passed.
+// checkBundle checks the bundle in a folder by the five rules of
+// docs/SHARE.md, and changes nothing in it. It returns the lines to print
+// and whether the bundle passed. The check itself is internal/bundle, which
+// the page that checks a bundle in a browser runs too.
 func checkBundle(dir string) ([]string, bool) {
-	var problems []string
-	bad := func(format string, a ...any) { problems = append(problems, "problem: "+fmt.Sprintf(format, a...)) }
-	done := func(lines []string) ([]string, bool) {
-		sort.Strings(problems)
-		lines = append(lines, problems...)
-		if len(problems) > 0 {
-			return append(lines, fmt.Sprintf("bundle FAILED: %d problems", len(problems))), false
-		}
-		return append(lines, "bundle ok"), true
-	}
-	// The folder: objects/ and, when it holds files, files/, real folders
-	// and not links that lead out of it, and nothing else. Names that
-	// start with a dot are not part of a bundle, as in a log: a file
-	// browser leaves such files behind.
-	if info, err := os.Lstat(filepath.Join(dir, "objects")); err != nil || !info.IsDir() {
-		bad("%s is not a bundle: it has no objects folder", dir)
-		return done(nil)
-	}
-	top, err := os.ReadDir(dir)
-	if err != nil {
-		bad("the folder cannot be read: %s", err)
-		return done(nil)
-	}
-	// Anything else in the folder is not part of the bundle. It is never
-	// read, so it cannot change the verdict, and it is named: pointing bean
-	// at a bundle with -dir leaves a local folder there.
-	var ignored []string
-	for _, e := range top {
-		switch name := e.Name(); {
-		case strings.HasPrefix(name, "."):
-		case name == "objects":
-		case name == "files":
-			if !e.IsDir() {
-				bad("files is not a folder: a link or a file in its place is not followed")
-			}
-		default:
-			ignored = append(ignored, "not part of the bundle, and not read: "+name)
-		}
-	}
-	if len(problems) > 0 {
-		return done(nil)
-	}
-	// Rule 1: every record file passes the checks of a log, with nothing
-	// left over: no error, no warning, no record of a newer format.
-	files, unread, err := bundleRecords(dir)
-	if err != nil {
-		bad("the records cannot be read: %s", err)
-		return done(nil)
-	}
-	for _, p := range unread {
-		bad("%s is not a record file: not a plain file, or too large", p)
-	}
-	rp := core.VerifyFiles(files)
-	var lines []string
-	for _, where := range slices.Sorted(maps.Keys(rp.Errors)) {
-		lines = append(lines, fmt.Sprintf("error: %s: %s", where, rp.Errors[where]))
-	}
-	if len(rp.Errors) > 0 {
-		bad("a record file fails a check of a log (the error lines say which)")
-	}
-	if len(rp.Unknown) > 0 || rp.Skipped > 0 || len(rp.TooNew) > 0 {
-		bad("a record is of a newer format than this bean knows, so it cannot be checked")
-	}
-	if len(rp.Compromised) > 0 || len(rp.Incomplete) > 0 {
-		bad("an identity in the bundle is frozen, or a key change is not whole")
-	}
-	// Rule 2: exactly one share record, signed by a person about themselves.
-	var share *core.Record
-	for _, id := range slices.Sorted(maps.Keys(rp.Records)) {
-		if r := rp.Records[id]; r.Type == shareType {
-			if share != nil {
-				bad("more than one share record: a bundle holds one")
-				return done(lines)
-			}
-			share = r
-		}
-	}
-	if share == nil || !rp.Valid[share.ID] {
-		bad("no valid share record: nothing says what this bundle holds")
-		return done(lines)
-	}
-	person := share.Author
-	if !core.IsID(person) || share.Subject != person {
-		bad("the share record is not signed by a person about themselves")
-		return done(lines)
-	}
-	// Its lists, read strictly: a list that is not as SHARE.md says is not
-	// read in a kinder way.
-	idList := func(key string) (map[string]bool, bool) {
-		out := map[string]bool{}
-		list, ok := share.Context[key].([]any)
-		for _, x := range list {
-			id, _ := x.(string)
-			if !core.IsID(id) || out[id] {
-				return nil, false
-			}
-			out[id] = true
-		}
-		return out, ok
-	}
-	listed, ok1 := idList("records")
-	proof, ok2 := idList("proof")
-	if n, _ := share.Value["n"].(float64); !ok1 || !ok2 || n != float64(len(listed)) {
-		bad("the share record's lists are damaged")
-		return done(lines)
-	}
-	// The files it holds: each entry names a stored file of a listed record,
-	// with the SHA-256 and the size of its plaintext.
-	type entry struct {
-		digest string
-		size   float64
-	}
-	account := map[string]entry{} // blob id and record id -> the share's word
-	want := map[string]float64{}  // SHA-256 -> size
-	rawFiles, hasFiles := share.Context["files"]
-	entries, isList := rawFiles.([]any)
-	damaged := hasFiles && !isList
-	for _, x := range entries {
-		m, _ := x.(map[string]any)
-		blob, _ := m["blob"].(string)
-		record, _ := m["record"].(string)
-		digest, _ := m["sha256"].(string)
-		size, hasSize := m["bytes"].(float64)
-		if _, twice := account[blob+" "+record]; twice || !core.IsID(blob) || !listed[record] || !core.IsID("sha256:"+digest) || !hasSize || size < 0 || size != float64(int64(size)) {
-			damaged = true
-			continue
-		}
-		if prev, ok := want[digest]; ok && prev != size {
-			damaged = true
-		}
-		account[blob+" "+record] = entry{digest, size}
-		want[digest] = size
-	}
-	if damaged {
-		bad("the share record's list of files is damaged")
-		return done(lines)
-	}
-	// Rule 1, the warnings. One is expected: a listed record that corrects
-	// an earlier record is "held" by a log's verifier when that earlier
-	// record is not there, and a share leaves it out on purpose. The reader
-	// is told how many such corrections there are. Any other warning fails.
-	corrections := 0
-	for _, id := range slices.Sorted(maps.Keys(rp.Warnings)) {
-		r := rp.Records[id]
-		expected := r != nil && listed[id] && rp.Held[id] && len(r.Targets("supersedes")) > 0
-		for _, w := range rp.Warnings[id] {
-			expected = expected && strings.HasPrefix(w, "held: ")
-		}
-		for _, target := range r.Targets("supersedes") {
-			expected = expected && rp.Records[target] == nil
-		}
-		if expected {
-			corrections++
-			continue
-		}
-		for _, w := range rp.Warnings[id] {
-			lines = append(lines, fmt.Sprintf("warning: %s: %s", id, w))
-		}
-		bad("%s has a warning that a bundle may not have", id)
-	}
-	// Rule 3: the records are exactly the listed ones, each valid, about
-	// the person and of a kind that is shared, plus the proof: the person's
-	// identity records and pairings that the share record names. A record
-	// that an agent or another key signed is valid, and counted apart: the
-	// person chose to share it, and did not write it.
-	paired := map[string]string{} // key -> the label the person gave it
-	for id := range proof {
-		if r := rp.Records[id]; r != nil && isPairing(r, person) && rp.Valid[id] {
-			label, _ := r.Value["label"].(string)
-			if label == "" {
-				label = "agent"
-			}
-			paired[r.ValueKey()] = label
-		}
-	}
-	byPerson, byAgent, byOther := 0, 0, 0
-	for _, id := range slices.Sorted(maps.Keys(rp.Records)) {
-		r := rp.Records[id]
-		switch {
-		case id == share.ID:
-		case listed[id] && proof[id]:
-			bad("%s is listed as a record and as proof", id)
-		case proof[id]:
-			if !onChain(rp, r, person) && !(isPairing(r, person) && rp.Valid[id]) {
-				bad("%s is named as proof, and is not a valid identity record or pairing of the person", id)
-			}
-		case !listed[id]:
-			bad("%s is in the bundle, and the share record does not list it", id)
-		case !rp.Valid[id]:
-			bad("%s is listed, and is not valid", id)
-		case r.Subject != person:
-			bad("%s is listed, and is about someone else", id)
-		case neverListed(r):
-			bad("%s is listed, and is a %s record, which is not shared", id, r.Type)
-		case r.Author == person:
-			byPerson++
-		case paired[r.Author] != "":
-			byAgent++
-		default:
-			byOther++
-		}
-	}
-	for _, id := range slices.Sorted(maps.Keys(listed)) {
-		if rp.Records[id] == nil {
-			bad("%s is listed, and is not in the bundle", id)
-		}
-	}
-	for _, id := range slices.Sorted(maps.Keys(proof)) {
-		if rp.Records[id] == nil {
-			bad("%s is named as proof, and is not in the bundle", id)
-		}
-	}
-	// Rule 4: each entry is for a stored file that its listed record names,
-	// and is the file that record states, where it states one. A stored file
-	// with no entry stays home: it is counted, not faulted.
-	named := 0
-	for _, id := range slices.Sorted(maps.Keys(listed)) {
-		r := rp.Records[id]
-		if r == nil {
-			continue
-		}
-		once := map[string]bool{}
-		for _, b := range r.Blobs {
-			if once[b.Hash] {
-				continue // a record may name one file twice
-			}
-			once[b.Hash] = true
-			e, ok := account[b.Hash+" "+id]
-			if !ok {
-				named++
-				continue
-			}
-			delete(account, b.Hash+" "+id)
-			if stated := statedDigest(r, b.Hash); stated != "" && e.digest != stated {
-				bad("the file of %s is not the one its record states", id)
-			}
-		}
-	}
-	if len(account) > 0 {
-		bad("the share record lists a file that no listed record names")
-	}
-	// Rule 5: files/ holds exactly the included files.
-	included := len(want)
-	found, err := os.ReadDir(filepath.Join(dir, "files"))
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		bad("the files cannot be read: %s", err)
-	}
-	for _, f := range found {
-		if strings.HasPrefix(f.Name(), ".") {
-			continue
-		}
-		size, ok := want[f.Name()]
-		if !ok {
-			bad("files/%s is in the bundle, and the share record does not list it", f.Name())
-			continue
-		}
-		delete(want, f.Name())
-		if !f.Type().IsRegular() {
-			bad("files/%s is not a plain file", f.Name())
-			continue
-		}
-		// The size first: a file of another size is not read at all.
-		if info, err := f.Info(); err != nil || float64(info.Size()) != size || fileDigest(filepath.Join(dir, "files", f.Name())) != f.Name() {
-			bad("files/%s is not the file the share record lists", f.Name())
-		}
-	}
-	for digest := range want {
-		bad("files/%s is listed, and is not in the bundle", digest)
-	}
-	when := "-"
-	if obs, ok := share.Observed.(map[string]any); ok {
-		when, _ = obs["start"].(string)
-	}
-	lines = append(lines,
-		fmt.Sprintf("share %s", share.ID),
-		fmt.Sprintf("signed by identity %s, with key %s, at %s", person, share.Kid, when),
-		fmt.Sprintf("records: %d listed; files: %d included, %d named and not included", len(listed), included, named),
-		fmt.Sprintf("signed: %d by the person, %d by an agent the person paired, %d by another key", byPerson, byAgent, byOther),
-		fmt.Sprintf("corrections: %d of the listed records replace an earlier record, which is not in the bundle", corrections),
-	)
-	if n, _ := share.Context["note"].(string); n != "" {
-		lines = append(lines, "note: "+n)
-	}
-	for _, key := range slices.Sorted(maps.Keys(paired)) {
-		lines = append(lines, fmt.Sprintf("paired by the person: %s, key %s", paired[key], core.Npub(key)))
-	}
-	lines = append(lines, ignored...)
-	// What it holds, shown only when every check passed: a reader should
-	// not read values out of a bundle that failed.
-	if len(problems) == 0 {
-		lines = append(lines, "It holds:")
-		var rows []*core.Record
-		for id := range listed {
-			rows = append(rows, rp.Records[id])
-		}
-		sort.Slice(rows, func(i, j int) bool {
-			wi, wj := core.When(rows[i]), core.When(rows[j])
-			if !wi.Equal(wj) {
-				return wi.Before(wj)
-			}
-			return rows[i].ID < rows[j].ID
-		})
-		inBundle := func(id string) *core.Record {
-			if listed[id] {
-				return rp.Records[id]
-			}
-			return nil
-		}
-		var caveats []string
-		for _, r := range rows {
-			by := ""
-			switch {
-			case r.Author == person:
-			case paired[r.Author] != "":
-				by = "  [" + paired[r.Author] + "]"
-			default:
-				by = "  [signed by another key: " + core.Npub(r.Author) + "]"
-			}
-			lines = append(lines, fmt.Sprintf("  %s  %s  %s%s  %s", sharedWhen(r), r.Type, recordText(r, inBundle), by, r.ID[7:19]))
-			list, _ := r.Context["caveats"].([]any)
-			for _, x := range list {
-				if text, _ := x.(string); text != "" && strings.HasPrefix(r.Type, "comparison.") && !slices.Contains(caveats, text) {
-					caveats = append(caveats, text)
-				}
-			}
-		}
-		// A comparison is shown as its claim states it. This check proves
-		// who signed the claim, not its arithmetic.
-		if len(caveats) > 0 {
-			lines = append(lines, "The comparisons above are shown as claimed, and are not computed again here: tools/compare/reproduce.py does that. Their own caveats:")
-			for _, text := range caveats {
-				lines = append(lines, "  - "+text)
-			}
-		}
-	}
-	lines = append(lines, bundleCaveats...)
-	return done(lines)
-}
-
-// sharedWhen is a record's observed time as the record states it, with its
-// own offset from UTC: a reader in another time zone sees the time the
-// sender recorded, not a shifted one.
-func sharedWhen(r *core.Record) string {
-	obs, ok := r.Observed.(map[string]any)
-	if !ok {
-		return "-"
-	}
-	start, _ := obs["start"].(string)
-	t, err := time.Parse(time.RFC3339Nano, start)
-	if err != nil {
-		return start
-	}
-	switch obs["precision"] {
-	case "year":
-		return t.Format("2006")
-	case "month":
-		return t.Format("2006-01")
-	case "day":
-		return t.Format("2006-01-02")
-	}
-	return t.Format("2006-01-02 15:04 -07:00")
-}
-
-// bundleCaveats are what no bundle can show. Every check prints them.
-var bundleCaveats = []string{
-	"These are selected records, not a complete history: a correction or a deletion that the share leaves out does not show.",
-	"A signature shows which identity signed, not that a value is true, nor who that identity is.",
-	"The key above is the one that signed. A bundle cannot show that it is still the person's key: a key change made since is not in it. When it matters, ask the person for their current key (bean whoami).",
+	res := bundle.Check(bundle.ReadDir(dir))
+	return res.Lines(), res.OK
 }

@@ -35,7 +35,17 @@ A comparison is shown as its claim states it. The check proves who signed the cl
 
 `python3 tools/second/checkbundle.py for-ana` runs the same five rules without bean. Its listing is plainer: each record's time, type and raw value.
 
-Today a reader needs bean or Python, and a terminal. A doctor with neither cannot read a bundle yet; a page that checks one in a browser is on the roadmap.
+### In a browser, with no install
+
+A reader with no terminal opens one page, `bean-check.html`, and chooses the bundle's folder or a zip file of it. The page says whether the bundle passed, shows your note and each record, then who signed and what no bundle can show. Nothing is shown from a bundle that fails.
+
+- The page is one file. It holds the same check as `bean check-bundle`, built for a browser, and loads nothing else. It works from a disk, with no connection.
+- It cannot use the network: its content policy forbids every request. What a reader opens in it is not sent anywhere.
+- `make page` builds it. The same commit and the same Go give the same bytes, and the build prints their SHA-256. It is not in the repository: it is 3.7 MB of built program.
+- Send the folder as a zip file; the page reads it packed.
+- A page that came with a bundle is only as good as whoever sent both: a forged page can call anything good. When it matters, the reader gets the page from the project, or builds it, and compares its SHA-256. The page says so itself.
+- What only a disk can hold, a link or a pipe in the folder, a browser does not hand to a page. `check-bundle` judges those; the page judges the bytes it gets.
+- It was tried in Chromium, on a wide screen and a phone's. Firefox and Safari have what it needs and were not tried.
 
 Read a bundle with `check-bundle`, not by pointing `-dir` at it: a bundle is someone else's records, not your log. If you did, no harm is done: bean leaves a `local` folder there, which the check names and does not read.
 
@@ -113,4 +123,4 @@ A listed record that an agent or another key signed is valid by rule 1 and passe
 
 A checker reads `objects/` and `files/` and nothing else of the folder, opens nothing that is not a plain file, and writes nothing.
 
-`bean check-bundle` and `tools/second/checkbundle.py` both implement these five rules, and share no code. One author wrote both, so their agreement shows that the rules can be followed twice, not that a stranger has checked them. `make bundles` makes bundles with bean, good and damaged, with records forged by a stranger and share records mis-signed by the person, and fails if the two disagree on any.
+`bean check-bundle` and `tools/second/checkbundle.py` both implement these five rules, and share no code. The page `bean-check.html` is not a third implementation: it is `check-bundle`'s own check (`internal/bundle`), built for a browser. One author wrote both, so their agreement shows that the rules can be followed twice, not that a stranger has checked them. `make bundles` makes bundles with bean, good and damaged, with records forged by a stranger and share records mis-signed by the person, and fails if the two disagree on any.

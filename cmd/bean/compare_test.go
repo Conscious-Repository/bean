@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Conscious-Repository/bean/internal/bundle"
 	"github.com/Conscious-Repository/bean/internal/nhanes"
 )
 
@@ -437,7 +438,7 @@ func TestCompareIsNotForTheMCPTool(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, text := range bundleCaveats {
+	for _, text := range bundle.Caveats {
 		if !strings.Contains(string(second), `"`+text+`"`) {
 			t.Errorf("tools/second/checkbundle.py does not have the caveat %q", text)
 		}

@@ -22,6 +22,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/Conscious-Repository/bean/core"
+	"github.com/Conscious-Repository/bean/internal/bundle"
 )
 
 const writeInstructions = `
@@ -247,7 +248,7 @@ func importerOnly(typ string) bool {
 // guards the tool, not the log: a program with the person's shell can
 // write any type with bean add.
 func computedOnly(typ string) bool {
-	return strings.HasPrefix(typ, "comparison.") || typ == shareType
+	return strings.HasPrefix(typ, "comparison.") || typ == bundle.ShareType
 }
 
 // mcpOpts are the tools the server offers: log_entry with write, read_blob

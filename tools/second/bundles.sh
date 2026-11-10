@@ -2,14 +2,19 @@
 # bundles.sh: makes share bundles with bean, good and damaged, and checks
 # that bean check-bundle and the Python checker (checkbundle.py, which follows
 # docs/SHARE.md and shares no code with bean) give the same verdict on each:
-# both pass, or both refuse. It also computes a shared comparison again from
-# its bundle alone.
+# both pass, or both refuse. The page that checks a bundle in a browser
+# (tools/page) is built and asked too, without a browser: it must print what
+# bean prints, from a folder and from a zip file. It also computes a shared
+# comparison again from its bundle alone.
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
 PY=${PY:-python3}
+NODE=${NODE:-node}
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 (cd "$ROOT" && go build -o "$T/bin/" ./cmd/bean ./cmd/bean-import-nhanes) || { echo "build failed"; exit 1; }
+command -v "$NODE" >/dev/null || { echo "node is needed, to run the page's check without a browser"; exit 1; }
+(cd "$ROOT" && go run ./tools/page -o "$T/bean-check.html" >/dev/null) || { echo "page build failed"; exit 1; }
 export PATH="$T/bin:$PATH" BEAN_NOW=2026-11-09T12:00:00Z
 unset BEAN_DIR
 DATA=$ROOT/internal/nhanes/testdata
@@ -40,6 +45,15 @@ both() {
   if [ "$g" != "$want" ] || [ "$p" != "$want" ]; then
     echo "DIFFER $1: want $3, bean exit $g, checkbundle.py exit $p"; sed 's/^/    go: /' "$T/go.txt" | tail -4; sed 's/^/    py: /' "$T/py.txt" | tail -4; rc=1
   fi
+  # The page that checks a bundle in a browser carries bean's own check, so
+  # it must print bean's own lines. A fourth word, disk, marks damage that
+  # only a disk can hold, a link or a pipe: a browser hands a page the
+  # bytes of plain files and nothing else, so the page is not asked.
+  [ "${4:-}" = disk ] && return
+  "$NODE" "$ROOT/tools/page/check.mjs" "$T/bean-check.html" "$2" >"$T/js.txt" 2>&1; j=$?
+  if [ "$j" != "$g" ] || ! cmp -s "$T/go.txt" "$T/js.txt"; then
+    echo "DIFFER $1: the page (exit $j) does not say what bean says (exit $g)"; diff "$T/go.txt" "$T/js.txt" | head -6 | sed 's/^/    /'; rc=1
+  fi
   # On a good bundle the two must also count the same records, files and signers.
   if [ "$want" = 0 ] && [ "$(grep -E '^(share|records:|signed:|corrections:) ' "$T/go.txt")" != "$(grep -E '^(share|records:|signed:|corrections:) ' "$T/py.txt")" ]; then
     echo "DIFFER $1: the two count differently"; grep -E '^(records:|signed:) ' "$T/go.txt" "$T/py.txt" | sed 's/^/    /'; rc=1
@@ -57,6 +71,20 @@ share "$T/agent" "$A1";                     both "a reading an agent signed" "$T
 grep -q '^signed: 0 by the person, 1 by an agent the person paired, 0 by another key' "$T/go.txt" || { echo "DIFFER: an agent's reading is not counted as one"; rc=1; }
 share "$T/rot" "$R1" "$R2";                 both "records from before and after a key rotation" "$T/rot" ok
 share "$T/type" -type 'lab.*' -note "for a friend"; both "by type" "$T/type" ok
+# As a zip file, which is how a folder travels: the page reads it packed,
+# also when it was packed on a Mac, which adds a tree of its own.
+"$PY" -I -c 'import sys, zipfile, os
+z = zipfile.ZipFile(sys.argv[2], "w", zipfile.ZIP_DEFLATED)
+for base, _, names in sorted(os.walk(sys.argv[1])):
+    for n in sorted(names):
+        full = os.path.join(base, n); rel = "for-ana/" + os.path.relpath(full, sys.argv[1])
+        z.write(full, rel); z.writestr("__MACOSX/" + os.path.dirname(rel) + "/._" + n, b"x")
+z.writestr("for-ana/.DS_Store", b"x")' "$T/cmpf" "$T/cmpf.zip"
+n=$((n + 1)); bean check-bundle "$T/cmpf" >"$T/go.txt" 2>&1
+"$NODE" "$ROOT/tools/page/check.mjs" "$T/bean-check.html" "$T/cmpf.zip" >"$T/js.txt" 2>&1 && cmp -s "$T/go.txt" "$T/js.txt" || { echo "DIFFER: the page reads a zip file differently from its folder"; diff "$T/go.txt" "$T/js.txt" | head -6; rc=1; }
+"$PY" -I -c 'import sys; d = bytearray(open(sys.argv[1], "rb").read()); i = d.index(b"objects/") + 200; d[i] ^= 1; open(sys.argv[2], "wb").write(d)' "$T/cmpf.zip" "$T/bad.zip"
+n=$((n + 1)); "$NODE" "$ROOT/tools/page/check.mjs" "$T/bean-check.html" "$T/bad.zip" >"$T/js.txt" 2>&1 && { echo "DIFFER: the page passed a zip file with a changed byte"; rc=1; }
+
 # A correction travels without the record it replaces, and the reader is told.
 K1=$(b add weight 82.5 -unit kg -at 2026-11-02 -corrects "$W1")
 share "$T/corr" "$K1";                      both "a correction, without what it corrects" "$T/corr" ok
@@ -90,14 +118,14 @@ damage "$T/plain"; cp -R "$X"/objects/* "$T/d/objects/";                       b
 damage "$T/cmpf"; touch "$T/d/.DS_Store" "$T/d/files/.DS_Store";                both "dot files left by a file browser" "$T/d" ok
 # Nor is anything else in the folder: it is not read, so it changes nothing.
 # Pointing bean at a bundle with -dir leaves a local folder there.
-damage "$T/cmpf"; mkdir "$T/d/local"; mkfifo "$T/d/local/identity"; echo x >"$T/d/README.txt"; both "a local folder and a stray file beside the bundle" "$T/d" ok
+damage "$T/cmpf"; mkdir "$T/d/local"; mkfifo "$T/d/local/identity"; echo x >"$T/d/README.txt"; both "a local folder and a stray file beside the bundle" "$T/d" ok disk
 damage "$T/cmpf"; bean -dir "$T/d" ls >/dev/null 2>&1;                           both "a bundle that someone ran bean ls on" "$T/d" ok
 # No link leads out of the bundle.
-damage "$T/cmpf"; mv "$T/d/files" "$T/elsewhere"; ln -s "$T/elsewhere" "$T/d/files"; both "files as a link out of the bundle" "$T/d" bad; rm -rf "$T/elsewhere"
-damage "$T/plain"; mv "$T/d/objects" "$T/elsewhere"; ln -s "$T/elsewhere" "$T/d/objects"; both "objects as a link out of the bundle" "$T/d" bad; rm -rf "$T/elsewhere"
-damage "$T/cmpf"; f=$(ls "$T/d/files" | head -1); cp "$T/d/files/$f" "$T/keep"; rm "$T/d/files/$f"; ln -s "$T/keep" "$T/d/files/$f"; both "a file as a link" "$T/d" bad
+damage "$T/cmpf"; mv "$T/d/files" "$T/elsewhere"; ln -s "$T/elsewhere" "$T/d/files"; both "files as a link out of the bundle" "$T/d" bad disk; rm -rf "$T/elsewhere"
+damage "$T/plain"; mv "$T/d/objects" "$T/elsewhere"; ln -s "$T/elsewhere" "$T/d/objects"; both "objects as a link out of the bundle" "$T/d" bad disk; rm -rf "$T/elsewhere"
+damage "$T/cmpf"; f=$(ls "$T/d/files" | head -1); cp "$T/d/files/$f" "$T/keep"; rm "$T/d/files/$f"; ln -s "$T/keep" "$T/d/files/$f"; both "a file as a link" "$T/d" bad disk
 damage "$T/cmpf"; rm -rf "$T/d/files"; echo x >"$T/d/files";                    both "files as a plain file" "$T/d" bad
-damage "$T/plain"; f="$T/d/objects/42"; mkdir -p "$f"; mkfifo "$f/$(printf 'a%.0s' $(seq 62)).json"; both "a pipe for a record file" "$T/d" bad
+damage "$T/plain"; f="$T/d/objects/42"; mkdir -p "$f"; mkfifo "$f/$(printf 'a%.0s' $(seq 62)).json"; both "a pipe for a record file" "$T/d" bad disk
 damage "$T/plain"; f="$T/d/objects/42"; mkdir -p "$f"; truncate -s 17M "$f/$(printf 'a%.0s' $(seq 62)).json"; both "a record file too large to be one" "$T/d" bad
 
 # Records that a stranger forged and slipped into a good bundle. forge signs
@@ -213,5 +241,5 @@ grep -q '"type":"agent.pair"' "$T"/unpaired/objects/*/*.json && { echo "DIFFER: 
 both "a folder that is not a bundle" "$T/bin" bad
 both "a whole log, not a bundle" "$L" bad
 
-[ "$rc" = 0 ] && echo "bundles: bean check-bundle and checkbundle.py agree on $n bundles, good and damaged, and a shared comparison computes again from its bundle"
+[ "$rc" = 0 ] && echo "bundles: bean check-bundle and checkbundle.py agree on $n bundles, good and damaged, the page that checks one in a browser says what bean says, and a shared comparison computes again from its bundle"
 exit $rc

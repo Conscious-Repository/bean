@@ -58,14 +58,14 @@ Not this week: Apple Health readings beyond what exists, `bean-import-csv -map`,
 
 ## What it is for, and where it stands
 
-bean is meant to become the canonical log of what a person's measuring hardware acquires. Until that hardware is here, it has to be worth using for what people already have: import it, share parts of it with a doctor or a peer in a way they can check, and compare it with public data. Measured against that on 2026-11-10 (DECISIONS 262 to 265):
+bean is meant to become the canonical log of what a person's measuring hardware acquires. Until that hardware is here, it has to be worth using for what people already have: import it, share parts of it with a doctor or a peer in a way they can check, and compare it with public data. Measured against that on 2026-11-10 (DECISIONS 262 to 268):
 
 | Use | Today | What is missing first |
 |---|---|---|
 | Import what exists | Works: two lab layouts, Apple Health, CSV. | More layouts, each from a real file. |
 | Compare with public data | Works for twelve blood tests, on files the person downloads. | The reference pack below, so that nothing large is downloaded. |
-| Share with a peer | Works with friction: both need bean or Python and a terminal; each reads the other's bundle; nothing sets two people's results side by side. | A bundle encrypted to its reader. |
-| Share with a doctor | Blocked for a doctor with no terminal. | One page that checks a bundle in a browser and shows it, with no install. |
+| Share with a peer | Works with friction: each reads the other's bundle, in a browser or with bean or Python; nothing sets two people's results side by side. | A bundle encrypted to its reader. |
+| Share with a doctor | Works with friction: the doctor opens one page in a browser and chooses the folder or its zip file, with no install. The page has to reach them first: today the person builds it (`make page`) and sends it along, and a page that comes with a bundle is only as good as its sender. | The page published with a release, with its SHA-256. |
 | A device's readings | Not built. A device can sign as a paired key today, and such readings list, share and check; but it runs the whole of bean, a pairing for devices and the device clock (EXTENSIONS 11) are not there, the Python checker takes minutes on thousands of device-signed records, and every command reads the whole log. | A real instrument. Then device capture, from what it shows. |
 
 ## After the loop: compare without the download
@@ -103,7 +103,7 @@ The first question a person asks is not "where is my cholesterol" but "how do I 
 6. **Comparison packages.** Standardize the interface of a comparison (inputs, method, cohort, caveats), and let others publish datasets and methods for it. Extension 1's replay rules wait until two kinds of comparison exist.
 7. **Nutrition as exposure.** `food` and `food.estimate` exist. Next comes a source-backed estimate (USDA FoodData Central) with its uncertainty, kept apart from what the person said they ate. No causal claims.
 8. **Share and trust, further.** `check-bundle -key <key>` to compare the signing key with one the person gave, `-to <npub>` encryption of a bundle, a share that does not carry the stable identity id, expiring links, `bean attest <id>`, and `bean trust <identity or npub> <1-100>`. Readers compute trust; the core does not.
-9. **Release.** A `go install` path and a neutral home ([GOVERNANCE-PROPOSAL.md](GOVERNANCE-PROPOSAL.md)).
+9. **Release.** A `go install` path and a neutral home ([GOVERNANCE-PROPOSAL.md](GOVERNANCE-PROPOSAL.md)). Each release publishes `bean-check.html`, the page that checks a bundle in a browser, with its SHA-256 and the Go that built it.
 10. **NIP-46 remote signing,** so that the nsec never sits on the host.
 11. **Device capture** (Extension 2). Wait for a real instrument, not a synthetic one.
 12. **More importers,** from real export files, never from memory. `bean-import-csv -map "<column>=<type>[:<unit>]"`, so that one row can make several records. Apple Health heart rate and daily series wait for rules that reconcile exports.
