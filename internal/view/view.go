@@ -65,6 +65,13 @@ func Record(r *core.Record, reading func(id string) *core.Record) string {
 			out += " (n " + strconv.FormatFloat(n, 'g', -1, 64) + ")"
 		}
 	}
+	// A comparison with a reference pack names the pack: two packs can
+	// place one reading differently.
+	if ref, ok := r.Context["reference"].(map[string]any); ok {
+		if digest, _ := ref["pack"].(string); len(digest) == 64 {
+			out += ", by pack " + digest[:12]
+		}
+	}
 	return out
 }
 

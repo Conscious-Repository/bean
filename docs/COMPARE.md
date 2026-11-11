@@ -159,6 +159,8 @@ python3 tools/compare/reproduce.py <a bundle> DEMO_J.xpt TCHOL_J.xpt
 python3 tools/compare/reproduce.py records.jsonl DEMO_J.xpt TCHOL_J.xpt
 ```
 
+A comparison that was made with a reference pack needs the pack and no other file: `python3 tools/compare/reproduce.py <a bundle> nhanes.pack`. The tool finds the pack by its SHA-256, whatever its file is called.
+
 A folder is read whole, so a `bean export` or a bundle shared with `-files` is enough by itself. Without the files in the folder, give them: the ones named in each claim, fetched from CDC. `records.jsonl` is the output of `bean ls -json`. A file that is missing gives `CANNOT CHECK` and its name, not a result that differs.
 
 The tool finds each file by its SHA-256, so the bytes are the same wherever you got them. What fetching from CDC yourself adds is the knowledge that CDC serves a file with that digest.

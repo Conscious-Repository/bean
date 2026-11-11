@@ -134,18 +134,29 @@ func TestRefuses(t *testing.T) {
 			files := top["source"].(map[string]any)["files"].([]any)
 			top["source"].(map[string]any)["files"] = append(files, files[0])
 		},
-		"a measure that takes no reading":   func(top map[string]any) { measure(top, "M2")["same"] = []any{} },
-		"more people than a cell may state": func(top map[string]any) { cell(top, 0)["n"] = float64(MaxN + 1) },
-		"a caveat that is a number":         func(top map[string]any) { top["caveats"] = []any{float64(1)} },
-		"another kind of cell":              func(top map[string]any) { cell(top, 0)["kind"] = "quantiles" },
-		"a cell member too many":            func(top map[string]any) { cell(top, 0)["note"] = "x" },
-		"values not rising":                 func(top map[string]any) { cell(top, 1)["values"] = []any{float64(60), 50.5, float64(70)} },
-		"a value twice":                     func(top map[string]any) { cell(top, 1)["values"] = []any{50.5, 50.5, float64(70)} },
-		"a value of zero":                   func(top map[string]any) { cell(top, 1)["values"] = []any{float64(0), float64(60), float64(70)} },
-		"a negative weight":                 func(top map[string]any) { cell(top, 1)["weights"] = []any{float64(10), float64(-11), float64(10)} },
-		"a weight that is text":             func(top map[string]any) { cell(top, 1)["weights"] = []any{float64(10), "11", float64(10)} },
-		"weights that add up to no number": func(top map[string]any) {
-			cell(top, 1)["weights"] = []any{1e308, 1e308, float64(10)}
+		"a measure that takes no reading":            func(top map[string]any) { measure(top, "M2")["same"] = []any{} },
+		"more people than a cell may state":          func(top map[string]any) { cell(top, 0)["n"] = float64(MaxN + 1) },
+		"a caveat that is a number":                  func(top map[string]any) { top["caveats"] = []any{float64(1)} },
+		"another kind of cell":                       func(top map[string]any) { cell(top, 0)["kind"] = "quantiles" },
+		"a cell member too many":                     func(top map[string]any) { cell(top, 0)["note"] = "x" },
+		"values not rising":                          func(top map[string]any) { cell(top, 1)["values"] = []any{float64(60), 50.5, float64(70)} },
+		"a value twice":                              func(top map[string]any) { cell(top, 1)["values"] = []any{50.5, 50.5, float64(70)} },
+		"a value of zero":                            func(top map[string]any) { cell(top, 1)["values"] = []any{float64(0), float64(60), float64(70)} },
+		"a negative weight":                          func(top map[string]any) { cell(top, 1)["weights"] = []any{float64(10), float64(-11), float64(10)} },
+		"a weight that is text":                      func(top map[string]any) { cell(top, 1)["weights"] = []any{float64(10), "11", float64(10)} },
+		"a weight too large":                         func(top map[string]any) { cell(top, 1)["weights"] = []any{1e16, float64(11), float64(10)} },
+		"a weight of a whole 1e21":                   func(top map[string]any) { cell(top, 1)["weights"] = []any{1e21, float64(11), float64(10)} },
+		"a value too small":                          func(top map[string]any) { cell(top, 1)["values"] = []any{1e-13, float64(60), float64(70)} },
+		"a title with a space no wider than nothing": func(top map[string]any) { top["title"] = "a\u200bb" },
+		"a title with a blank filler":                func(top map[string]any) { top["title"] = "\u3164" },
+		"a title with a no-break space":              func(top map[string]any) { top["title"] = "a\u00a0b" },
+		"a title with a tag character":               func(top map[string]any) { top["title"] = "a\U000e0041b" },
+		"a title with a noncharacter":                func(top map[string]any) { top["title"] = "a\ufffeb" },
+		"a measure that claims a share": func(top map[string]any) {
+			measure(top, "M2")["same"] = []any{map[string]any{"type": "share", "unit": "{record}"}}
+		},
+		"a measure that claims a comparison": func(top map[string]any) {
+			measure(top, "M2")["same"] = []any{map[string]any{"type": "comparison.percentile", "unit": "{percentile}"}}
 		},
 		"a weight missing":            func(top map[string]any) { cell(top, 1)["weights"] = []any{float64(10), float64(11)} },
 		"no values":                   func(top map[string]any) { cell(top, 1)["values"], cell(top, 1)["weights"] = []any{}, []any{} },

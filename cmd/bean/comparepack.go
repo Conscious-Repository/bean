@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -34,7 +35,7 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save boo
 	}
 	menu := slices.Sorted(maps.Keys(p.Cohorts))
 	if cohort == "" {
-		if len(pos) > 0 || typ != "" {
+		if len(pos) > 0 || typ != "" || save {
 			badArg(fmt.Errorf("name a cohort of the pack with -cohort: %s", strings.Join(menu, ", ")))
 		}
 		printPack(p)
@@ -45,7 +46,7 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save boo
 		badArg(fmt.Errorf("the pack has no cohort %q. It has: %s", cohort, strings.Join(menu, ", ")))
 	}
 	if (len(pos) == 0) == (typ == "") {
-		usage()
+		badArg(errors.New("say which readings to compare: record ids, or -type, and not both"))
 	}
 	readings, l := compareReadings(s, typ, pos)
 	labels := l.AgentLabels()
@@ -87,7 +88,7 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save boo
 		}
 	}
 	slices.Sort(known)
-	head := fmt.Sprintf("Compared with %s: %s.\nThe pack is %s, SHA-256 %s.\n%s", p.Title, co.Text, path, p.SHA256, onRecord(p))
+	head := fmt.Sprintf("Compared with the pack %q. Cohort: %s.\nThe pack is %s, SHA-256 %s.\n%s", p.Title, co.Text, path, p.SHA256, onRecord(p))
 	printComparisons(os.Stdout, rows, head, strings.Join(known, ", "), typ == "")
 	saveComparisons(s, l, claims, save, "the pack")
 }
@@ -139,7 +140,7 @@ func printPack(p *pack.Pack) {
 // onRecord says whether bean knows the pack. A pack is what its SHA-256
 // says, and bean has one on record.
 func onRecord(p *pack.Pack) string {
-	if p.SHA256 == nhanes.KnownPack {
+	if _, ok := pack.Known[p.SHA256]; ok {
 		return "This is the NHANES pack that bean has on record."
 	}
 	return "bean has no record of this pack. Compare its SHA-256 with the one that its publisher states, or build the pack again from the files that it names."

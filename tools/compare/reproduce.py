@@ -446,9 +446,17 @@ def check_pack_claim(claim, inputs):
     # Step 1: the pack has the SHA-256 the claim names.
     if digest in inputs.packbad:
         raise ValueError("the pack %s is not a pack: %s" % (digest[:12], inputs.packbad[digest][1]))
+    # The claim is about its reading and nothing else.
+    if claim.get("refs") != [{"rel": "about", "id": ctx["reading"]}]:
+        raise ValueError("the claim's refs are not the one reading it is about")
+    # A pack is what its SHA-256 says, whatever its file is called.
+    if digest not in inputs.packs and digest not in inputs.packbad and digest in inputs.files:
+        inputs.add_pack(inputs.files[digest])
+        if digest in inputs.packbad:
+            raise ValueError("the pack %s is not a pack: %s" % (digest[:12], inputs.packbad[digest][1]))
     pack = inputs.packs.get(digest)
     if pack is None:
-        raise Missing("the pack %s (SHA-256 %s) is not among the paths given" % (digest[:12], digest))
+        raise Missing("the pack with SHA-256 %s is not among the paths given: get that pack and give its file" % digest)
     if pack.sha256 != digest:
         raise ValueError("the pack does not have the SHA-256 the claim names")
     mid, cid = ref["measure"], ref["cohort"]

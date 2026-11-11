@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/Conscious-Repository/bean/core"
+	"github.com/Conscious-Repository/bean/internal/pack"
 	"github.com/Conscious-Repository/bean/internal/view"
 )
 
@@ -27,7 +28,7 @@ const ShareType = "share"
 var Caveats = []string{
 	"These are selected records, not a complete history: a correction or a deletion that the share leaves out does not show.",
 	"A signature shows which identity signed, not that a value is true, nor who that identity is.",
-	"The key above is the one that signed. A bundle cannot show that it is still the person's key: a key change made since is not in it. When it matters, ask the person for their current key (bean whoami).",
+	"The check shows the key that signed. A bundle cannot show that it is still the person's key: a key change made since is not in it. When it matters, ask the person for their current key (bean whoami).",
 }
 
 // IsPairing reports a pairing in force that the person signed about
@@ -465,7 +466,7 @@ func Check(in Input) Result {
 			}
 			return nil
 		}
-		var caveats []string
+		var caveats, packs []string
 		res.Rows = []Row{}
 		for _, r := range rows {
 			by := ""
@@ -477,6 +478,14 @@ func Check(in Input) Result {
 				by = "[signed by another key: " + core.Npub(r.Author) + "]"
 			}
 			res.Rows = append(res.Rows, Row{When: sharedWhen(r), Type: r.Type, Text: view.Record(r, inBundle), By: by, ID: r.ID[7:19]})
+			// A comparison with a reference pack names it by SHA-256.
+			if ref, ok := r.Context["reference"].(map[string]any); ok && strings.HasPrefix(r.Type, "comparison.") {
+				digest, _ := ref["pack"].(string)
+				title, _ := ref["title"].(string)
+				if line := fmt.Sprintf("  - %s, titled %q: %s", digest, title, pack.OnRecord(digest)); len(digest) == 64 && !slices.Contains(packs, line) {
+					packs = append(packs, line)
+				}
+			}
 			list, _ := r.Context["caveats"].([]any)
 			for _, x := range list {
 				if text, _ := x.(string); text != "" && strings.HasPrefix(r.Type, "comparison.") && !slices.Contains(caveats, text) {
@@ -491,6 +500,12 @@ func Check(in Input) Result {
 			for _, text := range caveats {
 				res.Tail = append(res.Tail, "  - "+text)
 			}
+		}
+		// The reader needs the pack to compute such a comparison again, and
+		// the title is the sender's word: the SHA-256 is what names a pack.
+		if len(packs) > 0 {
+			res.Tail = append(res.Tail, "A comparison by a pack was made with a file of reference data that is not in this bundle. To compute it again, get the pack with that SHA-256 and give it to tools/compare/reproduce.py with the bundle. A title is the sender's word; the SHA-256 names the pack:")
+			res.Tail = append(res.Tail, packs...)
 		}
 	}
 	res.Tail = append(res.Tail, Caveats...)

@@ -16,6 +16,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
+	"strings"
 
 	"github.com/Conscious-Repository/bean/internal/nhanes"
 	"github.com/Conscious-Repository/bean/internal/pack"
@@ -38,8 +40,27 @@ func main() {
 	}
 }
 
+// tests lists the data sets that a pack takes a measure from.
+func tests() []string {
+	var out []string
+	for _, a := range nhanes.Analytes {
+		if !slices.Contains(out, a.Dataset) {
+			out = append(out, a.Dataset)
+		}
+	}
+	for _, m := range nhanes.BodyMeasures {
+		if !slices.Contains(out, m.Dataset) {
+			out = append(out, m.Dataset)
+		}
+	}
+	return out
+}
+
+func usable(dataset string) bool { return dataset == nhanes.Demo || slices.Contains(tests(), dataset) }
+
 func build(out string, unknown bool, paths []string) error {
 	files := map[string]nhanes.SourceFile{}
+	var skipped []string
 	for _, path := range paths {
 		raw, err := os.ReadFile(path)
 		if err != nil {
@@ -48,6 +69,12 @@ func build(out string, unknown bool, paths []string) error {
 		x, err := xpt.Parse(raw)
 		if err != nil {
 			return fmt.Errorf("%s is not a file that NHANES publishes: %w", path, err)
+		}
+		// A file that a pack holds nothing of is left out, and named: so
+		// a folder of downloads can be given whole.
+		if !usable(x.Dataset) {
+			skipped = append(skipped, x.Dataset)
+			continue
 		}
 		if _, twice := files[x.Dataset]; twice {
 			return fmt.Errorf("%s is given twice", x.Dataset)
@@ -84,6 +111,12 @@ func build(out string, unknown bool, paths []string) error {
 	}
 	fmt.Printf("%s: %d measures, %d cohorts, %d cells, %d bytes\n", out, len(back.Measures), len(back.Cohorts), len(back.Cells), len(data))
 	fmt.Printf("sha256 %s\n", back.SHA256)
+	if _, ok := pack.Known[back.SHA256]; ok {
+		fmt.Println("This is the NHANES pack that bean has on record.")
+	}
+	if len(skipped) > 0 {
+		fmt.Printf("not used: %s. A pack is built from %s and the files of these tests: %s\n", strings.Join(skipped, ", "), nhanes.Demo, strings.Join(tests(), ", "))
+	}
 	for _, c := range back.Caveats[1:] {
 		fmt.Println("note: " + c)
 	}

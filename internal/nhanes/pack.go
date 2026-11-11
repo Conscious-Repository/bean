@@ -33,6 +33,12 @@ const (
 // CDC's files keeps it true.
 const KnownPack = "efbb252a361b1994c67207618a088d492d1b0dafb8ea5ff88f857f97abc69277"
 
+func init() {
+	if _, ok := pack.Known[KnownPack]; !ok {
+		panic("the NHANES pack on record is not among the packs that bean knows")
+	}
+}
+
 // PackMeasure is a variable that a pack holds, beside the lab tests of
 // Analytes: a body measure. Each Same row is a type that bean or one of
 // its importers writes, in the variable's own unit.

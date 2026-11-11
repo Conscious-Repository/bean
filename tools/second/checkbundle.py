@@ -40,7 +40,7 @@ HEX64 = re.compile(r"^[0-9a-f]{64}$")
 CAVEATS = (
     "These are selected records, not a complete history: a correction or a deletion that the share leaves out does not show.",
     "A signature shows which identity signed, not that a value is true, nor who that identity is.",
-    "The key above is the one that signed. A bundle cannot show that it is still the person's key: a key change made since is not in it. When it matters, ask the person for their current key (bean whoami).",
+    "The check shows the key that signed. A bundle cannot show that it is still the person's key: a key change made since is not in it. When it matters, ask the person for their current key (bean whoami).",
 )
 
 

@@ -101,6 +101,18 @@ func TestComparePack(t *testing.T) {
 	if list, _, _ := run(t, dir, "", "ls", "-type", "comparison.percentile"); !strings.Contains(list, "among male, age 30-39 (n ") {
 		t.Errorf("ls:\n%s", list)
 	}
+	// Shared, it tells its reader which pack it was made with, and that
+	// the pack is needed to compute it again.
+	bundle := filepath.Join(t.TempDir(), "b")
+	if out, errs, code := run(t, dir, "", "share", "-yes", "-out", bundle, "-type", "comparison.*"); code != 0 {
+		t.Fatalf("share: %d\n%s\n%s", code, out, errs)
+	}
+	checked, _, code := run(t, t.TempDir(), "", "check-bundle", bundle)
+	for _, want := range []string{"bundle ok", "among male, age 30-39 (n ", ", by pack " + digest[:12], "get the pack with that SHA-256", digest + `, titled "NHANES 2017-2018: adults by sex and ten years of age": bean has no record of this pack`} {
+		if code != 0 || !strings.Contains(checked, want) {
+			t.Errorf("check-bundle: %d, no %q in\n%s", code, want, checked)
+		}
+	}
 	// A comparison does not outlive its reading, whatever it was made with.
 	if _, errs, code := run(t, dir, "", "purge", ids[0]); code != 0 {
 		t.Fatalf("purge: %s", errs)
@@ -132,6 +144,8 @@ func TestComparePackRefuses(t *testing.T) {
 		"no cohort":                       {[]string{"compare", "-pack", path, ids[0]}, "name a cohort of the pack with -cohort"},
 		"-sex with a pack":                {[]string{"compare", "-pack", path, "-sex", "male", "-age", "30-39", ids[0]}, "with -pack, name a cohort"},
 		"-cohort with no pack":            {[]string{"compare", "-cohort", "male-30-39", ids[0]}, "usage"},
+		"no reading":                      {[]string{"compare", "-pack", path, "-cohort", "male-30-39"}, "say which readings to compare"},
+		"-save with no cohort":            {[]string{"compare", "-pack", path, "-save"}, "name a cohort of the pack with -cohort"},
 		"only what has no reference data": {[]string{"compare", "-pack", path, "-cohort", "male-30-39", ids[2]}, "nothing could be compared"},
 	} {
 		out, errs, code := run(t, dir, "", tc.args...)

@@ -180,6 +180,11 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
   - `export` does not decrypt the files of an agent that the person unpaired.
   - A source with a stranger's broken file makes every `sync` from it exit 1.
   - The purge check in `bean import` reads only this copy's `local/purged-refs.jsonl`.
+- From the review of reference packs (DECISIONS 283):
+  - A cell's n is not checked against its weights: with sample weights the two are not tied.
+  - Two packs can place one reading differently, and both claims are kept. Each row names its pack.
+  - `bean compare -pack <file>` needs a log even to show what a pack holds.
+  - `bean add` with a whole number above 9007199254740991 says `bad json`.
 - No way to test the 24 words without rotating. `net/http` is in the binary only to detect image types. CI does not run `lint`, `vuln` or fuzzing.
 
 ## Not planned

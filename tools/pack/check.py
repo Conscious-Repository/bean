@@ -39,6 +39,7 @@ FORMAT = "pack/0"
 MAX_BYTES = 64 * 1024 * 1024
 MIN_N = 30
 MAX_N = 2147483647  # the largest n that a cell may state
+MIN_NUMBER, MAX_NUMBER = 1e-12, 1e15  # the bounds of a value and of a weight
 MAX_TEXT = 400
 MAX_ID = 64
 ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
@@ -201,14 +202,26 @@ def text(x, where):
     if n < 1 or n > MAX_TEXT:
         raise Refused("%s is %d bytes, not 1 to %d" % (where, n, MAX_TEXT))
     for c in x:
-        cat = unicodedata.category(c)
-        # "control character" is read as: any Cc, and also the line and
-        # paragraph separators and the bidirectional controls (Cf).
-        if cat in ("Cc", "Cs", "Zl", "Zp") or c in "؜‎‏" or "‪" <= c <= "‮" or "⁦" <= c <= "⁩":
-            raise Refused("%s has a control character" % where)
-    if x[0].isspace() or x[-1].isspace():
+        if c != " " and hidden(c):
+            raise Refused("%s has a character that does not show, or a space other than the plain one: U+%04X" % (where, ord(c)))
+    if x[0] == " " or x[-1] == " ":
         raise Refused("%s has a space at an end" % where)
     return x
+
+
+def hidden(c):
+    """A character that a text of a pack may not hold: a control, format,
+    surrogate or private-use character, a separator, a space other than
+    the plain one, a filler that shows as blank, or a noncharacter."""
+    o = ord(c)
+    return (unicodedata.category(c) in ("Cc", "Cf", "Cs", "Co", "Zl", "Zp", "Zs")
+            or o in (0x115F, 0x1160, 0x3164, 0xFFA0)
+            or 0xFDD0 <= o <= 0xFDEF or o & 0xFFFE == 0xFFFE)
+
+
+def own_type(t):
+    """A type of bean's own records: not a reading, so no measure claims it."""
+    return t == "share" or t.startswith(("comparison.", "reference.", "bean.", "agent."))
 
 
 def ident(x, where):
@@ -288,6 +301,8 @@ def check_pack(p):
             members(s, SAME, "%s same[%d]" % (w, i))
             text(s["type"], "%s same[%d].type" % (w, i))
             text(s["unit"], "%s same[%d].unit" % (w, i))
+            if own_type(s["type"]):
+                raise Refused("%s claims %s, which is a record of bean's own and not a reading" % (w, safe(s["type"], 60)))
             key = (s["type"], s["unit"])
             if key in owner:
                 if owner[key] == mid:
@@ -331,16 +346,16 @@ def check_pack(p):
         for j, v in enumerate(values):
             if not is_num(v):
                 raise Refused("%s: value %d is not a number" % (w, j))
-            if not v > 0:
-                raise Refused("%s: value %d is not above zero" % (w, j))
+            if not MIN_NUMBER <= v <= MAX_NUMBER:
+                raise Refused("%s: value %d is not from 1e-12 to 1e15" % (w, j))
             if last is not None and not v > last:
                 raise Refused("%s: value %d is not above the one before" % (w, j))
             last = v
         for j, x in enumerate(weights):
             if not is_num(x):
                 raise Refused("%s: weight %d is not a number" % (w, j))
-            if not x > 0:
-                raise Refused("%s: weight %d is not above zero" % (w, j))
+            if not MIN_NUMBER <= x <= MAX_NUMBER:
+                raise Refused("%s: weight %d is not from 1e-12 to 1e15" % (w, j))
         n = whole(c["n"], w + " n", 0)
         if n < MIN_N or n > MAX_N:
             raise Refused("%s has an n that is not from %d to %d" % (w, MIN_N, MAX_N))

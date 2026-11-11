@@ -51,6 +51,12 @@ done
 [ "$saved" -ge 50 ] || say "bean saved only $saved comparisons with the pack"
 b ls -json >"$T/records.jsonl"
 "$PY" -I "$ROOT/tools/compare/reproduce.py" "$T/records.jsonl" "$T/syn.pack" >"$T/rp.txt" 2>&1 || say "reproduce.py does not get what bean saved: $(tail -2 "$T/rp.txt")"
+# A shared bundle of such comparisons, and the pack under another name: a
+# pack is what its SHA-256 says.
+b share -yes -out "$T/bundle" -type 'comparison.*' >/dev/null 2>&1 || say "the comparisons were not shared"
+bean check-bundle "$T/bundle" 2>&1 | grep -q "get the pack with that SHA-256" || say "check-bundle does not tell the reader that a pack is needed"
+cp "$T/syn.pack" "$T/reference-data.bin"
+"$PY" -I "$ROOT/tools/compare/reproduce.py" "$T/bundle" "$T/reference-data.bin" >"$T/rpb.txt" 2>&1 || say "reproduce.py does not compute a shared comparison again from the bundle and the pack: $(tail -2 "$T/rpb.txt")"
 # Without the pack the claims cannot be checked, and that is said.
 "$PY" -I "$ROOT/tools/compare/reproduce.py" "$T/records.jsonl" >"$T/rp0.txt" 2>&1 && say "reproduce.py passes claims without their pack"
 grep -q "CANNOT CHECK" "$T/rp0.txt" || say "reproduce.py does not say that it cannot check without the pack"
@@ -91,6 +97,18 @@ cases = {
     "weight-negative": lambda p: cell(p)["weights"].__setitem__(0, -1.5),
     "weight-text": lambda p: cell(p)["weights"].__setitem__(0, "1"),
     "weights-overflow": lambda p: cell(p).update(weights=[1e308] * len(cell(p)["weights"])),
+    "weight-1e21": lambda p: cell(p)["weights"].__setitem__(0, 1e21),
+    "weight-1e16": lambda p: cell(p)["weights"].__setitem__(0, 1e16),
+    "weight-subnormal": lambda p: cell(p)["weights"].__setitem__(0, 5e-324),
+    "value-tiny": lambda p: cell(p)["values"].__setitem__(0, 1e-13),
+    "title-zero-width": lambda p: p.update(title="a\u200bb"),
+    "title-filler": lambda p: p.update(title="\u3164"),
+    "title-nbsp": lambda p: p.update(title="a\u00a0b"),
+    "title-tag": lambda p: p.update(title="a\U000e0041b"),
+    "title-bidi": lambda p: p.update(title="a\u202eb"),
+    "cohort-text-escape": lambda p: first(p["cohorts"]).update(text="a\x1b[2Jb"),
+    "same-share": lambda p: first(p["measures"])["same"].append({"type": "share", "unit": "{record}"}),
+    "same-comparison": lambda p: first(p["measures"])["same"].append({"type": "comparison.percentile", "unit": "{percentile}"}),
     "weight-missing": lambda p: cell(p)["weights"].pop(),
     "values-none": lambda p: cell(p).update(values=[], weights=[]),
     "n-small": lambda p: cell(p).update(n=29),

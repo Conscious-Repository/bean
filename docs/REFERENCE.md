@@ -34,14 +34,20 @@ A comparison says where a value lies among the values of a cohort in the source'
 ## Try it
 
 ```
-bean-pack-nhanes -out nhanes.pack DEMO_J.xpt TCHOL_J.xpt BMX_J.xpt    # build a pack from files you downloaded
+bean-pack-nhanes -out nhanes.pack DEMO_J.xpt TCHOL_J.xpt HDL_J.xpt GHB_J.xpt CBC_J.xpt BMX_J.xpt
 bean compare -pack nhanes.pack                                         # what the pack holds
 bean compare -pack nhanes.pack -cohort male-30-39 -type 'lab.*'        # compare
+bean compare -pack nhanes.pack -cohort male-30-39 -type weight -save   # compare, and keep the result
 python3 tools/pack/check.py nhanes.pack                                # the check, without bean
 make pack                                                              # both, on packs good and wrong
 ```
 
-[COMPARE.md](COMPARE.md) says where the NHANES files are. `bean-pack-nhanes` reads the files that you give it and goes nowhere.
+[COMPARE.md](COMPARE.md) says where the NHANES files are: its loop downloads these six, and one more that a pack does not use. `bean-pack-nhanes` reads the files that you give it and goes nowhere.
+
+- **A pack holds the tests whose files you give.** `DEMO_J` is always needed. A file that a pack holds nothing of is named and left out, so `*.xpt` works. With the six files above, the pack is the one on record, and bean says so.
+- **A file that is not the one on record is refused.** It may be a download that was cut short. `-unknown-files` builds from it, and the pack then says so in its caveats.
+- **Keep the pack file.** Your log names a pack by its SHA-256 and does not hold it. A reader of a comparison that you share needs the same pack to compute it again.
+- **Use the type names and units that the pack lists.** `bean compare -pack nhanes.pack` shows them: a reading in another unit gets no number.
 
 ## The file
 
@@ -68,7 +74,7 @@ A measure has these members:
 | `caveats` | Texts that qualify every comparison with this measure. |
 | `same` | A list of one entry or more. Each entry has `type` and `unit`. |
 
-A `same` entry is a claim by the builder. It says that a reading of that type, in that unit, is this measure's quantity in this measure's unit. A reader compares a reading only when its type and its unit equal an entry exactly. No reader converts a unit. bean shows which measure each reading was set against, so that the person can see the claim. No type and unit may be in the `same` lists of two measures.
+A `same` entry is a claim by the builder. It says that a reading of that type, in that unit, is this measure's quantity in this measure's unit. A reader compares a reading only when its type and its unit equal an entry exactly. No reader converts a unit. bean shows which measure each reading was set against, so that the person can see the claim. No type and unit may be in the `same` lists of two measures. A type is never one of bean's own records: `share`, or a type that starts with `comparison.`, `reference.`, `bean.` or `agent.`.
 
 A cohort has `text`, such as `male, age 30-39`, and `caveats`. Its id is the name that a person gives to choose it.
 
@@ -76,11 +82,11 @@ Each object has the members that this document names and no other, each once. A 
 
 A number is a JSON number that a bean record may hold: a double, and for a whole number at most 9007199254740991. How it is written does not matter: 94, 94.0 and 9.4e1 are one number. `bytes` is a whole number of 1 or more.
 
-A control character is one of U+0000 to U+001F, U+007F to U+009F, U+061C, U+200E, U+200F, U+2028 to U+202E and U+2066 to U+2069. They end a line, or hide or reorder text.
+A text holds no character that ends a line, or that hides, reorders or fakes text. Those are the Unicode categories Cc, Cf, Cs, Co, Zl and Zp, and every space but U+0020. They are also the blank fillers U+115F, U+1160, U+3164 and U+FFA0, and the noncharacters.
 
 A measure or a cohort may have no cell. The cells may be in any order.
 
-An id is 1 to 64 letters, digits, dots, `-` and `_`, and starts with a letter or a digit. A text is 1 to 400 bytes, with no control character and no space at either end.
+An id is 1 to 64 letters, digits, dots, `-` and `_`, and starts with a letter or a digit. A text is 1 to 400 bytes, with no space at either end.
 
 ## A cell
 
@@ -93,8 +99,8 @@ An id is 1 to 64 letters, digits, dots, `-` and `_`, and starts with a letter or
 | `measure`, `cohort` | The ids of the measure and the cohort. A pair is there once. |
 | `kind` | `weights`. Version 0 has no other kind. |
 | `n` | The number of people: a whole number from 30 to 2147483647. |
-| `values` | The distinct values of the cohort, in rising order. Each is a number above zero. |
-| `weights` | One number above zero for each value: the weight that the value carries. Their sum is a number that a double can hold. |
+| `values` | The distinct values of the cohort, in rising order. Each is a number from 1e-12 to 1e15. |
+| `weights` | One number from 1e-12 to 1e15 for each value: the weight that the value carries. |
 
 A weight is the sum of the sample weights of the people with that value. For a source with no sample weights, it is the count of those people.
 
@@ -127,6 +133,8 @@ These are steps 6 to 8 of the method in [COMPARE.md](COMPARE.md). So a compariso
 | `result` | `n`, `percentile`, `below`, `equal`, `p25`, `p50`, `p75`. |
 | `caveats` | In this order: the pack's, the measure's, the cohort's, then the three below where they apply. |
 
+The claim's `refs` has one entry: it is `about` the reading. Its value is the percentile, with the unit `{percentile}`.
+
 The three caveats that a claim adds:
 
 - `you chose the cohort: bean does not know whether you belong to it`, always;
@@ -153,13 +161,15 @@ A saved comparison gives the reading's value away to anyone with the pack ([COMP
 - a member that the format does not have, a missing one, or one that is there twice;
 - a cell of another kind;
 - values that are not in rising order, or a value that is there twice;
-- a value or a weight that is zero, negative or not a number, and weights whose sum is too large for a double;
+- a value or a weight that is not a number from 1e-12 to 1e15;
 - a list of weights that is shorter or longer than the list of values;
 - an n below 30, above 2147483647, or below the number of distinct values;
 - a cell that names a measure or a cohort that the pack does not have, or a cell that is there twice;
 - a type and unit in the `same` lists of two measures, or twice in one, and a measure with an empty `same` list;
 - a source file that is named twice;
-- a text with a control character, and an id with a space.
+- a text with a character that does not show, or with a space other than the plain one;
+- a measure that claims one of bean's own record types;
+- an id with a space.
 
 ## How a pack travels
 
@@ -202,5 +212,5 @@ Public reference data comes in more shapes than a table of weights. Version 0 de
 - **A publisher's signature.** Today the SHA-256 is all. A publisher could sign a record that names a pack's SHA-256, with a bean identity, and send it as a bundle. That is built when a second publisher exists.
 - **A pack from data that is not public.** Nobody can build such a pack again, so a reader has only the publisher's word. Version 0 requires an address for each source file.
 - **Names for a measure that do not depend on bean's types.** A public code system for lab tests and for units could replace the `same` list. Its terms of use are not confirmed.
-- **A pack in a share.** A reader gets the pack by its SHA-256 from any host. `bean share` does not carry one yet, and the check page does not compute a comparison again.
+- **A pack in a share.** `bean share` does not carry a pack. The reader's check names each pack by its SHA-256 and says that it is needed. The reader gets it from the sender or from any host. The check page does not compute a comparison again.
 - **A measure that can be zero**, and an interval of uncertainty. Each is a new method version.

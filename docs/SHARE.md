@@ -135,6 +135,14 @@ python3 tools/compare/reproduce.py for-ana DEMO_J.xpt TCHOL_J.xpt
 python3 tools/compare/reproduce.py for-ana ~/bean-export/blobs
 ```
 
+A comparison that was made with a reference pack needs that pack ([REFERENCE.md](REFERENCE.md)). `bean check-bundle` and the page show `by pack` and the first digits of its SHA-256 in the row. Below the records they give the full SHA-256, and say whether bean has that pack on record. Send the pack file with the package, or tell your reader where it is: it is public data.
+
+```
+python3 tools/compare/reproduce.py for-ana nhanes.pack
+```
+
+The pack's title in a claim is the sender's word. The SHA-256 is what names a pack.
+
 ## The bundle, exactly
 
 A bundle is a folder with two entries, both real folders: `objects/`, and `files/` when it holds files. A link or a file in their place fails the check. Anything else in the folder is not part of the bundle. A checker never reads it, so it cannot change the verdict, and `bean check-bundle` names it. A name that starts with a dot is skipped in silence, there and in `files/`, as in a log. A file browser leaves such files behind.

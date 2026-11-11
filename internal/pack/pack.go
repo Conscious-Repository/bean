@@ -17,6 +17,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/Conscious-Repository/bean/core"
 	"github.com/Conscious-Repository/bean/internal/view"
@@ -41,6 +43,29 @@ const (
 const (
 	MinN   = 30
 	SmallN = 100
+)
+
+// Known are the packs that bean has on record, by SHA-256, each with what
+// it is. Today that is one: the pack that bean-pack-nhanes version 1
+// builds from the six NHANES files on record (internal/nhanes). A test
+// with CDC's files keeps it true, and docs/REFERENCE.md states it too.
+var Known = map[string]string{
+	"efbb252a361b1994c67207618a088d492d1b0dafb8ea5ff88f857f97abc69277": "the NHANES 2017-2018 pack",
+}
+
+// OnRecord says in a few words whether bean knows a pack by its SHA-256.
+func OnRecord(sha256 string) string {
+	if what, ok := Known[sha256]; ok {
+		return "this is " + what + " that bean has on record"
+	}
+	return "bean has no record of this pack"
+}
+
+// MinNumber and MaxNumber bound each value and each weight. Inside them no
+// sum of the method overflows, and no half of a weight is lost.
+const (
+	MinNumber = 1e-12
+	MaxNumber = 1e15
 )
 
 // MaxN is the largest n that a cell may state.
@@ -181,14 +206,47 @@ func (r *reader) object(v any, where string, members ...string) map[string]any {
 }
 
 // text returns v as text that can be shown as it is: not empty, not long,
-// and with no character that hides or reorders text.
+// and with no character that ends a line, or hides, reorders or fakes
+// text.
 func (r *reader) text(v any, where string) string {
 	s, ok := v.(string)
-	if !ok || s == "" || len(s) > 400 || view.Safe(s) != s || strings.TrimSpace(s) != s {
+	if !ok || s == "" || len(s) > 400 || !utf8.ValidString(s) || s[0] == ' ' || s[len(s)-1] == ' ' {
 		r.fail("%s is not plain text of 1 to 400 bytes", where)
 		return ""
 	}
+	for _, c := range s {
+		if c != ' ' && (Hidden(c) || unicode.In(c, unicode.Zs)) {
+			r.fail("%s has a character that does not show, or that is a space other than the plain one: U+%04X", where, c)
+			return ""
+		}
+	}
 	return s
+}
+
+// Hidden reports a character that a text of a pack may not hold: a
+// control, format, surrogate or private-use character, a line or paragraph
+// separator, a filler that shows as blank, or a noncharacter.
+func Hidden(c rune) bool {
+	switch {
+	case unicode.In(c, unicode.Cc, unicode.Cf, unicode.Cs, unicode.Co, unicode.Zl, unicode.Zp):
+		return true
+	case c == 0x115F, c == 0x1160, c == 0x3164, c == 0xFFA0:
+		return true
+	case c >= 0xFDD0 && c <= 0xFDEF, c&0xFFFE == 0xFFFE:
+		return true
+	}
+	return false
+}
+
+// ownType reports a type of bean's own records. Such a record is not a
+// reading, so no measure may claim it.
+func ownType(typ string) bool {
+	for _, prefix := range []string{"comparison.", "reference.", "bean.", "agent."} {
+		if strings.HasPrefix(typ, prefix) {
+			return true
+		}
+	}
+	return typ == "share"
 }
 
 func (r *reader) texts(v any, where string) []string {
@@ -268,6 +326,9 @@ func Read(data []byte) (*Pack, error) {
 		for _, x := range same {
 			s := r.object(x, "a same row", "type", "unit")
 			row := Same{r.text(s["type"], "a same row's type"), r.text(s["unit"], "a same row's unit")}
+			if ownType(row.Type) {
+				r.fail("a measure claims %s, which is a record of bean's own and not a reading", row.Type)
+			}
 			if claimed[row] {
 				r.fail("two measures claim %s in %s", row.Type, row.Unit)
 			}
@@ -327,14 +388,6 @@ func Read(data []byte) (*Pack, error) {
 				break
 			}
 		}
-		// Weights that are each a number can add up to none.
-		var total float64
-		for _, w := range cell.Weights {
-			total += w
-		}
-		if math.IsInf(total, 0) {
-			r.fail("%s has weights whose sum is too large for a number", where)
-		}
 		cell.N = int(n)
 		p.Cells = append(p.Cells, cell)
 	}
@@ -353,8 +406,8 @@ func (r *reader) numbers(v any, where string) []float64 {
 	out := make([]float64, 0, len(list))
 	for _, x := range list {
 		n, isNumber := x.(float64)
-		if !isNumber || !(n > 0) || math.IsInf(n, 0) {
-			r.fail("%s has a value or a weight that is not a number above zero", where)
+		if !isNumber || !(n >= MinNumber && n <= MaxNumber) {
+			r.fail("%s has a value or a weight that is not a number from %g to %g", where, MinNumber, MaxNumber)
 			return nil
 		}
 		out = append(out, n)
