@@ -363,7 +363,7 @@ bean protects who wrote what, and protects your identity against a stolen device
 | [CORE.md](CORE.md) | The protocol, in short. |
 | [UPGRADING.md](UPGRADING.md) | Changes that alter results for an existing log. |
 | [SPEC.md](SPEC.md) | The full protocol: every rule, error and conformance test. |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | What is done and what comes next. |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | The open paths: what comes next, in what order, and what is not decided. |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Every design decision, numbered, with the reason. |
 | [docs/EXTENSIONS.md](docs/EXTENSIONS.md) | Two draft extensions that no code implements yet: computed results and device capture. |
 | [docs/PROVIDER-INGESTION.md](docs/PROVIDER-INGESTION.md) | How data from a provider gets in, one source at a time. |
