@@ -31,12 +31,24 @@ func TestVerifyScales(t *testing.T) {
 		for p := range files {
 			proven[p] = true
 		}
-		start := time.Now()
-		rp := verifyFiles(files, proven)
-		d := time.Since(start)
-		t.Logf("%s: %d files in %v", name, len(files), d)
+		// The limit is on the best of three runs. A rule that is not linear
+		// is slow every time; a busy machine is slow once. One run on a
+		// shared CI machine took 1.25 s where the same code takes 0.3 s.
+		var rp *Report
+		var d time.Duration
+		for try := 0; try < 3; try++ {
+			start := time.Now()
+			rp = verifyFiles(files, proven)
+			if took := time.Since(start); try == 0 || took < d {
+				d = took
+			}
+			t.Logf("%s: %d files in %v", name, len(files), d)
+			if d <= time.Second {
+				break
+			}
+		}
 		if d > time.Second {
-			t.Errorf("%s: %d files took %v", name, len(files), d)
+			t.Errorf("%s: %d files took %v at best", name, len(files), d)
 		}
 		check(rp)
 	}
