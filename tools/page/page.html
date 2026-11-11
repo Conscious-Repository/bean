@@ -282,7 +282,7 @@ async function run(name, work) {
   await new Promise((next) => setTimeout(next, 30));
   try {
     await work();
-    $("status").textContent = "You can check another.";
+    $("status").textContent = waiting ? "This package is not open yet." : "You can check another.";
   } catch (err) {
     unread(name, go.exited
       ? "the check stopped, most likely because this is too large for a browser. Reload this page before you check anything else."
