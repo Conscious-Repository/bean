@@ -44,6 +44,8 @@ It needs Go and `curl`, and downloads about 7 MB from CDC. With Python and `pip 
 |---|---|---|
 | Go 1.24 or later | Building `bean` | `brew install go` |
 | `pdftotext` | Lab report PDFs only | `brew install poppler` |
+| `make` | `make page`, the page that checks a bundle in a browser | It comes with Xcode's command line tools |
+| Python 3 | Optional: the checks that use no bean (`tools/second`, `tools/compare`) | `brew install python`, then `pip install -r tools/requirements.txt` |
 
 Build and install the commands. The repository is private for now, so you need access to it on GitHub.
 
@@ -178,7 +180,7 @@ The CSV needs a header row and a `value` column. A `time` column (RFC 3339) and 
 `bean compare` shows where a reading lies among people you describe, in public survey data (NHANES, from the US CDC). You say who: sex, age, and if you like ethnicity, BMI, or what they ate that day. It runs on your machine, on files you downloaded and keep.
 
 ```
-for f in DEMO_J TCHOL_J; do
+for f in DEMO_J TCHOL_J HDL_J GHB_J CBC_J BMX_J; do
   curl -fLO https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/$f.xpt && bean import -yes nhanes $f.xpt
 done
 bean compare -sex male -age 30-39 -type 'lab.*'
@@ -194,7 +196,7 @@ lab.cholesterol-total  187 mg/dL  46          44.2%  3.5%  164 to 213   188     
 - It says where a value lies in a sample, and how many people the sample has. It does not say whether a value is healthy, and it does not advise.
 - Every number comes with its caveats and with how many people it rests on. A cohort of fewer than 30 people gives no number.
 - `-save` keeps a result as a signed record that names each file by its SHA-256, the cohort and the method. Anyone can compute it again without bean: `tools/compare/reproduce.py` does, in Python.
-- Twelve blood tests today: total and HDL cholesterol, hemoglobin A1c and the blood count.
+- Twelve blood tests today: total and HDL cholesterol, hemoglobin A1c and the blood count. Each test needs its own file, and a rule on BMI needs `BMX_J`: the loop above fetches all six, about 7 MB. [COMPARE.md](docs/COMPARE.md) lists the type names and units to use when you type a reading by hand.
 
 [docs/COMPARE.md](docs/COMPARE.md) has the files to download, the rules, the limits and the method.
 

@@ -171,7 +171,7 @@ function show(name, res, packed) {
   if (res.ok) {
     $("verdict-title").textContent = "This bundle passed the check.";
     lines.push("Every record of the bundle in " + clean(name) + " is what the person signed, and nothing was added to the bundle or removed from it.");
-    if (res.ignored && res.ignored.length) lines.push("Not part of the bundle, and not checked: " + res.ignored.join(", ") + ".");
+    if (res.ignored && res.ignored.length) lines.push("Also in the folder, not signed and not checked: " + res.ignored.join(", ") + ".");
     if (packed && res.files) lines.push("It carries " + res.files + (res.files === 1 ? " file" : " files") + ". To open one, unpack the zip file and check the unpacked folder here: another tool can read a zip file differently.");
   } else if (res.unread) {
     $("verdict-title").textContent = "Nothing was checked.";

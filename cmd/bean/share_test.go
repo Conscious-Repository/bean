@@ -259,7 +259,7 @@ func TestShareFilesAndComparison(t *testing.T) {
 	// A comparison comes with its reading and the records of its files.
 	// Without -files the files are named, not shared.
 	named := filepath.Join(t.TempDir(), "named")
-	if out, errs, code := run(t, dir, "", "share", "-yes", "-out", named, cmp.ID); code != 0 || !strings.Contains(out, "shared 4 records and 0 files") || strings.Count(errs, "Add -files to share it.") != 2 {
+	if out, errs, code := run(t, dir, "", "share", "-yes", "-out", named, cmp.ID); code != 0 || !strings.Contains(out, "shared 4 records and 0 files") || !strings.Contains(errs, "not shared: the 2 public files") {
 		t.Fatalf("%d\n%s\n%s", code, out, errs)
 	}
 	if _, err := os.Stat(filepath.Join(named, "files")); err == nil {
@@ -654,6 +654,10 @@ func TestShareSealed(t *testing.T) {
 		t.Errorf("the share left %d entries beside the package", len(entries)-1)
 	}
 	// The words open it, for bean check-bundle too.
+	// A person may write the words in capitals, or with hyphens or commas.
+	if res := bundle.Check(bundle.FromPackage("p", data, strings.ReplaceAll(words, " ", "-"))); !res.OK {
+		t.Errorf("the words with hyphens do not open it: %v", res.Lines())
+	}
 	if res := bundle.Check(bundle.FromPackage("p", data, strings.ToUpper(words)+"  ")); !res.OK || len(res.Rows) != 1 || res.Note != "for Ana" {
 		t.Errorf("the words do not open it: %v", res.Lines())
 	}
@@ -709,5 +713,37 @@ func TestShareSealed(t *testing.T) {
 	}
 	if again, _ := bundle.Pack(folder); !bytes.Equal(again, packed) {
 		t.Error("the same folder packs to different bytes")
+	}
+}
+
+// TestCorrectOnce: a record is corrected once. A second correction of the
+// same record would leave two current values, so bean names the record to
+// correct instead. A correction with no -at says that it is dated now.
+func TestCorrectOnce(t *testing.T) {
+	dir := t.TempDir()
+	run(t, dir, "", "init")
+	first, _, _ := run(t, dir, "", "add", "weight", "81.2", "-unit", "kg", "-at", "2026-10-27 07:15")
+	first = strings.TrimSpace(first)
+	second, errs, code := run(t, dir, "", "add", "weight", "80.4", "-unit", "kg", "-corrects", first)
+	if code != 0 || !strings.Contains(errs, "this correction is dated now") || !strings.Contains(errs, "2026-10-27") {
+		t.Fatalf("a correction with no -at: %d\n%s", code, errs)
+	}
+	second = strings.TrimSpace(second)
+	if _, errs, code := run(t, dir, "", "add", "weight", "80.1", "-unit", "kg", "-corrects", first, "-at", "2026-10-27 07:15"); code == 0 || !strings.Contains(errs, "was corrected already, by "+second[7:19]) {
+		t.Errorf("a second correction of one record: %d\n%s", code, errs)
+	}
+	// The record that replaced it can be corrected, and with -at nothing is noted.
+	if _, errs, code := run(t, dir, "", "add", "weight", "80.1", "-unit", "kg", "-corrects", second, "-at", "2026-10-27 07:15"); code != 0 || strings.Contains(errs, "dated now") {
+		t.Errorf("a correction of the correction: %d\n%s", code, errs)
+	}
+	if ls, _, _ := run(t, dir, "", "ls", "-type", "weight"); strings.Count(ls, "weight") != 1 || !strings.Contains(ls, "80.1 kg") {
+		t.Errorf("one current weight is wanted:\n%s", ls)
+	}
+	// An id that names nothing says so.
+	if _, errs, code := run(t, dir, "", "show", "d"); code == 0 || !strings.Contains(errs, "first 6 or more hex digits") {
+		t.Errorf("a short id: %d\n%s", code, errs)
+	}
+	if _, errs, code := run(t, dir, "", "show", "000000"); code == 0 || !strings.Contains(errs, "no record has this id") {
+		t.Errorf("an id of no record: %d\n%s", code, errs)
 	}
 }

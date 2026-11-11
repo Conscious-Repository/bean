@@ -60,7 +60,7 @@ Adds one record about you. Prints its id.
 | `-at <time>` | When it happened. Default: now, to the minute. A time it cannot read exits 2 and writes nothing. |
 | `-note <text>` | Free text. Stored in `context.note`. |
 | `-about <id>` | The record that this one comments on. |
-| `-corrects <id>` | Your earlier record that this one replaces, for example a wrong value. `ls` then shows only the new one. You can correct only records that you wrote. |
+| `-corrects <id>` | Your earlier record that this one replaces, for example a wrong value. `ls` then shows only the new one. You can correct only records that you wrote. A record is corrected once: for a record that was corrected already, bean names the record to correct instead. Without `-at` the correction is dated now, and bean says so. |
 | `-photo <file>` | Attach an image, stored encrypted. Only image files are accepted, up to 25 MiB. |
 | `-agent` | Sign with the agent key of this machine, not your key. |
 

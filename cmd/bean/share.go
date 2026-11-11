@@ -265,14 +265,23 @@ func cmdShare(s *core.Store, args []string) {
 	// for the person.
 	labels := l.AgentLabels()
 	// What stays home is said with or without the review.
+	publicHome, travels := 0, 0
 	for _, sf := range kept {
 		switch {
 		case sf.data != nil:
+			travels++
 		case sf.public:
-			leftOut = append(leftOut, fmt.Sprintf("  not shared: the file that %s (%s) keeps. Add -files to share it.", sf.record[7:19], sf.recordType))
+			publicHome++
 		default:
 			leftOut = append(leftOut, fmt.Sprintf("  not shared: the file that %s (%s) keeps. With -files, name that record by its id to share its file.", sf.record[7:19], sf.recordType))
 		}
+	}
+	// The public files are said once, with what their absence means.
+	if publicHome > 0 {
+		leftOut = append(leftOut, fmt.Sprintf("  not shared: the %d public files that the reference.file records keep. Add -files to share them: without them a reader needs the files from their publisher to compute a comparison again.", publicHome))
+	}
+	if *files && travels == 0 {
+		leftOut = append(leftOut, "  -files: no record that you named keeps a file, so no file goes")
 	}
 	if keepsFile > 0 {
 		leftOut = append(leftOut, fmt.Sprintf("  not shared: %d records of that type that keep a file. Name one by its id to share it.", keepsFile))
@@ -288,15 +297,29 @@ func cmdShare(s *core.Store, args []string) {
 		}
 		w := os.Stderr
 		fmt.Fprintf(w, "To share, into %s:\n", out)
+		// What the person chose comes first, then what comes along with it.
+		row := func(r *core.Record) string {
+			return fmt.Sprintf("  %s  %s  %s  %s", whenText(r), r.Type, safe(strings.TrimSpace(recordText(r, currentRecord(l))+"  "+byText(r, l.ID, labels))), r.ID[7:19])
+		}
 		for _, r := range shared {
-			line := fmt.Sprintf("  %s  %s  %s  %s", whenText(r), r.Type, safe(strings.TrimSpace(recordText(r, currentRecord(l))+"  "+byText(r, l.ID, labels))), r.ID[7:19])
-			if by := broughtBy[r.ID]; by != "" {
-				line += "  (comes along: " + by[7:19] + " is about it)"
+			if broughtBy[r.ID] == "" {
+				fmt.Fprintln(w, row(r))
 			}
-			fmt.Fprintln(w, line)
+		}
+		for _, r := range shared {
+			if by := broughtBy[r.ID]; by != "" {
+				fmt.Fprintln(w, row(r)+"  (comes along: "+by[7:19]+" is about it)")
+			}
+		}
+		if *note != "" {
+			fmt.Fprintf(w, "  with your note for the reader: %s\n", safe(*note))
 		}
 		for _, sf := range kept {
-			if sf.data != nil {
+			switch {
+			case sf.data == nil:
+			case sf.public:
+				fmt.Fprintf(w, "  the public file that %s (%s) keeps: %d bytes\n", sf.record[7:19], sf.recordType, len(sf.data))
+			default:
 				fmt.Fprintf(w, "  THE WHOLE FILE that %s (%s) keeps, as you imported it: %s, %d bytes, in plaintext. A lab report holds your name and birth date.\n", sf.record[7:19], sf.recordType, safe(sf.mediaType), len(sf.data))
 			}
 		}
@@ -304,7 +327,11 @@ func cmdShare(s *core.Store, args []string) {
 			fmt.Fprintln(w, line)
 		}
 		fmt.Fprintf(w, "  also: your %d identity records and %d pairings, and the share record itself\n", len(proof)-pairings, pairings)
-		fmt.Fprintln(w, "A bundle is a disclosure: it is not encrypted, and once sent it cannot be taken back. Each record carries your identity id, so two bundles of yours can be linked.")
+		if *seal {
+			fmt.Fprintln(w, "A sealed package is a disclosure: it is encrypted on its way, and once its reader has opened it, it cannot be taken back. Each record carries your identity id, so two packages of yours can be linked.")
+		} else {
+			fmt.Fprintln(w, "A bundle is a disclosure: it is not encrypted, and once sent it cannot be taken back. Each record carries your identity id, so two bundles of yours can be linked. With -seal it is one encrypted file.")
+		}
 		fmt.Fprintf(w, "Share %d records? [y/N] ", len(shared))
 		if !confirmed(bufio.NewReader(os.Stdin)) {
 			fail(errors.New("nothing was written: not shared"))
@@ -545,7 +572,7 @@ func checkPackage(path string) ([]string, bool) {
 	}
 	words := ""
 	if bundle.IsSealed(data) {
-		fmt.Fprint(os.Stderr, "The six words of this package: ")
+		fmt.Fprintln(os.Stderr, "Type the six words of this package, then Enter:")
 		line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 		words = line
 	}

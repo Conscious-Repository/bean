@@ -30,6 +30,23 @@ bean uses a kept file only when its SHA-256 is the one on record. A download tha
 | `BMX_J` | Body measures | A rule on BMI or waist |
 | `DR1TOT_J` | What each person ate on one day, as nutrient totals | A rule on food |
 
+A reading is compared only under one of these types, in the unit beside it. Type the name and the unit exactly: `mg/dl` and `mmol/L` give no number, and the output says which unit is needed.
+
+| Type | Unit |
+|---|---|
+| `lab.cholesterol-total`, `lab.hdl-cholesterol` | `mg/dL` |
+| `lab.hemoglobin-a1c` | `%` or `% of total Hgb` |
+| `lab.hemoglobin`, `lab.mchc` | `g/dL` |
+| `lab.hematocrit`, `lab.rdw` | `%` |
+| `lab.mcv` | `fL` |
+| `lab.mch` | `pg` |
+| `lab.wbc`, `lab.platelets` | `x10E3/uL` |
+| `lab.white-blood-cell-count`, `lab.platelet-count` | `Thousand/uL` |
+| `lab.rbc` | `x10E6/uL` |
+| `lab.red-blood-cell-count` | `Million/uL` |
+
+A reading you typed and a reading you imported are two readings, even with the same value. Each gets its own row.
+
 Each file is kept encrypted, as a `reference.file` record with its SHA-256. You sign for having kept it. That does not make it CDC's claim: anyone can check the SHA-256 against the copy CDC serves. The importer says whether the file is the one bean has on record ([the digests](../internal/nhanes/nhanes.go)).
 
 The digests on record come from one download, on 2026-11-09, through a proxy that could read the traffic. Until a second person has confirmed them from their own connection, treat "the file on record" as "the file one download saw". Check for yourself: `shasum -a 256 DEMO_J.xpt` against the table in the code. bean knows of no digests that CDC publishes for these files.
@@ -65,7 +82,7 @@ The numbers in this example are statistics of the public files, not anyone's rea
 
 ### People like you: more rules
 
-Each `-where` narrows the cohort by one NHANES variable: `<DATASET>.<VARIABLE>=<value>` or `=<from>-<to>`, both ends included. A measurement such as BMI needs a range: `=24` matches nobody, `=22-26` does. A person with no value for a rule's variable is left out. The nutrient totals are sums, and some sit a hair off a whole number (14.999999999999998 g of fiber). So a bound exactly on a whole number can leave a few people out. Put bounds between the values you mean, such as 14.5-60.
+Each `-where` narrows the cohort by one NHANES variable: `<DATASET>.<VARIABLE>=<value>` or `=<from>-<to>`, both ends included. A measurement such as BMI needs a range: `=24` matches almost nobody, `=22-26` does. A person with no value for a rule's variable is left out. The nutrient totals are sums, and some sit a hair off a whole number (14.999999999999998 g of fiber). So a bound exactly on a whole number can leave a few people out. Put bounds between the values you mean, such as 14.5-60.
 
 ```
 bean compare -sex male -age 30-39 -where DEMO_J.RIDRETH3=3 -where BMX_J.BMXBMI=20-27 -type 'lab.*'
