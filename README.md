@@ -200,18 +200,18 @@ lab.cholesterol-total  187 mg/dL  46          44.2%  3.5%  164 to 213   188     
 
 ## Share with someone
 
-`bean share` writes records you choose into a folder that anyone can check without your log, your keys or an account.
+`bean share` writes records you choose into a bundle that anyone can check without your log, your keys or an account. With `-seal` the bundle is one encrypted file that opens with six words: send the file one way and give the words another.
 
 ```
-bean share -out for-ana -note "my lipids" -type 'comparison.*'
-bean check-bundle for-ana          # what Ana runs: it checks the folder, then shows what it holds
+bean share -seal -out for-ana.bean -note "my lipids" -type 'comparison.*'
+bean check-bundle for-ana.bean     # what Ana runs: it asks for the six words, checks, then shows what it holds
 ```
 
 - It shows what will leave and asks first. Only the records you choose go, with what they are about. Files go only with `-files`, and a lab report only when you name it.
 - The reader can tell that each record is yours and unchanged, and that nothing was added or removed. They can check it without bean: `tools/second/checkbundle.py`.
 - A reader with no terminal checks it in a browser. `make page` builds `bean-check.html`, one file that reads the folder or a zip file of it. The page runs the same check on the reader's device and sends nothing.
 - The reader cannot tell that it is complete: it is what you chose. Nor that the key that signed is still yours, if you changed keys since. bean says so on every check.
-- A bundle is not encrypted, and once sent it cannot be taken back.
+- Without `-seal` a bundle is a plain folder that anyone who carries it can read. Sealed or not, once it is opened it cannot be taken back.
 
 [docs/SHARE.md](docs/SHARE.md) has what goes in, the limits and the format.
 

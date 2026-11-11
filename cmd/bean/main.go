@@ -45,10 +45,13 @@ Compare
                                 ones you describe, in public survey data (NHANES).
 
 Share
-  share -out <folder> [-files] [-note <text>] [-yes] <id>... | -type <type> [-since <time>] [-until <time>]
+  share -out <folder> [-seal] [-files] [-note <text>] [-yes] <id>... | -type <type> [-since <time>] [-until <time>]
                                 Write chosen records into a folder that anyone
-                                can check without your log or keys.
-  check-bundle <folder>         Check a bundle someone sent you.
+                                can check without your log or keys. With -seal:
+                                one file that only its reader can open, with
+                                six words that you give them.
+  check-bundle <folder or file> Check a bundle or a sealed package someone
+                                sent you.
 
 AI and agents
   mcp [-write] [-blobs] [-label <name>]
@@ -95,8 +98,8 @@ var syntax = map[string]string{
 	"ls":            "ls [-type <t>] [-since <time>] [-until <time>] [-author me|agent|<id>|<npub>] [-all] [-json]",
 	"show":          "show <id>",
 	"verify":        "verify",
-	"share":         "share -out <new folder> [-files] [-note <text>] [-yes] <id>... | -type <type> [-since <time>] [-until <time>]",
-	"check-bundle":  "check-bundle <folder>",
+	"share":         "share -out <new folder or file> [-seal] [-files] [-note <text>] [-yes] <id>... | -type <type> [-since <time>] [-until <time>]",
+	"check-bundle":  "check-bundle <folder, zip file or sealed package>",
 	"compare":       "compare -sex male|female -age <from>-<to> [-where <DATASET>.<VARIABLE>=<value>|<from>-<to>]... [-unknown-files] [-save] <id>... | -type <type>",
 	"mcp":           "mcp [-write] [-blobs] [-label <name>]",
 	"agent":         "agent init [-label <name>] [-identity <id>] | agent pair <npub> [-label <name>]",

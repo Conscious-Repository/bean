@@ -19,8 +19,9 @@ func main() {
 	select {}
 }
 
-// check is beanCheck(name, zip, paths, datas). zip is the bytes of a zip
-// file, or null; then paths and datas are the files of a chosen folder. It
+// check is beanCheck(name, file, paths, datas, words). file is the bytes of
+// a zip file or of a sealed package, or null; then paths and datas are the
+// files of a chosen folder. words open a sealed package. It
 // returns the result as JSON: bundle.Result, and lines, the same text that
 // bean check-bundle prints. Every string is made safe to show.
 func check(_ js.Value, args []js.Value) (out any) {
@@ -33,7 +34,11 @@ func check(_ js.Value, args []js.Value) (out any) {
 	}()
 	name := args[0].String()
 	if !args[1].IsNull() {
-		return encode(bundle.Check(bundle.FromZip(name, bytesOf(args[1]))))
+		words := ""
+		if len(args) > 4 && args[4].Type() == js.TypeString {
+			words = args[4].String()
+		}
+		return encode(bundle.Check(bundle.FromPackage(name, bytesOf(args[1]), words)))
 	}
 	files := map[string][]byte{}
 	for i := range args[2].Length() {

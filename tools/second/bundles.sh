@@ -2,7 +2,8 @@
 # bundles.sh: makes share bundles with bean, good and damaged, and checks
 # that bean check-bundle and the Python checker (checkbundle.py, which follows
 # docs/SHARE.md and shares no code with bean) give the same verdict on each:
-# both pass, or both refuse. The page that checks a bundle in a browser
+# both pass, or both refuse. A sealed package must open for bean, for the
+# page and for a Python reader of its format. The page that checks a bundle in a browser
 # (tools/page) is built and asked too, without a browser: it must print what
 # bean prints, from a folder and from a zip file. It also computes a shared
 # comparison again from its bundle alone.
@@ -88,6 +89,31 @@ n=$((n + 1)); bean check-bundle "$T/cmpf" >"$T/go.txt" 2>&1
 "$NODE" "$ROOT/tools/page/check.mjs" "$T/bean-check.html" "$T/cmpf.zip" >"$T/js.txt" 2>&1 && cmp -s "$T/go.txt" "$T/js.txt" || { echo "DIFFER: the page reads a zip file differently from its folder"; diff "$T/go.txt" "$T/js.txt" | head -6; rc=1; }
 "$PY" -I -c 'import sys; d = bytearray(open(sys.argv[1], "rb").read()); i = d.index(b"objects/") + 200; d[i] ^= 1; open(sys.argv[2], "wb").write(d)' "$T/cmpf.zip" "$T/bad.zip"
 n=$((n + 1)); "$NODE" "$ROOT/tools/page/check.mjs" "$T/bean-check.html" "$T/bad.zip" >"$T/js.txt" 2>&1 && { echo "DIFFER: the page passed a zip file with a changed byte"; rc=1; }
+
+# A sealed package: one file that opens with six words. bean, the page and
+# a Python reader of the age format that shares no code with either must all
+# open it with the words, and none without them or after a change.
+b share -yes -seal -files -note "sealed" -out "$T/sealed.bean" "$C1" >"$T/seal.txt" 2>"$T/err" || { echo "share -seal failed: $(cat "$T/err")"; exit 1; }
+WORDS=$(sed -n 's/^  //p' "$T/seal.txt" | head -1)
+"$PY" -I -c 'import sys; d = bytearray(open(sys.argv[1], "rb").read()); d[-40] ^= 1; open(sys.argv[2], "wb").write(d)' "$T/sealed.bean" "$T/sealed-changed.bean"
+# opens <name> <file> <words> <want: ok|bad>
+opens() {
+  n=$((n + 1)); want=0; [ "$4" = ok ] || want=1
+  echo "$3" | bean check-bundle "$2" >"$T/go.txt" 2>/dev/null; g=$?
+  "$NODE" "$ROOT/tools/page/check.mjs" "$T/bean-check.html" "$2" "$3" >"$T/js.txt" 2>&1; j=$?
+  rm -rf "$T/opened"; p=1
+  if echo "$3" | "$PY" -I "$HERE/unseal.py" "$2" "$T/opened" >"$T/py.txt" 2>&1; then "$PY" -I "$HERE/checkbundle.py" "$T/opened" >>"$T/py.txt" 2>&1; p=$?; fi
+  if [ "$g" != "$want" ] || [ "$j" != "$want" ] || [ "$p" != "$want" ]; then
+    echo "DIFFER $1: want $4, bean exit $g, the page exit $j, Python exit $p"; tail -2 "$T/go.txt" "$T/js.txt" "$T/py.txt" | sed 's/^/    /'; rc=1
+  fi
+  cmp -s "$T/go.txt" "$T/js.txt" || { echo "DIFFER $1: the page does not say what bean says"; diff "$T/go.txt" "$T/js.txt" | head -4 | sed 's/^/    /'; rc=1; }
+}
+opens "a sealed package, with its words" "$T/sealed.bean" "$WORDS" ok
+opens "a sealed package, with other words" "$T/sealed.bean" "abandon ability able about above absent" bad
+opens "a sealed package, with no words" "$T/sealed.bean" "" bad
+opens "a sealed package, with one byte changed" "$T/sealed-changed.bean" "$WORDS" bad
+grep -aq "$(echo "$R1" | cut -c8-30)" "$T/sealed.bean" && { echo "DIFFER: a sealed package shows a record's id in the clear"; rc=1; }
+[ -z "$(ls -A "$T" | grep '^\.bean-share-')" ] || { echo "DIFFER: a sealed share left its working folder behind"; rc=1; }
 
 # A correction travels without the record it replaces, and the reader is told.
 K1=$(b add weight 82.5 -unit kg -at 2026-11-02 -corrects "$W1")

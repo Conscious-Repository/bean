@@ -13,6 +13,6 @@ prints the lines of `bean verify` (SPEC.md 12.1) and exits with the same code. I
 
 - `cases.py` writes the edge-case logs of `vectors/conformance` (SPEC.md 14, V24). They cover nesting depth, empty arrays, byte and code point lengths, whole-string patterns and step order. They also cover too-new identities, recovery keys as signing keys, Ed25519 keys and unknown `v`. `run.sh` checks that it still writes them byte for byte, and that `beanverify.py` prints each folder's `expected.txt`, which `tools/genvectors` writes with bean.
 
-`checkbundle.py <folder>` checks a share bundle by the five rules of `docs/SHARE.md`, without bean. `bundles.sh` (or `make bundles`) checks that it and `bean check-bundle` agree on bundles good and damaged.
+`unseal.py <package> <new folder>` opens a sealed package with its six words, from the age format's specification. `checkbundle.py <folder>` checks a share bundle by the five rules of `docs/SHARE.md`, without bean. `bundles.sh` (or `make bundles`) checks that it and `bean check-bundle` agree on bundles good and damaged.
 
 Each place where the spec did not say what to do is marked `GUESS(n)` in `beanverify.py`. A disagreement or a guess is a spec defect; DECISIONS 134 lists the ones that were fixed.

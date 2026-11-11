@@ -14,17 +14,17 @@ Three things that matter to other people are missing. A bundle is not encrypted.
 
 **The plan.**
 
-1. **Seal with a passphrase first.** `bean share` packs the bundle into one file and encrypts it. bean makes the passphrase: six random words. The person gives the words to the reader by another channel, such as a phone call. The check page asks for the words, opens the file on the reader's device, and runs the check. This needs no key from the reader.
+1. **Seal with a passphrase first. Done:** `bean share -seal` ([SHARE.md](SHARE.md), DECISIONS 275). bean packs the bundle into one file, encrypts it, and makes six random words. The person gives the words to the reader by another channel, such as a phone call. The check page asks for the words, opens the file on the reader's device, and runs the check. This needs no key from the reader.
 2. **Seal to a reader's key next.** The check page makes a key for the reader, in their browser. The secret part stays on their device. They send the public part, a short reader address, to the sender. `bean share -to <address>` seals the package to it. A reader who runs bean gets an address from bean.
-3. **Use a standard format.** The file is an `age` file, so a tool other than bean can open it. bean invents no cipher.
+3. **Use a standard format. Done.** The file is an `age` file, so a tool other than bean can open it. bean invents no cipher.
 4. **Say what leaves.** The review before a share also says that the person's identity id travels. It flags a file that holds a name or a birth date.
-5. **Record who it was for.** The share record names the reader's address, or says that a passphrase was used.
+5. **Record who it was for.** The share record says that a passphrase was used. With a reader's key it will name the reader's address.
 
 **What it cannot do.** A reader who has opened the package holds a copy for good. Withdrawing permission stops the next share, not the last one.
 
 **Open.**
 
-- Is a spoken passphrase acceptable for a doctor, or must the first version use a reader's key?
+- Should `-seal` become what `bean share` does unless told otherwise? Today a plain folder is the default, because the checks and the examples are built on it.
 - Does a package need an end date after which the page refuses to open it? An end date stops an honest reader's page. It does not stop a copy.
 
 ## Path 2: people compare with each other
@@ -49,14 +49,14 @@ Three things that matter to other people are missing. A bundle is not encrypted.
 
 **Open.**
 
-- Who are the first peers: people who already know each other, an existing patient group, or strangers?
+- The first peers are people who already know and trust each other (the owner, 2026-11-11). So steps 1 to 3 come first, and step 4 waits.
 - Who runs the place where cards live: nobody (people pass addresses by hand), an open network, or AION?
 
 ## Path 3: a device signs what it captures
 
 **The need.** An AION instrument signs each acquisition when it captures it. The person brings the signed records into their log over a cable or a radio link. A reader can tell which device captured, with which settings, and that nothing changed since.
 
-No device exists yet, and the hardware is being decided now. So this path starts with what the firmware and the hardware must be able to do. [EXTENSIONS.md](EXTENSIONS.md) section 11 is an earlier draft of the record shapes. No code implements it.
+No device exists yet, and the hardware is being decided now. bean does not wait for it: the protocol is written first, and the hardware is built to meet it. So this path starts with what the firmware and the hardware must be able to do. [EXTENSIONS.md](EXTENSIONS.md) section 11 is an earlier draft of the record shapes. No code implements it.
 
 **Decide in the hardware now. These are hard to change later.**
 

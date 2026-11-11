@@ -155,9 +155,9 @@ A comparison says where a value lies in a sample. It does not say whether the va
 
 ## Share
 
-### `share -out <folder> [-files] [-note <text>] [-yes] <id>... | -type <type> [-since <time>] [-until <time>]`
+### `share -out <folder or file> [-seal] [-files] [-note <text>] [-yes] <id>... | -type <type> [-since <time>] [-until <time>]`
 
-Writes chosen records into a new or empty folder, a bundle, that anyone can check without your log or keys. [SHARE.md](SHARE.md) says what goes in, what a reader can tell, and the format.
+Writes chosen records into a new or empty folder, a bundle, that anyone can check without your log or keys. With `-seal` it writes one new file instead: the bundle, encrypted, with six words that open it. It prints the words once and does not keep them. [SHARE.md](SHARE.md) says what goes in, what a reader can tell, and the format.
 
 - Give record ids, or `-type` with optional `-since` and `-until`. Only current records about you can be shared, and not one that another identity signed. A record brings the record it is about, one step and no further. A type never picks a record that keeps a file, such as a lab report: name that one by its id.
 - `-files` also writes, in plaintext, the file of each record you named by its id, and any public reference file among the records. A file never goes because its record came along or was picked by type. What stays home is said on stderr.
@@ -167,9 +167,9 @@ Writes chosen records into a new or empty folder, a bundle, that anyone can chec
 
 It builds the bundle beside its place, checks it as its reader will, and moves it there. Then it adds one `share` record to your log: the signed list of what the bundle holds, which is in the bundle too. A share that fails leaves neither. A bundle is not encrypted, and once sent it cannot be taken back. It prints `shared <n> records and <m> files in <folder>`, then `share record <id>`.
 
-### `check-bundle <folder>`
+### `check-bundle <folder or file>`
 
-Checks a bundle, shows what it holds when it passes, and changes nothing in it. It needs no log, and reads only the bundle's `objects` and `files` folders; anything else in the folder is named and not read. It prints any record that fails, then the share record's id and the identity and key that signed it. It prints how many records and files it holds. It prints who signed the records: the person, an agent the person paired, or another key. It prints how many are corrections of a record that is not in the bundle. When every check passed it lists the records under `It holds:`, a comparison in words with its reading, cohort and n. Then `bundle ok`, exit 0, or `bundle FAILED: <n> problems`, exit 1. It says each time what no bundle can show: that it is complete, that a value is true, and who the identity is. Nor can a bundle show that the key that signed is still the person's. `tools/second/checkbundle.py` does the same check without bean.
+Checks a bundle, shows what it holds when it passes, and changes nothing in it. Given a file, it reads a zip file of a bundle's folder, or a sealed package. For a sealed package it asks for the six words, and reads them from standard input. It needs no log, and reads only the bundle's `objects` and `files` folders; anything else in the folder is named and not read. It prints any record that fails, then the share record's id and the identity and key that signed it. It prints how many records and files it holds. It prints who signed the records: the person, an agent the person paired, or another key. It prints how many are corrections of a record that is not in the bundle. When every check passed it lists the records under `It holds:`, a comparison in words with its reading, cohort and n. Then `bundle ok`, exit 0, or `bundle FAILED: <n> problems`, exit 1. It says each time what no bundle can show: that it is complete, that a value is true, and who the identity is. Nor can a bundle show that the key that signed is still the person's. `tools/second/checkbundle.py` does the same check without bean.
 
 A reader with no terminal runs the same check in a browser. `make page` builds `bean-check.html`, one file that reads a bundle's folder or a zip file of it and sends nothing ([SHARE.md](SHARE.md)).
 

@@ -94,3 +94,17 @@ func WordsToSeed(words []string) ([]byte, error) {
 	}
 	return entropy, nil
 }
+
+// WordCount is the number of words in the list.
+const WordCount = 2048
+
+// WordAt is word i of the list, for i below WordCount. A tool above the
+// core uses the list for other words than a seed, such as the words that
+// open a sealed package.
+func WordAt(i int) string { return wordList[i] }
+
+// IsWord reports whether w is a word of the list.
+func IsWord(w string) bool {
+	_, ok := wordIndex[w]
+	return ok
+}
