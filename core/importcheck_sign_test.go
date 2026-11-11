@@ -64,8 +64,12 @@ func TestPurgeMany(t *testing.T) {
 	if err != nil || code != 0 {
 		t.Errorf("verify after PurgeMany: %d %v\n%s", code, err, strings.Join(lines, "\n"))
 	}
-	// A bad id stops it, and reports how many went before.
-	if n, err := s.PurgeMany([]string{ids[2], "sha256:" + strings.Repeat("0", 64)}, "test"); n != 1 || err == nil {
-		t.Errorf("a bad id: %d %v", n, err)
+	// The caller chose the ids from an earlier load. One that is gone since,
+	// or was never there, is passed over: two cleanups at once must not fail.
+	if n, err := s.PurgeMany([]string{ids[2], "sha256:" + strings.Repeat("0", 64)}, "test"); n != 1 || err != nil {
+		t.Errorf("an id that is not there: %d %v", n, err)
+	}
+	if n, err := s.PurgeMany(ids, "test"); n != 0 || err != nil {
+		t.Errorf("the same ids again: %d %v", n, err)
 	}
 }

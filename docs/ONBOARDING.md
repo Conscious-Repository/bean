@@ -7,7 +7,7 @@ From nothing to a working log: install, identity, a checked lab import, an AI as
 - A Mac with [Homebrew](https://brew.sh). Linux works with the same tools.
 - Access to this repository on GitHub. It is private for now: sign in first, with `gh auth login` or an SSH key.
 - An encrypted disk. On a Mac, turn on FileVault. bean signs records but does not encrypt the record files.
-- A lab report PDF, if you have one. bean reads the layouts it knows; today, the Labcorp patient report and the Quest Diagnostics report. To practice, use `cmd/bean-import-lab/testdata/real-layout.txt` (Labcorp) or `quest-layout.html` (Quest): real layouts with synthetic content.
+- A lab report PDF, if you have one. bean reads the layouts it knows; today, the Labcorp patient report and the Quest Diagnostics report. To practice, use `cmd/bean-import-lab/testdata/real-layout.txt` (Labcorp) or `quest-layout.html` (Quest): real layouts with synthetic content. Practice in a throwaway folder, not in your log: `bean -dir /tmp/practice init`, then `bean -dir /tmp/practice import lab ...`.
 - Pen and paper for 24 words.
 
 ## Working with an AI assistant
@@ -230,7 +230,7 @@ Saved comparisons, the reference files you kept and the records of your shares a
 | `unknown time zone` | A zone name such as `America/Chicago`, not `CST`. |
 | `the file was not accepted, and nothing was written` | A line the importer could not read for sure. See [If the import is refused](#if-the-import-is-refused). |
 | `bean: input missing: <id>` | Use the record id from `bean ls` or the `kept` line, not the `stored as` id. |
-| `changed: ... this file says ...` | A newer report changed a value. If it is right, import again with `-corrections`. |
+| `changed: ... this input says ...` | A newer report changed a value. If it is right, import again with `-corrections`. |
 | `bean: undecided: ...` from `restore` | Expected on the first run. Read the list, then `-seal-all` (step 7). |
 
 Every command, flag and exit code: [COMMANDS.md](COMMANDS.md).

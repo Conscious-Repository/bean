@@ -25,8 +25,11 @@ Start
 Write
   add <type> <value> [flags]    Add one record. Flags: -unit, -at, -note, -about,
                                 -corrects, -photo, -agent.
-  append [-agent]               Add the records that an importer writes to stdin.
-  import <source> <file>        Keep a provider file, then add its readings.
+  append [-agent | -corrections]
+                                Add the records that an importer writes to stdin.
+  import <source> [-yes] [-corrections] <file>
+                                Keep a provider file, then add its readings. It
+                                shows them and asks first; -yes skips that.
   blob put <file>               Store a file, encrypted. Prints its id.
 
 Read
@@ -37,12 +40,12 @@ Read
   verify                        Check every file and signature.
 
 Compare
-  compare -sex <s> -age <from>-<to> [-where <rule>]... [-save] <id>... | -type <type>
+  compare -sex <s> -age <from>-<to> [-where <rule>]... [-unknown-files] [-save] <id>... | -type <type>
                                 Show where a reading lies among people like the
                                 ones you describe, in public survey data (NHANES).
 
 Share
-  share -out <folder> [-files] [-note <text>] <id>... | -type <type>
+  share -out <folder> [-files] [-note <text>] [-yes] <id>... | -type <type> [-since <time>] [-until <time>]
                                 Write chosen records into a folder that anyone
                                 can check without your log or keys.
   check-bundle <folder>         Check a bundle someone sent you.
@@ -51,7 +54,8 @@ AI and agents
   mcp [-write] [-blobs] [-label <name>]
                                 Run the MCP server for an AI client. Read-only
                                 unless -write; stored files only with -blobs.
-  agent init [-label <name>]    Make the agent key of this machine.
+  agent init [-label <name>] [-identity <id>]
+                                Make the agent key of this machine.
   agent pair <npub> [-label <name>]
                                 Trust an agent key. Run it on your own machine.
 
@@ -86,7 +90,7 @@ var syntax = map[string]string{
 	"whoami":        "whoami",
 	"add":           "add <type> <value> [-unit <u>] [-at <time>] [-note <text>] [-about <id>] [-corrects <id>] [-photo <file>] [-agent]",
 	"append":        "append [-agent | -corrections] < records.jsonl",
-	"import":        "import <source> [importer flags] [-corrections] <file>",
+	"import":        "import <source> [importer flags] [-yes] [-corrections] <file>",
 	"blob":          "blob put <file> | blob get <id>",
 	"ls":            "ls [-type <t>] [-since <time>] [-until <time>] [-author me|agent|<id>|<npub>] [-all] [-json]",
 	"show":          "show <id>",
@@ -313,6 +317,9 @@ func main() {
 	case "agent":
 		cmdAgent(s, rest)
 	case "verify":
+		if len(rest) != 0 {
+			usage() // a flag that is ignored reads as a flag that was obeyed
+		}
 		lines, code, err := s.VerifyLines()
 		if err != nil {
 			fail(err)
@@ -357,6 +364,9 @@ func main() {
 			}
 		}
 	case "gc":
+		if len(rest) != 0 {
+			usage() // gc erases for good: "gc -dry-run" must not run
+		}
 		r, b, err := s.GC()
 		if err != nil {
 			fail(err)

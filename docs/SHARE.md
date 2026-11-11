@@ -11,7 +11,7 @@ bean share -out with-files -files 7b8b81           # also the files those record
 ## What goes in
 
 - **The records you name**, by id or by `-type` (with `-since` and `-until`). Only current records about you: not a corrected one and not a deleted one. A record that another identity signed does not go either, since a bundle carries only your identity records.
-- **What they are about, one step.** A record is read with the record it is about, so that one comes along. Examples are the reading of a comparison, the meal of an estimate, and the entry a note comments on. What that one is about in turn stays home unless you name it. The review marks each record that comes along, and says which it could not bring and why.
+- **What they are about, one step.** A record is read with the record it is about, so that one comes along. Examples are the reading of a comparison, the meal of an estimate, and the entry a note comments on. A comparison also brings the record of each reference file it used, without the file. What that one is about in turn stays home unless you name it. The review marks each record that comes along, and says which it could not bring and why.
 - **Nothing else of yours.** Not the rest of the log, not a lab report unless you name it. A reading names its report by a hash, and the report stays home.
 - **A file only when you name its record.** A record that keeps a file (a lab report, a photo) is shared without the file. With `-files`, the file of a record you named by its id goes in whole, as plaintext. For a lab report that is the report as you imported it, with your name and birth date. A file never goes because its record came along with another, or was picked by type. The one exception is a public reference file you kept, such as an NHANES file: with `-files` it goes with the comparison that used it.
 - **A type never picks a record that keeps a file.** `-type 'lab.*'` shares your lab readings, not the lab report. Name such a record by its id when you mean to share it.
@@ -21,7 +21,7 @@ bean share -out with-files -files 7b8b81           # also the files those record
 
 bean shows the list and asks before it writes: each record, the cohort of a comparison, each file, and how many identity records go along. `-yes` skips that, for scripts. Without a terminal and without `-yes` it writes nothing. That stops an assistant from sharing through a tool that has no terminal. It does not stop a program that has your shell and passes `-yes`: what runs as you can do what you can.
 
-The bundle is written whole or not at all: it is built beside its place, checked as its reader will check it, and moved there. Only then does the share record go into your log, as type `share`: your own record of what you disclosed and when. `bean ls -type share` lists them. A share that fails leaves no bundle and no record.
+The bundle is written whole or not at all: it is built beside its place, checked as its reader will check it, and moved there. Only then does the share record go into your log, as type `share`: your own record of what you disclosed and when. `bean ls -type share` lists them. A share that fails leaves no bundle and no record. Ctrl-C before the bundle is in place removes what was built. From that moment the share runs to its end, so that no bundle exists without its record. Only a kill that cannot be caught (`kill -9`) can leave one without the other.
 
 ## Reading a bundle someone sent you
 
@@ -29,7 +29,7 @@ The bundle is written whole or not at all: it is built beside its place, checked
 bean check-bundle for-ana
 ```
 
-One command checks the bundle and, when it passes, shows what it holds. Each record has its time as the sender recorded it, its type and its value. A record that the sender did not sign shows who signed it. Each comparison is in words, such as `percentile 46 of lab.cholesterol-total 187 mg/dL, among male, age 30-39 (n 339)`, with its caveats below. Nothing is shown from a bundle that fails. You need no log of your own for this, and the check changes nothing in the folder.
+One command checks the bundle and, when it passes, shows what it holds. Each record has its time as the sender recorded it, its type and its value. A record that the sender did not sign shows who signed it. Each comparison is in words, such as `percentile 46 of lab.cholesterol-total 187 mg/dL, among male, age 30-39 (n 339)`, with its caveats below. A bundle that fails lists no record and shows no note. The check still prints the share record's id, its signer and the counts. You need no log of your own for this, and the check changes nothing in the folder.
 
 A comparison is shown as its claim states it. The check proves who signed the claim, not its arithmetic: `tools/compare/reproduce.py` computes it again ([COMPARE.md](COMPARE.md)).
 
@@ -74,7 +74,7 @@ And you should know:
 - **A bundle is a disclosure.** It is not encrypted, and once sent it cannot be taken back. Deleting or correcting a record later does not reach a bundle you sent: send a new one.
 - **Keep the folder you sent** if you want to know later what was in it. The share record in your log lists ids; a record you deleted since is gone from your log, and the bundle is the only copy.
 - **One share holds up to about 14,000 records.** Its list must fit one record. Share a long series in parts, by `-since` and `-until`.
-- **Send it as one file, by a way you trust.** A bundle is a folder: zip it. Without `-files` it is a few kilobytes; with the NHANES files about 18 MB. bean does not encrypt it. Whoever carries the file can read it. Send it over a channel that encrypts end to end, or encrypt the zip file to your reader first with a tool you both have. A bundle encrypted to its reader's key is on the roadmap.
+- **Send it as one file, by a way you trust.** A bundle is a folder: zip it. Without `-files` it is a few kilobytes; with the NHANES files, 4 to 18 MB. bean does not encrypt it. Whoever carries the file can read it. Send it over a channel that encrypts end to end, or encrypt the zip file to your reader first with a tool you both have. A bundle encrypted to its reader's key is on the roadmap.
 - **Two bundles of yours can be linked.** Every record carries your identity id.
 - **Your identity records say how many records you had at each key change.** A key change lists the ids of the records it seals. The ids are hashes and give no content away, but their number shows.
 - **A correction travels without what it corrects.** A record that replaces an earlier one is shared alone; the earlier one stays home. The check says how many such corrections a bundle holds.

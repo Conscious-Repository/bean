@@ -34,7 +34,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import beanverify  # noqa: E402
 
 IDENTITY = ("bean.genesis", "bean.succession", "bean.seal")
-NOT_SHARED = IDENTITY + ("agent.pair", "device.pair", "bean.tombstone", "share")
+NOT_SHARED = IDENTITY + ("agent.pair", "bean.tombstone", "share")
 MAX_RECORD = 16 << 20
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 CAVEATS = (
@@ -183,7 +183,16 @@ def check(folder):
         v = r.get("value") if isinstance(r.get("value"), dict) else {}
         return r["type"] == "agent.pair" and r["author"] == person and r.get("subject") == person and isinstance(v.get("key"), str) and v.get("key") and v.get("status") != "unpaired"
 
-    paired = {records[i]["value"]["key"]: (records[i]["value"].get("label") or "agent") for i in proof if i in records and pairing(records[i]) and i in valid}
+    # A key paired under two labels shows under both, in the order of the
+    # pairings' ids, so that the same bundle reads the same on every check.
+    paired = {}
+    for i in sorted(proof):
+        if i in records and pairing(records[i]) and i in valid:
+            key, label = records[i]["value"]["key"], records[i]["value"].get("label") or "agent"
+            if key not in paired:
+                paired[key] = label
+            elif label not in paired[key].split(", "):
+                paired[key] += ", " + label
     signed = [0, 0, 0]  # by the person, by a paired agent, by another key
     for i, r in sorted(records.items()):
         if i == share["id"]:
@@ -273,8 +282,9 @@ def main(argv):
         print("records: %d listed; files: %d included, %d named and not included" % (n, included, named))
         print("signed: %d by the person, %d by an agent the person paired, %d by another key" % tuple(signed))
         print("corrections: %d of the listed records replace an earlier record, which is not in the bundle" % corrections)
+        # The note is shown only with a bundle that passed.
         note = (share.get("context") or {}).get("note")
-        if isinstance(note, str) and note:
+        if isinstance(note, str) and note and not problems:
             print("note: " + safe(note))
         if not problems:
             # Shown only when every check passed.

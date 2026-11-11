@@ -159,7 +159,7 @@ Readings name the PDF by its SHA-256, not as a blob, so purging the `lab.report`
 On the iPhone, Health, your picture, Export All Health Data. Then:
 
 ```
-bean import apple-health export.zip              # keeps the export, encrypted
+bean import apple-health export.zip              # keeps the export, encrypted; asks first
 bean import apple-health -records export.zip     # also one record per reading
 ```
 
@@ -339,7 +339,7 @@ Read [UPGRADING.md](UPGRADING.md) before you run a new build on your log. It lis
 
 A record is a JSON file in `objects/`, named by the SHA-256 hash of its content and signed with your key. Your identity is the hash of your first record, so it never changes when keys change. Corrections and deletions are new records. The protocol says who may make them, so every copy reaches the same result from the same files. Stored files (PDFs, photos) are encrypted in `blobs/`. Sync copies the files that one copy has and the other does not.
 
-Every record is checked when it is first read, then cached, the same way git trusts its object store. `bean verify` checks everything again. At 20,000 records, `add` and an AI query take about 0.2 s and `verify` about 1 s. At 230,000 records on one machine (measured 2026-10-30), `add` takes about 7 s, `verify` about 11 s and `rotate` about 9 s. Each needs about 2.5 GB of memory. Every write goes to disk before it counts.
+Every record is checked when it is first read, then cached, the same way git trusts its object store. `bean verify` checks everything again. At 20,000 records, `add` and an AI query take under 1 s and `verify` about 1.3 s (4-core Linux virtual machine, measured 2026-11-10). At 230,000 records on one machine (measured 2026-10-30), `add` takes about 7 s, `verify` about 11 s and `rotate` about 9 s. Each needs about 2.5 GB of memory. Every write goes to disk before it counts.
 
 [CORE.md](CORE.md) is a short summary of the protocol. [SPEC.md](SPEC.md) has every rule: enough to write a second implementation.
 
@@ -358,6 +358,7 @@ bean protects who wrote what, and protects your identity against a stolen device
 | [docs/SHARE.md](docs/SHARE.md) | Share chosen records as a bundle anyone can check: what goes in, limits, format. |
 | [examples/blood](examples/blood/README.md) | The whole loop in one script, on a synthetic report. |
 | [cmd/bean/vocabulary.md](cmd/bean/vocabulary.md) | The usual record types and units. |
+| Importer notes: [lab](cmd/bean-import-lab/README.md), [Apple Health](cmd/bean-import-apple-health/README.md), [NHANES](cmd/bean-import-nhanes/README.md) | What each importer reads, keeps and refuses. |
 | [SECURITY.md](SECURITY.md) | What is protected, and the keys. |
 | [CORE.md](CORE.md) | The protocol, in short. |
 | [UPGRADING.md](UPGRADING.md) | Changes that alter results for an existing log. |

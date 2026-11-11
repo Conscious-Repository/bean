@@ -1,7 +1,8 @@
 # Source-specific ingestion, without bridges
 
-Current scope: Apple Health file ingestion. No bridge, iPhone application,
-provider account creation, sharing protocol or new Bean core rule is required.
+Scope: how a provider's data gets in. Built today: lab reports, Apple Health,
+CSV and NHANES files. No bridge, iPhone application,
+provider account creation, sharing protocol or new bean core rule is required.
 Each additional provider gets its own small adapter and real input sample.
 
 ## Implemented Apple Health path
@@ -50,7 +51,7 @@ response kept outside the repository. Never request tokens/secrets in chat.
    refresh and durably replace rotating tokens; do not keep using an invalidated
    token after a concurrent refresh. Respect Retry-After and bounded retries.
 4. Save original pages before advancing a retrieval checkpoint. Replay locally
-   into existing Bean adoption. A partial fetch must not masquerade as a complete
+   into existing bean adoption. A partial fetch must not masquerade as a complete
    date range. Keep download success and adoption success separately observable.
 5. Only then add incremental retrieval. Define corrections/deletions from actual
    provider behavior; absence in a page is not deletion. Webhooks can trigger
@@ -64,7 +65,7 @@ connector framework, bridge dependency or stable new wire format is warranted.
 
 Raw API bytes are what a provider exposes, often derived scores or summaries;
 they are not necessarily raw sensor/ADC data. OAuth/TLS establish an authorized
-retrieval channel. Bean signatures establish owner adoption. Neither is a device
+retrieval channel. bean signatures establish owner adoption. Neither is a device
 signature proving a physical measurement or the person measured. A future AION
 acquisition receipt is a separate evidence class.
 
@@ -75,5 +76,6 @@ history. Purging an individual claim does not erase its contents from a retained
 raw archive; artifact retention needs its own explicit treatment.
 
 These choices apply the three review lenses: minimal working code, explicit
-trust/identity boundaries, and an independent user exit. Homomorphic encryption
-and generalized sharing/attestation remain separate future work.
+trust/identity boundaries, and an independent user exit. No importer is written
+before there is a real export from an account the owner uses (ROADMAP.md, "Not
+planned"). Homomorphic encryption remains separate future work.

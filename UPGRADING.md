@@ -48,6 +48,13 @@ Do not run `purge` or `gc` on the copies. Only they erase anything.
 - `gc` erases a target whose first tombstone became invalid while another valid tombstone still deletes it. It waits 7 days from that other tombstone's hold.
 - A record of a too-new identity gets no `hidden pending gc` warning.
 
+### Compare and share (2026-11-10)
+
+- `sync` refuses a folder that is not a copy of your log. Read a bundle that someone sent with `check-bundle`.
+- A correction or deletion of a reading deletes the saved comparisons of that reading. `purge`, `add -corrects`, `append`, `import`, `sync`, `import-export` and `verify` do this, and say how many.
+- `verify` and `gc` refuse extra arguments with exit 2. Before, they ignored them.
+- `bean-import-lab` 0.5.0 reads Quest Diagnostics reports.
+
 ### Rules N1 to N4 (2026-10-30)
 
 Four rules changed. bean never wrote a record that the new rules reject. Most effects make records invalid, but some make records valid. A record of an unknown version that is not in canonical form no longer halts its identity. The records and tombstones of that identity count again. A deletion with a small-order signature is now invalid, so its target comes back. The check above shows both kinds.

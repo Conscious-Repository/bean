@@ -47,10 +47,12 @@ bean compare -sex female -age 40-49 3fa9c1
 Compared with NHANES 2017-2018: male, age 30-39.
 READING                VALUE      PERCENTILE  LOWER  SAME  MIDDLE HALF  MEDIAN  N    NOTE  ID
 lab.cholesterol-total  187 mg/dL  46          44.2%  3.5%  164 to 213   188     339        fca23ea91778
+PERCENTILE is the weighted share of the cohort with a lower value, plus half of those with the same value. It says where a value lies in this sample, not whether it is healthy.
 Read each number with these caveats:
   - the lab that measured the reading and NHANES used their own instruments and methods
   - NHANES is a sample of people living in the United States in the survey years, not a reference range
   - you chose the cohort: bean does not know whether you belong to it
+Not saved. Pass -save to keep these comparisons as signed records.
 ```
 
 - **PERCENTILE**: the weighted share of the cohort with a lower value, plus half of those with the same value.
@@ -63,7 +65,7 @@ The numbers in this example are statistics of the public files, not anyone's rea
 
 ### People like you: more rules
 
-Each `-where` narrows the cohort by one NHANES variable: `<FILE>.<VARIABLE>=<value>` or `=<from>-<to>`, both ends included. A measurement such as BMI needs a range: `=24` matches nobody, `=22-26` does. A person with no value for a rule's variable is left out. The nutrient totals are sums, and some sit a hair off a whole number (14.999999999999998 g of fiber). So a bound exactly on a whole number can leave a few people out. Put bounds between the values you mean, such as 14.5-60.
+Each `-where` narrows the cohort by one NHANES variable: `<DATASET>.<VARIABLE>=<value>` or `=<from>-<to>`, both ends included. A measurement such as BMI needs a range: `=24` matches nobody, `=22-26` does. A person with no value for a rule's variable is left out. The nutrient totals are sums, and some sit a hair off a whole number (14.999999999999998 g of fiber). So a bound exactly on a whole number can leave a few people out. Put bounds between the values you mean, such as 14.5-60.
 
 ```
 bean compare -sex male -age 30-39 -where DEMO_J.RIDRETH3=3 -where BMX_J.BMXBMI=20-27 -type 'lab.*'
@@ -109,6 +111,8 @@ Limits beyond those:
 ```
 bean compare -sex male -age 30-39 -type 'lab.*' -save
 ```
+
+A comparison is kept once. Two saves at one moment can each save the same one, and so can two copies that you then sync. bean then deletes all but one and says so.
 
 `-save` writes one `comparison.percentile` record per result, signed by you. Without it nothing is written: try cohorts freely, and save what you will act on or share. The same inputs twice add nothing. A comparison you deleted is saved again when you ask again.
 

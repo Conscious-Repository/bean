@@ -402,7 +402,9 @@ func (s *Store) PurgeAll(id, reason string) (PurgeResult, error) {
 
 // PurgeMany purges each of ids as Purge does, under one lock and one load
 // of the log, and returns how many it purged. It stops at the first that
-// fails. Purging many records one by one reads the whole log for each.
+// fails. Purging many records one by one reads the whole log for each. The
+// caller chose ids from an earlier load, so a record that is no longer
+// current, because another command deleted it since, is passed over.
 func (s *Store) PurgeMany(ids []string, reason string) (int, error) {
 	unlock, err := s.lock()
 	if err != nil {
@@ -413,12 +415,17 @@ func (s *Store) PurgeMany(ids []string, reason string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	for n, id := range ids {
+	n := 0
+	for _, id := range ids {
+		if !l.Current(id) {
+			continue
+		}
 		if _, err := s.purgeLoaded(l, id, reason); err != nil {
 			return n, err
 		}
+		n++
 	}
-	return len(ids), nil
+	return n, nil
 }
 
 // purgeLoaded purges one record of the loaded log. The caller holds the
@@ -654,10 +661,21 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 		return res, err
 	}
 	// Seal continuations go first, so a sync that stops halfway never
-	// leaves a succession without its parts (C28). Order changes nothing
-	// else: the result is a set union.
+	// leaves a succession without its parts (C28). The other identity
+	// records go next: a first sync that stops halfway then leaves records
+	// whose author resolves, not a log that lists nothing. Order changes
+	// nothing else: the result is a set union.
 	order := sortedKeys(good)
-	sort.SliceStable(order, func(i, j int) bool { return isSealPath(a, order[i]) && !isSealPath(a, order[j]) })
+	rank := func(p string) int {
+		switch {
+		case isSealPath(a, p):
+			return 0
+		case checked[p].Record != nil && checked[p].Record.IsIdentity():
+			return 1
+		}
+		return 2
+	}
+	sort.SliceStable(order, func(i, j int) bool { return rank(order[i]) < rank(order[j]) })
 	for _, p := range order {
 		data := good[p]
 		fr := checked[p]

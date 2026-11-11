@@ -9,7 +9,7 @@ bean [-dir <folder>] <command> [arguments]
 ```
 
 - `-dir` is the log folder. If you do not give it, `bean` uses `$BEAN_DIR`, then the current folder.
-- Flags can come before or after the arguments of `add` and `ls`. For other commands, put flags first.
+- Flags can come before or after the arguments of `add`, `ls`, `compare`, `share`, `agent` and `migrate`. `import` takes `-yes` and `-corrections` anywhere. For other commands, put flags first.
 - An **id** is `sha256:` and 64 hex digits. Commands that take an id also take its first 6 or more hex digits, if no other record starts with them.
 - A **time** is RFC 3339 (`2026-10-28T13:00:00-05:00`), `YYYY-MM-DD HH:MM`, or `YYYY-MM-DD`. The last two use your local time zone.
 - Output goes to stdout. Errors go to stderr and start with `bean:`.
@@ -64,7 +64,7 @@ Adds one record about you. Prints its id.
 | `-photo <file>` | Attach an image, stored encrypted. Only image files are accepted, up to 25 MiB. |
 | `-agent` | Sign with the agent key of this machine, not your key. |
 
-### `append [-agent]`
+### `append [-agent | -corrections]`
 
 Reads records from stdin, one JSON object per line, as an importer writes them. Signs and stores each one. Prints `added <n>, skipped <m>`. A record that is already in the log, or that you deleted, is skipped, so you can import the same file again safely. `skipped` counts every line not written: one already in the log, a deleted one, or a repeat of an earlier line of the same input. It also counts a correction whose target is not in the log, and each reading named on a `changed:` line (below). When there is a `changed:` line, `append` exits 1. `-agent` signs with the agent key.
 
@@ -78,7 +78,7 @@ Keeps a provider file, then adds its readings. Runs `bean-import-<source>`, foun
 
 1. It copies the file privately, at most 256 MiB, works out the id the encrypted copy will have, and runs the importer on the copy. The importer's output goes to a private file, at most 1 GiB of readings plus 1 MiB. If the importer refuses the file, nothing is written.
 2. It checks the importer's first record: it must keep this file (`lab.report`, `apple-health.export`, `csv.file`, `reference.file`) and carry `source.ref_input`, not a ready-made `source.ref` or a `source.supersedes_ref`. It must pass the checks `append` makes of a record: its fields, its size, your key. If it does not, or you deleted that record before with `purge`, nothing is written, not even the file. A file you deleted stays deleted under any `-system`, on a copy whose `local/purged-refs.jsonl` remembers the deletion. A copy that only received the deletion by sync, and never held the record, stores the file again. A file kept under another archive type is not caught.
-3. It shows the readings, one line each (type, value as printed, unit, flag), and asks `Save <n> readings and keep the file? [y/N]`. Only `y` goes on; anything else writes nothing. `-yes` skips the review, for scripts. Without a terminal and without `-yes` it writes nothing and shows no value. The readings would land in a script's log or an AI assistant's context. A terminal is what the system says is one, on both ends: the review is printed and answered there. A closed input, `/dev/null` or a pipe on the output is not one.
+3. It shows the readings, one line each (type, value as printed, unit, flag), and asks `Save <n> readings and keep the file? [y/N]`. Only `y` or `yes` goes on; anything else writes nothing. The review lists the first 300 readings and counts the rest. `-yes` skips the review, for scripts. Without a terminal and without `-yes` it writes nothing and shows no value: it stops before the importer runs. The readings would land in a script's log or an AI assistant's context. A terminal is what the system says is one, on both ends: the review is printed and answered there. A closed input, `/dev/null` or a pipe on the output is not one.
 4. It stores the copy, encrypted, and reads it back. The bytes must match.
 5. It adds the first record and checks that the log keeps it. The record must be a current record of yours, about you, that names the blob and the file's SHA-256. The blob must still read back as the file. This check proves every record file, as `verify` does, because the object cache vouches for a file by its size and time.
 6. It adds the readings, then checks the file record again.
@@ -95,7 +95,7 @@ Readings name the file by its SHA-256 (`context.report_sha256`, `export_sha256`,
 
 Lists current records in time order: when, type, value, who wrote it if not you, and the first 12 hex digits of the id. A corrected record shows only its newest version. Deleted records never show.
 
-A record that keeps a file, such as `lab.report` or `apple-health.export`, shows its value as `file <media type> <blob id start>`. A test the lab did not perform shows as `not performed`. A value in a blob with a unit shows as `series <blob id start> <unit>`. A time that `-since` or `-until` cannot read exits 2.
+A record that keeps a file, such as `lab.report` or `apple-health.export`, shows its value as `file <media type> <blob id start>`. A `reference.file` shows `file <data set> <blob id start>`. A comparison shows in words, with its reading, cohort and n. A test the lab did not perform shows as `not performed`. A value in a blob with a unit shows as `series <blob id start> <unit>`. A time that `-since` or `-until` cannot read exits 2.
 
 | Flag | Meaning |
 |---|---|
@@ -142,10 +142,10 @@ Reads and checks every file and signature, and every stored file's hash. Run it 
 Shows where a reading lies among the people of a cohort in NHANES 2017-2018, from the files you kept with `bean import nhanes`. [COMPARE.md](COMPARE.md) has the files, the columns, the limits and the method.
 
 - `-sex` and `-age` are required. `-age 30-39` includes both ends; 80 means 80 and over. Without them the command exits 2: bean never guesses a cohort.
-- `-where <FILE>.<VARIABLE>=<value>` or `=<from>-<to>` adds a rule, and may repeat: `-where DEMO_J.RIDRETH3=3 -where BMX_J.BMXBMI=20-27`. The file is `DEMO_J`, `BMX_J` or `DR1TOT_J`. A rule on `DR1TOT_J` makes the computation use the dietary day one weight.
+- `-where <DATASET>.<VARIABLE>=<value>` or `=<from>-<to>` adds a rule, and may repeat: `-where DEMO_J.RIDRETH3=3 -where BMX_J.BMXBMI=20-27`. The file is `DEMO_J`, `BMX_J` or `DR1TOT_J`. A rule on `DR1TOT_J` makes the computation use the dietary day one weight.
 - Give one or more record ids, or `-type` for every current reading of a type or prefix (`'lab.*'`). With `-type`, readings of a type bean has no reference data for are counted, not listed.
 - `-unknown-files` also uses a kept file whose SHA-256 is not the one on record. Without it such a copy is refused: it may be a download that was cut short.
-- `-save` writes each result as a signed `comparison.percentile` record and prints `saved <id>`. Without it nothing is written. The same inputs again add nothing. A comparison you deleted before is saved again when you ask again.
+- `-save` writes each result as a signed `comparison.percentile` record and prints `saved <id>`. Without it nothing is written. The same inputs again add nothing. A comparison you deleted before is saved again when you ask again. The last line is `added <n>, already there <m>`.
 
 `purge`, `add -corrects`, `append`, `import`, `sync`, `import-export` and `verify` delete the saved comparisons of a reading that was corrected or deleted. They do so also when they fail part way, and say how many on stderr. `compare` and `share` do the same before anything else.
 
@@ -165,7 +165,7 @@ Writes chosen records into a new or empty folder, a bundle, that anyone can chec
 - It lists what will leave, on stderr, and asks `Share <n> records? [y/N]`. `-yes` skips that. Without a terminal and without `-yes` it writes nothing.
 - The folder must be new or empty, and not inside your log.
 
-It builds the bundle beside its place, checks it as its reader will, and moves it there. Then it adds one `share` record to your log: the signed list of what the bundle holds, which is in the bundle too. A share that fails leaves neither. A bundle is not encrypted, and once sent it cannot be taken back.
+It builds the bundle beside its place, checks it as its reader will, and moves it there. Then it adds one `share` record to your log: the signed list of what the bundle holds, which is in the bundle too. A share that fails leaves neither. A bundle is not encrypted, and once sent it cannot be taken back. It prints `shared <n> records and <m> files in <folder>`, then `share record <id>`.
 
 ### `check-bundle <folder>`
 
@@ -186,7 +186,7 @@ Runs a [Model Context Protocol](https://modelcontextprotocol.io) server on stdin
 | `stats` | Count, minimum, maximum, mean, median and spread of one type, by day, week or month if asked. Readings by different authors or in different units are in separate `groups`. |
 | `get_record` | One non-deleted, valid record, including superseded history, its status and replies. Blob IDs are metadata. |
 | `read_blob` | With `-blobs` only. Takes the blob id in full or as its first 6 or more hex digits. Only blobs of current records of yours or of a paired agent; superseded-only history and a stranger's record do not grant content access. Text is returned; for binary files only size. |
-| `log_entry` | With `-write` only. Adds a record signed by the agent key, of a type from the vocabulary only. The vocabulary is the built-in one plus `vocabulary.md` in the bean folder, if it exists (cmd/bean/vocabulary.md, "Your own types"). It can also comment on a record (`about`) or replace one of the agent's own records (`corrects`). It refuses `lab.*`, `apple-health.*` and `csv.file`: only an importer that keeps the source file writes those. |
+| `log_entry` | With `-write` only. Adds a record signed by the agent key, of a type from the vocabulary only. The vocabulary is the built-in one plus `vocabulary.md` in the bean folder, if it exists (cmd/bean/vocabulary.md, "Your own types"). It can also comment on a record (`about`) or replace one of the agent's own records (`corrects`). It refuses `lab.*`, `apple-health.*` and `csv.file`: only an importer that keeps the source file writes those. It also refuses `reference.*`, `comparison.*` and `share`: only `bean import`, `bean compare` and `bean share` write those. |
 
 With `-write`, the first start makes the agent key of this machine and, on your own machine, trusts it. `-label` names that agent (default: `agent@<computer name>`). Without `-label`, a key that already exists keeps its name. A label that differs from the key's pairing is refused with exit 1, as in `agent init`.
 
@@ -202,7 +202,7 @@ Makes the agent key of this machine. Prints the agent key and its npub.
 
 ### `agent pair <npub> [-label <name>]`
 
-Run on your own machine. Records that you trust this agent key to write about you. `bean ls` then shows its records with the label.
+Run on your own machine. Records that you trust this agent key to write about you. `bean ls` then shows its records with the label. It prints `paired <id>`, the id of the pairing record.
 
 If the key is already paired, the same label or no `-label` prints that pairing. A different label is refused with exit 1 and changes nothing. bean does not rename an agent, because every record it wrote would then show the new name. A key you unpaired gets a new pairing.
 
@@ -210,7 +210,7 @@ If the key is already paired, the same label or no `-label` prints that pairing.
 
 ### `sync <folder>`
 
-Copies to this log every record and file that the other folder has and this one does not. It checks each file first, and replaces a stored copy that fails the checks. It reads this log's files from disk, not from the cache, so it also repairs a file that was changed in place. It does not copy a record that a valid deletion names. It judges each deletion on the files of both folders together, not on what the other folder says. A copy that has not seen your rotation takes the old key's deletions for valid. Run it both ways to make two copies the same. Prints `copied <r> records, <b> blobs, refused <p> purged`. Sync only from your own copies. It refuses a folder that is not one. That is a folder whose `local/identity` names someone else, or one with no `local/` that does not hold your identity record. A bundle someone sent is such a folder: read that with `check-bundle`. This catches a mistake; it does not stop a folder built to pass it.
+Copies to this log every record and file that the other folder has and this one does not. It checks each file first, and replaces a stored copy that fails the checks. It reads this log's files from disk, not from the cache, so it also repairs a file that was changed in place. It does not copy a record that a valid deletion names. It judges each deletion on the files of both folders together, not on what the other folder says. A copy that has not seen your rotation takes the old key's deletions for valid. Run it both ways to make two copies the same. Prints `copied <r> records, <b> blobs, refused <p> purged`. Sync only from your own copies. It refuses a folder that is not one. That is a folder whose `local/identity` names someone else, or one with no `local/` that does not hold your identity record. A bundle someone sent is such a folder: read that with `check-bundle`. This catches a mistake; it does not stop a folder built to pass it. It prints `copied <r> records, <b> blobs, refused <n> purged`, and `replaced <n> bad copies` when it repaired any.
 
 - The other folder must hold a log (`local/identity` or `objects/`). If it does not, `sync` fails with `no log in <folder>`, so a typo does not look like a sync with nothing to copy.
 - A record file of the other folder that fails its checks is not copied, nor a file that this log needs whose hash is wrong. Then `sync` copies the rest, prints `skipped <n> bad record files, <m> bad blobs in <folder>`, and exits 1. Run `bean verify` in that folder. A stranger's broken file there has the same effect.
@@ -238,7 +238,7 @@ Reads an export into a log of the same identity. Prints `added <r> records, <b> 
 - It does not read `invalid/`.
 - It needs a log of the same identity. In a folder with no log it fails and names `restore -export`: `bean init` would make a new identity, which cannot read the export.
 
-### `rotate [-list] [-seal-all] [-no-seal <id>]... [-nostr new|<file>]`
+### `rotate [-list] [-seal-all] [-no-seal <id>]... [-no-seal-file <file>] [-nostr new|<file>]`
 
 Changes your signing key. Reads the 24 words from stdin. Sync every copy first.
 
@@ -253,7 +253,7 @@ The sync can bring in records from a thief, and a seal cannot be undone, so `rot
 
 With nothing to decide on, for example on a new log, no flag is needed. Records the old key makes after the rotation are not valid. `-nostr` makes the new key a Nostr key, from a file because stdin carries the words. Above 200,000 records it also prints one `seal part <id>` line per extra seal record (C28); copy those with the rest of the log. It refuses above 200,200,000 records (`too large`). If a thief with your current key halted the log (`too new`), rotate goes past the halt. It prints one `past halt <id>` line per halting record. The rotation retires that key, so the halt ends on every copy. A halt from a newer bean of your own (signed with the 24 words) is not passed: update bean.
 
-### `restore [-list] [-seal-all] [-no-seal <id>]... [-nostr new|<file>] [-identity <id>] [-export <folder>]`
+### `restore [-list] [-seal-all] [-no-seal <id>]... [-no-seal-file <file>] [-nostr new|<file>] [-identity <id>] [-export <folder>]`
 
 Rebuilds `local/` on a new machine. Copy `objects/` and `blobs/` from your backup into the folder, then run it and give the 24 words on stdin. It finds your identity, writes the identity secret, and moves you to a new signing key. Your identity id and records do not change. The lost key can no longer add, delete or correct anything. Sync every copy you still have into the folder first. The flags work as for `rotate`. If more than one identity matches the words, it fails with `ambiguous` and writes nothing; pass `-identity <id>`.
 
@@ -267,11 +267,11 @@ Starts a new identity from a frozen log. On any other log it refuses: run `rotat
 
 ### `purge [-reason <text>] <id>`
 
-Deletes a record about you. Writes a tombstone that every copy obeys, and erases the record here at once. `sync` and `import-export` refuse the record after that, also from an older copy or export. Its files are erased too, unless another record names them. Then `purge` prints `the file <id> is kept: <n> other records name it`, and the file is still readable. Purge those records too to erase it. It counts only records it can reach. Other files that keep it are counted on a second line. Such a file is a deleted record waiting for `gc`, a record about someone else, or a damaged file. A file under another name, such as a sync tool's conflict copy, is not a record. It keeps no file, and `purge` erases a copy of the record with it. A record of a newer format, which this bean cannot judge, can be purged too. `export` writes a kept file only if a valid record of yours or of a paired agent names it. Files are erased before the record. If purge fails in between, the record and its tombstone stay. The next command hides the record, and `gc` erases it after the hold. The tombstone does not keep the import ref of the record. `local/purged-refs.jsonl` does, so a later import of the same data adds nothing on this copy, but it does on a copy without that file. You cannot purge identity records or other tombstones.
+Deletes a record about you. Writes a tombstone that every copy obeys, and erases the record here at once. `sync` and `import-export` refuse the record after that, also from an older copy or export. Its files are erased too, unless another record names them. Then `purge` prints `the file <id> is kept: <n> other records name it`, and the file is still readable. Purge those records too to erase it. It counts only records it can reach. Other files that keep it are counted on a second line. Such a file is a deleted record waiting for `gc`, a record about someone else, or a damaged file. A file under another name, such as a sync tool's conflict copy, is not a record. It keeps no file, and `purge` erases a copy of the record with it. A record of a newer format, which this bean cannot judge, can be purged too. `export` writes a kept file only if a valid record of yours or of a paired agent names it. Files are erased before the record. If purge fails in between, the record and its tombstone stay. The next command hides the record, and `gc` erases it after the hold. The tombstone does not keep the import ref of the record. `local/purged-refs.jsonl` does, so a later import of the same data adds nothing on this copy, but it does on a copy without that file. You cannot purge identity records or other tombstones. It prints `purged, tombstone <id>`.
 
 ### `gc`
 
-Erases records that a deletion from another copy hid at least 7 days ago, and the files that only those records used. It also erases a file under another name, such as a sync tool's conflict copy. The file must be a copy of a record that it erases or that is erased already. Only a copy of your own deleted record counts as a record, and only it takes the files it names along. Any other copy is removed alone. It erases the files first, so a failure leaves the hidden record for the next `gc`. Nothing is erased without `gc` or `purge`. It refuses while your identity has records from a newer bean or is frozen, or a rotation's seal parts are missing (`incomplete seals`).
+Erases records that a deletion from another copy hid at least 7 days ago, and the files that only those records used. It also erases a file under another name, such as a sync tool's conflict copy. The file must be a copy of a record that it erases or that is erased already. Only a copy of your own deleted record counts as a record, and only it takes the files it names along. Any other copy is removed alone. It erases the files first, so a failure leaves the hidden record for the next `gc`. Nothing is erased without `gc` or `purge`. It refuses while your identity has records from a newer bean or is frozen, or a rotation's seal parts are missing (`incomplete seals`). It prints `erased <r> records, <b> blobs`.
 
 ## Other
 
@@ -320,12 +320,14 @@ Keeps one public NHANES file of the 2017-2018 cycle (SAS transport, a name endin
 
 ### `bean-import-csv -type <type> [-unit <unit>] [-system <name>] [-blob <id>] [-precision <p>] <file.csv>`
 
+`-system` names the source (default `csv`). `-precision` is the precision of the `time` column (default `second`).
+
 Reads a CSV file with a header row. Column `value` is required. Column `time` (RFC 3339) and column `id` (the source's id for the row) are optional. Each non-empty cell of another column goes into `context` as text, under the column's name in lower case. One type per file. With `-blob` the first record is a `csv.file` that keeps the file, at most 256 MiB. Each reading has the file's SHA-256 in `context.file_sha256`, and a column of that name is refused. Run it as `bean import csv -type <type> [-unit <unit>] file.csv`.
 
 It refuses the file, names the line, and writes nothing when:
 
 - a row has more or fewer fields than the header. An unquoted `1,234` or `72,5` is two fields; put such a number in quotes, and it is kept as text.
-- two column names are the same ignoring letter case and spaces at either end (`Value` and `value `), or a column is named `raw_time`.
+- two column names are the same ignoring letter case and spaces at either end (`Value` and `value `), or a column is named `raw_time` or `unit`. The unit of every value comes from `-unit`: import the rows of each unit apart.
 - two rows have the same `id`. One id names one reading. Across files, a row whose id another file already used under the same `-system` is a `changed:` line when its time differs.
 - with `-blob` (so under `bean import`): a `time` that is not RFC 3339 with an offset. Also a `value` written as a number that cannot be stored exactly. Such a number has more digits than a float keeps (`0.30000000000000001`). Or it is a nonzero number that would be 0 (`1e-400`), or one too large (`1e17`, `9007199254740993`). An empty `time` is no time and is taken.
 
@@ -339,6 +341,7 @@ Without `-blob` it keeps its older behaviour for those two: an unread time goes 
 | `blobs/` | Stored files, encrypted, named by their hash. | Yes. |
 | `local/identity` | Your identity id. | No. |
 | `local/identity-secret` | The key for stored files and dedupe. | No. |
+| `local/lock` | The folder lock. | No. |
 | `local/signing-key` | Your signing key. | No. |
 | `local/agent-key` | The agent key of this machine. | No. |
 | `local/hidden/`, `local/holds.json` | Deletion state of this copy. A lost `holds.json` starts each wait again. | No. |

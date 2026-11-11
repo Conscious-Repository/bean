@@ -93,7 +93,7 @@ func Value(r *core.Record) string {
 		out = Blob(r)
 	case r.Type == "bean.genesis" || r.Type == "bean.succession":
 		out = r.ValueKey()
-	case r.Type == "agent.pair" || r.Type == "device.pair":
+	case r.Type == "agent.pair":
 		label, _ := v["label"].(string)
 		out = strings.TrimSpace(label + " " + core.Npub(r.ValueKey()))
 	case len(v) == 1 && v["n"] == nil:

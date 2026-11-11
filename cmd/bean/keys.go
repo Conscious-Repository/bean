@@ -240,7 +240,7 @@ func printUndecided(ue *core.UndecidedError, l *core.Loaded, all bool) {
 			fmt.Fprintf(w, "  %s  %s  DELETES %s\n", r.ID[7:19], r.Imported, safe(targets(r.Targets("purges"))))
 		case r.IsDestructive():
 			fmt.Fprintf(w, "  %s  %s  CORRECTS %s to %s\n", r.ID[7:19], r.Imported, safe(targets(r.Targets("supersedes"))), safe(valueText(r)))
-		case r.Type == "agent.pair" || r.Type == "device.pair":
+		case r.Type == "agent.pair":
 			fmt.Fprintf(w, "  %s  %s  TRUSTS a key: %s\n", r.ID[7:19], r.Imported, safe(valueText(r)))
 		default:
 			claims = append(claims, r)

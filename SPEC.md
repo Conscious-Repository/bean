@@ -223,7 +223,7 @@ An interval is `{"start": time, "end": time, "precision": p}`. `end` is optional
 `start` and `end` are times.
 A time is a string that matches `^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?(Z|[+-][0-9]{2}:[0-9]{2})$` as a whole, with these ranges:
 
-- Year 0001 to 9999, month 01 to 12, a day that exists in that month (February 29 only in a leap year of the Gregorian calendar).
+- Year 0001 to 9999, month 01 to 12, a day that exists in that month. February 29 exists only in a leap year of the Gregorian calendar.
 - Hour 00 to 23, minute 00 to 59, second 00 to 59. There is no leap second.
 - Offset hour 00 to 23, offset minute 00 to 59. `-00:00` and `+00:00` mean the same as `Z`.
 
@@ -239,7 +239,7 @@ A writer puts an unparseable source time in `context.raw_time` as a string.
 ### 3.6 source
 
 `source.system` is a string of 1 to 64 bytes in UTF-8, for example `oura` or `self`.
-`source.adapter` is `name@version`, for example `bean-import-oura@1.0.0`. The verifier checks only the form: one `@`, with at least one character before and after it, and no space, TAB (U+0009), LF (U+000A), FF (U+000C) or CR (U+000D) (regular expression `^[^@\t\n\f\r ]+@[^@\t\n\f\r ]+$`). Other characters, for example U+000B and U+00A0, are allowed. Error: `bad field: source.adapter`.
+`source.adapter` is `name@version`, for example `bean-import-oura@1.0.0`. The verifier checks only the form: one `@`, with at least one character before and after it. The form has no space, TAB (U+0009), LF (U+000A), FF (U+000C) or CR (U+000D). The regular expression is `^[^@\t\n\f\r ]+@[^@\t\n\f\r ]+$`. Other characters, for example U+000B and U+00A0, are allowed. Error: `bad field: source.adapter`.
 `source.ref` is a dedupe ref (section 4.8) or null.
 `source.ref` is null for a record that the author makes directly, with no source file.
 `source.ref` is null for a device-signed record (Extension 2).
@@ -273,7 +273,7 @@ At the first failure, the verifier reports the error string and stops checking t
 
 1. The path matches `objects/<2 hex>/<62 hex>.json`. Error: `bad path`. The files and other entries are those of 7.1.
 2. The file size is at most 16 MiB. Error: `too large`.
-3. The bytes are valid UTF-8 and parse as one JSON object. No value is nested deeper than 256 levels: the record object is at depth 0, and a value inside an object or an array is one level deeper than it. Error: `bad json`.
+3. The bytes are valid UTF-8 and parse as one JSON object. No value is nested deeper than 256 levels. The record object is at depth 0. A value inside an object or an array is one level deeper than it. Error: `bad json`.
 4. The object has no duplicate keys at any depth. Error: `duplicate key`.
 5. Every number is an integer in the range -(2^53 - 1) to 2^53 - 1, or a finite double that canonicalizes (section 4.1). An integer is a number whose canonical form has no `.` and no `e`. Error: `bad number`.
 6. No string holds an escaped lone surrogate. Error: `bad string`.
@@ -342,7 +342,7 @@ A tagged key is `<alg>:<lowercase hex>`.
 | `p256` | 33-byte SEC1 compressed point (prefix 0x02 or 0x03) | 66 | Allowed for hardware-backed device keys. Verifiers MUST support it. |
 | `secp256k1` | 32-byte BIP-340 x-only public key (the Nostr public key) | 64 | Allowed for signing keys and bare-key authors, so a Nostr key can sign records. Verifiers MUST support it. A recovery key is never secp256k1. |
 
-A verifier MUST reject uppercase hex or a wrong length. Error: `bad key`. For `p256` and `secp256k1`, a verifier MUST also reject an invalid point with `bad key`; for `secp256k1`, the point is invalid when BIP-340 `lift_x` fails. For `ed25519`, a key is invalid with `bad key` when it is not the canonical encoding of a curve point (RFC 8032 5.1.3: y below p, and not x = 0 with the sign bit set), or when the point has small order ([8]A is the neutral point). This is the key check of libsodium. Vector V23 has these cases.
+A verifier MUST reject uppercase hex or a wrong length. Error: `bad key`. For `p256` and `secp256k1`, a verifier MUST also reject an invalid point with `bad key`; for `secp256k1`, the point is invalid when BIP-340 `lift_x` fails. For `ed25519`, a key is invalid with `bad key` when it is not the canonical encoding of a curve point. The canonical encoding is that of RFC 8032 5.1.3: y below p, and not x = 0 with the sign bit set. A key is also invalid with that error when the point has small order ([8]A is the neutral point). This is the key check of libsodium. Vector V23 has these cases.
 A verifier MUST reject any other tag. Error: `unsupported key algorithm`.
 
 ### 4.5 Signatures
@@ -499,13 +499,13 @@ A record signed by the head key can be valid.
 A record signed by an older chain key is valid only when the succession that ends that key seals it. This applies to claims and to destructive records.
 The succession that ends a key is the next node on the chain after the node that names the key.
 Only that succession can seal records of that key.
-`bean rotate` MUST NOT seal a record without a decision from the person. The person syncs before a rotation, so a thief's records can be in this replica, and a seal cannot be undone. If the replica holds any record of the outgoing key, and the person did not give `-seal-all`, the command MUST show those records, write nothing, and stop. `-seal-all` seals every record of the outgoing key. `-no-seal <id>` excludes one. An id that names no record of the outgoing key is an error.
+`bean rotate` MUST NOT seal a record without a decision from the person. The person syncs before a rotation, so a thief's records can be in this replica, and a seal cannot be undone. If the replica holds any record of the outgoing key, and the person did not give `-seal-all`, the command MUST show those records. In that case it MUST write nothing and MUST stop. `-seal-all` seals every record of the outgoing key. `-no-seal <id>` excludes one. An id that names no record of the outgoing key is an error.
 A record of the outgoing key also seals the targets that it names and that this replica does not hold, unless the person excludes them. A record of any other author MUST NOT cause a seal. Otherwise a stranger's record could name a record that the thief signed earlier and delivers later. DEFAULT.
 The maximum file size of a `bean.succession` or a `bean.seal` is 16 MiB. DEFAULT.
 
-Seal continuations. One succession holds about 230,000 ids. When the seal set is larger, the writer puts the first ids in the succession and the rest in `bean.seal` records (3.3), parts 1 to n, and sets `value.parts` = n on the succession. The reference writer puts 200,000 ids in each record. The ids of all parts together, with the succession's own list, are the seal set of the succession. The order and the split do not change the set.
+Seal continuations. One succession holds about 230,000 ids. When the seal set is larger, the writer puts the first ids in the succession. It puts the rest in `bean.seal` records (3.3), parts 1 to n, and sets `value.parts` = n on the succession. The reference writer puts 200,000 ids in each record. The ids of all parts together, with the succession's own list, are the seal set of the succession. The order and the split do not change the set.
 
-- A part is valid only when it names a succession on the chain, has the same `subject` and the same `kid` as that succession, and has `part` ≤ `value.parts` of the succession. Otherwise it is invalid. Error: `bad seal`. Thus only the recovery key that signed the succession can sign a part, and a part never moves to another identity or another rotation.
+- A part is valid only when it names a succession on the chain. It is valid only when it has the same `subject` and the same `kid` as that succession. It is valid only when it has `part` ≤ `value.parts` of the succession. Otherwise it is invalid. Error: `bad seal`. Thus only the recovery key that signed the succession can sign a part, and a part never moves to another identity or another rotation.
 - When the named succession is not in R, the part is held. Report `held: <id>` as a warning. It has no effect.
 - Two parts with the same `part` for one succession are both invalid. Error: `bad seal`. Only the seed holder can sign them.
 - The seal set is complete when each part number from 1 to `value.parts` has exactly one valid part. An incomplete seal set seals nothing: every record of the outgoing key is `not sealed` until the missing parts arrive. Report `incomplete seals: <succession id>` as a warning. Nothing is erased (7.6 step 5), and the records are valid again when the parts arrive.
@@ -530,15 +530,15 @@ The person rotates when a device is lost, a key is stolen, or a device leaves. S
 2. The parent is the chain head (6.3). Its position on the chain, counting the genesis as 0, is the recovery generation `g`.
 3. Check that the identity secret derived from the words equals `local/identity-secret`, and that the commitment of recovery generation `g` equals the parent's `value.recovery`. Error: `seed does not match`.
 4. If the identity is frozen (5.7), stop. Error: `compromised: <id>`.
-4a. If the identity is too new (8.2), stop with `too new: <id>` (exit 3), except in this case: every record that makes the identity too new is signed by the head key, none by a recovery key and none is a genesis. Then evaluate the identity as if those records were ungated, apply step 4 to that result, and go on. The halting records are records of the parent key in this replica, so step 6 seals them unless the person excludes them. Before the first write, check that the folder with the new succession and parts is not too new for the identity and that the succession is its head; else stop with `too new: <id>` and write nothing. This happens, for example, when the folder has a record of an unknown `v` by recovery generation `g + 1`, the key that the new succession commits to. The succession retires the head key, so the halting records are ungated (8.2 condition 3) on every verifier, in any order of arrival.
+4a. If the identity is too new (8.2), stop with `too new: <id>` (exit 3). There is one exception, this case: every record that makes the identity too new is signed by the head key. None is signed by a recovery key, and none is a genesis. Then evaluate the identity as if those records were ungated, apply step 4 to that result, and go on. The halting records are records of the parent key in this replica, so step 6 seals them unless the person excludes them. Before the first write, check that the folder with the new succession and parts is not too new for the identity. Check also that the succession is its head. Else stop with `too new: <id>` and write nothing. This happens, for example, when the folder has a record of an unknown `v` by recovery generation `g + 1`. That is the key that the new succession commits to. The succession retires the head key, so the halting records are ungated (8.2 condition 3) on every verifier, in any order of arrival.
 5. Make a new signing key.
 6. Write a succession with:
    - `refs` = `[{"rel":"succeeds","id":<parent id>}]`.
    - `value.key` = the new tagged public key.
    - `value.recovery` = the commitment to recovery generation `g + 1`.
-   - `value.sealed` = the sorted ids of every record of the parent key in this replica, valid or not, except identity records, plus the target ids of the tombstones, supersede records and holds in this replica that do not name a record of another key, minus any the person excludes. An invalid or purged record is sealed too: if its tombstone dies, it comes back valid.
+   - `value.sealed` = the sorted ids of every record of the parent key in this replica, valid or not, except identity records. Add the target ids of the tombstones, supersede records and holds in this replica that do not name a record of another key. Remove any id the person excludes. An invalid or purged record is sealed too: if its tombstone dies, it comes back valid.
 7. Sign with recovery key generation `g`. The `kid` is the recovery public key. This reveals the key.
-8. Store the new signing key in `local/`. Write in this order: `local/rotation-pending` with the succession id, `local/signing-key.next` with the new key, the seal parts (5.4), the succession, then rename `local/signing-key.next` to `local/signing-key` and remove `local/rotation-pending`. A load that finds `local/rotation-pending` and no file for the succession it names removes the parts that name that succession and the note: the rotation is undone. A load that finds `local/signing-key.next` renames it when the chain head names its key, and removes it when no chain node names its key. Thus a crash at any point leaves a folder that can write, and a folder never has a succession without its parts from its own writer.
+8. Store the new signing key in `local/`. Write in this order: `local/rotation-pending` with the succession id, `local/signing-key.next` with the new key, the seal parts (5.4), and the succession. Then rename `local/signing-key.next` to `local/signing-key` and remove `local/rotation-pending`. A load that finds `local/rotation-pending` and no file for the succession it names removes the parts that name that succession and the note. The rotation is undone. A load that finds `local/signing-key.next` renames it when the chain head names its key, and removes it when no chain node names its key. Thus a crash at any point leaves a folder that can write. A folder never has a succession without its parts from its own writer.
 9. Erase the paper seed and the recovery private keys.
 
 The identity secret does not change. See 17 for this limit.
@@ -574,11 +574,11 @@ The path of a succession S is the nodes from the genesis to its parent P. The ke
 A verifier checks S in this order:
 
 1. If `S.value.recovery` is a recovery commitment of the path, S is invalid. Error: `recovery not advanced`.
-2. S is invalid with `key reuse` when `S.value.key` is a key of the path, when the commitment to `S.value.key` is `S.value.recovery` or a recovery commitment of the path, or when `S.value.recovery` is the commitment to a key of the path.
+2. S is invalid with `key reuse` when `S.value.key` is a key of the path. S is also invalid with that error when the commitment to `S.value.key` is `S.value.recovery` or a recovery commitment of the path. S is also invalid with that error when `S.value.recovery` is the commitment to a key of the path.
 
 A genesis G is invalid with `key reuse` when the commitment to `G.value.key` is `G.value.recovery`.
 
-A recovery key of identity I signs only successions and seal parts of I. A record whose `author` is I and whose `kid` is a recovery key committed on the chain of I, and that is no succession or seal part, is invalid. Error: `key not in chain`. A record whose `author` is the recovery key itself is a bare-key claim like any other (conformance case 17c).
+A recovery key of identity I signs only successions and seal parts of I. Take a record whose `author` is I and whose `kid` is a recovery key committed on the chain of I. If it is no succession or seal part, it is invalid. Error: `key not in chain`. A record whose `author` is the recovery key itself is a bare-key claim like any other (conformance case 17c).
 
 ### 5.9 Identity secret
 
@@ -607,7 +607,7 @@ This section adds no record type.
 1. A custodian is a host that holds the signing key and the identity secret for a person, for example a hosted service. Section 5.2 applies to it. It is the one host of that identity.
 2. A copy of a secret cannot be taken back. A custodian that hands over its key or the paper seed can keep a copy. Thus a handover is not an exit.
 3. To leave a custodian, the person makes a new identity on a host that the person controls (5.2). The data is copied as new records that the new identity signs. The new records have new ids, because `author` is part of the hashed bytes (4.2).
-4. After the exit, a former custodian or another service can still write about the person with its own key, as a device (Extension 2) or an agent (item 5). It never holds the secret of the new identity.
+4. After the exit, a former custodian or another service can still write about the person with its own key. It writes as a device (Extension 2) or an agent (item 5). It never holds the secret of the new identity.
 5. An AI agent writes with its own key (`bean agent`): a bare key or its own identity. It MUST NOT hold or use the signing key of a person. Its claims about a person have `author` = the agent key and `subject` = the person, so readers can see which records an agent wrote.
 6. A frozen identity (5.7) uses the same exit as item 3.
 7. The new identity MAY write one ordinary claim with rel `about` to the genesis of the old identity, to link the two. Each re-signed copy MAY have rel `about` to its original id. The claim type is a vocabulary term (9.9), not a `bean.*` type. The core gives these claims no special meaning. A dedicated exit record is not part of v0.
@@ -764,11 +764,11 @@ These rules change no valid set, error or verify line. They say what a reader sh
 
 1. A succession that is not on a chain, and a held seal part, are not records of the identity. No step checks their keys. A reader MUST NOT show them, or list them as a reply to another record.
 2. If the local identity is too new, a command that reads MUST stop with `too new: <id>` and exit code 3. It MUST NOT show an empty list. `bean export` still writes every file (7.9).
-3. If the local identity is frozen, a command that reads MUST print its result, say on standard error that the identity is frozen, and exit with code 4. An MCP result has a `frozen` field.
-4. For a frozen identity, these rules follow what every branch at the fork agreed on, because a person who restored from a stale backup keeps everything and must not see old values come back:
-   - A correction that is `frozen` is shown in place of its target when a key on the path to the fork signed it, and either an earlier succession sealed it or every succession at the fork seals it. Otherwise the target stays, and its status names the correction.
+3. If the local identity is frozen, a command that reads MUST print its result and say on standard error that the identity is frozen. The command MUST also exit with code 4. An MCP result has a `frozen` field.
+4. For a frozen identity, these rules follow what every branch at the fork agreed on. The reason is that a person who restored from a stale backup keeps everything and must not see old values come back. The rules are:
+   - A correction that is `frozen` is shown in place of its target when both of these are true. A key on the path to the fork signed it. Either an earlier succession sealed it, or every succession at the fork seals it. Otherwise the target stays, and its status names the correction.
    - A claim of the key at the fork is shown only when every succession at the fork seals it. A thief can still sign with that key. A claim of a key below the fork is `frozen` and is not shown.
-   - A target of a `frozen` tombstone is not shown when an older key signed the tombstone, or at least one succession at the fork seals it. Any other tombstone has no effect here: otherwise one signature from a thief, with the key at the fork or a key below it, could hide the log. The bytes stay on disk.
+   - A target of a `frozen` tombstone is not shown when an older key signed the tombstone. It is also not shown when at least one succession at the fork seals it. Any other tombstone has no effect here. Otherwise one signature from a thief, with the key at the fork or a key below it, could hide the log. The bytes stay on disk.
    - A correction replaces its target only while the correction itself can be shown. A duplicate is shown when its primary cannot be. A reading must not vanish behind a record that is in doubt.
    - `bean ls -all` shows these records, marked `[in doubt]`. `bean export` writes them, and judges deletions without a record of a newer format by the key at the fork.
 
@@ -793,7 +793,7 @@ These rules change no valid set, error or verify line. They say what a reader sh
 
 Directories use mode 0700. Writers MUST write each file to a temporary name in the same directory and then rename it.
 A sync tool MUST NOT copy `local/`.
-Names that start with `.` under `objects/` and `blobs/` are not part of the log: temporary files (7.2) and what operating systems and sync tools leave (`.DS_Store`, iCloud `.icloud` stubs, `.stversions`). A verifier ignores them. Every other entry under `objects/` and `blobs/` is part of the log. A plain file one directory down is checked (3.8), and a wrong name is `bad path`. Anything else (a file directly in `objects/`, a symlink, a directory one level down, a device) is `bad path` and is not read. Paths outside `objects/` and `blobs/` are not part of the log.
+Names that start with `.` under `objects/` and `blobs/` are not part of the log. They are temporary files (7.2) and what operating systems and sync tools leave (`.DS_Store`, iCloud `.icloud` stubs, `.stversions`). A verifier ignores them. Every other entry under `objects/` and `blobs/` is part of the log. A plain file one directory down is checked (3.8), and a wrong name is `bad path`. Anything else (a file directly in `objects/`, a symlink, a directory one level down, a device) is `bad path` and is not read. Paths outside `objects/` and `blobs/` are not part of the log.
 
 ### 7.2 Write a record
 
@@ -816,16 +816,16 @@ Names that start with `.` under `objects/` and `blobs/` are not part of the log:
 Sync from replica A (source) to replica B (destination) is a set union with one exception.
 
 1. Compute the valid set of the union of A's and B's record files (section 6). Judge B's files by their bytes on disk, not a cache.
-2. Collect the valid tombstones of that union. A tombstone that only A's own view finds valid does not count. When the head key alone halts the local identity in the union (8.2), judge it without the records that halt it; otherwise none of its tombstones would count.
+2. Collect the valid tombstones of that union. A tombstone that only A's own view finds valid does not count. When the head key alone halts the local identity in the union (8.2), judge it without the records that halt it. Otherwise none of its tombstones would count.
 3. For each record file in A that B does not have, `bean.seal` files first:
    1. If the file fails a step from 1 to 15 of 3.8, do not copy it. A file with an unknown `v` stops at step 14 and passes.
    2. If a valid tombstone of A or B names it, apply 7.5. Do not copy it. This holds for a record this build cannot judge too, when the tombstone's subject is the record's `subject`.
    3. If B hides it under a hold, do not copy it.
    4. Otherwise copy it.
-   5. If B holds a file for that id that fails a step from 1 to 15 of 3.8 and the file in A passes, replace B's file.
+   5. Take the case where B holds a file for that id. If that file fails a step from 1 to 15 of 3.8 and the file in A passes, replace B's file.
 4. For each blob in A that B does not have, or that B has with a stored hash that does not match its path:
    1. If the SHA-256 of A's bytes does not match the path, do not copy it.
-   2. If only purged or hidden record files name it, do not copy it. A record file names a blob in `blobs[].hash` or `value.blob`, valid or not. If a purged or hidden record file of the union names it, copy it only when a live record of the local identity or of a paired agent names it, by the rule of 7.9 step 2. Any record can name any blob.
+   2. If only purged or hidden record files name it, do not copy it. A record file names a blob in `blobs[].hash` or `value.blob`, valid or not. If a purged or hidden record file of the union names it, copy it only in one case. The case is that a live record of the local identity or of a paired agent names it, by the rule of 7.9 step 2. Any record can name any blob.
    3. Otherwise copy it. If B has a corrupt copy, replace it atomically with A's verified bytes.
 5. Compute the valid set of B again. Apply 7.6 to new tombstones.
 
@@ -854,7 +854,7 @@ When a replica first finds a valid tombstone T for a target that it stores, also
 2. Otherwise hide the target at once, if it is not hidden yet: move it to `local/hidden/`. Hidden records are still input to the local verifier (6.2) and never sync.
 3. Record the receipt time in `local/holds.json` as `{"<T id>": {"target": "<target id>", "received": "<UTC time>"}}`.
 4. A replica MUST NOT erase a hidden target on a timer.
-5. `bean gc` erases a hidden target when a still-valid tombstone for it has a hold at least 7 days old, and drops every hold of that target. It then erases each blob that an erased target names, when no remaining record file names it. It never erases a blob that no erased record named. A file whose name is not a record path keeps no blob. `gc` erases such a file when its bytes give the id of a target it erases, or of a target that a valid tombstone of the file's subject names and that is not stored here. Only when the file's subject is the local identity, and the target is one it erases or one that a valid tombstone of the local identity names, does `gc` also erase the blobs the file names, as for that target. Any other such file is erased alone. If the local identity is too new (8.2) or frozen (5.7), or any seal set is incomplete (5.4), `gc` erases nothing. Error: `too new: <id>`, `compromised: <id>` or `incomplete seals: <ids>`. Validity can change after an update or a fork, and erasure cannot be undone. Another too-new identity does not stop `gc`. Its records are never valid (8.2), and a tombstone whose target it wrote or is about is held (6.7). So it can only hold a tombstone of another identity, never make one erase.
+5. `bean gc` erases a hidden target when a still-valid tombstone for it has a hold at least 7 days old. It also drops every hold of that target. It then erases each blob that an erased target names, when no remaining record file names it. It never erases a blob that no erased record named. A file whose name is not a record path keeps no blob. `gc` erases such a file when its bytes give the id of a target it erases. The same holds for a target that is not stored here, when a valid tombstone of the file's subject names it. `gc` also erases the blobs the file names, as for that target, only on two conditions. The file's subject is the local identity. And the target is one that `gc` erases, or one that a valid tombstone of the local identity names. Any other such file is erased alone. If the local identity is too new (8.2) or frozen (5.7), or any seal set is incomplete (5.4), `gc` erases nothing. Error: `too new: <id>`, `compromised: <id>` or `incomplete seals: <ids>`. Validity can change after an update or a fork, and erasure cannot be undone. Another too-new identity does not stop `gc`. Its records are never valid (8.2), and a tombstone whose target it wrote or is about is held (6.7). So it can only hold a tombstone of another identity, never make one erase.
 6. `bean verify` reports each hidden target as `hidden pending gc: <id>` (a warning), unless its author or subject is too new (8.2).
 
 A lost `local/holds.json` starts each hold again. Erasure is then later, never earlier.
@@ -887,23 +887,23 @@ A program MUST NOT tombstone a genesis, a succession or a tombstone.
 `local/purged-refs.jsonl` has one line per purged target.
 Each line is the canonical bytes of `["<subject>", "<source.system>", "<source.ref>"]`.
 A replica writes a line when it hides, erases or does not copy a purged target that has a non-null `source.ref`.
-`bean append` MUST skip a record whose (`subject`, `source.system`, `source.ref`) is in this file. A replica removes the line when the target comes back because its tombstone became invalid, unless another hidden record has that ref or a tombstone of that subject names a target that this replica does not hold. A line names only a ref, and an erased record cannot be checked, so the replica keeps the line when it is unsure.
+`bean append` MUST skip a record whose (`subject`, `source.system`, `source.ref`) is in this file. A replica removes the line when the target comes back because its tombstone became invalid. It does not remove the line if another hidden record has that ref. It also does not remove the line if a tombstone of that subject names a target that this replica does not hold. A line names only a ref, and an erased record cannot be checked, so the replica keeps the line when it is unsure.
 Thus a new import after a purge adds nothing on this replica.
-A replica that never had the target, or that lost this file, does not know the ref, and a new import of the same source data adds it again (17).
+A replica that never had the target, or that lost this file, does not know the ref. A new import of the same source data adds it again (17).
 
 ### 7.9 Export
 
 `bean export <dir>` writes a plaintext copy of the log for exit.
 
 1. Write each record file that is not purged or hidden to `<dir>/records/<64 hex>.json`. A record this build cannot judge counts as purged when a valid tombstone of its subject names it (6.7 holds that tombstone). Use the stored bytes. This includes records of an unknown version and records of a too-new identity: an export needs no judgment of them.
-2. Decrypt each blob that an exported record of the local identity or of an agent it paired names, and each blob that no record file names. Write the plaintext to `<dir>/blobs/<64 hex of the blob id>`. A blob that only another author's records name is not decrypted. A record that this build cannot judge (an unknown version, a too-new identity) counts as the local identity's only when 8.2 would trust its `kid`: the head key of the chain, or a recovery key that a chain node commits to. A retired key does not count: it is the key a thief holds. It counts as a paired agent's only when its `kid` is its `author`. For a too-new identity, a pairing counts when the identity's `agent.pair` record has such a `kid` and no other such record supersedes it. When the head key alone halts the local identity (8.2), judge this step and step 1 without the records that halt it. If a blob is not available, continue. If a record of the local identity or of a paired agent names it, add its id to `missing_blobs` in the manifest (sorted); otherwise count it in `missing_blobs_of_others`. One file MUST NOT stop an exit.
-3. Write the stored bytes of each record file that fails a step from 1 to 15 of 3.8 to `<dir>/invalid/<its path>`, and list them in `invalid_records` as `{"path", "error"}`. A file whose id is hidden, or is the target of any tombstone in the log, is not written: list it in `withheld_records` as `{"path", "reason"}`. The id is the one in its path, or, for a file whose name is not a record path (a sync tool's conflict copy), the id its bytes give (4.2). List blobs that no record names in `unreferenced_blobs`, and stored blobs not decrypted in `not_exported_blobs` as `{"id", "reason"}`.
+2. Decrypt each blob that an exported record of the local identity or of an agent it paired names. Decrypt also each blob that no record file names. Write the plaintext to `<dir>/blobs/<64 hex of the blob id>`. A blob that only another author's records name is not decrypted. A record that this build cannot judge (an unknown version, a too-new identity) counts as the local identity's only when 8.2 would trust its `kid`. That key is the head key of the chain, or a recovery key that a chain node commits to. A retired key does not count: it is the key a thief holds. It counts as a paired agent's only when its `kid` is its `author`. For a too-new identity, a pairing counts when the identity's `agent.pair` record has such a `kid` and no other such record supersedes it. When the head key alone halts the local identity (8.2), judge this step and step 1 without the records that halt it. If a blob is not available, continue. If a record of the local identity or of a paired agent names it, add its id to `missing_blobs` in the manifest (sorted). Otherwise count it in `missing_blobs_of_others`. One file MUST NOT stop an exit.
+3. Write the stored bytes of each record file that fails a step from 1 to 15 of 3.8 to `<dir>/invalid/<its path>`. List them in `invalid_records` as `{"path", "error"}`. A file whose id is hidden, or is the target of any tombstone in the log, is not written: list it in `withheld_records` as `{"path", "reason"}`. The id is the one in its path. For a file whose name is not a record path (a sync tool's conflict copy), the id is the one its bytes give (4.2). List blobs that no record names in `unreferenced_blobs`, and stored blobs not decrypted in `not_exported_blobs` as `{"id", "reason"}`.
 4. Write `<dir>/manifest.json` with the canonical bytes of `{"spec": "bean-v0", "identity": <id>, "records": <count>, "blobs": [{"id": <blob id>, "plaintext_sha256": <hex>, "media_type": <string>}]}`, plus the lists above when they are not empty. Sort `blobs` by `id`. The `spec` string names the export format. It does not change with the software version.
 
-After it writes, the command fails with `too new: <id>` if the local identity is too new, or with `blob missing: <id>` if a blob is missing that the local identity or an agent it paired names. A blob that another author names does not fail it: anyone can name an absent blob.
+After it writes, the command fails with `too new: <id>` if the local identity is too new. After it writes, it also fails with `blob missing: <id>` if a blob is missing that the local identity or an agent it paired names. A blob that another author names does not fail it: anyone can name an absent blob.
 The export is not encrypted. The CLI MUST say this before it writes.
-`bean import-export <dir>` reverses the export for a log with the same identity secret. It reads `manifest.json` first and refuses an export of another identity. It needs only the `identity` field and reads the file one token at a time. It applies 7.4 steps 2 and 3.2 to the union of the log and the export, so a record the person deleted does not come back. A blob that a deleted record names is not imported, unless a live record of the local identity or of a paired agent names it, by the rule of step 2.
-It encrypts each blob again. The deterministic encryption gives the same blob ids. The reference CLI refuses symbolic links, special file entries, record exports over 16 MiB, a manifest over 4 GiB, one manifest token over 1 MiB or nesting deeper than 16, and plaintext blob exports over 256 MiB. It confines file reads to the selected export directory. These are CLI resource limits, not core validity rules.
+`bean import-export <dir>` reverses the export for a log with the same identity secret. It reads `manifest.json` first and refuses an export of another identity. It needs only the `identity` field and reads the file one token at a time. It applies 7.4 steps 2 and 3.2 to the union of the log and the export. So a record the person deleted does not come back. A blob that a deleted record names is not imported, unless a live record of the local identity or of a paired agent names it. This is the rule of step 2.
+It encrypts each blob again. The deterministic encryption gives the same blob ids. The reference CLI refuses symbolic links, special file entries and record exports over 16 MiB. It also refuses a manifest over 4 GiB, one manifest token over 1 MiB or nesting deeper than 16. It also refuses plaintext blob exports over 256 MiB. It confines file reads to the selected export directory. These are CLI resource limits, not core validity rules.
 
 ### 7.10 Caches
 
@@ -913,11 +913,11 @@ The reference implementation has one cache: the record files that it already pro
 
 ### 7.11 Lock
 
-Every command that writes to the folder, and `verify`, holds an exclusive lock on `local/lock` for its whole run. The reference implementation uses `flock`. Two commands on one folder thus never interleave: two rotations cannot fork the identity, and a purge cannot race a sync. A folder that cannot be written (read-only media) is read without the lock and without changes. The lock is local: it does not protect two hosts that write to one network or synced folder at once, and some network file systems ignore `flock`. The reference implementation has no cross-process lock on Windows; only one process at a time may use a folder there. These are known limits (17).
+Every command that writes to the folder, and `verify`, holds an exclusive lock on `local/lock` for its whole run. The reference implementation uses `flock`. Two commands on one folder thus never interleave: two rotations cannot fork the identity, and a purge cannot race a sync. A folder that cannot be written (read-only media) is read without the lock and without changes. The lock is local. It does not protect two hosts that write to one network or synced folder at once. Some network file systems ignore `flock`. The reference implementation has no cross-process lock on Windows; only one process at a time may use a folder there. These are known limits (17).
 
 ### 7.12 Write checks
 
-A write MUST NOT return an id for a record that the verifier of the same folder rejects. A copy that has `local/` but no genesis yet can write. Its records are `unresolved author` until the genesis arrives, and `verify` says `own identity missing`. While the own identity has no chain, `gc` refuses and no hidden target is restored. `append`, `add`, `purge` and the agent writes refuse when the author identity is too new (`too new: <id>`), frozen (`compromised: <id>`), has an invalid genesis in this folder, or when the local signing key is not the chain head key (`retired key: ...`). `append` refuses identity records (`bad type`). `SignRecord` refuses strings that are not UTF-8 and numbers that are not finite (`bad string`, `bad number`).
+A write MUST NOT return an id for a record that the verifier of the same folder rejects. A copy that has `local/` but no genesis yet can write. Its records are `unresolved author` until the genesis arrives, and `verify` says `own identity missing`. While the own identity has no chain, `gc` refuses and no hidden target is restored. `append`, `add`, `purge` and the agent writes refuse when the author identity is too new (`too new: <id>`) or frozen (`compromised: <id>`). They also refuse when the author identity has an invalid genesis in this folder. They also refuse when the local signing key is not the chain head key (`retired key: ...`). `append` refuses identity records (`bad type`). `SignRecord` refuses strings that are not UTF-8 and numbers that are not finite (`bad string`, `bad number`).
 
 ## 8. Versioning
 
@@ -938,7 +938,7 @@ A verifier MUST NOT interpret a record whose `v` it does not know.
 The record reached step 14 of 3.8, so its envelope, id, signature and bytes are good. The affected identity is:
 
 1. For `bean.genesis`: the record's own id, when `author` = `kid`.
-2. For other `bean.*` types: the `author` field I, when I has a genesis in R and `kid` is the head key of I or a recovery public key whose commitment (4.6) is the `value.recovery` of a node on the chain of I. The chain is followed from the genesis through nodes with one child; at a fork the fork point is the head (6.3 step 5). When the chain is the genesis alone, the head key is the genesis key.
+2. For other `bean.*` types: the `author` field I, when I has a genesis in R. It also needs `kid` to be one of two keys. One is the head key of I. The other is a recovery public key whose commitment (4.6) is the `value.recovery` of a node on the chain of I. The chain is followed from the genesis through nodes with one child; at a fork the fork point is the head (6.3 step 5). When the chain is the genesis alone, the head key is the genesis key.
 3. Otherwise no identity is too new. If `author` is an identity with a genesis in R that is not too new, report `ungated: <id>` as a warning. Skip the record.
 
 Only the head key or the seed holder can change the rules for an identity. A rotated-out key, a stranger or a forged file cannot halt it. There is no `too new: log`.
@@ -988,7 +988,7 @@ If it has no `subject`, `bean append` sets the local identity id.
 ### 9.3 Blob first
 
 1. Store the raw source file as a blob before any record (`bean blob put <file>` prints the blob id). DEFAULT.
-2. Put `{"hash": <blob id>, "role": "raw-export", "media_type": <type>}` in `blobs` of each record from that file.
+2. Put `{"hash": <blob id>, "role": "raw-export", "media_type": <type>}` in `blobs` of the one record that keeps that file. Each other record from the file names it by its SHA-256 in `context`, not in `blobs`. Then a purge of the record that keeps the file erases the file. DEFAULT.
 
 ### 9.4 Granularity
 
@@ -1007,16 +1007,16 @@ The adapter writes the HMAC input array (4.8) as `source.ref_input`.
 - that triple is a purged ref (7.8), or
 - an earlier line of the same input has that triple.
 
-If the writer's records with that triple never had the `type`, `value` and `times.observed` of the new record, or no current record of the triple has its `type`, the source changed the reading. A lab's corrected report, an older report, a parser bug and two sources that share an id all look like this, so a program MUST NOT replace the value by itself and MUST NOT skip it in silence. `bean append` MUST skip it, name it on standard error, and exit 1 after the rest of the input.
+The source changed the reading in two cases. In the first case, the writer's records with that triple never had the `type`, `value` and `times.observed` of the new record. In the second case, no current record of the triple has its `type`. A lab's corrected report, an older report, a parser bug and two sources that share an id all look like this. So a program MUST NOT replace the value by itself and MUST NOT skip it in silence. `bean append` MUST skip it, name it on standard error, and exit 1 after the rest of the input.
 
-`bean append -corrections` is the person's word that the input is newer and right. It writes the new record with a `supersedes` ref to every current record of that triple, when a current record has the type, the observed time is the same and the value is not empty (`{"n": null}`). Otherwise it reports the reading as before: a different observed time may be another reading under the same id, as when two files number their rows alike. A value that the triple has had with that type and time, under a type a current record has, is always skipped, so an old report cannot bring its value back. A record of another type or time is never skipped in silence, even with the same value. In one input, the first line for a triple decides; a later line with the same triple and the same type, value and time is skipped, and one with another is an error that stops the input.
+`bean append -corrections` is the person's word that the input is newer and right. It writes the new record with a `supersedes` ref to every current record of that triple. It does so when a current record has the type, the observed time is the same and the value is not empty (`{"n": null}`). Otherwise it reports the reading as before. A different observed time may be another reading under the same id, as when two files number their rows alike. A value that the triple has had with that type and time, under a type a current record has, is always skipped. So an old report cannot bring its value back. A record of another type or time is never skipped in silence, even with the same value. In one input, the first line for a triple decides. A later line with the same triple and the same type, value and time is skipped. A later line with the same triple and a different type, value or time is an error that stops the input.
 
 `bean append` reports the count of added and skipped records, and how many of the added records are new values. Skipped counts every line not written: one this section says to skip, and each one named on standard error. DEFAULT.
 
 ### 9.6 Unknown values
 
 An adapter MUST write null when the source has no value for a time.
-An adapter MUST put an unparseable time in `context.raw_time` and set `times.observed` to null, or refuse the input. A tuple ref (4.8) does not hold `context.raw_time`, so readings that differ only in an unparseable time get refs by their order, and a re-export with one row more moves them. An adapter whose ref is a tuple SHOULD refuse. The reference CSV importer refuses with `-blob`.
+An adapter MUST put an unparseable time in `context.raw_time` and set `times.observed` to null, or refuse the input. A tuple ref (4.8) does not hold `context.raw_time`. So readings that differ only in an unparseable time get refs by their order. A re-export with one row more moves them. An adapter whose ref is a tuple SHOULD refuse. The reference CSV importer refuses with `-blob`.
 An adapter MUST NOT invent values.
 
 ### 9.7 Parser fixes
@@ -1026,8 +1026,8 @@ When the fixed record keeps the same HMAC input, its dedupe ref is the same as t
 
 ### 9.8 Adapters
 
-The reference implementation has `bean-import-csv` and `bean-import-lab`. Adapters for Apple Health, Oura and Whoop are open (Appendix).
-The first planned source is Whoop: JSON from the Whoop API, fetched on a schedule by a separate job (9.10), stored as a blob first (9.3), then parsed. Its field mapping and native ids come from real responses, not from memory.
+The reference implementation has `bean-import-csv`, `bean-import-lab`, `bean-import-apple-health` and `bean-import-nhanes`. Adapters for Oura and Whoop are open (Appendix).
+An API source such as Whoop gives JSON. A separate job fetches it on a schedule (9.10), stores it as a blob first (9.3), then parses it. Its field mapping and native ids come from real responses, not from memory.
 Each adapter document MUST say which source field is the native id, or that the source has none.
 
 ### 9.9 Vocabulary and uncertainty
@@ -1067,7 +1067,7 @@ Every command takes `-dir <path>`. The default is `$BEAN_DIR`, then the current 
 Commands write results to standard output and errors to standard error.
 An error line is `bean: <error string>`.
 Text output writes control characters, line and paragraph separators and bidirectional controls from records and file names as `\xNN` or `\uNNNN`. So a record cannot fake an output line or control the terminal. JSON output (`ls -json`, `bean mcp`) uses JSON escapes.
-Every command that loads the log applies the hold rules (7.6) first. A hidden target is restored only when every tombstone that hid it is invalid; a tombstone that is unresolved, held, too new or missing keeps it hidden.
+Every command that loads the log applies the hold rules (7.6) first. A hidden target is restored only when every tombstone that hid it is invalid. A tombstone that is unresolved, held, too new or missing keeps it hidden.
 
 Exit codes:
 
@@ -1091,7 +1091,7 @@ Verify output lines:
 
 Lines are sorted by their ASCII bytes, with the summary line last.
 
-`<id or path>` is the path of the file, relative to the log folder (`objects/ab/<62 hex>.json`), for an error from 3.8 steps 1 to 15, and the record id for an error from section 6.
+`<id or path>` is the path of the file, relative to the log folder (`objects/ab/<62 hex>.json`), for an error from 3.8 steps 1 to 15. It is the record id for an error from section 6.
 
 The summary counts:
 
@@ -1143,8 +1143,8 @@ Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <
 `bean rotate [-list] [-seal-all] [-no-seal <id>]... [-no-seal-file <file>] [-nostr new|<file>]`
 
 - Input: the 24 words on standard input. Numbering and case are ignored. `-nostr` selects a new secp256k1 key, as for `init`. The nsec comes from a file, because standard input carries the words.
-- Action: sections 5.4 and 5.5. Without `-seal-all`, if this replica holds a record of the outgoing key, show the deletions, corrections, pair claims and claims that replace a duplicate in full, with every record that they name, and a summary of the claims on standard error, do not read the words, write nothing, and exit 1. `-list` shows every record, writes nothing, and exits 0. `-seal-all` seals every record of the outgoing key in this replica except the ids that `-no-seal` or the lines of `-no-seal-file` name.
-- Output: one line `sealed <id>` or `not sealed <id>` per record of the outgoing key, then one line `seal part <id>` per seal continuation (only above the limit of one succession), then one line `past halt <id>` per record that halted the identity (5.5 step 4a), then `rotated to <tagged key>`, then `sealed <n>`. Before reading input, print `sync all devices before you rotate` to standard error.
+- Action: sections 5.4 and 5.5. Without `-seal-all`, if this replica holds a record of the outgoing key, do these things. Show the deletions, corrections, pair claims and claims that replace a duplicate in full, with every record that they name. Show a summary of the claims on standard error. Do not read the words, write nothing, and exit 1. `-list` shows every record, writes nothing, and exits 0. `-seal-all` seals every record of the outgoing key in this replica except the ids that `-no-seal` or the lines of `-no-seal-file` name.
+- Output: one line `sealed <id>` or `not sealed <id>` per record of the outgoing key. Then one line `seal part <id>` per seal continuation (only above the limit of one succession). Then one line `past halt <id>` per record that halted the identity (5.5 step 4a). Then `rotated to <tagged key>`. Then `sealed <n>`. Before reading input, print `sync all devices before you rotate` to standard error.
 - Errors: `undecided: ...`, `input missing: <id> is not a record of the key you are replacing`, `ambiguous id: <id>`, `seed does not match`, `compromised: <id>` (exit 4), `key reuse`.
 
 `bean restore [-list] [-seal-all] [-no-seal <id>]... [-no-seal-file <file>] [-nostr new|<file>] [-identity <id>]`
@@ -1156,7 +1156,7 @@ Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <
 
 `bean migrate [-also <id>]... [-also-file <file>] [-nostr new|<file>] <empty folder>`, `bean migrate -list`
 
-- Action: only for a frozen local identity, also past a record of a newer format by a key at the fork. Make a new identity in the folder. Write each record of the person that `ls` shows as a new record of the new identity: signing with the new key says that the person stands behind it, so an agent's, a stranger's and a claim in doubt do not move. `-also <id>` and `-also-file <file>` also move a claim of the person in doubt, for example what they logged after the fork. Two moved records never share a ref: what `ls` shows goes first. `-list` shows what stays behind and writes nothing. A reader takes the time of a moved record with no `times.observed` from `context.migrated_imported`. Encrypt its blobs again under the new key. Put the old id in `context.migrated_from` and the old `times.imported` in `context.migrated_imported`. If one side of the fork corrected the record, put the corrections in `context.migrated_disputed_by`. Keep `about` refs between moved records, and name a link that cannot move in `context.migrated_about`. Nothing links the two identities by signature: after a fork, two parties hold the seed.
+- Action: only for a frozen local identity, also past a record of a newer format by a key at the fork. Make a new identity in the folder. Write each record of the person that `ls` shows as a new record of the new identity. Signing with the new key says that the person stands behind it. So an agent's, a stranger's and a claim in doubt do not move. `-also <id>` and `-also-file <file>` also move a claim of the person in doubt, for example what they logged after the fork. Two moved records never share a ref: what `ls` shows goes first. `-list` shows what stays behind and writes nothing. A reader takes the time of a moved record with no `times.observed` from `context.migrated_imported`. Encrypt its blobs again under the new key. Put the old id in `context.migrated_from` and the old `times.imported` in `context.migrated_imported`. If one side of the fork corrected the record, put the corrections in `context.migrated_disputed_by`. Keep `about` refs between moved records, and name a link that cannot move in `context.migrated_about`. Nothing links the two identities by signature: after a fork, two parties hold the seed.
 - Output: `identity <id>`, the 24 new words, then `migrated <r> records, <b> blobs, <m> blobs missing`, then lines that count what is disputed and what it left out.
 - Errors: `not initialized`, `not frozen: ...`, `migrate folder not empty`, `too new: <id>` (exit 3).
 
@@ -1192,12 +1192,12 @@ Warning strings: `held: <id>`, `unresolved author: <id>`, `unresolved subject: <
 `bean import-export <dir>`
 
 - Action: section 7.9 reverse. The log MUST have the same identity secret.
-- Output: `added <r> records, <b> blobs`.
+- Output: `added <r> records, <b> blobs, refused <n> purged`.
 
 `bean-import-<source> [flags] <file>`
 
 - Output: JSONL partial records (9.2) on standard output.
-- `bean-import-csv -type <type> -system <system> -blob <blob id> [-unit <unit>] <file.csv>` reads a header row. It uses column `value`, optional column `time` (a time of 3.5; with `-blob` any other text refuses the file, without it the text goes to `context.raw_time`) and optional column `id` (native id, once per file). Get `<blob id>` from `bean blob put <file.csv>` first.
+- `bean-import-csv -type <type> [-system <system>] [-blob <blob id>] [-unit <unit>] <file.csv>` reads a header row. It uses column `value`, optional column `time` and optional column `id`. The time column is a time of 3.5. With `-blob` any other text refuses the file. Without it the text goes to `context.raw_time`. The id column is a native id, once per file. Get `<blob id>` from `bean blob put <file.csv>` first.
 
 Test clock: the reference CLI reads the current time from `$BEAN_NOW` (RFC 3339) when it is set. Tests use it for holds and `times.imported`. DEFAULT.
 
@@ -1366,7 +1366,7 @@ The tests are numbered in the order they were added. The tests of the extensions
     - Setup: test 39 with one part removed.
     - Expected: `incomplete seals: <succession id>`. Every claim of the old key is `not sealed`. `gc` fails with `incomplete seals`. When the part comes back, every claim is valid.
 41. Duplicate and forged parts.
-    - Setup: test 39 plus a second part 1 signed by the recovery key, and parts signed by a signing key, by another identity's recovery key, by the next recovery key, with a part number above n, and with a claim as target.
+    - Setup: test 39 plus a second part 1 signed by the recovery key. It also has parts signed by a signing key, by another identity's recovery key and by the next recovery key. It also has parts with a part number above n and with a claim as target.
     - Expected: the forged parts are `bad seal` and change nothing. The two parts 1 are `bad seal` and the set is incomplete.
 42. Out of order.
     - Setup: sync the succession first, then the parts one by one.
@@ -1412,17 +1412,17 @@ The independent checks are `tools/checkvectors.py`, `tools/checksecp256k1.py` an
 | V19 | Retired-key seals | A fixed identity, a rotation that seals some claims, and claims of the retired key | Valid or `not sealed` per record. Published. |
 | V20 | Duplicates per author | Records of two authors with one ref | The duplicate lines. Published. |
 | V21 | Seal continuations | A fixed identity, a succession with 2 parts, a duplicate part, a forged part and a part for a missing succession | Valid, `bad seal`, `not sealed`, held or incomplete per record and per scenario. Published. |
-| V22 | Too-new gate and going past a halt | One identity with records of `v` = 99 by the head key, a retired key, recovery keys 0 and 1 and a stranger, with and without a rotation | Too-new identities, `ungated` ids, valid ids, and the halting records that 5.5 step 4a passes, per scenario. Published. |
+| V22 | Too-new gate and going past a halt | One identity with records of `v` = 99 by the head key, a retired key, recovery keys 0 and 1 and a stranger. The test runs with and without a rotation | Too-new identities, `ungated` ids, valid ids, and the halting records that 5.5 step 4a passes, per scenario. Published. |
 | V18 | secp256k1 | A fixed secret key and a record id, created_at 0 and 1761566400, zero aux | `kid`, npub, nsec, wrapper bytes and id, `sig`, and five rejects. Published. Checked by `tools/checksecp256k1.py`. |
-| V23 | Ed25519 edge cases | A good signature, `S` = `S` + L, the small-order identity key with one signature for two ids, a non-canonical encoding of it, and a key that is not a point | `bad key` or not, and accept or `bad signature`, as 4.4 and 4.5 say. Published. Conformance case 18d adds a small-order `R` under a mixed-order key. |
-| V24 | Conformance folders | Folders of record files in `vectors/conformance/`, written by `tools/second/cases.py`: nesting depth, empty arrays, byte and code point lengths, whole-string patterns, held and not-sealed order, too-new identities, recovery keys as signing keys, keys and recovery commitments that come back on a path, Ed25519 keys, unknown `v`, old types | `expected.txt`: the verify lines (12.1) and the exit code of a replica with no local identity. Published. |
+| V23 | Ed25519 edge cases | A good signature, `S` = `S` + L, the small-order identity key with one signature for two ids. A non-canonical encoding of it, and a key that is not a point | `bad key` or not, and accept or `bad signature`, as 4.4 and 4.5 say. Published. Conformance case 18d adds a small-order `R` under a mixed-order key. |
+| V24 | Conformance folders | Folders of record files in `vectors/conformance/`, written by `tools/second/cases.py`. They cover nesting depth, empty arrays, byte and code point lengths, and whole-string patterns. They also cover held and not-sealed order, too-new identities and recovery keys as signing keys. They also cover keys and recovery commitments that come back on a path, Ed25519 keys, unknown `v`, old types | `expected.txt`: the verify lines (12.1) and the exit code of a replica with no local identity. Published. |
 
 Hand-built AES-SIV code MUST also pass the RFC 4493 and RFC 5297 Appendix A vectors (4.9). The HKDF code MUST pass the RFC 5869 Appendix A vectors.
 
 ## 15. Security considerations
 
 - Key theft. A thief with the head key can add claims, supersede and tombstone. Recovery with the paper seed ends this. Every record of the thief that the person does not seal becomes invalid, and the retired key cannot add valid records after the rotation. Records the thief wrote and the person synced before the rotation are in the list that the rotation shows. A seal cannot be undone, so nothing is sealed without the person's decision (5.4).
-- Forged identity records. No step checks the key of a succession that is not on a chain, so any key can write one that names the person as its author. It stays valid in the verify output, as a held record. A reader MUST NOT show it as the person's (6.8).
+- Forged identity records. No step checks the key of a succession that is not on a chain. So any key can write one that names the person as its author. It stays valid in the verify output, as a held record. A reader MUST NOT show it as the person's (6.8).
 - Paper seed theft. The seed holder can recover and take the identity. If the owner also recovers from the same parent, the identity freezes. There is no way back from a freeze in v0.
 - Seed exposure. Devices never store the seed. `init`, `rotate` and `restore` MUST erase it from memory after use, as far as the language allows.
 - No trusted time. Validity never uses a clock. Only the delete hold uses the local clock, and it never changes validity.
@@ -1455,8 +1455,8 @@ Hand-built AES-SIV code MUST also pass the RFC 4493 and RFC 5297 Appendix A vect
 9. A frozen identity cannot recover. `bean migrate` starts a new identity from what the frozen one shows. Nothing links the two by signature.
 10. A record of the head key that the rotating copy does not hold is not sealed, so the rotation makes it invalid (5.4).
 11. The folder lock is local (7.11).
-12. Every command reads and checks the whole log. Time and memory grow with the number of records: about 1 s and 0.2 GB of live heap at 50,000 records on a laptop-class machine. Batch dense series (9.4).
-13. A thief with the head signing key can halt the identity with one `bean.*` record of an unknown `v` (8.2) until the person rotates with the paper seed (5.5 step 4a). Until then every copy that has the record refuses writes for the identity. When the fork point of a frozen identity signs the halt, `verify` reports `too new`, not `compromised`; `rotate` reports `compromised`.
+12. Every command reads and checks the whole log. Time and memory grow with the number of records. At 50,000 records a check takes about 3 s on a 4-core virtual machine (measured 2026-11-10), and about 0.2 GB of live heap. Batch dense series (9.4).
+13. A thief with the head signing key can halt the identity with one `bean.*` record of an unknown `v` (8.2). The halt lasts until the person rotates with the paper seed (5.5 step 4a). Until then every copy that has the record refuses writes for the identity. When the fork point of a frozen identity signs the halt, `verify` reports `too new`, not `compromised`; `rotate` reports `compromised`.
 
 ## 18. Out of scope
 

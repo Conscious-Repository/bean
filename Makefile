@@ -19,7 +19,7 @@ help:
 	@echo "make example       run examples/blood offline, on synthetic reference files"
 	@echo "make differential  compare this build with OLD (default origin/main)"
 	@echo "make fuzz          run each fuzz target for FUZZTIME (default 2m)"
-	@echo "make smoke         build a large log and time the commands"
+	@echo "make smoke         run the end-to-end and adversarial suite, with timings on a large log"
 
 check: fmt vet build test lint vuln prose vectors second compare bundles pagetest example differential demo
 

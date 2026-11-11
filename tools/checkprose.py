@@ -12,7 +12,8 @@ How it reads Markdown: a fenced block, an indented block, a heading and a
 table's rule line are not prose. A list item and a table cell each start a
 new sentence. A code span is one word, and so is a link's text plus its
 target. A sentence ends at ". ", "? " or "! " before a capital letter, a
-digit, a quote, a bracket, a code span or the word bean.
+digit, a quote, a bracket, a code span or the word bean. A run of code spans
+with commas between them is a list of literals, not a sentence.
 
 docs/DECISIONS.md is not checked: it is a dated log, and an entry is not
 rewritten after the fact.
@@ -81,8 +82,10 @@ def main(argv):
     over = 0
     for path in argv[1:]:
         for n, s in sentences(path):
-            k = len(words(s))
-            if k > limit:
+            w = words(s)
+            k = len(w)
+            # A run of code spans and commas is a list of literals, not prose.
+            if k > limit and not all(re.fullmatch(r"CODE[,.;]?", x) for x in w):
                 over += 1
                 print("%s:%d: %d words: %s" % (path, n, k, s))
     if over:

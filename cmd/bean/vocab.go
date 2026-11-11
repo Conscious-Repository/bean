@@ -70,6 +70,9 @@ func (v vocab) allows(typ string) bool {
 }
 
 // setup are the pairing types; a person writes them, never an agent.
+// device.pair is only a name kept free: no code writes or reads one until
+// device capture is built (docs/EXTENSIONS.md 11), and a personal term must
+// not take it before then.
 var setup = []string{"agent.pair", "device.pair"}
 
 // takenTerm reports whether a personal term would redefine a built-in

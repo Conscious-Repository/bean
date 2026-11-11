@@ -53,7 +53,7 @@ func StatedDigest(r *core.Record, blob string) string {
 // identity records and pairings travel as proof, and a deletion or the
 // record of a share is not shared.
 func NeverListed(r *core.Record) bool {
-	return r.IsIdentity() || r.Type == "bean.tombstone" || r.Type == "agent.pair" || r.Type == "device.pair" || r.Type == ShareType
+	return r.IsIdentity() || r.Type == "bean.tombstone" || r.Type == "agent.pair" || r.Type == ShareType
 }
 
 // OnChain reports an identity record of the person that their chain holds.
@@ -275,14 +275,22 @@ func Check(in Input) Result {
 	// identity records and pairings that the share record names. A record
 	// that an agent or another key signed is valid, and counted apart: the
 	// person chose to share it, and did not write it.
-	paired := map[string]string{} // key -> the label the person gave it
-	for id := range proof {
+	// A key that the person paired under two labels, on two copies, shows
+	// under both, in the order of the pairings' ids: the same bundle reads
+	// the same on every check.
+	paired := map[string]string{} // key -> the labels the person gave it
+	for _, id := range slices.Sorted(maps.Keys(proof)) {
 		if r := rp.Records[id]; r != nil && IsPairing(r, person) && rp.Valid[id] {
 			label, _ := r.Value["label"].(string)
 			if label == "" {
 				label = "agent"
 			}
-			paired[r.ValueKey()] = label
+			switch has := paired[r.ValueKey()]; {
+			case has == "":
+				paired[r.ValueKey()] = label
+			case !slices.Contains(strings.Split(has, ", "), label):
+				paired[r.ValueKey()] = has + ", " + label
+			}
 		}
 	}
 	byPerson, byAgent, byOther := 0, 0, 0
@@ -386,7 +394,9 @@ func Check(in Input) Result {
 		fmt.Sprintf("signed: %d by the person, %d by an agent the person paired, %d by another key", byPerson, byAgent, byOther),
 		fmt.Sprintf("corrections: %d of the listed records replace an earlier record, which is not in the bundle", corrections),
 	)
-	if n, _ := share.Context["note"].(string); n != "" {
+	// The person's note is shown only with a bundle that passed: on a
+	// failed one it could say "bundle ok" above the verdict.
+	if n, _ := share.Context["note"].(string); n != "" && len(res.Problems) == 0 {
 		res.Head = append(res.Head, "note: "+n)
 	}
 	for _, key := range slices.Sorted(maps.Keys(paired)) {

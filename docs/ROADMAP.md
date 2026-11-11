@@ -1,6 +1,6 @@
 # Roadmap
 
-What comes next. Work that is done is in the git history, and the reasons are in [DECISIONS.md](DECISIONS.md). Nothing here is final.
+What is done in the first loop, and what comes next. Earlier work is in the git history, and the reasons are in [DECISIONS.md](DECISIONS.md). Nothing here is final.
 
 ## What bean is for
 
@@ -41,7 +41,7 @@ In order. Each step is done only when its test passes.
    - It says where a value lies in a sample. It does not diagnose, flag risk or advise.
    - Same inputs, same bytes.
 4. **Independent reproduction. Done.**
-   - `tools/compare/reproduce.py` (Python, pandas) computes every number of a saved claim again from the claim, the reading and the files. It shares no code with bean and has no table of tests; it knows the method and the files' digests.
+   - `tools/compare/reproduce.py` (Python, pandas) computes every number of a saved claim again from the claim, the reading and the files. It shares no code with bean. It holds the same tables as bean: the tests, the weights, the caveats and the files' digests. A test keeps them equal.
    - `make compare` fails if one number differs, in CI on synthetic files; with `BEAN_NHANES_DIR` it runs on CDC's files.
 5. **`bean share` and `bean check-bundle`. Done.**
    - `bean share -out <folder> <ids> | -type <type>` writes the chosen records, the records they are about, and the identity records that verify them. It adds one `share` record, signed by the person, that lists exactly what the bundle holds. Files go only with `-files`, as plaintext named by SHA-256 (DECISIONS 251, [SHARE.md](SHARE.md)).
@@ -58,11 +58,11 @@ Not this week: Apple Health readings beyond what exists, `bean-import-csv -map`,
 
 ## What it is for, and where it stands
 
-bean is meant to become the canonical log of what a person's measuring hardware acquires. Until that hardware is here, bean has to be worth using for what people already have. They import it, share parts of it with a doctor or a peer in a way they can check, and compare it with public data. Measured against that on 2026-11-10 (DECISIONS 262 to 268):
+bean is meant to become the canonical log of what a person's measuring hardware acquires. Until that hardware is here, bean has to be worth using for what people already have. They import it, share parts of it with a doctor or a peer in a way they can check, and compare it with public data. Measured against that on 2026-11-11 (DECISIONS 262 to 273):
 
 | Use | Today | What is missing first |
 |---|---|---|
-| Import what exists | Works: two lab layouts, Apple Health, CSV. | More layouts, each from a real file. |
+| Import what exists | Works: two lab layouts, Apple Health, CSV. A CSV needs times with an offset, which few spreadsheets write. | More layouts, each from a real file. A time zone flag for CSV. |
 | Compare with public data | Works for twelve blood tests, on files the person downloads. | The reference pack below, so that nothing large is downloaded. |
 | Share with a peer | Works with friction: each reads the other's bundle, in a browser or with bean or Python; nothing sets two people's results side by side. | A bundle encrypted to its reader. |
 | Share with a doctor | Works with friction: the doctor opens one page in a browser and chooses the folder or its zip file, with no install. The page has to reach them first: today the person builds it (`make page`) and sends it along. A page that comes with a bundle is only as good as its sender. | The page published with a release, with its SHA-256. |
@@ -85,7 +85,7 @@ Not now: computing on encrypted values (homomorphic encryption, multi-party comp
 
 The first question a person asks is not "where is my cholesterol". It is "how do I compare with people like me, who eat what I eat". The rule-based cohort is the start. In order of value for the effort:
 
-- **More tests.** Each is one row in `internal/nhanes`, from the file's own label and a real report's name for the test. Next: the biochemistry profile, hs-CRP, ferritin, vitamin D. Fasting tests (glucose, triglycerides, LDL, insulin) need the fasting weight first. Quest's names come with its importer.
+- **More tests.** Each is one row in `internal/nhanes`, from the file's own label and a real report's name for the test. Next: the biochemistry profile, hs-CRP, ferritin, vitamin D. Fasting tests (glucose, triglycerides, LDL, insulin) need the fasting weight first.
 - **More people.** One cycle has about 9,000 people, so three rules often leave fewer than 30. Pool cycles (2017 to March 2020 is published as one file set), with the weights CDC gives for pooling.
 - **Your own food as the rule.** Work out the ranges from the person's own `food.estimate` records, and say how many days they cover. One recalled day in NHANES is not a usual diet; the two-day files and their weight come first.
 - **Check a recommended range.** Given a range someone recommends, show the share of the cohort inside it. That is a fact about the sample, not advice.
@@ -95,7 +95,7 @@ The first question a person asks is not "where is my cholesterol". It is "how do
 
 ## Also after the loop
 
-1. **Read PDFs by word position.** `pdftotext -bbox-layout` gives each word's box; columns come from where the header words sit, not from counted spaces. Most attacks on the layout grammar (DECISIONS 219 to 231) were artifacts of `-layout` spacing.
+1. **Read Labcorp PDFs by word position too.** Quest reports are read this way since 0.5.0. `pdftotext -bbox-layout` gives each word's box; columns come from where the header words sit, not from counted spaces. Most attacks on the layout grammar (DECISIONS 219 to 231) were artifacts of `-layout` spacing.
 2. **Unknown layouts, with an assistant if the person wants.** The person's own assistant, or a local model, proposes each reading with the page and words it read it from. bean checks every value against those words in the PDF and refuses what is not printed there. The person confirms the table, and the readings are theirs, with the extractor in context. bean ships no model and no key. A scanned PDF has no words to check against: the person confirms each value. Design it on a second real report from another lab, never from memory.
 3. **Freeze at `v` 0** (CORE.md section 6). After two weeks of real use (lab results, Apple Health, chat and agent logging) with no change to CORE.md, every DEFAULT in SPEC.md is final.
 4. **Longitudinal comparison.** A reading over time against what published studies saw over the same interval: baseline, cadence, follow-up and attrition. This needs a time-course matching contract first.
@@ -110,11 +110,11 @@ The first question a person asks is not "where is my cholesterol". It is "how do
 
 ## Limits to say out loud
 
-- **The lab importer is proven on one real report.** Thirteen attack rounds found ways to make it store a wrong value, fewer each round, but not none. It refuses what it cannot read, so it refuses unfamiliar layouts, and it shows what it read before it saves.
+- **The lab importer is proven on one real report of each layout.** Thirteen attack rounds found ways to make it store a wrong value, fewer each round, but not none. It refuses what it cannot read, so it refuses unfamiliar layouts, and it shows what it read before it saves.
 - **A signature proves who signed, not that the number is right.** It does not prove that a lab or device produced the number, nor anyone's credentials.
 - **A shared subset proves authenticity, not completeness.** Record files are readable JSON; only blobs are encrypted. Share by bundle, never by copying the log folder. The subject id is stable, so two bundles from one person can be linked.
 - **Regulatory.** Storing, verifying and displaying are kept apart from interpreting. A percentile against public data is a function that needs its own review before any clinical use. bean does not interpret, predict or advise.
-- **A comparison is as good as its cohort.** NHANES is one country, one two-year window, about 9,000 people. A lab and the survey measure with different instruments. A narrow cohort has few people, and no interval of uncertainty is computed yet. Every result says its n and its reasons.
+- **A comparison is as good as its cohort.** NHANES is one country, one two-year window, about 9,000 people. A lab and the survey measure with different instruments. A narrow cohort has few people, and no interval of uncertainty is computed yet. Every result says its n and its caveats.
 
 ## Known gaps
 
