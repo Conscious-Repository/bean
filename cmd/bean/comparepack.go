@@ -73,6 +73,7 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save boo
 				break
 			}
 			c.measure = id
+			c.against = fmt.Sprintf("%s in %s against %s", r.Type, unit, p.Measures[id].Label)
 			c.result = nhanes.Result{N: res.N, Percentile: res.Percentile, Below: res.Below, Equal: res.Equal, P25: res.P25, P50: res.P50, P75: res.P75}
 			c.caveats = packCaveats(p, id, cohort, res.N, c.by != "")
 			claims = append(claims, packRecord(c, p, cohort, co))

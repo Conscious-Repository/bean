@@ -64,6 +64,7 @@ type comparison struct {
 	caveats  []string
 	files    []*refFile // the analyte's file, the demographics file, then each rule's file
 	measure  string     // with a pack: the id of the pack's measure
+	against  string     // with a pack: the reading's type and unit, and the measure's label
 }
 
 // refFile is a kept NHANES file.
@@ -485,7 +486,7 @@ func printComparisons(w io.Writer, rows []comparison, head, known string, all bo
 	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "READING\tVALUE\tPERCENTILE\tLOWER\tSAME\tMIDDLE HALF\tMEDIAN\tN\tNOTE\tID")
-	var caveats, help, unmapped []string
+	var caveats, help, unmapped, against []string
 	once := func(list *[]string, text string) {
 		if text != "" && !slices.Contains(*list, text) {
 			*list = append(*list, text)
@@ -522,9 +523,18 @@ func printComparisons(w io.Writer, rows []comparison, head, known string, all bo
 			for _, text := range c.caveats {
 				once(&caveats, text)
 			}
+			once(&against, c.against)
 		}
 	}
 	tw.Flush()
+	// Which measure a reading is set against is the pack's claim, so it is
+	// shown.
+	if len(against) > 0 {
+		fmt.Fprintln(w, "The pack sets each reading against one of its measures:")
+		for _, text := range against {
+			fmt.Fprintln(w, "  - "+safe(text))
+		}
+	}
 	for _, text := range help {
 		fmt.Fprintln(w, safe(text))
 	}

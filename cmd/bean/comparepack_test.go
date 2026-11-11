@@ -78,7 +78,7 @@ func TestComparePack(t *testing.T) {
 	if got == "" || got != want {
 		t.Errorf("with the pack:  %s\nwith the files: %s", got, want)
 	}
-	for _, want := range []string{"SHA-256 " + digest, "male, age 30-39", "this copy of TCHOL_J is not the file on record", "you chose the cohort", "Not saved"} {
+	for _, want := range []string{"SHA-256 " + digest, "male, age 30-39", "lab.cholesterol-total in mg/dL against Total Cholesterol (mg/dL)", "this copy of TCHOL_J is not the file on record", "you chose the cohort", "Not saved"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("no %q in\n%s", want, out)
 		}

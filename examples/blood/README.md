@@ -23,9 +23,9 @@ The script ends with the path of the sealed package and its six words. To open i
 make page
 ```
 
-Open `bean-check.html` in a browser. Choose the package, type the six words, and press Open. The page checks the package on your machine and shows what it holds. It sends nothing.
+Open `bean-check.html` in a browser. Press "Choose the file you received", pick the package, type the six words, and press Open. The page checks the package on your machine and shows what it holds. It sends nothing. It shows the signer's six identity words: the script prints the same six after "Your identity words".
 
-Try it with one word changed: nothing opens. The plain folder, `bundle`, opens with "Choose the bundle's folder" and needs no words.
+Try it with one word changed: the file does not open. The plain folder, `bundle`, opens with "Or choose a folder" and needs no words.
 
 ## What the script checks
 
