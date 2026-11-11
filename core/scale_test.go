@@ -39,10 +39,11 @@ func TestVerifyScales(t *testing.T) {
 		for try := 0; try < 3; try++ {
 			start := time.Now()
 			rp = verifyFiles(files, proven)
-			if took := time.Since(start); try == 0 || took < d {
+			took := time.Since(start)
+			if try == 0 || took < d {
 				d = took
 			}
-			t.Logf("%s: %d files in %v", name, len(files), d)
+			t.Logf("%s: %d files in %v", name, len(files), took)
 			if d <= time.Second {
 				break
 			}

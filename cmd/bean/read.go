@@ -206,6 +206,20 @@ func cmdAdd(s *core.Store, args []string) {
 		}
 	}
 	o.About, o.Corrects = *about, *corrects
+	if o.Corrects != "" {
+		// Two corrections of one record both stay current. And a correction
+		// with no -at is dated now, which moves a reading in time.
+		if l, err := s.Load(); err == nil {
+			if t, err := l.Resolve(o.Corrects); err == nil {
+				if by := l.Report.Superseded[t.ID]; len(by) > 0 {
+					fail(fmt.Errorf("%s was corrected already, by %s: correct that record instead", t.ID[7:19], by[len(by)-1][7:19]))
+				}
+				if _, timed := t.Observed.(map[string]any); timed && *at == "" {
+					fmt.Fprintf(os.Stderr, "bean: note: this correction is dated now. The record it replaces was at %s: pass -at to keep that time\n", whenText(t))
+				}
+			}
+		}
+	}
 	id, err := s.Add(pos[0], pos[1], o)
 	if err != nil {
 		fail(err)

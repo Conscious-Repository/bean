@@ -67,6 +67,9 @@ type File struct {
 	Regular bool          // a plain file, not a link or a folder
 	Size    int64         // in bytes
 	Digest  func() string // its SHA-256 in hex, or "" when it cannot be read
+	// Read returns the file's bytes. A reader that was shown a passed
+	// bundle saves a carried file through it.
+	Read func() ([]byte, error)
 }
 
 // Input is a bundle as it was read, before any check.
@@ -86,6 +89,15 @@ type Input struct {
 	Files []File
 	// FilesFault says why files/ could not be listed, or "".
 	FilesFault string
+}
+
+// Carried is one file that a bundle carries.
+type Carried struct {
+	SHA256 string `json:"sha256"`
+	Bytes  int64  `json:"bytes"`
+	Type   string `json:"type"`  // the type of the record that keeps it
+	Media  string `json:"media"` // the media type that record states
+	Record string `json:"record"`
 }
 
 // Row is one shared record, as a reader sees it.
@@ -115,6 +127,10 @@ type Result struct {
 	// Files is how many files the bundle carries, set when every check
 	// passed.
 	Files int `json:"files"`
+	// Carried lists those files, set when every check passed: each is the
+	// file that a listed record keeps, with the SHA-256 that the share
+	// record gives it.
+	Carried []Carried `json:"carried"`
 	// Rows are the shared records. They are set only when every check
 	// passed: a reader should not read values out of a bundle that failed.
 	Rows []Row `json:"rows"`
@@ -334,6 +350,7 @@ func Check(in Input) Result {
 	// and is the file that record states, where it states one. A stored file
 	// with no entry stays home: it is counted, not faulted.
 	named := 0
+	var carried []Carried
 	for _, id := range slices.Sorted(maps.Keys(listed)) {
 		r := rp.Records[id]
 		if r == nil {
@@ -351,6 +368,7 @@ func Check(in Input) Result {
 				continue
 			}
 			delete(account, b.Hash+" "+id)
+			carried = append(carried, Carried{SHA256: e.digest, Bytes: int64(e.size), Type: r.Type, Media: b.MediaType, Record: id[7:19]})
 			if stated := StatedDigest(r, b.Hash); stated != "" && e.digest != stated {
 				bad("the file of %s is not the one its record states", id)
 			}
@@ -410,6 +428,7 @@ func Check(in Input) Result {
 	if len(res.Problems) == 0 {
 		res.Note, _ = share.Context["note"].(string)
 		res.Files = included
+		res.Carried = carried
 		var rows []*core.Record
 		for id := range listed {
 			rows = append(rows, rp.Records[id])

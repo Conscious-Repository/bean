@@ -139,7 +139,7 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
   - A mode-000 file from rsync stops every command, and a 1 GiB sparse file costs 1 GiB per load.
   - A stranger's incomplete seal set blocks `gc`.
   - A retired key as a bare author stays current.
-  - A correction undone at rotation keeps its purged ref. Two corrections of one target both show.
+  - A correction undone at rotation keeps its purged ref. Two corrections of one target both show when they come from two copies; `bean add -corrects` refuses the second on one copy.
   - After a thief's link in a chain of `-corrections` is refused, the two records left can become duplicates, and the lower id wins.
   - Purging a correction brings the older value back. `-corrections` cannot tell an older report from a newer one.
   - Two current records with one ref migrate as one: the other is counted as left out, but `migrate -list` does not show it.

@@ -66,7 +66,7 @@ bean ls
 bean verify
 ```
 
-`verify` ends with `summary: 2 valid, 0 invalid, 0 skipped, 0 held, 0 duplicate`. The count includes your identity record. The [type vocabulary](../cmd/bean/vocabulary.md) lists the usual types and units.
+`verify` ends with `summary: 2 valid, 0 invalid, 0 skipped, 0 held, 0 duplicate`. The count includes your identity record. After you delete a record, `verify` also prints a `held` warning for the deletion's own record, and counts it as `held`: that is normal. The [type vocabulary](../cmd/bean/vocabulary.md) lists the usual types and units.
 
 ## 4. Import a lab report
 
@@ -103,7 +103,7 @@ bean-import-lab: 71 results, 2 without a value. Importing the same report again 
 - `added`: the results.
 - The last line is the importer's summary.
 
-Run the same import again: `already kept ...` and `added 0, skipped 71`. If the report says the collection time was not given, only the day is recorded.
+Run the same import again: it shows the readings and asks again, then says `already kept ...` and `added 0, skipped 71`. If the report says the collection time was not given, only the day is recorded.
 
 `-yes` saves without the review, for scripts. Without a terminal and without `-yes`, `bean import` writes nothing and shows no value: that is what happens when an AI assistant runs it.
 

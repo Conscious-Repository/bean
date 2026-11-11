@@ -60,7 +60,7 @@ Adds one record about you. Prints its id.
 | `-at <time>` | When it happened. Default: now, to the minute. A time it cannot read exits 2 and writes nothing. |
 | `-note <text>` | Free text. Stored in `context.note`. |
 | `-about <id>` | The record that this one comments on. |
-| `-corrects <id>` | Your earlier record that this one replaces, for example a wrong value. `ls` then shows only the new one. You can correct only records that you wrote. |
+| `-corrects <id>` | Your earlier record that this one replaces, for example a wrong value. `ls` then shows only the new one. You can correct only records that you wrote. A record is corrected once: for a record that was corrected already, bean names the record to correct instead. Without `-at` the correction is dated now, and bean says so. |
 | `-photo <file>` | Attach an image, stored encrypted. Only image files are accepted, up to 25 MiB. |
 | `-agent` | Sign with the agent key of this machine, not your key. |
 
@@ -167,9 +167,9 @@ Writes chosen records into a new or empty folder, a bundle, that anyone can chec
 
 It builds the bundle beside its place, checks it as its reader will, and moves it there. Then it adds one `share` record to your log: the signed list of what the bundle holds, which is in the bundle too. A share that fails leaves neither. A bundle is not encrypted, and once sent it cannot be taken back. It prints `shared <n> records and <m> files in <folder>`, then `share record <id>`.
 
-### `check-bundle <folder or file>`
+### `check-bundle [-unpack <new folder>] <folder or file>`
 
-Checks a bundle, shows what it holds when it passes, and changes nothing in it. Given a file, it reads a zip file of a bundle's folder, or a sealed package. For a sealed package it asks for the six words, and reads them from standard input. It needs no log, and reads only the bundle's `objects` and `files` folders; anything else in the folder is named and not read. It prints any record that fails, then the share record's id and the identity and key that signed it. It prints how many records and files it holds. It prints who signed the records: the person, an agent the person paired, or another key. It prints how many are corrections of a record that is not in the bundle. When every check passed it lists the records under `It holds:`, a comparison in words with its reading, cohort and n. Then `bundle ok`, exit 0, or `bundle FAILED: <n> problems`, exit 1. It says each time what no bundle can show: that it is complete, that a value is true, and who the identity is. Nor can a bundle show that the key that signed is still the person's. `tools/second/checkbundle.py` does the same check without bean.
+Checks a bundle, shows what it holds when it passes, and changes nothing in it. Given a file, it reads a zip file of a bundle's folder, or a sealed package. For a sealed package it asks for the six words, and reads them from standard input. With `-unpack`, a package that passes is written into a new folder as a bundle, with the files it carries. It needs no log, and reads only the bundle's `objects` and `files` folders; anything else in the folder is named and not read. It prints any record that fails, then the share record's id and the identity and key that signed it. It prints how many records and files it holds. It prints who signed the records: the person, an agent the person paired, or another key. It prints how many are corrections of a record that is not in the bundle. When every check passed it lists the records under `It holds:`, a comparison in words with its reading, cohort and n. Then `bundle ok`, exit 0, or `bundle FAILED: <n> problems`, exit 1. It says each time what no bundle can show: that it is complete, that a value is true, and who the identity is. Nor can a bundle show that the key that signed is still the person's. `tools/second/checkbundle.py` does the same check without bean.
 
 A reader with no terminal runs the same check in a browser. `make page` builds `bean-check.html`, one file that reads a bundle's folder or a zip file of it and sends nothing ([SHARE.md](SHARE.md)).
 

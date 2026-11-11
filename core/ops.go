@@ -518,7 +518,7 @@ func resolveIn(records map[string]*Record, id string) (*Record, error) {
 		return r, nil
 	}
 	if len(hexPart) < 6 || !isLowerHex(hexPart, len(hexPart)) {
-		return nil, errors.New("input missing: " + id)
+		return nil, errors.New("input missing: " + id + ": give a record's id, or its first 6 or more hex digits")
 	}
 	var found *Record
 	for rid, r := range records {
@@ -530,7 +530,7 @@ func resolveIn(records map[string]*Record, id string) (*Record, error) {
 		}
 	}
 	if found == nil {
-		return nil, errors.New("input missing: " + id)
+		return nil, errors.New("input missing: " + id + ": no record has this id")
 	}
 	return found, nil
 }

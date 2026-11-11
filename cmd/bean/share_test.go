@@ -259,7 +259,7 @@ func TestShareFilesAndComparison(t *testing.T) {
 	// A comparison comes with its reading and the records of its files.
 	// Without -files the files are named, not shared.
 	named := filepath.Join(t.TempDir(), "named")
-	if out, errs, code := run(t, dir, "", "share", "-yes", "-out", named, cmp.ID); code != 0 || !strings.Contains(out, "shared 4 records and 0 files") || strings.Count(errs, "Add -files to share it.") != 2 {
+	if out, errs, code := run(t, dir, "", "share", "-yes", "-out", named, cmp.ID); code != 0 || !strings.Contains(out, "shared 4 records and 0 files") || !strings.Contains(errs, "not shared: the 2 public files") {
 		t.Fatalf("%d\n%s\n%s", code, out, errs)
 	}
 	if _, err := os.Stat(filepath.Join(named, "files")); err == nil {
@@ -654,6 +654,10 @@ func TestShareSealed(t *testing.T) {
 		t.Errorf("the share left %d entries beside the package", len(entries)-1)
 	}
 	// The words open it, for bean check-bundle too.
+	// A person may write the words in capitals, or with hyphens or commas.
+	if res := bundle.Check(bundle.FromPackage("p", data, strings.ReplaceAll(words, " ", "-"))); !res.OK {
+		t.Errorf("the words with hyphens do not open it: %v", res.Lines())
+	}
 	if res := bundle.Check(bundle.FromPackage("p", data, strings.ToUpper(words)+"  ")); !res.OK || len(res.Rows) != 1 || res.Note != "for Ana" {
 		t.Errorf("the words do not open it: %v", res.Lines())
 	}
@@ -704,10 +708,100 @@ func TestShareSealed(t *testing.T) {
 	zipPath := filepath.Join(where, "plain.zip")
 	os.WriteFile(zipPath, packed, 0o600)
 	want, _ := checkBundle(folder)
-	if got, ok := checkPackage(zipPath); !ok || len(got) != len(want) {
+	if got, ok, _ := checkPackage(zipPath); !ok || len(got) != len(want) {
 		t.Errorf("a zip file of the folder:\n%s", strings.Join(got, "\n"))
 	}
 	if again, _ := bundle.Pack(folder); !bytes.Equal(again, packed) {
 		t.Error("the same folder packs to different bytes")
+	}
+}
+
+// TestCorrectOnce: a record is corrected once. A second correction of the
+// same record would leave two current values, so bean names the record to
+// correct instead. A correction with no -at says that it is dated now.
+func TestCorrectOnce(t *testing.T) {
+	dir := t.TempDir()
+	run(t, dir, "", "init")
+	first, _, _ := run(t, dir, "", "add", "weight", "81.2", "-unit", "kg", "-at", "2026-10-27 07:15")
+	first = strings.TrimSpace(first)
+	second, errs, code := run(t, dir, "", "add", "weight", "80.4", "-unit", "kg", "-corrects", first)
+	if code != 0 || !strings.Contains(errs, "this correction is dated now") || !strings.Contains(errs, "2026-10-27") {
+		t.Fatalf("a correction with no -at: %d\n%s", code, errs)
+	}
+	second = strings.TrimSpace(second)
+	if _, errs, code := run(t, dir, "", "add", "weight", "80.1", "-unit", "kg", "-corrects", first, "-at", "2026-10-27 07:15"); code == 0 || !strings.Contains(errs, "was corrected already, by "+second[7:19]) {
+		t.Errorf("a second correction of one record: %d\n%s", code, errs)
+	}
+	// The record that replaced it can be corrected, and with -at nothing is noted.
+	if _, errs, code := run(t, dir, "", "add", "weight", "80.1", "-unit", "kg", "-corrects", second, "-at", "2026-10-27 07:15"); code != 0 || strings.Contains(errs, "dated now") {
+		t.Errorf("a correction of the correction: %d\n%s", code, errs)
+	}
+	if ls, _, _ := run(t, dir, "", "ls", "-type", "weight"); strings.Count(ls, "weight") != 1 || !strings.Contains(ls, "80.1 kg") {
+		t.Errorf("one current weight is wanted:\n%s", ls)
+	}
+	// An id that names nothing says so.
+	if _, errs, code := run(t, dir, "", "show", "d"); code == 0 || !strings.Contains(errs, "first 6 or more hex digits") {
+		t.Errorf("a short id: %d\n%s", code, errs)
+	}
+	if _, errs, code := run(t, dir, "", "show", "000000"); code == 0 || !strings.Contains(errs, "no record has this id") {
+		t.Errorf("an id of no record: %d\n%s", code, errs)
+	}
+}
+
+// TestSealedFilesComeOut: a reader gets a carried file out of a sealed
+// package with check-bundle -unpack, and the folder it writes checks as a
+// bundle. A sealed share writes the package and nothing else.
+func TestSealedFilesComeOut(t *testing.T) {
+	dir, _, ids := compareLog(t, "TCHOL_J", "DEMO_J")
+	if out, errs, code := run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", "-save", ids[0]); code != 0 {
+		t.Fatalf("%s\n%s", out, errs)
+	}
+	where := t.TempDir()
+	pkg := filepath.Join(where, "p.bean")
+	stdout, errs, code := run(t, dir, "", "share", "-yes", "-seal", "-files", "-out", pkg, "-type", "comparison.*")
+	if code != 0 || !strings.Contains(stdout, "shared 4 records and 2 files") {
+		t.Fatalf("%d\n%s\n%s", code, stdout, errs)
+	}
+	// No folder of plain records was made beside the package.
+	if entries, _ := os.ReadDir(where); len(entries) != 1 || entries[0].Name() != "p.bean" {
+		t.Errorf("a sealed share wrote more than the package: %v", entries)
+	}
+	words := ""
+	for _, line := range strings.Split(stdout, "\n") {
+		if strings.HasPrefix(line, "  ") {
+			words = strings.TrimSpace(line)
+		}
+	}
+	data, _ := os.ReadFile(pkg)
+	res := bundle.Check(bundle.FromPackage("p", data, words))
+	if !res.OK || len(res.Carried) != 2 || res.Carried[0].Type != "reference.file" || res.Carried[0].Bytes == 0 {
+		t.Fatalf("the files a package carries: %+v", res.Carried)
+	}
+	// With the words, -unpack writes the bundle, and its files are the files.
+	open := filepath.Join(where, "open")
+	if stdout, errs, code := run(t, t.TempDir(), words+"\n", "check-bundle", "-unpack", open, pkg); code != 0 || !strings.Contains(stdout, "unpacked into") {
+		t.Fatalf("-unpack: %d\n%s\n%s", code, stdout, errs)
+	}
+	if lines, ok := checkBundle(open); !ok {
+		t.Errorf("the unpacked folder does not check:\n%s", strings.Join(lines, "\n"))
+	}
+	for _, c := range res.Carried {
+		if fileDigest(filepath.Join(open, "files", c.SHA256)) != c.SHA256 {
+			t.Errorf("files/%s is not the file that was checked", c.SHA256)
+		}
+	}
+	// Without the words nothing is unpacked, and a folder that is there is not written into.
+	other := filepath.Join(where, "other")
+	if _, _, code := run(t, t.TempDir(), "abandon ability able about above absent\n", "check-bundle", "-unpack", other, pkg); code == 0 {
+		t.Error("-unpack with other words passed")
+	}
+	if _, err := os.Stat(other); err == nil {
+		t.Error("-unpack with other words wrote a folder")
+	}
+	if _, errs, code := run(t, t.TempDir(), words+"\n", "check-bundle", "-unpack", open, pkg); code == 0 || !strings.Contains(errs, "nothing was unpacked") {
+		t.Errorf("-unpack into a folder that is there: %d\n%s", code, errs)
+	}
+	if _, errs, code := run(t, t.TempDir(), "", "check-bundle", "-unpack", other, open); code == 0 || !strings.Contains(errs, "a folder is unpacked already") {
+		t.Errorf("-unpack of a folder: %d\n%s", code, errs)
 	}
 }

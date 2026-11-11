@@ -82,7 +82,7 @@ cat "$WORK/seal.txt"
 WORDS=$(sed -n 's/^  //p' "$WORK/seal.txt" | head -1)
 # The reader types the words. Here they are piped in.
 echo "$WORDS" | bean check-bundle "$WORK/for-a-reader.bean" 2>/dev/null | tail -1
-if echo "wrong words do not open this package" | bean check-bundle "$WORK/for-a-reader.bean" >/dev/null 2>&1; then
+if echo "abandon ability able about above absent" | bean check-bundle "$WORK/for-a-reader.bean" >/dev/null 2>&1; then
   echo "a package opened with the wrong words"; exit 1
 fi
 if python3 -c 'import cryptography' 2>/dev/null; then

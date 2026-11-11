@@ -265,14 +265,23 @@ func cmdShare(s *core.Store, args []string) {
 	// for the person.
 	labels := l.AgentLabels()
 	// What stays home is said with or without the review.
+	publicHome, travels := 0, 0
 	for _, sf := range kept {
 		switch {
 		case sf.data != nil:
+			travels++
 		case sf.public:
-			leftOut = append(leftOut, fmt.Sprintf("  not shared: the file that %s (%s) keeps. Add -files to share it.", sf.record[7:19], sf.recordType))
+			publicHome++
 		default:
 			leftOut = append(leftOut, fmt.Sprintf("  not shared: the file that %s (%s) keeps. With -files, name that record by its id to share its file.", sf.record[7:19], sf.recordType))
 		}
+	}
+	// The public files are said once, with what their absence means.
+	if publicHome > 0 {
+		leftOut = append(leftOut, fmt.Sprintf("  not shared: the %d public files that the reference.file records keep. Add -files to share them: without them a reader needs the files from their publisher to compute a comparison again.", publicHome))
+	}
+	if *files && travels == 0 {
+		leftOut = append(leftOut, "  -files: no record that you named keeps a file, so no file goes")
 	}
 	if keepsFile > 0 {
 		leftOut = append(leftOut, fmt.Sprintf("  not shared: %d records of that type that keep a file. Name one by its id to share it.", keepsFile))
@@ -288,15 +297,29 @@ func cmdShare(s *core.Store, args []string) {
 		}
 		w := os.Stderr
 		fmt.Fprintf(w, "To share, into %s:\n", out)
+		// What the person chose comes first, then what comes along with it.
+		row := func(r *core.Record) string {
+			return fmt.Sprintf("  %s  %s  %s  %s", whenText(r), r.Type, safe(strings.TrimSpace(recordText(r, currentRecord(l))+"  "+byText(r, l.ID, labels))), r.ID[7:19])
+		}
 		for _, r := range shared {
-			line := fmt.Sprintf("  %s  %s  %s  %s", whenText(r), r.Type, safe(strings.TrimSpace(recordText(r, currentRecord(l))+"  "+byText(r, l.ID, labels))), r.ID[7:19])
-			if by := broughtBy[r.ID]; by != "" {
-				line += "  (comes along: " + by[7:19] + " is about it)"
+			if broughtBy[r.ID] == "" {
+				fmt.Fprintln(w, row(r))
 			}
-			fmt.Fprintln(w, line)
+		}
+		for _, r := range shared {
+			if by := broughtBy[r.ID]; by != "" {
+				fmt.Fprintln(w, row(r)+"  (comes along: "+by[7:19]+" is about it)")
+			}
+		}
+		if *note != "" {
+			fmt.Fprintf(w, "  with your note for the reader: %s\n", safe(*note))
 		}
 		for _, sf := range kept {
-			if sf.data != nil {
+			switch {
+			case sf.data == nil:
+			case sf.public:
+				fmt.Fprintf(w, "  the public file that %s (%s) keeps: %d bytes\n", sf.record[7:19], sf.recordType, len(sf.data))
+			default:
 				fmt.Fprintf(w, "  THE WHOLE FILE that %s (%s) keeps, as you imported it: %s, %d bytes, in plaintext. A lab report holds your name and birth date.\n", sf.record[7:19], sf.recordType, safe(sf.mediaType), len(sf.data))
 			}
 		}
@@ -304,7 +327,11 @@ func cmdShare(s *core.Store, args []string) {
 			fmt.Fprintln(w, line)
 		}
 		fmt.Fprintf(w, "  also: your %d identity records and %d pairings, and the share record itself\n", len(proof)-pairings, pairings)
-		fmt.Fprintln(w, "A bundle is a disclosure: it is not encrypted, and once sent it cannot be taken back. Each record carries your identity id, so two bundles of yours can be linked.")
+		if *seal {
+			fmt.Fprintln(w, "A sealed package is a disclosure: it is encrypted on its way, and once its reader has opened it, it cannot be taken back. Each record carries your identity id, so two packages of yours can be linked.")
+		} else {
+			fmt.Fprintln(w, "A bundle is a disclosure: it is not encrypted, and once sent it cannot be taken back. Each record carries your identity id, so two bundles of yours can be linked. With -seal it is one encrypted file.")
+		}
 		fmt.Fprintf(w, "Share %d records? [y/N] ", len(shared))
 		if !confirmed(bufio.NewReader(os.Stdin)) {
 			fail(errors.New("nothing was written: not shared"))
@@ -371,20 +398,26 @@ func cmdShare(s *core.Store, args []string) {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, importSignals...)
 	defer signal.Stop(sig)
-	tmp, err := os.MkdirTemp(filepath.Dir(out), ".bean-share-*")
-	if err != nil {
-		fail(err)
+	// The bundle, in memory: every record file under its path, each shared
+	// file under its SHA-256, and the note for a person who has only the
+	// folder.
+	bundleFiles := map[string][]byte{core.PathOf(shareID): shareBytes, "README.txt": []byte(bundleReadme)}
+	for _, r := range append(shared, proof...) {
+		bundleFiles[core.PathOf(r.ID)] = r.Bytes
 	}
-	gone := func(err error) {
-		os.RemoveAll(tmp)
-		fail(fmt.Errorf("nothing was shared: %w", err))
+	for _, sf := range kept {
+		if sf.data != nil {
+			bundleFiles["files/"+sf.digest] = sf.data
+		}
 	}
+	tmp := ""
 	stopped := func() {
 		select {
 		case got := <-sig:
-			os.RemoveAll(tmp)
-			os.Remove(tmp + ".sealed")
-			fmt.Fprintf(os.Stderr, "bean: stopped by %s; nothing was shared, and the half-built bundle is removed\n", got)
+			if tmp != "" {
+				os.RemoveAll(tmp)
+			}
+			fmt.Fprintf(os.Stderr, "bean: stopped by %s; nothing was shared, and nothing of it is left\n", got)
 			code := 1
 			if n, ok := got.(syscall.Signal); ok {
 				code = 128 + int(n)
@@ -393,49 +426,19 @@ func cmdShare(s *core.Store, args []string) {
 		default:
 		}
 	}
-	write := map[string][]byte{shareID: shareBytes}
-	for _, r := range append(shared, proof...) {
-		write[r.ID] = r.Bytes
-	}
-	for id, data := range write {
-		stopped()
-		p := filepath.Join(tmp, filepath.FromSlash(core.PathOf(id)))
-		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
-			gone(err)
-		}
-		if err := os.WriteFile(p, data, 0o600); err != nil {
-			gone(err)
-		}
-	}
-	if len(fileList) > 0 {
-		if err := os.MkdirAll(filepath.Join(tmp, "files"), 0o700); err != nil {
-			gone(err)
-		}
-		for _, sf := range kept {
-			if sf.data == nil {
-				continue
-			}
-			stopped()
-			if err := os.WriteFile(filepath.Join(tmp, "files", sf.digest), sf.data, 0o600); err != nil {
-				gone(err)
-			}
-		}
-	}
-	if err := os.WriteFile(filepath.Join(tmp, "README.txt"), []byte(bundleReadme), 0o600); err != nil {
-		gone(err)
-	}
-	if lines, ok := checkBundle(tmp); !ok {
-		for _, line := range lines {
-			fmt.Fprintln(os.Stderr, safe(line))
-		}
-		gone(errors.New("the bundle does not pass bean check-bundle"))
-	}
-	// A sealed package: the folder becomes one file that opens with six
-	// words. It is opened and checked once more, as its reader will, before
-	// it takes its place.
-	words, sealed := "", filepath.Join(filepath.Dir(out), filepath.Base(tmp)+".sealed")
+	words := ""
 	if *seal {
-		packed, err := bundle.Pack(tmp)
+		// A sealed package never touches the disk in plaintext: it is
+		// checked, packed and encrypted in memory, opened and checked once
+		// more as its reader will, and only then written, as a new file.
+		res := bundle.Check(bundle.FromFiles(out, bundleFiles))
+		if !res.OK {
+			for _, line := range res.Lines() {
+				fmt.Fprintln(os.Stderr, safe(line))
+			}
+			fail(errors.New("nothing was shared: the bundle does not pass bean check-bundle"))
+		}
+		packed, err := bundle.PackFiles(bundleFiles)
 		if err == nil {
 			words, err = bundle.NewWords()
 		}
@@ -448,23 +451,55 @@ func cmdShare(s *core.Store, args []string) {
 				err = errors.New("the sealed package does not open and pass the check")
 			}
 		}
+		if err != nil {
+			fail(fmt.Errorf("nothing was shared: %w", err))
+		}
+		stopped() // the last moment: after this the share runs to its end
+		// The file is made new, or not at all: a file that appeared at
+		// this path since the first look is not replaced.
+		f, err := os.OpenFile(out, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if err != nil {
+			fail(fmt.Errorf("nothing was shared: %w", err))
+		}
+		_, err = f.Write(data)
 		if err == nil {
-			err = os.WriteFile(sealed, data, 0o600)
+			err = f.Sync()
+		}
+		if cerr := f.Close(); err == nil {
+			err = cerr
 		}
 		if err != nil {
-			os.Remove(sealed)
-			gone(err)
-		}
-	}
-	stopped() // the last moment: after this the share runs to its end
-	if *seal {
-		// The folder held plaintext: it goes before the package is in place.
-		os.RemoveAll(tmp)
-		if err := os.Rename(sealed, out); err != nil {
-			os.Remove(sealed)
+			os.Remove(out)
 			fail(fmt.Errorf("nothing was shared: %w", err))
 		}
 	} else {
+		// A plain bundle is written next to its place, checked as its
+		// reader will check it, and moved there whole.
+		var err error
+		if tmp, err = os.MkdirTemp(filepath.Dir(out), ".bean-share-*"); err != nil {
+			fail(err)
+		}
+		gone := func(err error) {
+			os.RemoveAll(tmp)
+			fail(fmt.Errorf("nothing was shared: %w", err))
+		}
+		for _, name := range slices.Sorted(maps.Keys(bundleFiles)) {
+			stopped()
+			p := filepath.Join(tmp, filepath.FromSlash(name))
+			if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+				gone(err)
+			}
+			if err := os.WriteFile(p, bundleFiles[name], 0o600); err != nil {
+				gone(err)
+			}
+		}
+		if lines, ok := checkBundle(tmp); !ok {
+			for _, line := range lines {
+				fmt.Fprintln(os.Stderr, safe(line))
+			}
+			gone(errors.New("the bundle does not pass bean check-bundle"))
+		}
+		stopped() // the last moment: after this the share runs to its end
 		if err := os.Remove(out); err != nil && !errors.Is(err, os.ErrNotExist) {
 			gone(err)
 		}
@@ -473,6 +508,11 @@ func cmdShare(s *core.Store, args []string) {
 		}
 	}
 	if err := s.AddSigned(shareID, shareBytes); err != nil {
+		if *seal {
+			// Its words were never shown, so nobody can open it.
+			os.Remove(out)
+			fail(fmt.Errorf("nothing was shared: the share record could not be added to your log, and the package is removed: %w", err))
+		}
 		fail(fmt.Errorf("the bundle is written, in %s, and its share record could not be added to your log: %w", out, err))
 	}
 	fmt.Printf("shared %d records and %d files in %s\n", len(shared), len(distinct), out)
@@ -509,15 +549,22 @@ func bundleTarget(out string) error {
 }
 
 func cmdCheckBundle(args []string) {
-	if len(args) != 1 {
+	fs := flag.NewFlagSet("check-bundle", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	unpack := fs.String("unpack", "", "for a package that passes: write its bundle into this new folder")
+	if err := fs.Parse(args); err != nil || fs.NArg() != 1 {
 		usage()
 	}
+	path := fs.Arg(0)
 	var lines []string
 	var ok bool
-	if info, err := os.Stat(args[0]); err == nil && info.Mode().IsRegular() {
-		lines, ok = checkPackage(args[0])
+	var in bundle.Input
+	if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() {
+		lines, ok, in = checkPackage(path)
+	} else if *unpack != "" {
+		fail(errors.New("-unpack is for a package that is one file: a folder is unpacked already"))
 	} else {
-		lines, ok = checkBundle(args[0])
+		lines, ok = checkBundle(path)
 	}
 	for _, line := range lines {
 		fmt.Println(safe(line))
@@ -525,15 +572,53 @@ func cmdCheckBundle(args []string) {
 	if !ok {
 		os.Exit(1)
 	}
+	if *unpack != "" {
+		if err := unpackBundle(in, *unpack); err != nil {
+			fail(err)
+		}
+		fmt.Printf("unpacked into %s: its files are in %s\n", *unpack, filepath.Join(*unpack, "files"))
+	}
+}
+
+// unpackBundle writes a bundle that passed its check into a new folder: its
+// records, and the files it carries, each read and hashed once more. So a
+// reader gets a carried file out of a sealed package, and the folder checks
+// again as any bundle does.
+func unpackBundle(in bundle.Input, dir string) error {
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		return fmt.Errorf("nothing was unpacked: %w", err)
+	}
+	write := func(rel string, data []byte) error {
+		p := filepath.Join(dir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+			return err
+		}
+		return os.WriteFile(p, data, 0o600)
+	}
+	for rel, data := range in.Records {
+		if err := write(rel, data); err != nil {
+			return err
+		}
+	}
+	for _, f := range in.Files {
+		data, err := f.Read()
+		if sum := sha256.Sum256(data); err != nil || hex.EncodeToString(sum[:]) != f.Name {
+			return fmt.Errorf("the file %s could not be read again as it was checked", f.Name)
+		}
+		if err := write("files/"+f.Name, data); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // checkPackage checks a bundle that is one file: a zip file of the folder,
 // or a sealed package. For a sealed one it asks for the six words, and
 // reads them from standard input.
-func checkPackage(path string) ([]string, bool) {
-	fatal := func(format string, a ...any) ([]string, bool) {
+func checkPackage(path string) ([]string, bool, bundle.Input) {
+	fatal := func(format string, a ...any) ([]string, bool, bundle.Input) {
 		res := bundle.Check(bundle.Input{Fatal: []string{fmt.Sprintf(format, a...)}})
-		return res.Lines(), false
+		return res.Lines(), false, bundle.Input{}
 	}
 	info, err := os.Stat(path)
 	if err != nil || info.Size() > 2<<30 {
@@ -545,12 +630,13 @@ func checkPackage(path string) ([]string, bool) {
 	}
 	words := ""
 	if bundle.IsSealed(data) {
-		fmt.Fprint(os.Stderr, "The six words of this package: ")
+		fmt.Fprintln(os.Stderr, "Type the six words of this package, then Enter:")
 		line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 		words = line
 	}
-	res := bundle.Check(bundle.FromPackage(path, data, words))
-	return res.Lines(), res.OK
+	in := bundle.FromPackage(path, data, words)
+	res := bundle.Check(in)
+	return res.Lines(), res.OK, in
 }
 
 // checkBundle checks the bundle in a folder by the five rules of

@@ -115,6 +115,7 @@ func ReadDir(dir string) Input {
 			defer r.Close()
 			return digestOf(r)
 		}
+		file.Read = func() ([]byte, error) { return os.ReadFile(path) }
 		in.Files = append(in.Files, file)
 	}
 	return in
@@ -258,7 +259,7 @@ func from(name string, src map[string]source) Input {
 				}
 				defer r.Close()
 				return digestOf(r)
-			}}
+			}, Read: func() ([]byte, error) { return readAll(s) }}
 		case parts[0] == "files":
 			files[parts[1]] = File{Name: parts[1], Size: -1, Digest: func() string { return "" }}
 		default:

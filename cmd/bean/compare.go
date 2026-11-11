@@ -432,6 +432,23 @@ func sweepComparisons(s *core.Store) {
 	}
 }
 
+// comparable lists the types that have reference data, each with the units
+// a reading may be in, from the table of tests.
+func comparable() string {
+	var order []string
+	units := map[string][]string{}
+	for _, a := range nhanes.Analytes {
+		if units[a.Type] == nil {
+			order = append(order, a.Type)
+		}
+		units[a.Type] = append(units[a.Type], a.Unit)
+	}
+	for i, typ := range order {
+		order[i] = typ + " (" + strings.Join(units[typ], " or ") + ")"
+	}
+	return strings.Join(order, ", ")
+}
+
 // printComparisons writes one row per reading: a result, or a few words on
 // why there is none. What to do about a missing result, and the caveats, are
 // said once below the table. Unless all is set, the readings of a type that
@@ -486,7 +503,13 @@ func printComparisons(w io.Writer, rows []comparison, cohort nhanes.Cohort, all 
 	}
 	if len(unmapped) > 0 {
 		slices.Sort(unmapped)
-		fmt.Fprintf(w, "No reference data for %d other types: %s.\n", len(unmapped), strings.Join(unmapped, ", "))
+		types := "types"
+		if len(unmapped) == 1 {
+			types = "type"
+		}
+		fmt.Fprintf(w, "No reference data for %d other %s: %s.\n", len(unmapped), types, strings.Join(unmapped, ", "))
+		// A type typed by hand may be one letter off a type bean compares.
+		fmt.Fprintf(w, "bean compares these types, each in this unit: %s.\n", comparable())
 	}
 	if len(caveats) > 0 {
 		fmt.Fprintln(w, "PERCENTILE is the weighted share of the cohort with a lower value, plus half of those with the same value. It says where a value lies in this sample, not whether it is healthy.")

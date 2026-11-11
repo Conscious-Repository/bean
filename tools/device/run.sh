@@ -26,6 +26,8 @@ both "a device's folder, with a certificate" "$T/a" ok
 both "a later hand-over, from capture 4" "$T/b" ok
 "$PY" -I "$HERE/craft.py" "$T/c" || { echo "craft failed"; exit 1; }
 both "a folder that Python wrote" "$T/c" ok
+"$PY" -I "$HERE/craft.py" "$T/e" ed25519 || { echo "craft failed"; exit 1; }
+both "a folder signed with Ed25519" "$T/e" ok
 
 # One thing wrong, written and signed by craft.py: both must refuse.
 for case in $("$PY" -I "$HERE/craft.py" -cases); do
@@ -49,6 +51,9 @@ damage; cp "$T/b/device.json" "$T/d/device.json";                               
 damage; cat "$T/b/captures.jsonl" >>"$T/d/captures.jsonl"; cp "$T"/b/raw/* "$T/d/raw/"; both "another device's statements added" "$T/d" bad
 damage; sed -i 's/"model":"sim-1","sig"/"model":"sim-2","sig"/' "$T/d/device.json"; both "a certificate changed after signing" "$T/d" bad
 damage; f=$(first); rm "$T/d/raw/$f"; ln -s /dev/null "$T/d/raw/$f";            both "a raw file as a link" "$T/d" bad
+damage; mv "$T/d/raw" "$T/elsewhere"; ln -s "$T/elsewhere" "$T/d/raw";         both "the raw folder as a link" "$T/d" bad; rm -rf "$T/elsewhere"
+damage; printf 'x\ndevice folder ok\n' >"$T/d/raw/$(printf 'x\ndevice folder ok')" 2>/dev/null; both "a raw file whose name is a line of output" "$T/d" bad
+for f in go py; do grep -q '^device folder ok$' "$T/$f.txt" && { echo "DIFFER: a file's name drew a line of its own in the $f check"; rc=1; }; done
 
 [ "$rc" = 0 ] && echo "device: the Go check and check.py agree on $n folders, written by Go and by Python, good and with one thing wrong"
 exit $rc

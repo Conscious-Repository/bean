@@ -60,7 +60,8 @@ func NewWords() (string, error) {
 // with any space between. It refuses what cannot be a package's words, so
 // that a typing mistake is named before any work is done.
 func CleanWords(text string) (string, error) {
-	words := strings.Fields(strings.ToLower(text))
+	// A person may write the words with commas or hyphens between them.
+	words := strings.Fields(strings.NewReplacer(",", " ", "-", " ").Replace(strings.ToLower(text)))
 	if len(words) != sealWords {
 		return "", fmt.Errorf("a package opens with %d words, and these are %d", sealWords, len(words))
 	}
@@ -97,8 +98,10 @@ func Seal(packed []byte, words string) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// ErrWords is returned when the words do not open the package.
-var ErrWords = errors.New("these words do not open it")
+// ErrWords is returned when the words do not open the package. A package
+// whose header was changed on the way fails the same way: until it opens,
+// nothing in it can be told from a wrong word.
+var ErrWords = errors.New("these words do not open it, or it was changed on the way")
 
 // Unseal opens a sealed package with its words and returns the packed
 // bundle. A package that was changed on the way does not open.
@@ -111,16 +114,21 @@ func Unseal(sealed []byte, words string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	// A package that asks for more work than bean ever sets is not bean's,
-	// and could keep a reader's machine busy for hours.
-	id.SetMaxWorkFactor(sealWork + 2)
+	// A package sealed for a key, or by another tool's rules, is not one
+	// that words open. The header is not secret, so this is said plainly.
+	if !IsSealed(sealed) || !bytes.HasPrefix(sealed[len(sealHeader):], []byte("-> scrypt ")) {
+		return nil, errors.New("it is not sealed with words: this is another kind of age file")
+	}
+	// bean seals with one work factor. A header that asks for more is not
+	// bean's, or was changed to keep a reader's machine busy.
+	id.SetMaxWorkFactor(sealWork)
 	r, err := age.Decrypt(bytes.NewReader(sealed), id)
 	if err != nil {
 		var none *age.NoIdentityMatchError
 		if errors.As(err, &none) {
 			return nil, ErrWords
 		}
-		return nil, fmt.Errorf("it is damaged, or not a package of bean: %w", err)
+		return nil, fmt.Errorf("it is damaged, or not a package that bean sealed: %w", err)
 	}
 	packed, err := io.ReadAll(io.LimitReader(r, maxPackage+1))
 	if err != nil {
@@ -132,41 +140,22 @@ func Unseal(sealed []byte, words string) ([]byte, error) {
 	return packed, nil
 }
 
-// Pack makes one zip file of a bundle's folder. The same folder gives the
-// same bytes: the names are in order, and no time is written.
-func Pack(dir string) ([]byte, error) {
-	var names []string
-	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.Type().IsRegular() {
-			rel, err := filepath.Rel(dir, path)
-			if err != nil {
-				return err
-			}
-			names = append(names, filepath.ToSlash(rel))
-		} else if !d.IsDir() {
-			return fmt.Errorf("%s is not a plain file", path)
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
+// PackFiles makes one zip file of a bundle's files, each under its path
+// in the bundle's folder.
+func PackFiles(files map[string][]byte) ([]byte, error) {
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
 	}
 	sort.Strings(names)
 	var out bytes.Buffer
 	zw := zip.NewWriter(&out)
 	for _, name := range names {
-		data, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(name)))
-		if err != nil {
-			return nil, err
-		}
 		w, err := zw.CreateHeader(&zip.FileHeader{Name: name, Method: zip.Deflate})
 		if err != nil {
 			return nil, err
 		}
-		if _, err := w.Write(data); err != nil {
+		if _, err := w.Write(files[name]); err != nil {
 			return nil, err
 		}
 	}
@@ -174,6 +163,32 @@ func Pack(dir string) ([]byte, error) {
 		return nil, err
 	}
 	return out.Bytes(), nil
+}
+
+// Pack makes one zip file of a bundle's folder.
+func Pack(dir string) ([]byte, error) {
+	files := map[string][]byte{}
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if !d.Type().IsRegular() {
+			return fmt.Errorf("%s is not a plain file", path)
+		}
+		rel, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		files[filepath.ToSlash(rel)], err = os.ReadFile(path)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return PackFiles(files)
 }
 
 // FromPackage reads a bundle from one file: a zip file of the bundle's
