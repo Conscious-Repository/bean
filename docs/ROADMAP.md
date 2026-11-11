@@ -56,7 +56,7 @@ Three things that matter to other people are missing. A bundle is not encrypted.
 
 **The need.** An AION instrument signs each acquisition when it captures it. The person brings the signed records into their log over a cable or a radio link. A reader can tell which device captured, with which settings, and that nothing changed since.
 
-No device exists yet, and the hardware is being decided now. bean does not wait for it: the protocol is written first, and the hardware is built to meet it. So this path starts with what the firmware and the hardware must be able to do. [EXTENSIONS.md](EXTENSIONS.md) section 11 is an earlier draft of the record shapes. No code implements it.
+No device exists yet, and the hardware is being decided now. bean does not wait for it: the protocol is written first, and the hardware is built to meet it. So this path starts with what the firmware and the hardware must be able to do. [DEVICE.md](DEVICE.md) is the format. [EXTENSIONS.md](EXTENSIONS.md) section 11 is an earlier draft that it replaces.
 
 **Decide in the hardware now. These are hard to change later.**
 
@@ -72,7 +72,8 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 - Every setting of the acquisition, the calibration in force, and the result of the self-test.
 - The model, hardware revision, firmware version and the two counters.
 - The device's time, as a claim.
-- Whole numbers and text only. The record is JSON in one fixed order, and fractions are hard to write the same way on every processor.
+- Whole numbers and text only. The statement is JSON in one fixed order, and fractions are hard to write the same way on every processor.
+- The id of the statement before it, so that none can be taken out of the middle.
 
 **What the device does not do.**
 
@@ -89,8 +90,8 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 
 **What bean builds.**
 
-1. **A written format and a checker, first.** The record shape, the transfer folder and test vectors, with a script that says whether a device's output is right. The firmware team can build against it before bean reads a single device.
-2. **A software device.** A small program that writes the same folder as a real device. bean and the firmware are then built side by side.
+1. **A written format and a checker, first. Done:** [DEVICE.md](DEVICE.md) and `tools/device/check.py`, one Python file that says whether a device's output is right (DECISIONS 276). The firmware team can build against it before bean reads a single device.
+2. **A software device. Done:** `tools/device/sim` writes the same folder as a real device. `make device` holds the Go check and the Python check to the same verdict.
 3. **`bean pair` and `bean import-device`.** The person trusts a device key. bean checks each signature, keeps the records unchanged, keeps the raw files encrypted, and records the device's clock against the host's.
 4. **Who signed, shown everywhere.** A device record shows the device's label in a listing, in a bundle and on the check page.
 

@@ -4,16 +4,17 @@
 PY ?= python3
 FUZZTIME ?= 2m
 
-.PHONY: help check build fmt vet test lint vuln prose vectors second compare bundles page pagetest example differential demo fuzz smoke
+.PHONY: help check build fmt vet test lint vuln prose vectors second compare bundles device page pagetest example differential demo fuzz smoke
 
 help:
-	@echo "make check         every check a commit needs (fmt vet build test lint vuln prose vectors second compare bundles pagetest example differential demo)"
+	@echo "make check         every check a commit needs (fmt vet build test lint vuln prose vectors second compare bundles device pagetest example differential demo)"
 	@echo "make test          go test -race -failfast ./..."
 	@echo "make prose         no sentence of a document is longer than 25 words"
 	@echo "make vectors       regenerate vectors/ and check them byte for byte and with Python"
 	@echo "make second        compare bean with the second verifier and the conformance folders"
 	@echo "make compare       compute every saved comparison again with Python and pandas"
 	@echo "make bundles       check share bundles, good and damaged, with bean, with Python and with the page"
+	@echo "make device        check a device's folder with Go and with Python, good and with one thing wrong"
 	@echo "make page          build bean-check.html, the page that checks a bundle in a browser"
 	@echo "make pagetest      try that page in a real browser (needs node with Playwright)"
 	@echo "make example       run examples/blood offline, on synthetic reference files"
@@ -21,7 +22,7 @@ help:
 	@echo "make fuzz          run each fuzz target for FUZZTIME (default 2m)"
 	@echo "make smoke         run the end-to-end and adversarial suite, with timings on a large log"
 
-check: fmt vet build test lint vuln prose vectors second compare bundles pagetest example differential demo
+check: fmt vet build test lint vuln prose vectors second compare bundles device pagetest example differential demo
 
 build:
 	go build ./...
@@ -49,7 +50,7 @@ vuln:
 # dated log and is not rewritten.
 DOCS = README.md CORE.md SPEC.md SECURITY.md UPGRADING.md CONTRIBUTING.md \
 	docs/COMMANDS.md docs/ONBOARDING.md docs/SHARE.md docs/COMPARE.md \
-	docs/IMPORTERS.md docs/ROADMAP.md docs/EXTENSIONS.md \
+	docs/IMPORTERS.md docs/ROADMAP.md docs/EXTENSIONS.md docs/DEVICE.md \
 	docs/PROVIDER-INGESTION.md docs/GOVERNANCE-PROPOSAL.md \
 	cmd/bean/vocabulary.md cmd/bean-import-lab/README.md \
 	cmd/bean-import-apple-health/README.md cmd/bean-import-nhanes/README.md \
@@ -82,6 +83,12 @@ compare:
 # This needs node, to run the page's check without a browser.
 bundles:
 	PY=$(PY) bash tools/second/bundles.sh
+
+# What a device hands over (docs/DEVICE.md): the Go check and the Python
+# check, which share no code, must agree on folders that Go and Python
+# wrote, good and with one thing wrong.
+device:
+	PY=$(PY) bash tools/device/run.sh
 
 # One file that checks a bundle in a browser, with no install and no
 # network: the check of bean check-bundle, built for a browser. The same

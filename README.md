@@ -365,6 +365,7 @@ bean protects who wrote what, and protects your identity against a stolen device
 | [SPEC.md](SPEC.md) | The full protocol: every rule, error and conformance test. |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | The open paths: what comes next, in what order, and what is not decided. |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Every design decision, numbered, with the reason. |
+| [docs/DEVICE.md](docs/DEVICE.md) | For the people who build an instrument: what a device signs and how it hands it over. A draft. |
 | [docs/EXTENSIONS.md](docs/EXTENSIONS.md) | Two draft extensions that no code implements yet: computed results and device capture. |
 | [docs/PROVIDER-INGESTION.md](docs/PROVIDER-INGESTION.md) | How data from a provider gets in, one source at a time. |
 | [docs/GOVERNANCE-PROPOSAL.md](docs/GOVERNANCE-PROPOSAL.md) | A proposal for who decides changes to the protocol. Not decided. |
