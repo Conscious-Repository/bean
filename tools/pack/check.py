@@ -24,8 +24,8 @@ number above zero.
 As a module: read_pack(path) returns a Pack (a dict) or raises Refused, and
 place(cell, value) returns the numbers of the result.
 
-Where the document is silent this tool takes the stricter reading; each such
-place is marked GAP in a comment.
+It shares no code with bean. It was written from the document, and where
+the two checks first disagreed the document now states the rule.
 """
 import hashlib
 import json
@@ -38,6 +38,7 @@ from decimal import Decimal
 FORMAT = "pack/0"
 MAX_BYTES = 64 * 1024 * 1024
 MIN_N = 30
+MAX_N = 2147483647  # the largest n that a cell may state
 MAX_TEXT = 400
 MAX_ID = 64
 ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
@@ -96,7 +97,7 @@ class Pack(dict):
 
 def _int_hook(s):
     v = int(s)  # a ValueError for more digits than Python reads: refused
-    # GAP: "a double can hold" is read with SPEC 3.8: a whole number must be
+    # "a double can hold" is read with SPEC 3.8: a whole number must be
     # within +-(2^53 - 1), as bean's own records are.
     if abs(v) > TWO53 - 1:
         raise Refused("a whole number beyond 2^53 - 1: %s" % safe(s, 30))
@@ -108,10 +109,10 @@ def _float_hook(s):
     if math.isinf(f) or math.isnan(f):
         raise Refused("a number that overflows a double: %s" % safe(s, 30))
     if f == 0 and re.search(r"[1-9]", s.split("e")[0].split("E")[0]):
-        # GAP: a literal that underflows to zero is a number a double cannot hold.
+        # a literal that underflows to zero is a number a double cannot hold.
         raise Refused("a number that underflows a double: %s" % safe(s, 30))
     if abs(f) > TWO53 - 1 and f == math.floor(f):
-        # GAP: the same limit for a whole number written with a point or an exponent.
+        # the same limit for a whole number written with a point or an exponent.
         raise Refused("a whole number beyond 2^53 - 1: %s" % safe(s, 30))
     return f
 
@@ -162,7 +163,7 @@ def parse_pack(data):
     except UnicodeDecodeError:
         raise Refused("not UTF-8")
     if text.startswith("﻿"):
-        # GAP: the document says "in UTF-8" and nothing of a byte order mark.
+        # the document says "in UTF-8" and nothing of a byte order mark.
         raise Refused("starts with a byte order mark")
     try:
         obj = json.loads(text, object_pairs_hook=_pairs_hook, parse_int=_int_hook,
@@ -201,7 +202,7 @@ def text(x, where):
         raise Refused("%s is %d bytes, not 1 to %d" % (where, n, MAX_TEXT))
     for c in x:
         cat = unicodedata.category(c)
-        # GAP: "control character" is read as: any Cc, and also the line and
+        # "control character" is read as: any Cc, and also the line and
         # paragraph separators and the bidirectional controls (Cf).
         if cat in ("Cc", "Cs", "Zl", "Zp") or c in "؜‎‏" or "‪" <= c <= "‮" or "⁦" <= c <= "⁩":
             raise Refused("%s has a control character" % where)
@@ -221,10 +222,11 @@ def is_num(x):
 
 
 def whole(x, where, low):
-    # GAP: "number" for a count is read as a whole number written as one.
-    if not (isinstance(x, int) and not isinstance(x, bool)) or x < low:
+    """A whole number, however it is written: 94, 94.0 and 9.4e1 are one
+    number."""
+    if not is_num(x) or x != int(x) or x < low:
         raise Refused("%s is not a whole number of %d or more" % (where, low))
-    return x
+    return int(x)
 
 
 def text_list(x, where):
@@ -251,12 +253,12 @@ def check_pack(p):
         members(f, FILE, w)
         text(f["name"], w + ".name")
         if f["name"] in names:
-            # GAP: two source files of one name cannot be told apart.
+            # two source files of one name cannot be told apart.
             raise Refused("%s: a file name is there twice" % w)
         names.add(f["name"])
         if not isinstance(f["sha256"], str) or not SHA_RE.fullmatch(f["sha256"]):
             raise Refused("%s.sha256 is not 64 lower-case hex digits" % w)
-        whole(f["bytes"], w + ".bytes", 1)  # GAP: a source file is not empty
+        whole(f["bytes"], w + ".bytes", 1)  # a source file is not empty
         text(f["url"], w + ".url")
     members(p["builder"], BUILDER, "builder")
     text(p["builder"]["name"], "builder.name")
@@ -280,7 +282,7 @@ def check_pack(p):
         text_list(m["caveats"], w + " caveats")
         same = m["same"]
         if not isinstance(same, list) or not same:
-            # GAP: a measure with no entry can never be compared with.
+            # a measure with no entry can never be compared with.
             raise Refused("%s: same is not a list of one entry or more" % w)
         for i, s in enumerate(same):
             members(s, SAME, "%s same[%d]" % (w, i))
@@ -321,7 +323,7 @@ def check_pack(p):
         if not isinstance(values, list) or not isinstance(weights, list):
             raise Refused("%s: values and weights are not lists" % w)
         if not values:
-            # GAP: no value gives a total weight of zero.
+            # no value gives a total weight of zero.
             raise Refused("%s has no value" % w)
         if len(weights) != len(values):
             raise Refused("%s has %d weights for %d values" % (w, len(weights), len(values)))
@@ -340,15 +342,15 @@ def check_pack(p):
             if not x > 0:
                 raise Refused("%s: weight %d is not above zero" % (w, j))
         n = whole(c["n"], w + " n", 0)
-        if n < MIN_N:
-            raise Refused("%s has an n below %d" % (w, MIN_N))
+        if n < MIN_N or n > MAX_N:
+            raise Refused("%s has an n that is not from %d to %d" % (w, MIN_N, MAX_N))
         if n < len(values):
             raise Refused("%s has an n below the number of distinct values" % w)
         total = 0.0
         for x in weights:
             total += float(x)
         if math.isinf(total):
-            # GAP: a total that overflows has no percentile.
+            # a total that overflows has no percentile.
             raise Refused("%s: the weights add up to more than a double holds" % w)
     return p
 

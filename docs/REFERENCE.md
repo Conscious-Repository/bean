@@ -52,7 +52,7 @@ A pack is one JSON object, in UTF-8. A builder writes it in bean's canonical for
 | `bean` | `pack/0`. |
 | `title` | What the pack is, in a few words. |
 | `source.name`, `source.publisher`, `source.home` | The source, who publishes it, and its address. |
-| `source.files` | One entry or more. Each has `name`, `sha256` (64 lower-case hex digits), `bytes` and `url`. These are the files that the pack was built from. |
+| `source.files` | One entry or more. Each has `name`, `sha256` (64 lower-case hex digits), `bytes` and `url`. These are the files that the pack was built from. A name is there once. |
 | `builder.name`, `builder.version` | The program that built the pack. |
 | `caveats` | Texts that qualify every comparison with this pack. It can be empty. |
 | `measures` | An object. Each key is a measure's id. |
@@ -66,15 +66,21 @@ A measure has these members:
 | `label` | The source's own label of the quantity, such as `Total Cholesterol (mg/dL)`. |
 | `unit` | The unit of every value in the measure's cells. |
 | `caveats` | Texts that qualify every comparison with this measure. |
-| `same` | A list. Each entry has `type` and `unit`. |
+| `same` | A list of one entry or more. Each entry has `type` and `unit`. |
 
 A `same` entry is a claim by the builder. It says that a reading of that type, in that unit, is this measure's quantity in this measure's unit. A reader compares a reading only when its type and its unit equal an entry exactly. No reader converts a unit. No type and unit may be in the `same` lists of two measures.
 
 A cohort has `text`, such as `male, age 30-39`, and `caveats`. Its id is the name that a person gives to choose it.
 
-Each object has the members that this document names and no other, each once. A number is a JSON number that an IEEE 754 double can hold. A pack is at most 64 MiB.
+Each object has the members that this document names and no other, each once. A pack is at most 64 MiB, and does not start with a byte order mark.
 
-Each object has the members that this document names and no other. An id is 1 to 64 letters, digits, dots, `-` and `_`, and starts with a letter or a digit. A text is 1 to 400 bytes, with no control character and no space at either end.
+A number is a JSON number that a bean record may hold: a double, and for a whole number at most 9007199254740991. How it is written does not matter: 94, 94.0 and 9.4e1 are one number. `bytes` is a whole number of 1 or more.
+
+A control character is one of U+0000 to U+001F, U+007F to U+009F, U+061C, U+200E, U+200F, U+2028 to U+202E and U+2066 to U+2069. They end a line, or hide or reorder text.
+
+A measure or a cohort may have no cell. The cells may be in any order.
+
+An id is 1 to 64 letters, digits, dots, `-` and `_`, and starts with a letter or a digit. A text is 1 to 400 bytes, with no control character and no space at either end.
 
 ## A cell
 
@@ -86,9 +92,9 @@ Each object has the members that this document names and no other. An id is 1 to
 |---|---|
 | `measure`, `cohort` | The ids of the measure and the cohort. A pair is there once. |
 | `kind` | `weights`. Version 0 has no other kind. |
-| `n` | The number of people. It is 30 or more. |
+| `n` | The number of people: a whole number from 30 to 2147483647. |
 | `values` | The distinct values of the cohort, in rising order. Each is a number above zero. |
-| `weights` | One number above zero for each value: the weight that the value carries. |
+| `weights` | One number above zero for each value: the weight that the value carries. Their sum is a number that a double can hold. |
 
 A weight is the sum of the sample weights of the people with that value. For a source with no sample weights, it is the count of those people.
 
@@ -147,11 +153,12 @@ A saved comparison gives the reading's value away to anyone with the pack ([COMP
 - a member that the format does not have, a missing one, or one that is there twice;
 - a cell of another kind;
 - values that are not in rising order, or a value that is there twice;
-- a value or a weight that is zero, negative or not a number;
+- a value or a weight that is zero, negative or not a number, and weights whose sum is too large for a double;
 - a list of weights that is shorter or longer than the list of values;
-- an n below 30, or below the number of distinct values;
+- an n below 30, above 2147483647, or below the number of distinct values;
 - a cell that names a measure or a cohort that the pack does not have, or a cell that is there twice;
-- a type and unit in the `same` lists of two measures;
+- a type and unit in the `same` lists of two measures, or twice in one, and a measure with an empty `same` list;
+- a source file that is named twice;
 - a text with a control character, and an id with a space.
 
 ## How a pack travels

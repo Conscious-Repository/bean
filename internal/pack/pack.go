@@ -43,6 +43,9 @@ const (
 	SmallN = 100
 )
 
+// MaxN is the largest n that a cell may state.
+const MaxN = 1<<31 - 1
+
 // MaxBytes is the largest pack that is read.
 const MaxBytes = 64 << 20
 
@@ -226,9 +229,14 @@ func Read(data []byte) (*Pack, error) {
 	if !ok || len(files) == 0 {
 		r.fail("source.files is not a list of one file or more")
 	}
+	named := map[string]bool{}
 	for _, x := range files {
 		f := r.object(x, "a source file", "name", "sha256", "bytes", "url")
 		file := File{Name: r.text(f["name"], "a source file's name"), URL: r.text(f["url"], "a source file's url")}
+		if named[file.Name] {
+			r.fail("a source file is named twice")
+		}
+		named[file.Name] = true
 		file.SHA256, _ = f["sha256"].(string)
 		if !digestPattern.MatchString(file.SHA256) {
 			r.fail("a source file's sha256 is not 64 lower-case hex digits")
@@ -254,8 +262,8 @@ func Read(data []byte) (*Pack, error) {
 		m := r.object(measures[id], "measure "+view.Safe(id), "label", "unit", "caveats", "same")
 		measure := Measure{Label: r.text(m["label"], "a measure's label"), Unit: r.text(m["unit"], "a measure's unit"), Caveats: r.texts(m["caveats"], "a measure's caveats")}
 		same, ok := m["same"].([]any)
-		if !ok {
-			r.fail("a measure's same is not a list")
+		if !ok || len(same) == 0 {
+			r.fail("a measure's same is not a list of one entry or more")
 		}
 		for _, x := range same {
 			s := r.object(x, "a same row", "type", "unit")
@@ -308,8 +316,8 @@ func Read(data []byte) (*Pack, error) {
 		switch {
 		case len(cell.Values) == 0 || len(cell.Values) != len(cell.Weights):
 			r.fail("%s does not have one weight for each value", where)
-		case !isNumber || n != math.Trunc(n) || n < MinN || n > 1<<31:
-			r.fail("%s has an n that is not a whole number of %d or more", where, MinN)
+		case !isNumber || n != math.Trunc(n) || n < MinN || n > MaxN:
+			r.fail("%s has an n that is not a whole number from %d to %d", where, MinN, MaxN)
 		case int(n) < len(cell.Values):
 			r.fail("%s has more distinct values than people", where)
 		}
@@ -318,6 +326,14 @@ func Read(data []byte) (*Pack, error) {
 				r.fail("%s does not have its values in rising order, each once", where)
 				break
 			}
+		}
+		// Weights that are each a number can add up to none.
+		var total float64
+		for _, w := range cell.Weights {
+			total += w
+		}
+		if math.IsInf(total, 0) {
+			r.fail("%s has weights whose sum is too large for a number", where)
 		}
 		cell.N = int(n)
 		p.Cells = append(p.Cells, cell)

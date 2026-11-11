@@ -79,6 +79,9 @@ cases = {
     "files-none": lambda p: p["source"].update(files=[]),
     "digest-upper": lambda p: p["source"]["files"][0].update(sha256="A" * 64),
     "bytes-zero": lambda p: p["source"]["files"][0].update(bytes=0),
+    "file-twice": lambda p: p["source"]["files"].append(p["source"]["files"][0]),
+    "same-empty": lambda p: first(p["measures"]).update(same=[]),
+    "n-huge": lambda p: cell(p).update(n=4000000000),
     "caveat-number": lambda p: p.update(caveats=[1]),
     "kind": lambda p: cell(p).update(kind="quantiles"),
     "cell-member": lambda p: cell(p).update(note="x"),
@@ -87,6 +90,7 @@ cases = {
     "value-zero": lambda p: cell(p)["values"].__setitem__(0, 0),
     "weight-negative": lambda p: cell(p)["weights"].__setitem__(0, -1.5),
     "weight-text": lambda p: cell(p)["weights"].__setitem__(0, "1"),
+    "weights-overflow": lambda p: cell(p).update(weights=[1e308] * len(cell(p)["weights"])),
     "weight-missing": lambda p: cell(p)["weights"].pop(),
     "values-none": lambda p: cell(p).update(values=[], weights=[]),
     "n-small": lambda p: cell(p).update(n=29),
@@ -114,6 +118,8 @@ for name, text in {
     "member-twice": raw.replace('{"bean":"pack/0",', '{"bean":"pack/0","bean":"pack/0",', 1),
     "cut-short": raw[: len(raw) // 2],
     "nan": raw.replace('"n":', '"n":NaN,"x":', 1),
+    "bom": "\ufeff" + raw,
+    "whole-number-too-large": raw.replace('"bytes":', '"bytes":9007199254740993,"x":', 1),
     "number-too-large": raw.replace('"weights":[', '"weights":[1e999,', 1),
 }.items():
     with open(os.path.join(out, name + ".pack"), "w") as f:
@@ -129,6 +135,17 @@ for f in "$T"/wrong/*.pack; do
 done
 # The pack that was not changed still passes: the changes are what is refused.
 bean -dir "$T/log" compare -pack "$T/syn.pack" >/dev/null 2>&1 || say "bean refuses the good pack"
+# A number written another way is the same number, and the cells may be in
+# any order: both read such a pack, under another SHA-256.
+"$PY" -I - "$T/syn.pack" "$T/other.pack" <<'EOF2'
+import json, re, sys
+p = json.load(open(sys.argv[1]))
+p["cells"].reverse()
+text = re.sub(r'"n":(\d+)', r'"n":\1.0', json.dumps(p, indent=1), count=1)
+open(sys.argv[2], "w").write(text)
+EOF2
+bean -dir "$T/log" compare -pack "$T/other.pack" >/dev/null 2>&1 || say "bean refuses a pack that is written another way"
+"$PY" -I "$HERE/check.py" "$T/other.pack" >/dev/null 2>&1 || say "check.py refuses a pack that is written another way"
 
 real=""
 if [ -n "${BEAN_NHANES_DIR:-}" ]; then
