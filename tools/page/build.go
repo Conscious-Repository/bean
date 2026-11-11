@@ -81,9 +81,10 @@ func build(out string) error {
 	}
 	html := page
 	for mark, text := range map[string]string{
-		"/*LOADER*/":  string(loader),
-		"/*PROGRAM*/": base64.StdEncoding.EncodeToString(packed.Bytes()),
-		"<!--GO-->":   strings.TrimSpace(string(version)),
+		"/*LOADER*/":     string(loader),
+		"/*PROGRAM*/":    base64.StdEncoding.EncodeToString(packed.Bytes()),
+		"<!--GO-->":      strings.TrimSpace(string(version)),
+		"<!--VERSION-->": commit(),
 	} {
 		if strings.Count(html, mark) != 1 {
 			return fmt.Errorf("page.html must hold %s once", mark)
@@ -99,4 +100,18 @@ func build(out string) error {
 	}
 	fmt.Printf("%s  %d bytes  sha256 %x\n", out, len(html), sha256.Sum256([]byte(html)))
 	return nil
+}
+
+// commit names what the page was built from: the commit, in full, so that
+// a reader can build the same page. A build from changed files, or outside
+// a checkout, says so and names no commit: nobody can build it again.
+func commit() string {
+	head, err := exec.Command("git", "rev-parse", "HEAD").Output()
+	if err != nil {
+		return "built outside a checkout"
+	}
+	if changed, err := exec.Command("git", "status", "--porcelain").Output(); err != nil || len(changed) > 0 {
+		return "built from files that are in no commit"
+	}
+	return "commit " + strings.TrimSpace(string(head))
 }

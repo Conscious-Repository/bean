@@ -19,9 +19,13 @@ shared 1 records and 0 files in for-ana.bean
 share record sha256:41ae...
 The package is sealed. It opens with these six words:
   moral arrive identify have dress oblige
+Your identity words, which are not a secret:
+  injury glow drink patch dynamic submit
 ```
 
 - **Send the file one way and the words another.** Send the file by e-mail or any other way. Give the words by a phone call, in person, or in a message on another service. Whoever has only the file can read nothing in it: no record, no type, no note.
+- **Read your identity words to the reader, in the same call.** They are six words made from your identity id, and `bean whoami` shows them. The reader's check shows the identity words of whoever signed. If the two are the same, the records are from your identity. A changed package cannot pass this: nobody else can sign as your identity.
+- **The words also show who sealed it.** A package opens only with its own six words. So whoever sealed a package that opens knew the words: you, or someone you told.
 - **The reader needs no key and no account.** They open the file in a browser with `bean-check.html`, which asks for the words, or with `bean check-bundle for-ana.bean`. Both open it on the reader's device and then check it as they check a folder.
 - **bean makes the words and does not keep them.** Six words of a list of 2048 are 66 bits that no person chose. If the words are lost, share again: a new package gets new words.
 - **A changed package does not open.** Nor does a package that was cut short. The three openers read the format strictly, and `make bundles` holds them to one verdict.
@@ -63,17 +67,32 @@ A comparison is shown as its claim states it. The check proves who signed the cl
 
 ### In a browser, with no install
 
-A reader with no terminal opens one page, `bean-check.html`, and chooses the bundle's folder or a zip file of it. The page gives one of three verdicts: the bundle passed, it failed, or nothing was checked (the wrong folder, not a zip file). When it passed, the page shows your note and each record, then who signed and what no bundle can show. Nothing is shown from a bundle that did not pass, and no earlier verdict stays on the page.
+A reader with no terminal opens one page, `bean-check.html`, and chooses the file they received, or a folder. The page gives one of four verdicts:
+
+- **The records passed.** The page says what the check shows and what it does not. It shows the signer's identity words, your note, each record, and what no bundle can show. A text file that the package carries can be read in the page, and any file can be saved.
+- **The records failed.** The page shows what failed and nothing else: no record, no note, and not who signed.
+- **The file did not open.** The words were wrong, or the file was changed. The form stays, to try again.
+- **Nothing was checked.** The wrong folder, or a file that is not a bundle.
+
+No earlier verdict stays on the page. The technical lines of `bean check-bundle` are under "Details for a technical reader". A printed page names the file, the time of the check and the page's commit.
 
 - The page is one file. It holds the same check as `bean check-bundle`, built for a browser, and loads nothing else. It works from a disk, with no connection.
 - It sends nothing: its script makes no request, and its content policy blocks every load. What a reader opens in it has nowhere to go. A policy cannot stop a page from leaving for another address; this page's script never does, and holds no link.
-- `make page` builds it. The same commit and the same Go give the same bytes, and the build prints their SHA-256. It is not in the repository: it is 3.7 MB of built program.
+- `make page` builds it. The same commit and the same Go give the same bytes, and the build prints their SHA-256. The page names its commit and its Go, so anyone can build that page again. It is not in the repository: it is 3.7 MB of built program.
 - Send the folder as a zip file; the page reads it packed. What the page is given must be the bundle's own folder, or one folder that is the bundle. Anything beside it is refused, and anything else inside it is named as not checked.
 - A zip file can read differently in different tools. So a pass covers what the page read. To open a file that a bundle carries, the reader unpacks the zip file and checks the unpacked folder; the page says so.
-- A page that came with a bundle is only as good as whoever sent both: a forged page can call anything good. When it matters, the reader gets the page from the project, or builds it, and compares its SHA-256. The page says so itself.
+- A page that came with the records is only as good as whoever sent both. A forged page can call anything good, and can show any identity words. The reader gets the page from another place than the records ([below](#which-page-to-trust)). The page says so itself.
 - What only a disk can hold, a link or a pipe in the folder, a browser does not hand to a page. `check-bundle` judges those; the page judges the bytes it gets.
 - A bundle whose records hold more than 32 MiB together is refused by the page: a browser has little memory. `check-bundle` has no such limit.
 - It was tried in Chromium, opened from a disk, on a wide screen and a phone's (`make pagetest`). Firefox and Safari have what it needs and were not tried.
+
+### Which page to trust
+
+A page cannot prove itself: a forged page prints whatever its maker likes, and a page cannot compute the SHA-256 of its own file. So the trust comes from where the reader got the page.
+
+- **A reader with no terminal** gets the page from the bean project, not from the sender. The sender tells them where, in the same call that gives the words. Today the project has no public address for the page: that is the next step ([ROADMAP.md](ROADMAP.md)). Until then, such a reader trusts the sender for the page as well.
+- **A reader with a terminal** builds the page (`make page`) at the commit that a copy names, and compares the SHA-256 of the two files. Or they do not use the page: `bean check-bundle` and `tools/second/checkbundle.py` are the same check.
+- **What a second source adds.** One address can serve one reader a changed page. A SHA-256 that is published in a second place, or a build of one's own, is what catches that.
 
 Read a bundle with `check-bundle`, not by pointing `-dir` at it: a bundle is someone else's records, not your log. If you did, no harm is done: bean leaves a `local` folder there, which the check names and does not read.
 
@@ -92,7 +111,7 @@ They cannot tell, and bean says so on every check:
 
 - **That it is complete.** A bundle is the records you chose. A correction or a deletion you left out, or made later, does not show. "All my readings this year" is your word, not something the bundle proves.
 - **That a value is true.** A signature shows who signed.
-- **Who you are.** An identity is a key, not a name.
+- **Who you are.** An identity is a key, not a name. The check shows the identity as six words. Your reader knows that it is you only when you read them the same words, by a way that an attacker does not control.
 - **That the key is still yours.** A bundle holds the key changes made before it was signed, not later ones. Someone who stole a key you have since retired can sign a bundle with it, leave the retirement out, and it passes. The check prints the key that signed. When it matters, the reader asks you for your current key (`bean whoami`) by another way, and compares.
 
 And you should know:

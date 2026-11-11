@@ -211,7 +211,7 @@ bean check-bundle for-ana.bean     # what Ana runs: it asks for the six words, c
 
 - It shows what will leave and asks first. Only the records you choose go, with what they are about. Files go only with `-files`, and a lab report only when you name it.
 - The reader can tell that each record is yours and unchanged, and that nothing was added or removed. They can check it without bean: `tools/second/checkbundle.py`.
-- A reader with no terminal checks it in a browser. `make page` builds `bean-check.html`, one file that reads the folder or a zip file of it. The page runs the same check on the reader's device and sends nothing. It lists each file that the bundle carries, with a button to save it.
+- A reader with no terminal checks it in a browser. `make page` builds `bean-check.html`, one file that reads the folder or a zip file of it. The page runs the same check on the reader's device and sends nothing. It shows the signer's identity as six words, which you read to your reader (`bean whoami`). It lists each file that the bundle carries, to read or to save.
 - The reader cannot tell that it is complete: it is what you chose. Nor that the key that signed is still yours, if you changed keys since. bean says so on every check.
 - Without `-seal` a bundle is a plain folder that anyone who carries it can read. Sealed or not, once it is opened it cannot be taken back.
 

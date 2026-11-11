@@ -4,7 +4,7 @@
 PY ?= python3
 FUZZTIME ?= 2m
 
-.PHONY: help check build fmt vet test lint vuln prose vectors second compare bundles device page pagetest example differential demo fuzz smoke
+.PHONY: help check build fmt vet test lint vuln prose vectors second compare bundles device page dist pagetest example differential demo fuzz smoke
 
 help:
 	@echo "make check         every check a commit needs (fmt vet build test lint vuln prose vectors second compare bundles device pagetest example differential demo)"
@@ -16,6 +16,7 @@ help:
 	@echo "make bundles       check share bundles, good and damaged, with bean, with Python and with the page"
 	@echo "make device        check a device's folder with Go and with Python, good and with one thing wrong"
 	@echo "make page          build bean-check.html, the page that checks a bundle in a browser"
+	@echo "make dist          build what a release publishes: the page, its SHA-256 and how to build it again"
 	@echo "make pagetest      try that page in a real browser (needs node with Playwright)"
 	@echo "make example       run examples/blood offline, on synthetic reference files"
 	@echo "make differential  compare this build with OLD (default origin/main)"
@@ -95,6 +96,18 @@ device:
 # commit and the same Go give the same bytes; it prints their SHA-256.
 page:
 	go run ./tools/page -o bean-check.html
+
+# What a release publishes: the page, its SHA-256, and how to build the
+# same file again. CI builds it on every push, so the digest of a commit
+# is on record from a machine that is not the releaser's.
+dist:
+	mkdir -p dist
+	go run ./tools/page -o dist/bean-check.html >/dev/null
+	cd dist && sha256sum bean-check.html > SHA256SUMS
+	@{ echo "bean-check.html checks shared records in a browser: it installs nothing and sends nothing."; echo; \
+	  echo "SHA-256 of bean-check.html:"; echo; sed 's/^/    /' dist/SHA256SUMS; echo; \
+	  echo "To get the same file, byte for byte: check out this commit, then run make page with $$(go env GOVERSION)."; } > dist/NOTES.md
+	@cat dist/SHA256SUMS
 
 # The page's own script, buttons and content policy, in a real browser
 # opened from the disk. CI has no browser to drive, so this runs where

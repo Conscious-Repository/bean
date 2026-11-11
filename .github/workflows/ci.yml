@@ -27,6 +27,16 @@ jobs:
           python-version: '3.12'
       - name: Install verifier dependencies
         run: python -m pip install -r tools/requirements.txt
+      # Before anything else writes a file: the page names its commit only
+      # when it is built from a clean checkout.
+      - name: Build the check page and record its SHA-256
+        run: |
+          make dist
+          { echo "bean-check.html, SHA-256:"; echo '```'; cat dist/SHA256SUMS; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bean-check
+          path: dist/
       - name: Verify build, tests and vectors
         run: |
           make fmt vet build prose test vectors second compare bundles device example demo

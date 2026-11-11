@@ -10,3 +10,6 @@ __pycache__/
 
 # Built by make page.
 /bean-check.html
+
+# Built by make dist.
+/dist/

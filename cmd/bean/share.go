@@ -517,13 +517,16 @@ func cmdShare(s *core.Store, args []string) {
 	}
 	fmt.Printf("shared %d records and %d files in %s\n", len(shared), len(distinct), out)
 	fmt.Printf("share record %s\n", shareID)
+	who := "Your identity words, which are not a secret:\n  " + core.IDWords(l.ID) + "\nThe reader's check shows the identity words of whoever signed. Read yours to the reader, so that they know the records are yours."
 	if *seal {
 		fmt.Println("The package is sealed. It opens with these six words:")
 		fmt.Println("  " + words)
 		fmt.Println("Give the words to the reader by another way than the file, such as a phone call. bean does not keep them: if they are lost, share again.")
+		fmt.Println(who)
 		fmt.Println("The reader opens it with bean check-bundle, or in a browser with bean-check.html.")
 		return
 	}
+	fmt.Println(who)
 	fmt.Println("The bundle is not encrypted: anyone who gets the folder can read it. Share with -seal to write one file that only its reader can open.")
 }
 

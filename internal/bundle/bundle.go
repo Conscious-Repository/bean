@@ -89,6 +89,9 @@ type Input struct {
 	Files []File
 	// FilesFault says why files/ could not be listed, or "".
 	FilesFault string
+	// Locked reports a sealed package that did not open: no words, wrong
+	// words, or a changed file. Opened reports one that its words opened.
+	Locked, Opened bool
 }
 
 // Carried is one file that a bundle carries.
@@ -115,6 +118,19 @@ type Result struct {
 	// Unread reports that what was given could not be read as a bundle at
 	// all: the wrong folder, not a zip file. Nothing was checked.
 	Unread bool `json:"unread"`
+	// Locked reports a sealed package that did not open, and Opened one
+	// that its words opened. Only someone who knows the words can have
+	// sealed a package that they open.
+	Locked bool `json:"locked"`
+	Opened bool `json:"opened"`
+	// Identity is the id of the identity that signed the share record, and
+	// Words that id as six words that a person can read out. Key is the
+	// key that signed, and When the time that the share record states.
+	// They are set when every check passed.
+	Identity string `json:"identity"`
+	Words    string `json:"words"`
+	Key      string `json:"key"`
+	When     string `json:"when"`
 	// Head is what the check says before the records: who shared, when, and
 	// the counts.
 	Head []string `json:"head"`
@@ -173,9 +189,10 @@ func Check(in Input) Result {
 		return res
 	}
 	if len(in.Fatal) > 0 {
-		res.Problems, res.Unread = slices.Clone(in.Fatal), true
+		res.Problems, res.Unread, res.Locked = slices.Clone(in.Fatal), true, in.Locked
 		return done()
 	}
+	res.Opened = in.Opened
 	res.Problems = slices.Clone(in.Problems)
 	// Rule 1: every record file passes the checks of a log, with nothing
 	// left over: no error, no warning, no record of a newer format.
@@ -408,6 +425,7 @@ func Check(in Input) Result {
 	res.Head = append(res.Head,
 		fmt.Sprintf("share %s", share.ID),
 		fmt.Sprintf("signed by identity %s, with key %s, at %s", person, share.Kid, when),
+		fmt.Sprintf("identity words: %s", core.IDWords(person)),
 		fmt.Sprintf("records: %d listed; files: %d included, %d named and not included", len(listed), included, named),
 		fmt.Sprintf("signed: %d by the person, %d by an agent the person paired, %d by another key", byPerson, byAgent, byOther),
 		fmt.Sprintf("corrections: %d of the listed records replace an earlier record, which is not in the bundle", corrections),
@@ -427,6 +445,7 @@ func Check(in Input) Result {
 	// What it holds, shown only when every check passed.
 	if len(res.Problems) == 0 {
 		res.Note, _ = share.Context["note"].(string)
+		res.Identity, res.Words, res.Key, res.When = person, core.IDWords(person), share.Kid, when
 		res.Files = included
 		res.Carried = carried
 		var rows []*core.Record

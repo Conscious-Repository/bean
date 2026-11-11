@@ -54,8 +54,10 @@ def hkdf(key, salt, info):
 
 def clean(words):
     """The words as a person types them: any letter case, with spaces,
-    commas or hyphens between."""
-    return " ".join(words.lower().replace(",", " ").replace("-", " ").split())
+    commas, hyphens or full stops between."""
+    for mark in ",-.;":
+        words = words.replace(mark, " ")
+    return " ".join(words.lower().split())
 
 
 def unseal(data, words):
