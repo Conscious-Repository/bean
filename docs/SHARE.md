@@ -6,7 +6,29 @@
 bean share -out for-ana 3fa9c1 7b8b81              # these records
 bean share -out lipids -type 'comparison.*'        # every saved comparison, each with its reading
 bean share -out with-files -files 7b8b81           # also the files those records keep
+bean share -seal -out for-ana.bean 3fa9c1          # one file that only its reader can open
 ```
+
+## Seal it for one reader
+
+A folder is plain: whoever carries it can read it. With `-seal`, bean writes one file that is encrypted, and prints six words that open it.
+
+```
+$ bean share -seal -out for-ana.bean -note "my lipids" 3fa9c1
+shared 1 records and 0 files in for-ana.bean
+share record sha256:41ae...
+The package is sealed. It opens with these six words:
+  moral arrive identify have dress oblige
+```
+
+- **Send the file one way and the words another.** Send the file by e-mail or any other way. Give the words by a phone call, in person, or in a message on another service. Whoever has only the file can read nothing in it: no record, no type, no note.
+- **The reader needs no key and no account.** They open the file in a browser with `bean-check.html`, which asks for the words, or with `bean check-bundle for-ana.bean`. Both open it on the reader's device and then check it as they check a folder.
+- **bean makes the words and does not keep them.** Six words of a list of 2048 are 66 bits that no person chose. If the words are lost, share again: a new package gets new words.
+- **A changed package does not open.** Nor does a package that was cut short.
+- **The format is not bean's own.** A package is the bundle's folder as a zip file, encrypted in the age format (age-encryption.org/v1) with the words as its passphrase. `age -d` opens one. So does `tools/second/unseal.py`, which reads the format from its specification and shares no code with bean.
+- **What it does not do.** A reader who has opened a package holds a copy for good. Whoever learns both the file and the words can open it. The words protect the package on its way, not after.
+
+Your log's share record says `"seal": "passphrase"`. It does not hold the words.
 
 ## What goes in
 
@@ -26,7 +48,8 @@ The bundle is written whole or not at all: it is built beside its place, checked
 ## Reading a bundle someone sent you
 
 ```
-bean check-bundle for-ana
+bean check-bundle for-ana          # a folder, or a zip file of it
+bean check-bundle for-ana.bean     # a sealed package: it asks for the six words
 ```
 
 One command checks the bundle and, when it passes, shows what it holds. Each record has its time as the sender recorded it, its type and its value. A record that the sender did not sign shows who signed it. Each comparison is in words, such as `percentile 46 of lab.cholesterol-total 187 mg/dL, among male, age 30-39 (n 339)`, with its caveats below. A bundle that fails lists no record and shows no note. The check still prints the share record's id, its signer and the counts. You need no log of your own for this, and the check changes nothing in the folder.
@@ -74,7 +97,7 @@ And you should know:
 - **A bundle is a disclosure.** It is not encrypted, and once sent it cannot be taken back. Deleting or correcting a record later does not reach a bundle you sent: send a new one.
 - **Keep the folder you sent** if you want to know later what was in it. The share record in your log lists ids; a record you deleted since is gone from your log, and the bundle is the only copy.
 - **One share holds up to about 14,000 records.** Its list must fit one record. Share a long series in parts, by `-since` and `-until`.
-- **Send it as one file, by a way you trust.** A bundle is a folder: zip it. Without `-files` it is a few kilobytes; with the NHANES files, 4 to 18 MB. bean does not encrypt it. Whoever carries the file can read it. Send it over a channel that encrypts end to end, or encrypt the zip file to your reader first with a tool you both have. A bundle encrypted to its reader's key is on the roadmap.
+- **Send it sealed.** `bean share -seal` writes one encrypted file that opens with six words ([above](#seal-it-for-one-reader)). A plain bundle is a folder that anyone who carries it can read. Zip it, and send it only over a channel that encrypts end to end. Without `-files` a bundle is a few kilobytes; with the NHANES files, 4 to 18 MB. A package sealed to a reader's own key is on the roadmap.
 - **Two bundles of yours can be linked.** Every record carries your identity id.
 - **Your identity records say how many records you had at each key change.** A key change lists the ids of the records it seals. The ids are hashes and give no content away, but their number shows.
 - **A correction travels without what it corrects.** A record that replaces an earlier one is shared alone; the earlier one stays home. The check says how many such corrections a bundle holds.
@@ -108,6 +131,7 @@ The share record is an ordinary record:
 | `context.proof` | the ids of the identity records and pairings that travel with them |
 | `context.files` | absent, or one entry per file in `files/`. An entry has `blob` (the id by which a listed record names the file) and `record` (that record). It also has `sha256` (64 hex digits) and `bytes` (a whole number) of the plaintext. A stored file that stays home has no entry: its own record names it. |
 | `context.note` | the `-note`, if any |
+| `context.seal` | `"passphrase"` when the share left as a sealed package; absent for a folder |
 
 A bundle passes when all of this holds. A list in the share record that is not as the table says fails the check; it is never read in a kinder way.
 

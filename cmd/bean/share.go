@@ -110,6 +110,7 @@ func cmdShare(s *core.Store, args []string) {
 	files := fs.Bool("files", false, "also share the files that the records keep, in plaintext")
 	note := fs.String("note", "", "a line for the reader, stored in the share record")
 	yes := fs.Bool("yes", false, "write without the review")
+	seal := fs.Bool("seal", false, "write one file that only its reader can open, with six words")
 	pos, err := parseInterspersed(fs, args)
 	if err != nil || *outFlag == "" || (len(pos) == 0 && *typ == "") || (*typ == "" && (*since != "" || *until != "")) {
 		usage()
@@ -124,6 +125,9 @@ func cmdShare(s *core.Store, args []string) {
 	out, err := filepath.Abs(*outFlag)
 	if err != nil {
 		fail(err)
+	}
+	if _, err := os.Lstat(out); *seal && err == nil {
+		fail(fmt.Errorf("%s is there already: a sealed package is a new file", out))
 	}
 	if err := bundleTarget(out); err != nil {
 		fail(err)
@@ -337,6 +341,11 @@ func cmdShare(s *core.Store, args []string) {
 	if *note != "" {
 		ctx["note"] = *note
 	}
+	// The person's own record of how the bundle left. It does not hold the
+	// words.
+	if *seal {
+		ctx["seal"] = "passphrase"
+	}
 	line := core.Canonical(map[string]any{
 		"type":    bundle.ShareType,
 		"value":   map[string]any{"n": float64(len(shared)), "unit": "{record}"},
@@ -374,6 +383,7 @@ func cmdShare(s *core.Store, args []string) {
 		select {
 		case got := <-sig:
 			os.RemoveAll(tmp)
+			os.Remove(tmp + ".sealed")
 			fmt.Fprintf(os.Stderr, "bean: stopped by %s; nothing was shared, and the half-built bundle is removed\n", got)
 			code := 1
 			if n, ok := got.(syscall.Signal); ok {
@@ -420,19 +430,61 @@ func cmdShare(s *core.Store, args []string) {
 		}
 		gone(errors.New("the bundle does not pass bean check-bundle"))
 	}
-	stopped() // the last moment: after this the share runs to its end
-	if err := os.Remove(out); err != nil && !errors.Is(err, os.ErrNotExist) {
-		gone(err)
+	// A sealed package: the folder becomes one file that opens with six
+	// words. It is opened and checked once more, as its reader will, before
+	// it takes its place.
+	words, sealed := "", filepath.Join(filepath.Dir(out), filepath.Base(tmp)+".sealed")
+	if *seal {
+		packed, err := bundle.Pack(tmp)
+		if err == nil {
+			words, err = bundle.NewWords()
+		}
+		var data []byte
+		if err == nil {
+			data, err = bundle.Seal(packed, words)
+		}
+		if err == nil {
+			if res := bundle.Check(bundle.FromPackage(out, data, words)); !res.OK {
+				err = errors.New("the sealed package does not open and pass the check")
+			}
+		}
+		if err == nil {
+			err = os.WriteFile(sealed, data, 0o600)
+		}
+		if err != nil {
+			os.Remove(sealed)
+			gone(err)
+		}
 	}
-	if err := os.Rename(tmp, out); err != nil {
-		gone(err)
+	stopped() // the last moment: after this the share runs to its end
+	if *seal {
+		// The folder held plaintext: it goes before the package is in place.
+		os.RemoveAll(tmp)
+		if err := os.Rename(sealed, out); err != nil {
+			os.Remove(sealed)
+			fail(fmt.Errorf("nothing was shared: %w", err))
+		}
+	} else {
+		if err := os.Remove(out); err != nil && !errors.Is(err, os.ErrNotExist) {
+			gone(err)
+		}
+		if err := os.Rename(tmp, out); err != nil {
+			gone(err)
+		}
 	}
 	if err := s.AddSigned(shareID, shareBytes); err != nil {
 		fail(fmt.Errorf("the bundle is written, in %s, and its share record could not be added to your log: %w", out, err))
 	}
 	fmt.Printf("shared %d records and %d files in %s\n", len(shared), len(distinct), out)
 	fmt.Printf("share record %s\n", shareID)
-	fmt.Println("The bundle is not encrypted. Anyone can check it with bean check-bundle, or without bean: tools/second/checkbundle.py.")
+	if *seal {
+		fmt.Println("The package is sealed. It opens with these six words:")
+		fmt.Println("  " + words)
+		fmt.Println("Give the words to the reader by another way than the file, such as a phone call. bean does not keep them: if they are lost, share again.")
+		fmt.Println("The reader opens it with bean check-bundle, or in a browser with bean-check.html.")
+		return
+	}
+	fmt.Println("The bundle is not encrypted: anyone who gets the folder can read it. Share with -seal to write one file that only its reader can open.")
 }
 
 // bundleTarget refuses a place a bundle must not go: inside the log, onto
@@ -440,6 +492,9 @@ func cmdShare(s *core.Store, args []string) {
 func bundleTarget(out string) error {
 	if rel, err := filepath.Rel(logDir, out); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("%s is inside your log: a bundle goes somewhere else", out)
+	}
+	if info, err := os.Lstat(out); err == nil && !info.IsDir() {
+		return fmt.Errorf("%s is a file: a bundle goes into a new or empty folder", out)
 	}
 	entries, err := os.ReadDir(out)
 	switch {
@@ -457,13 +512,45 @@ func cmdCheckBundle(args []string) {
 	if len(args) != 1 {
 		usage()
 	}
-	lines, ok := checkBundle(args[0])
+	var lines []string
+	var ok bool
+	if info, err := os.Stat(args[0]); err == nil && info.Mode().IsRegular() {
+		lines, ok = checkPackage(args[0])
+	} else {
+		lines, ok = checkBundle(args[0])
+	}
 	for _, line := range lines {
 		fmt.Println(safe(line))
 	}
 	if !ok {
 		os.Exit(1)
 	}
+}
+
+// checkPackage checks a bundle that is one file: a zip file of the folder,
+// or a sealed package. For a sealed one it asks for the six words, and
+// reads them from standard input.
+func checkPackage(path string) ([]string, bool) {
+	fatal := func(format string, a ...any) ([]string, bool) {
+		res := bundle.Check(bundle.Input{Fatal: []string{fmt.Sprintf(format, a...)}})
+		return res.Lines(), false
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.Size() > 2<<30 {
+		return fatal("%s cannot be read, or is too large to be a package", path)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fatal("%s cannot be read: %s", path, err)
+	}
+	words := ""
+	if bundle.IsSealed(data) {
+		fmt.Fprint(os.Stderr, "The six words of this package: ")
+		line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+		words = line
+	}
+	res := bundle.Check(bundle.FromPackage(path, data, words))
+	return res.Lines(), res.OK
 }
 
 // checkBundle checks the bundle in a folder by the five rules of

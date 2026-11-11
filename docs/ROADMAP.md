@@ -1,112 +1,127 @@
 # Roadmap
 
-What is done in the first loop, and what comes next. Earlier work is in the git history, and the reasons are in [DECISIONS.md](DECISIONS.md). Nothing here is final.
+This file is the one place for open paths: what bean should do next, in what order, and what is not decided. Work that is done is in the git history, and the reasons are in [DECISIONS.md](DECISIONS.md). Nothing here is final.
 
-## What bean is for
+## Where bean stands (2026-11-11)
 
-bean is an open format for personal health evidence. Anyone can check that evidence without trusting the person who keeps it, or the program that wrote it. A record is a claim, not a fact. On top of the core sit three layers, kept apart:
+A person can keep a log, import lab reports, Apple Health and CSV files, and compare a reading with public survey data. They can share chosen records as a bundle that anyone can check: with bean, with Python, or in a browser. Two independent checkers and a real-browser test guard those paths.
 
-1. **Evidence.** What was observed, who signed it, from which original file. This is the core, and it is built.
-2. **Exchange.** A person hands chosen records, with their files, to someone else, who can check them without bean or an account.
-3. **Comparison.** A reproducible computation that sets a personal reading against public reference data. It says what it compared, how, and what it could not compare.
+Three things that matter to other people are missing. A bundle is not encrypted. Two people cannot compare with each other. A device cannot sign what it captures. They are the three paths below, in the order to build them.
 
-Exchange and comparison are programs that write ordinary signed claims. They change no core rule. bean uses existing vocabularies (LOINC, units, public dataset variables) through adapters, and does not replace FHIR, OMOP or LOINC.
+## Path 1: a sealed package for one reader
 
-## Goal
+**The need.** A person sends records to a doctor or a peer. Only that reader can open the package. The reader may have no key and no account.
 
-1. The first user imports their own data and uses it every week. If that does not happen, stop and find out why.
-2. By 2026-11-15, the first shareable loop (below): a technical person can run it, and a researcher can check it.
-3. Then: technical users install bean, import their data, sign, share and compare, through a CLI and their own AI agent.
+**The plan.**
 
-## Next: the first shareable loop (by 2026-11-15)
+1. **Seal with a passphrase first. Done:** `bean share -seal` ([SHARE.md](SHARE.md), DECISIONS 275). bean packs the bundle into one file, encrypts it, and makes six random words. The person gives the words to the reader by another channel, such as a phone call. The check page asks for the words, opens the file on the reader's device, and runs the check. This needs no key from the reader.
+2. **Seal to a reader's key next.** The check page makes a key for the reader, in their browser. The secret part stays on their device. They send the public part, a short reader address, to the sender. `bean share -to <address>` seals the package to it. A reader who runs bean gets an address from bean.
+3. **Use a standard format. Done.** The file is an `age` file, so a tool other than bean can open it. bean invents no cipher.
+4. **Say what leaves.** The review before a share also says that the person's identity id travels. It flags a file that holds a name or a birth date.
+5. **Record who it was for.** The share record says that a passphrase was used. With a reader's key it will name the reader's address.
 
-**Done means:** a person who has never used bean clones the repo and runs one script on a synthetic lab report. The script does three things. It imports the report, keeping the PDF. It compares the total cholesterol reading with NHANES 2017–2018. It writes a share bundle. On a second machine, without a bean log, they check every signature in the bundle and get the same percentile from an independent implementation. The first user runs the same steps on their own report, privately. No real health data enters the repository.
+**What it cannot do.** A reader who has opened the package holds a copy for good. Withdrawing permission stops the next share, not the last one.
 
-In order. Each step is done only when its test passes.
+**Open.**
 
-1. **Real import, privately (day 1). Done.**
-   - A real report imports: 71 readings, each checked by hand against the PDF (DECISIONS 230, 231). Its layout, with synthetic content, is `cmd/bean-import-lab/testdata/real-layout.txt`. The real text never enters the repository.
-   - `bean import` shows what it read and asks before it saves; `-yes` skips that for scripts (DECISIONS 234).
-2. **Reference data: NHANES 2017–2018. Done.**
-   - `bean import nhanes <file.XPT>` keeps a public file as a `reference.file` record, on the same rail as a lab report. The record has an encrypted blob, its SHA-256 and the data set's name (DECISIONS 236, 258).
-   - One record per file, not one per release: CDC publishes files, and each is pinned on its own.
-   - The person who imports it signs for having kept it. It is never written as CDC's claim.
-   - `internal/xpt` reads SAS transport itself. On ten CDC files it gives the same bits as pandas for every value but zero, which pandas reads as 5.4e-79.
-3. **`bean compare`. Done.**
-   - `bean compare -sex <s> -age <from>-<to> [-where <rule>]... <ids> | -type 'lab.*'` (DECISIONS 237 to 240 and 246 to 248, [COMPARE.md](COMPARE.md)).
-   - The cohort is "people like me", stated as rules: sex and age, then any of ethnicity, body measures and a day's food. Every rule is in the claim, and n is on every row.
-   - Twelve tests: total and HDL cholesterol, hemoglobin A1c and the blood count.
-   - `-save` writes a `comparison.percentile` claim, `about` the reading and each file, with the cohort, the method, the files' digests and the result. It does not copy the reading's value.
-   - A row is a number with its caveats, or no number and why. Fewer than 30 people: no number.
-   - It says where a value lies in a sample. It does not diagnose, flag risk or advise.
-   - Same inputs, same bytes.
-4. **Independent reproduction. Done.**
-   - `tools/compare/reproduce.py` (Python, pandas) computes every number of a saved claim again from the claim, the reading and the files. It shares no code with bean. It holds the same tables as bean: the tests, the weights, the caveats and the files' digests. A test keeps them equal.
-   - `make compare` fails if one number differs, in CI on synthetic files; with `BEAN_NHANES_DIR` it runs on CDC's files.
-5. **`bean share` and `bean check-bundle`. Done.**
-   - `bean share -out <folder> <ids> | -type <type>` writes the chosen records, the records they are about, and the identity records that verify them. It adds one `share` record, signed by the person, that lists exactly what the bundle holds. Files go only with `-files`, as plaintext named by SHA-256 (DECISIONS 251, [SHARE.md](SHARE.md)).
-   - A bundle is a small log, so the checks of a log apply unchanged. `bean check-bundle <folder>` needs no log. `tools/second/checkbundle.py`, which follows SHARE.md and shares no code with bean, gives the same verdict. `make bundles` checks both on bundles good and damaged.
-   - The person sees what leaves and confirms. The share record stays in the log as the record of the disclosure.
-   - A bundle proves that what it holds is authentic and exactly what the person listed. It does not prove completeness, and every check says so.
-   - A shared comparison computes again from its bundle (`reproduce.py <bundle>`).
-6. **Quickstart and release to peers.**
-   - Done: `examples/blood/run.sh` runs steps 1 to 5 on a synthetic report with values a person could have. The steps are: import, fetch the NHANES files, compare, share, check without bean. It fails if a number differs from `expected.txt`. `make example` runs it offline on synthetic reference files, in CI.
-   - Done: the README has the five-minute path.
-   - Open, and the owner's to do: confirm the NHANES digests from a second connection, and open the repository to the people who will try it. Then require the CI check on `main`. A private repository on the free plan cannot, so until then a PR merges only after CI passes on its exact head.
+- Should `-seal` become what `bean share` does unless told otherwise? Today a plain folder is the default, because the checks and the examples are built on it.
+- Does a package need an end date after which the page refuses to open it? An end date stops an honest reader's page. It does not stop a copy.
 
-Not this week: Apple Health readings beyond what exists, `bean-import-csv -map`, `-to <npub>` encryption, `bean attest` and `bean trust`, NIP-46, nutrition.
+## Path 2: people compare with each other
 
-## What it is for, and where it stands
+**The need.** A person with a condition wants to learn from others in the same situation: what they measured, what they tried, what happened. bean is the way they exchange evidence with people they trust. bean does not diagnose, rank treatments or advise.
 
-bean is meant to become the canonical log of what a person's measuring hardware acquires. Until that hardware is here, bean has to be worth using for what people already have. They import it, share parts of it with a doctor or a peer in a way they can check, and compare it with public data. Measured against that on 2026-11-11 (DECISIONS 262 to 273):
+**The plan, in steps that each stand alone.**
 
-| Use | Today | What is missing first |
-|---|---|---|
-| Import what exists | Works: two lab layouts, Apple Health, CSV. A CSV needs times with an offset, which few spreadsheets write. | More layouts, each from a real file. A time zone flag for CSV. |
-| Compare with public data | Works for twelve blood tests, on files the person downloads. | The reference pack below, so that nothing large is downloaded. |
-| Share with a peer | Works with friction: each reads the other's bundle, in a browser or with bean or Python; nothing sets two people's results side by side. | A bundle encrypted to its reader. |
-| Share with a doctor | Works with friction: the doctor opens one page in a browser and chooses the folder or its zip file, with no install. The page has to reach them first: today the person builds it (`make page`) and sends it along. A page that comes with a bundle is only as good as its sender. | The page published with a release, with its SHA-256. |
-| A device's readings | Not built. A device can sign as a paired key today, and such readings list, share and check. But the device runs the whole of bean. A pairing for devices and the device clock (EXTENSIONS 11) are not there. The Python checker takes minutes on thousands of device-signed records. Every command reads the whole log. | A real instrument. Then device capture, from what it shows. |
+1. **One person to one person.** Path 1 is this step. A person sends a sealed package, such as a biopsy report with their notes, to a peer they already know. The peer checks it and reads it.
+2. **A reply that the owner can keep.** The peer signs notes about the records they received, and sends them back sealed. The owner adds those notes to their log, marked with who signed them. Today a log takes records from the person, their paired agents and nobody else.
+3. **Side by side.** bean shows the records of two people next to each other, each with its signer and its caveats. It computes nothing across them.
+4. **Finding each other.** A person publishes a short card: a condition, what they look for, and a reader address. It holds no measurement. Others answer with a sealed package. Where cards live is not decided.
+5. **A statistic over a group.** A group wants its own distribution, and no member wants to show their values. This is the one step that needs computing on hidden values. It waits for a real group, and for steps 1 to 4.
 
-## After the loop: compare without the download
+**On homomorphic encryption.** Steps 1 to 4 need none: each person shows chosen records to chosen people. Step 5 is where it applies. For a small group, a simpler method than full homomorphic encryption may do. Each member splits their value into shares, and only the sum is opened. The choice waits for a real group and a real question.
 
-Today a person downloads the survey files to compare with them. That is right for someone who wants every rule and every check in their own hands. It is too much for most people, who will meet bean inside a phone app. The way to drop the download without sending anyone's number anywhere:
+**Risks to design for.**
 
-- **A reference pack.** One small signed file per data set. For every cohort on a fixed menu (sex and age band first), it holds the weight of each distinct value of each test. That is the table that steps 6 to 8 of the method need ([COMPARE.md](COMPARE.md)). The same table gives the same result, to the last bit, as the files.
-- **Blind by construction.** Everyone fetches the same file, so the host learns neither a person's value nor which cohort they looked at. The comparison runs on the device. No encryption scheme is needed for this, and none is planned for it.
-- **Checkable by anyone.** A pack is a deterministic output of public files, a menu and the method. Whoever has the files builds the same bytes and compares the digest. Most people never will; that anyone can is what keeps a publisher honest. A saved comparison pins the pack's digest and the cohort.
-- **Raw files stay.** A cohort off the menu, such as a diet pattern, needs the files on the person's own machine, as today.
-- **Other sources, the same shape.** A pack built from AION devices' pooled data, with a floor on n and only for people who agreed. Nobody outside can rebuild it, so comparisons with it carry that as a caveat. A table from a published study, with its citation. A friend's bundle.
-- **Custody is a separate choice.** A host that holds a person's data and computes for them is the easy path for many. It makes that host a handler of health values, with what follows from that. It uses the same method and writes the same claim, signed by the host.
+- A card for a rare condition can identify a person. A card is coarse, and it carries a reader address made for it, not the person's identity id.
+- A claim is a claim. A peer's account of a treatment is not evidence that it works, and bean says so wherever it shows one.
+- Any output that ranks, scores or recommends is a different product, with its own review. The steps above produce none.
 
-Not now: computing on encrypted values (homomorphic encryption, multi-party computation). A reference pack does not need it: the public table goes to the value, not the value to the table. It is the right tool for one thing that may come: statistics across peers who each keep their values to themselves. No host sees the values. That is a real path for peer-to-peer growth and stays open. It waits for a concrete case, such as a group of people who want their own shared distribution. It also waits for the simpler steps before it: a bundle encrypted to its reader, then a pack built from people who agreed.
+**Open.**
 
-## After that: people like me
+- The first peers are people who already know and trust each other (the owner, 2026-11-11). So steps 1 to 3 come first, and step 4 waits.
+- Who runs the place where cards live: nobody (people pass addresses by hand), an open network, or AION?
 
-The first question a person asks is not "where is my cholesterol". It is "how do I compare with people like me, who eat what I eat". The rule-based cohort is the start. In order of value for the effort:
+## Path 3: a device signs what it captures
 
-- **More tests.** Each is one row in `internal/nhanes`, from the file's own label and a real report's name for the test. Next: the biochemistry profile, hs-CRP, ferritin, vitamin D. Fasting tests (glucose, triglycerides, LDL, insulin) need the fasting weight first.
-- **More people.** One cycle has about 9,000 people, so three rules often leave fewer than 30. Pool cycles (2017 to March 2020 is published as one file set), with the weights CDC gives for pooling.
-- **Your own food as the rule.** Work out the ranges from the person's own `food.estimate` records, and say how many days they cover. One recalled day in NHANES is not a usual diet; the two-day files and their weight come first.
-- **Check a recommended range.** Given a range someone recommends, show the share of the cohort inside it. That is a fact about the sample, not advice.
-- **Outcomes.** NHANES has linked mortality files. Associations only, and only after a regulatory read.
-- **Genetics.** NHANES publishes no genotypes. This is another rail with the same shape: the person's genotype file and a public score file pinned by its digest. The score is computed locally and saved as a signed claim.
-- **An assistant asks for a comparison.** `bean mcp` can read saved comparisons today. A tool that runs one comes after the person has used the command for a while.
+**The need.** An AION instrument signs each acquisition when it captures it. The person brings the signed records into their log over a cable or a radio link. A reader can tell which device captured, with which settings, and that nothing changed since.
 
-## Also after the loop
+No device exists yet, and the hardware is being decided now. bean does not wait for it: the protocol is written first, and the hardware is built to meet it. So this path starts with what the firmware and the hardware must be able to do. [DEVICE.md](DEVICE.md) is the format. [EXTENSIONS.md](EXTENSIONS.md) section 11 is an earlier draft that it replaces.
 
-1. **Read Labcorp PDFs by word position too.** Quest reports are read this way since 0.5.0. `pdftotext -bbox-layout` gives each word's box; columns come from where the header words sit, not from counted spaces. Most attacks on the layout grammar (DECISIONS 219 to 231) were artifacts of `-layout` spacing.
-2. **Unknown layouts, with an assistant if the person wants.** The person's own assistant, or a local model, proposes each reading with the page and words it read it from. bean checks every value against those words in the PDF and refuses what is not printed there. The person confirms the table, and the readings are theirs, with the extractor in context. bean ships no model and no key. A scanned PDF has no words to check against: the person confirms each value. Design it on a second real report from another lab, never from memory.
-3. **Freeze at `v` 0** (CORE.md section 6). After two weeks of real use (lab results, Apple Health, chat and agent logging) with no change to CORE.md, every DEFAULT in SPEC.md is final.
-4. **Longitudinal comparison.** A reading over time against what published studies saw over the same interval: baseline, cadence, follow-up and attrition. This needs a time-course matching contract first.
-5. **Summary-statistics references.** Many studies publish only aggregates. A reference may be a published table, with its citation, as well as participant-level files. Access-restricted datasets stay outside the repository.
-6. **Comparison packages.** Standardize the interface of a comparison (inputs, method, cohort, caveats), and let others publish datasets and methods for it. Extension 1's replay rules wait until two kinds of comparison exist.
-7. **Nutrition as exposure.** `food` and `food.estimate` exist. Next comes a source-backed estimate (USDA FoodData Central) with its uncertainty, kept apart from what the person said they ate. No causal claims.
-8. **Share and trust, further.** `check-bundle -key <key>` to compare the signing key with one the person gave, and `-to <npub>` encryption of a bundle. A share that does not carry the stable identity id, and expiring links. `bean attest <id>`, and `bean trust <identity or npub> <1-100>`. Readers compute trust; the core does not.
-9. **Release.** A `go install` path and a neutral home ([GOVERNANCE-PROPOSAL.md](GOVERNANCE-PROPOSAL.md)). Each release publishes `bean-check.html`, the page that checks a bundle in a browser, with its SHA-256 and the Go that built it.
-10. **NIP-46 remote signing,** so that the nsec never sits on the host.
-11. **Device capture** (Extension 2). Wait for a real instrument, not a synthetic one.
-12. **More importers,** from real export files, never from memory. `bean-import-csv -map "<column>=<type>[:<unit>]"`, so that one row can make several records. Apple Health heart rate and daily series wait for rules that reconcile exports.
+**Decide in the hardware now. These are hard to change later.**
+
+1. **A key that is made on the device and never leaves it.** Use a secure element or the secure key store of the processor. Choose a part that signs with ECDSA on the P-256 curve: most secure elements do, and bean accepts it. The public key can be read out, and is also printed on the device as a code to scan.
+2. **A certificate from the factory.** At manufacture, AION signs each device's public key with its model and hardware revision. Without it, a reader sees that some key signed. With it, a reader sees that an AION device of a named model signed. This needs a step on the production line and a key that AION guards.
+3. **Signed firmware, and its version in every record.** A device key signs whatever the firmware hands it. If the firmware can be replaced, the signature means less. The record names the firmware version and build.
+4. **A counter that never goes back.** Each record carries the count of acquisitions and the count of starts since manufacture. A device clock can be wrong or reset. A counter gives the order and shows a gap.
+5. **Enough storage and time to hash the raw data.** The device computes the SHA-256 of each raw acquisition as it writes it.
+
+**What the device signs, per acquisition. One record, not one per sample.**
+
+- The SHA-256 of the raw data, and its size.
+- Every setting of the acquisition, the calibration in force, and the result of the self-test.
+- The model, hardware revision, firmware version and the two counters.
+- The device's time, as a claim.
+- Whole numbers and text only. The statement is JSON in one fixed order, and fractions are hard to write the same way on every processor.
+- The id of the statement before it, so that none can be taken out of the middle.
+
+**What the device does not do.**
+
+- It does not know whose body it measured. The person says so when they bring the record into their log.
+- It does not hold the person's keys or their log.
+- It does not judge the measurement.
+
+**The transfer.**
+
+- The device hands over a folder: the signed records, the raw files, and its current time.
+- The folder is the same over a cable, Bluetooth or Wi-Fi. The link is not trusted for integrity, because the records are signed.
+- The link must still be private. A radio link is encrypted, and its pairing key is not the signing key.
+- The device keeps an acquisition until the host confirms it holds it.
+
+**What bean builds.**
+
+1. **A written format and a checker, first. Done:** [DEVICE.md](DEVICE.md) and `tools/device/check.py`, one Python file that says whether a device's output is right (DECISIONS 276). The firmware team can build against it before bean reads a single device.
+2. **A software device. Done:** `tools/device/sim` writes the same folder as a real device. `make device` holds the Go check and the Python check to the same verdict.
+3. **`bean pair` and `bean import-device`.** The person trusts a device key. bean checks each signature, keeps the records unchanged, keeps the raw files encrypted, and records the device's clock against the host's.
+4. **Who signed, shown everywhere.** A device record shows the device's label in a listing, in a bundle and on the check page.
+
+**What a device signature supports.** This key signed these bytes, with these settings, in this order. With the factory certificate: the key belongs to an AION device of this model. It does not show that the reading is accurate, or whose body was measured.
+
+**Open, for the hardware team.**
+
+- Which processor, and does it have a secure element or a secure key store? Can it sign with P-256?
+- Is there a production step where a certificate can be issued?
+- How large is one raw acquisition, and does the device process it or send it raw?
+- Which links will the device have: cable, Bluetooth, Wi-Fi? Is a phone always part of the transfer?
+- Can the firmware be updated in the field, and is the update signed?
+
+## Order
+
+1. Path 1, the passphrase package. It is small, and Path 2 starts with it.
+2. Path 3, the written format, the checker and the software device. The hardware decisions will not wait.
+3. Path 2, steps 2 and 3.
+4. Path 3, pairing and import, when a real device or its firmware can produce the folder.
+5. Path 2, steps 4 and 5, when real peers ask for them.
+
+## Smaller open paths
+
+- **Compare without the download.** A reference pack: one small signed file per data set, with the table that the method needs for each cohort on a fixed menu. Anyone can build it again from the public files and compare the digest ([COMPARE.md](COMPARE.md)).
+- **More tests and cohort rules.** Each is one row in `internal/nhanes`, from the file's own label and a real report's name.
+- **More importers,** each from a real file, never from memory. A time zone flag for CSV times.
+- **A check of a whole export in Python.**
+- **Release.** A `go install` path and a neutral home ([GOVERNANCE-PROPOSAL.md](GOVERNANCE-PROPOSAL.md)). Each release publishes `bean-check.html` with its SHA-256 and the Go that built it.
+- **The owner's to do.** Confirm the NHANES digests from a second connection. Open the repository to the people who will try it. Then require the CI check on `main`.
+- **Freeze at `v` 0** (CORE.md section 6), after two weeks of real use with no change to CORE.md.
 
 ## Limits to say out loud
 
@@ -141,4 +156,4 @@ The first question a person asks is not "where is my cholesterol". It is "how do
 
 ## Not planned
 
-A central data platform that a person cannot leave. A UI beyond a static report. Relay publishing of records. Encryption of record files at rest (use an encrypted volume). Whoop and Oura importers until there is a real export. Zero-knowledge proofs, and distributed trust scores. Custody by a host a person chooses, and computing on encrypted values, are not in this list: see "compare without the download" above.
+A central data platform that a person cannot leave. A UI beyond a static report. Relay publishing of health records. Encryption of record files at rest (use an encrypted volume). Whoop and Oura importers until there is a real export. Zero-knowledge proofs, and distributed trust scores. Any output that diagnoses, predicts or advises.

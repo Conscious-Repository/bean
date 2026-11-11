@@ -1,7 +1,7 @@
 // check.mjs: runs the check that a built bean-check.html carries, without
 // a browser, so that scripts can compare it with bean check-bundle.
 //
-//     node tools/page/check.mjs <bean-check.html> <bundle folder or .zip>
+//     node tools/page/check.mjs <bean-check.html> <bundle folder, .zip or sealed package> [six words]
 //
 // It takes the loader and the program out of the page, starts the program
 // as the page does, and hands it the folder as a browser would. It prints
@@ -11,7 +11,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, basename } from "node:path";
 import { gunzipSync } from "node:zlib";
 
-const [pagePath, target] = process.argv.slice(2);
+const [pagePath, target, words] = process.argv.slice(2);
 if (!pagePath || !target) {
   console.error("usage: node check.mjs <bean-check.html> <bundle folder or .zip>");
   process.exit(2);
@@ -41,7 +41,7 @@ if (statSync(target).isDirectory()) {
   walk(target, basename(target) + "/");
   out = beanCheck(target, null, paths, datas);
 } else {
-  out = beanCheck(target, new Uint8Array(readFileSync(target)), null, null);
+  out = beanCheck(target, new Uint8Array(readFileSync(target)), null, null, words || "");
 }
 const res = JSON.parse(out);
 console.log(res.lines.join("\n"));

@@ -5,7 +5,8 @@
 #   2. fetch the public NHANES files from CDC and keep them;
 #   3. compare the readings with men of 30 to 39, and save the comparisons;
 #   4. share them as a bundle;
-#   5. check the bundle and compute every comparison again, without bean.
+#   5. check the bundle and compute every comparison again, without bean;
+#   6. seal the same records into one file for one reader, and open it.
 #
 #   examples/blood/run.sh [work folder]
 #   examples/blood/run.sh --synthetic [work folder]
@@ -75,13 +76,31 @@ else
   echo "(python3 with tools/requirements.txt is not installed: the checks without bean are skipped)"
 fi
 
+say "6. Seal the same records for one reader, and open the package as that reader"
+bean share -yes -seal -note "the example package" -out "$WORK/for-a-reader.bean" -type 'comparison.*' >"$WORK/seal.txt" 2>/dev/null
+cat "$WORK/seal.txt"
+WORDS=$(sed -n 's/^  //p' "$WORK/seal.txt" | head -1)
+# The reader types the words. Here they are piped in.
+echo "$WORDS" | bean check-bundle "$WORK/for-a-reader.bean" 2>/dev/null | tail -1
+if echo "wrong words do not open this package" | bean check-bundle "$WORK/for-a-reader.bean" >/dev/null 2>&1; then
+  echo "a package opened with the wrong words"; exit 1
+fi
+if python3 -c 'import cryptography' 2>/dev/null; then
+  rm -rf "$WORK/opened"
+  echo "$WORDS" | python3 -I "$ROOT/tools/second/unseal.py" "$WORK/for-a-reader.bean" "$WORK/opened" | sed "s|$WORK/||"
+  python3 -I "$ROOT/tools/second/checkbundle.py" "$WORK/opened" | tail -1
+fi
+
 # The numbers must be the ones this example was written with. Ids differ
 # from run to run, so they are cut off, and the rows sorted. Rows with no
 # number are left out.
 rows() { grep -h '^lab\.' "$@" | grep -v 'not comparable' | sed 's/  *[0-9a-f]\{12\}$//; s/   */  /g' | sort; }
 { echo "# men of 30 to 39"; rows "$WORK/compare.txt"; echo "# and a BMI from 20 to 27"; rows "$WORK/compare-bmi.txt"; } >"$WORK/numbers.txt"
 if diff "$WORK/numbers.txt" "$WANT" >"$WORK/diff.txt"; then
-  say "Done: every number matches $(basename "$WANT"). The log, the files and the bundle are in $WORK"
+  say "Done: every number matches $(basename "$WANT"). The log, the files, the bundle and the package are in $WORK"
+  echo "To be the reader in a browser: run 'make page', open bean-check.html, choose"
+  echo "  $WORK/for-a-reader.bean"
+  echo "and type the six words: $WORDS"
 else
   say "The numbers differ from $(basename "$WANT"):"; cat "$WORK/diff.txt"; exit 1
 fi

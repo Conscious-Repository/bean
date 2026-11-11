@@ -66,6 +66,7 @@ Tests of applications that use computed results, for example a comparison of a 7
 
 This extension is above the core line.
 The core treats device records as ordinary claims with a bare-key author.
+[DEVICE.md](DEVICE.md) is the current draft for a device, and takes another way. The device signs a statement that has no subject, and the person's own record points at it. Where the two differ, DEVICE.md holds.
 
 ### 11.2 Device keys
 

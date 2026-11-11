@@ -32,6 +32,8 @@ p { margin: .5rem 0; max-width: 46rem; }
 .drop.over { border-color: var(--accent); }
 button { font: inherit; padding: .5rem .9rem; margin: .25rem .5rem .25rem 0; border: 1px solid var(--accent); border-radius: .4rem; background: var(--accent); color: var(--bg); cursor: pointer; }
 button:disabled { opacity: .5; cursor: default; }
+#words-box { margin-top: .75rem; }
+#words { font: inherit; padding: .45rem .6rem; max-width: 100%; border: 1px solid var(--line); border-radius: .4rem; background: var(--bg); color: var(--fg); }
 .verdict { margin: 1.5rem 0 1rem; padding: 1rem 1.25rem; border-radius: .5rem; border: 1px solid; }
 .verdict strong { display: block; font-size: 1.2rem; }
 .verdict div div { margin-top: .25rem; }
@@ -67,15 +69,20 @@ footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--line
 <body>
 <main>
 <h1>Check a bean bundle</h1>
-<p>A bundle is a folder of health records that one person chose to share. This page checks that every record is what that person signed and that nothing was added or removed. Then it shows what the bundle holds.</p>
+<p>A bundle is a folder of health records that one person chose to share, or one sealed file of it that opens with six words. This page checks that every record is what that person signed and that nothing was added or removed. Then it shows what the bundle holds.</p>
 <p class="muted">The check runs on this device. This page sends nothing: its script makes no request, and its policy blocks every load.</p>
 
 <div class="drop" id="drop">
   <button id="pick-folder" disabled>Choose the bundle's folder</button>
-  <button id="pick-zip" disabled>Choose a .zip file</button>
+  <button id="pick-zip" disabled>Choose a package or .zip file</button>
   <span class="muted" id="status">Getting ready…</span>
   <input type="file" id="folder" webkitdirectory hidden>
-  <input type="file" id="zip" accept=".zip,application/zip" hidden>
+  <input type="file" id="zip" hidden>
+  <form id="words-box" hidden>
+    <p><label for="words">This package is sealed. Type the six words that its sender gave you:</label></p>
+    <input type="text" id="words" autocomplete="off" autocapitalize="none" spellcheck="false" size="48">
+    <button id="open" type="submit">Open</button>
+  </form>
 </div>
 
 <section id="result" hidden>
@@ -208,11 +215,39 @@ function unread(name, why) {
   show(name, { ok: false, unread: true, problems: [why] });
 }
 
+// A sealed package starts with this line. It opens with six words.
+const SEALED = "age-encryption.org/v1\n";
+let waiting = null; // a sealed package that waits for its words
+
 async function checkZip(file) {
   if (file.size > MAX_BYTES) return unread(file.name, "this file is too large to be a bundle");
   const data = new Uint8Array(await file.arrayBuffer());
+  if (new TextDecoder().decode(data.subarray(0, SEALED.length)) === SEALED) {
+    // Ask for the words. Nothing is known about the package until then.
+    waiting = { name: file.name, data };
+    $("words").value = "";
+    $("words-box").hidden = false;
+    $("words").focus();
+    return;
+  }
   show(file.name, JSON.parse(beanCheck(file.name, data, null, null)), true);
 }
+
+$("words-box").onsubmit = (ev) => {
+  ev.preventDefault();
+  const pack = waiting, words = $("words").value;
+  if (!pack) return;
+  run(pack.name, async () => {
+    const res = JSON.parse(beanCheck(pack.name, pack.data, null, null, words));
+    // Wrong words leave the box open, to try again.
+    if (!res.unread) {
+      waiting = null;
+      $("words-box").hidden = true;
+      $("words").value = "";
+    }
+    show(pack.name, res, true);
+  });
+};
 
 // checkFolder hands over every path, and the bytes of what can be part of
 // a bundle: what lies under objects/ and files/. Nothing else is read.
@@ -237,13 +272,17 @@ async function run(name, work) {
   if (busy) return;
   busy = true;
   $("result").hidden = true;
+  if (!waiting || waiting.name !== name) {
+    waiting = null;
+    $("words-box").hidden = true;
+  }
   $("status").textContent = "Checking " + clean(name) + "…";
   for (const b of document.querySelectorAll("button")) b.disabled = true;
   // Let the page draw that, before the check keeps it busy.
   await new Promise((next) => setTimeout(next, 30));
   try {
     await work();
-    $("status").textContent = "You can check another.";
+    $("status").textContent = waiting ? "This package is not open yet." : "You can check another.";
   } catch (err) {
     unread(name, go.exited
       ? "the check stopped, most likely because this is too large for a browser. Reload this page before you check anything else."
@@ -283,7 +322,7 @@ addEventListener("drop", (ev) => {
   const entry = items.length === 1 && items[0].webkitGetAsEntry ? items[0].webkitGetAsEntry() : null;
   const file = items.length === 1 ? items[0].getAsFile() : null;
   if (!file || (entry && entry.isDirectory)) {
-    return run("what you dropped", async () => unread("what you dropped", "drop one .zip file. For a folder, use the button."));
+    return run("what you dropped", async () => unread("what you dropped", "drop one package or .zip file. For a folder, use the button."));
   }
   run(file.name, () => checkZip(file));
 });
@@ -291,7 +330,7 @@ addEventListener("drop", (ev) => {
 start().then(() => {
   for (const b of document.querySelectorAll("button")) b.disabled = false;
   busy = false;
-  $("status").textContent = "Or drop a .zip file here.";
+  $("status").textContent = "Or drop a package or a .zip file here.";
 }, (err) => {
   $("status").textContent = "This browser cannot run the check (" + (err && err.message ? err.message : err) + "). Use a current Chrome, Edge, Firefox or Safari.";
 });

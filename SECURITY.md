@@ -30,7 +30,7 @@ This page says what bean protects, what it does not protect, and where each key 
 - **A missing seal part fails closed.** Someone who can delete files in a copy can delete a `bean.seal` part. Then every record of the retired key in that copy is not valid until the part comes back from another copy. Nothing is erased, and no one without the 24 words can add or replace a part.
 - **Equal files look equal.** Encryption is deterministic, so someone with the files can see that two of them hold the same content.
 
-**A bundle is a disclosure.** `bean share` writes plaintext: a bundle is not encrypted, and once sent it cannot be taken back. Two bundles of yours can be linked by your identity id ([docs/SHARE.md](docs/SHARE.md)).
+**A bundle is a disclosure.** A plain bundle is not encrypted. `bean share -seal` encrypts it with six words, which protects it on its way. A reader who has opened it holds a copy for good, and whoever learns both the file and the words can open it. Two bundles of yours can be linked by your identity id ([docs/SHARE.md](docs/SHARE.md)).
 
 **A saved comparison gives its reading away.** The record holds the cohort and the result. With the public files, anyone who has the record can work the value out.
 

@@ -17,6 +17,7 @@ python3 -I tools/checkvectors.py     # independent check of the vectors; needs `
 PY=python3 bash tools/second/run.sh  # the second verifier against bean and against vectors/conformance
 PY=python3 bash tools/compare/run.sh # every saved comparison computed again with Python and pandas
 PY=python3 bash tools/second/bundles.sh # share bundles, good and damaged, checked by bean and by Python
+PY=python3 bash tools/device/run.sh  # a device's folder, good and wrong, checked by Go and by Python
 ```
 
 Run all of them before every commit; `make check` runs them, plus staticcheck, govulncheck and a check that `tools/genvectors` reproduces every vector byte for byte. It also runs the example, the page in a browser, and a comparison with the build of `origin/main`. So it needs node (for `bundles`), node with Playwright and Chromium (for `pagetest`), and `origin/main` (for `differential`). `make fuzz` runs the fuzz targets (2 minutes each) and `make smoke` runs the end-to-end and adversarial suite in `tools/smoke.sh`. When you change a test vector, run `go run ./tools/genvectors` and the Python checks. The conformance folders come from `tools/second/cases.py`: delete `vectors/conformance`, run `python3 tools/second/cases.py vectors/conformance`, then `go run ./tools/genvectors` to write each `expected.txt`. Every vector is reproducible; V6 uses an RFC 6979 nonce since 2026-10-30.
@@ -44,6 +45,9 @@ cmd/bean-import-nhanes/   keeps a public NHANES file as a reference file
 internal/bundle/          the check of a share bundle; bean check-bundle and the
                           page run it
 internal/view/            the words a record is shown in
+internal/capture/         the check of the folder that a device hands over
+tools/device/             a software device, a second writer and the Python
+                          check of that folder (docs/DEVICE.md)
 tools/page/               builds bean-check.html, the page that checks a bundle
                           in a browser
 tools/differential/       compares this build's output with another build's

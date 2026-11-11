@@ -620,3 +620,94 @@ func TestBundleReadsTheSameEveryTime(t *testing.T) {
 		t.Errorf("a failed bundle shows the note:\n%s", strings.Join(lines, "\n"))
 	}
 }
+
+// TestShareSealed: with -seal a share is one file that opens with six words
+// that bean makes and does not keep. Nothing of it is readable without them.
+func TestShareSealed(t *testing.T) {
+	dir, _, ids := compareLog(t)
+	where := t.TempDir()
+	out := filepath.Join(where, "for-ana.bean")
+	stdout, errs, code := run(t, dir, "", "share", "-yes", "-seal", "-note", "for Ana", "-out", out, ids[0])
+	if code != 0 || !strings.Contains(stdout, "The package is sealed") {
+		t.Fatalf("%d\n%s\n%s", code, stdout, errs)
+	}
+	words := ""
+	for _, line := range strings.Split(stdout, "\n") {
+		if strings.HasPrefix(line, "  ") {
+			words = strings.TrimSpace(line)
+		}
+	}
+	if len(strings.Fields(words)) != 6 {
+		t.Fatalf("no six words in:\n%s", stdout)
+	}
+	data, err := os.ReadFile(out)
+	if err != nil || !bundle.IsSealed(data) {
+		t.Fatalf("no sealed file: %v", err)
+	}
+	// The file shows no id, no type and no value, and the working folder is gone.
+	for _, clear := range []string{ids[0][7:], "lab.cholesterol-total", "for Ana", "objects/"} {
+		if bytes.Contains(data, []byte(clear)) {
+			t.Errorf("the sealed file shows %q in the clear", clear)
+		}
+	}
+	if entries, _ := os.ReadDir(where); len(entries) != 1 {
+		t.Errorf("the share left %d entries beside the package", len(entries)-1)
+	}
+	// The words open it, for bean check-bundle too.
+	if res := bundle.Check(bundle.FromPackage("p", data, strings.ToUpper(words)+"  ")); !res.OK || len(res.Rows) != 1 || res.Note != "for Ana" {
+		t.Errorf("the words do not open it: %v", res.Lines())
+	}
+	if stdout, _, code := run(t, t.TempDir(), words+"\n", "check-bundle", out); code != 0 || !strings.Contains(stdout, "bundle ok") {
+		t.Errorf("check-bundle with the words: %d\n%s", code, stdout)
+	}
+	// Nothing else does: other words, a misspelt word, no words, a changed byte.
+	for name, try := range map[string]string{
+		"other words":    "abandon ability able about above absent",
+		"a misspelt one": "abandn ability able about above absent",
+		"five words":     "abandon ability able about above",
+		"no words":       "",
+	} {
+		if res := bundle.Check(bundle.FromPackage("p", data, try)); res.OK || !res.Unread || res.Rows != nil {
+			t.Errorf("%s opened the package", name)
+		}
+	}
+	changed := slices.Clone(data)
+	changed[len(changed)-20] ^= 1
+	if res := bundle.Check(bundle.FromPackage("p", changed, words)); res.OK || res.Rows != nil {
+		t.Error("a changed package opened")
+	}
+	if stdout, _, code := run(t, t.TempDir(), "abandon ability able about above absent\n", "check-bundle", out); code != 1 || strings.Contains(stdout, "It holds") {
+		t.Errorf("check-bundle with other words: %d\n%s", code, stdout)
+	}
+	// The log says that the share left sealed, and holds no word of the six.
+	ls, _, _ := run(t, dir, "", "ls", "-json", "-type", "share")
+	if !strings.Contains(ls, `"seal":"passphrase"`) || strings.Contains(ls, strings.Fields(words)[0]+" "+strings.Fields(words)[1]) {
+		t.Errorf("the share record: %s", ls)
+	}
+	// A package is a new file: it replaces nothing.
+	if _, errs, code := run(t, dir, "", "share", "-yes", "-seal", "-out", out, ids[0]); code == 0 || !strings.Contains(errs, "is there already") {
+		t.Errorf("a second share onto the package: %d\n%s", code, errs)
+	}
+	// Two packages of the same records have different words.
+	other := filepath.Join(where, "again.bean")
+	stdout2, _, _ := run(t, dir, "", "share", "-yes", "-seal", "-out", other, ids[0])
+	if strings.Contains(stdout2, words) {
+		t.Error("two packages got the same words")
+	}
+	// A zip file of a bundle's folder is read as its folder is.
+	folder := filepath.Join(where, "plain")
+	run(t, dir, "", "share", "-yes", "-out", folder, ids[0])
+	packed, err := bundle.Pack(folder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zipPath := filepath.Join(where, "plain.zip")
+	os.WriteFile(zipPath, packed, 0o600)
+	want, _ := checkBundle(folder)
+	if got, ok := checkPackage(zipPath); !ok || len(got) != len(want) {
+		t.Errorf("a zip file of the folder:\n%s", strings.Join(got, "\n"))
+	}
+	if again, _ := bundle.Pack(folder); !bytes.Equal(again, packed) {
+		t.Error("the same folder packs to different bytes")
+	}
+}

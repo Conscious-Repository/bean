@@ -2,12 +2,13 @@
 // disk as a reader does, and uses its buttons. tools/page/smoke.sh makes
 // the bundles and runs it. It needs Playwright with Chromium.
 //
-//     node smoke.cjs <bean-check.html> <folder with good/, good.zip and bad/>
+//     node smoke.cjs <bean-check.html> <folder with good/, good.zip, bad/ and sealed.bean> <six words>
 const { chromium } = require("playwright");
 const path = require("path");
 
 (async () => {
-  const [pagePath, dir] = process.argv.slice(2).map((p) => path.resolve(p));
+  const [pagePath, dir] = process.argv.slice(2, 4).map((p) => path.resolve(p));
+  const words = process.argv[4] || "";
   const browser = await chromium.launch();
   const page = await (await browser.newContext()).newPage();
   const requests = [], errors = [];
@@ -60,6 +61,20 @@ const path = require("path");
   await settled();
   expect("the last verdict is taken off before the next check", during === true);
 
+  // A sealed package: the page asks for its words, shows nothing until it
+  // has them, keeps asking after wrong ones, and opens with the right ones.
+  await page.setInputFiles("#zip", path.join(dir, "sealed.bean"));
+  await settled();
+  expect("a sealed package asks for its words and shows nothing", (await page.locator("#words-box").isVisible()) && !(await page.locator("#result").isVisible()));
+  await page.fill("#words", "abandon ability able about above absent");
+  await page.click("#open");
+  await settled();
+  expect("other words open nothing", (await title()) === "Nothing was checked." && !(await rowsShown()) && (await page.locator("#words-box").isVisible()));
+  await page.fill("#words", "  " + words.toUpperCase() + " ");
+  await page.click("#open");
+  await settled();
+  expect("the six words open the package", (await title()) === "This bundle passed the check." && (await page.locator("#rows tr").count()) > 0 && !(await page.locator("#words-box").isVisible()));
+
   // The page loaded nothing but itself, and a request from inside it fails.
   const reach = await page.evaluate(() => fetch("https://example.com/").then(() => "reached", () => "blocked"));
   expect("the page cannot fetch", reach === "blocked");
@@ -69,5 +84,5 @@ const path = require("path");
 
   await browser.close();
   if (failed) process.exit(1);
-  console.log("page: a real browser opens it from the disk, passes a good bundle as a folder and as a zip file, fails a damaged one, keeps no earlier verdict, and loads nothing");
+  console.log("page: a real browser opens it from the disk, passes a good bundle as a folder and as a zip file, opens a sealed package with its words only, fails a damaged one, keeps no earlier verdict, and loads nothing");
 })().catch((err) => { console.error(err); process.exit(1); });
