@@ -67,7 +67,7 @@ func TestCompare(t *testing.T) {
 	}
 	// -type compares what it can and counts the rest.
 	out, _, code = run(t, dir, "", "compare", "-unknown-files", "-sex", "female", "-age", "20-59", "-type", "lab.*")
-	if code != 0 || !strings.Contains(out, "lab.hdl-cholesterol") || !strings.Contains(out, "No reference data for 1 other type: lab.tsh.") || !strings.Contains(out, "bean compares these types, each in this unit: lab.cholesterol-total (mg/dL)") {
+	if code != 0 || !strings.Contains(out, "lab.hdl-cholesterol") || !strings.Contains(out, "No reference data for 1 other type: lab.tsh.") || !strings.Contains(out, "These types have reference data, each in this unit: lab.cholesterol-total (mg/dL)") {
 		t.Errorf("-type: %d\n%s", code, out)
 	}
 	// An id that cannot be compared is a row that says why, and exit 1 when

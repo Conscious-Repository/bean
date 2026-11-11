@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Conscious-Repository/bean/internal/pack"
 	"github.com/Conscious-Repository/bean/internal/xpt"
 )
 
@@ -291,13 +292,30 @@ func (c column) of(seqn float64) float64 {
 // each distinct value carries (steps 5 to 8). So a table of those weights
 // for a cohort gives the same result, bit for bit, as the files do.
 func Compare(files map[string]*xpt.File, a Analyte, c Cohort, v float64) (Result, error) {
-	var res Result
-	if err := c.Check(); err != nil {
-		return res, err
-	}
 	// Step 0.
 	if !(v > 0) || math.IsInf(v, 0) {
-		return res, errors.New("the reading is not a number above zero")
+		if err := c.Check(); err != nil {
+			return Result{}, err
+		}
+		return Result{}, errors.New("the reading is not a number above zero")
+	}
+	byValue, n, err := Table(files, a.Dataset, a.Variable, a.Label, c)
+	if err != nil {
+		return Result{N: n}, err
+	}
+	res := Result{N: n}
+	res.Percentile, res.Below, res.Equal, res.P25, res.P50, res.P75 = Place(byValue, v)
+	return res, nil
+}
+
+// Table is steps 1 to 5: the weight that each distinct value of a variable
+// carries in a cohort, added in file order, and the number of people. A
+// reference pack holds this table for each cohort on its menu
+// (docs/REFERENCE.md). label is the unit in the variable's label, which
+// Table checks.
+func Table(files map[string]*xpt.File, dataset, variable, label string, c Cohort) (map[float64]float64, int, error) {
+	if err := c.Check(); err != nil {
+		return nil, 0, err
 	}
 	file := func(dataset string) (*xpt.File, error) {
 		f := files[dataset]
@@ -306,12 +324,12 @@ func Compare(files map[string]*xpt.File, a Analyte, c Cohort, v float64) (Result
 		}
 		return f, nil
 	}
-	lab, err := file(a.Dataset)
+	lab, err := file(dataset)
 	if err != nil {
-		return res, err
+		return nil, 0, err
 	}
-	if lv, _ := lab.Variable(a.Variable); !strings.HasSuffix(lv.Label, "("+a.Label+")") {
-		return res, fmt.Errorf("%s in %s is labelled %q, not in %s", a.Variable, lab.Dataset, lv.Label, a.Label)
+	if lv, _ := lab.Variable(variable); !strings.HasSuffix(lv.Label, "("+label+")") {
+		return nil, 0, fmt.Errorf("%s in %s is labelled %q, not in %s", variable, lab.Dataset, lv.Label, label)
 	}
 	// Each file's rows by SEQN, read once.
 	rows := map[string]map[float64]int{}
@@ -344,30 +362,29 @@ func Compare(files map[string]*xpt.File, a Analyte, c Cohort, v float64) (Result
 		values, err := files[dataset].Column(variable)
 		return column{m, values}, err
 	}
-	_, seqn, err := index(a.Dataset)
+	_, seqn, err := index(dataset)
 	if err != nil {
-		return res, err
+		return nil, 0, err
 	}
-	x, err := lab.Column(a.Variable)
+	x, err := lab.Column(variable)
 	if err != nil {
-		return res, err
+		return nil, 0, err
 	}
 	people, _, err := index(Demo)
 	if err != nil {
-		return res, err
+		return nil, 0, err
 	}
 	rules := make([]column, len(c.Rules))
 	for i, r := range c.Rules {
 		if rules[i], err = col(r.Dataset, r.Variable); err != nil {
-			return res, err
+			return nil, 0, err
 		}
 	}
 	weight, err := col(c.Weight())
 	if err != nil {
-		return res, err
+		return nil, 0, err
 	}
-	// Steps 1 to 5: the weight of each distinct value in the cohort, added
-	// in file order.
+	n := 0
 	byValue := map[float64]float64{}
 rowLoop:
 	for i, s := range seqn {
@@ -375,7 +392,7 @@ rowLoop:
 			continue
 		}
 		if _, ok := people[s]; !ok {
-			return res, fmt.Errorf("%s has a person that %s does not: they are not files of one release", lab.Dataset, Demo)
+			return nil, 0, fmt.Errorf("%s has a person that %s does not: they are not files of one release", lab.Dataset, Demo)
 		}
 		for k, r := range c.Rules {
 			if y := rules[k].of(s); !(y >= r.Min && y <= r.Max) {
@@ -386,47 +403,27 @@ rowLoop:
 		if !(w > 0) || math.IsInf(w, 0) {
 			continue
 		}
-		res.N++
+		n++
 		byValue[x[i]] += w
 	}
-	if res.N < MinN {
-		return Result{N: res.N}, ErrSmall
+	if n < MinN {
+		return nil, n, ErrSmall
 	}
-	res.Percentile, res.Below, res.Equal, res.P25, res.P50, res.P75 = Place(byValue, v)
-	return res, nil
+	return byValue, n, nil
 }
 
 // Place is steps 6 to 8: where v lies, given the weight of each distinct
-// value of a cohort. The sums run over the values in rising order.
+// value of a cohort. The sums run over the values in rising order. It is
+// the method of a reference pack, and one implementation serves both.
 func Place(byValue map[float64]float64, v float64) (percentile, below, equal, p25, p50, p75 float64) {
 	values := make([]float64, 0, len(byValue))
 	for value := range byValue {
 		values = append(values, value)
 	}
 	sort.Float64s(values)
-	var total, b, e float64
-	for _, value := range values {
-		total += byValue[value]
-		if value < v {
-			b += byValue[value]
-		} else if value == v {
-			e = byValue[value]
-		}
+	weights := make([]float64, len(values))
+	for i, value := range values {
+		weights[i] = byValue[value]
 	}
-	quartile := func(q float64) float64 {
-		var sum float64
-		for _, value := range values {
-			sum += byValue[value]
-			if sum >= q*total {
-				return value
-			}
-		}
-		return values[len(values)-1]
-	}
-	return round1(100 * (b + e/2) / total), round1(100 * b / total), round1(100 * e / total), quartile(0.25), quartile(0.5), quartile(0.75)
+	return pack.Place(values, weights, v)
 }
-
-// round1 rounds to one decimal. The conversions keep a compiler from
-// fusing the multiplication and the addition into one operation, as Go
-// allows and arm64 does: every implementation must round each step.
-func round1(y float64) float64 { return math.Floor(float64(float64(10*y)+0.5)) / 10 }

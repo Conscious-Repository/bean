@@ -4,9 +4,9 @@ This file is the one place for open paths: what bean should do next, in what ord
 
 ## Where bean stands (2026-11-11)
 
-A person can keep a log, import lab reports, Apple Health and CSV files, and compare a reading with public survey data. They can share chosen records as a bundle that anyone can check: with bean, with Python, or in a browser. Two independent checkers and a real-browser test guard those paths.
+A person can keep a log, and import lab reports, Apple Health and CSV files. They can compare a reading with public reference data: with a survey's own files, or with a reference pack. They can share chosen records as one sealed file that opens with six words, and a reader checks it in a browser. Independent second implementations and a real-browser test guard those paths.
 
-Three things that matter to other people are missing. A bundle is not encrypted. Two people cannot compare with each other. A device cannot sign what it captures. They are the three paths below, in the order to build them.
+Four things are missing before other people use it. The check page has no public address. A peer cannot send a signed reply. A device cannot sign what it captures. Only one public source has been built into a pack. They are the four paths below.
 
 ## Path 1: a sealed package for one reader
 
@@ -20,11 +20,15 @@ Three things that matter to other people are missing. A bundle is not encrypted.
 4. **Say what leaves.** The review before a share also says that the person's identity id travels. It flags a file that holds a name or a birth date.
 5. **Record who it was for.** The share record says that a passphrase was used. With a reader's key it will name the reader's address.
 
+6. **The reader knows who signed. Done:** identity words (DECISIONS 280). The sender reads six words in the call that carries the opening words, and the check shows the same six.
+7. **One public address for the check page. Not done, and the owner's to decide.** A reader with no terminal must get the page from another place than the records. The page names its commit, CI records its SHA-256 on every push, and a tag publishes both (`make dist`). What is missing is the address, and a second place that states the SHA-256.
+
 **What it cannot do.** A reader who has opened the package holds a copy for good. Withdrawing permission stops the next share, not the last one.
 
 **Open.**
 
 - Should `-seal` become what `bean share` does unless told otherwise? Today a plain folder is the default, because the checks and the examples are built on it.
+- Where does the page live? A project domain, or the pages of the code host once the repository is public. A second, independent place for its SHA-256 is what catches a host that serves a changed page.
 - Does a package need an end date after which the page refuses to open it? An end date stops an honest reader's page. It does not stop a copy.
 
 ## Path 2: people compare with each other
@@ -105,21 +109,45 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 - Which links will the device have: cable, Bluetooth, Wi-Fi? Is a phone always part of the transfer?
 - Can the firmware be updated in the field, and is the update signed?
 
+## Path 4: compare with public data, from any source
+
+**The need.** A person sets a reading against data that someone else publishes. The value must not leave their machine. The result must be one that anyone can compute again. And the way to do it must not know one survey, one test or one unit.
+
+**Done.** A reference pack ([REFERENCE.md](REFERENCE.md), DECISIONS 281): one file, named by its SHA-256, with a table for each measure and each cohort on its menu. `bean-pack-nhanes` builds one from the NHANES files, with weight and height beside the blood tests. `bean compare -pack` compares with it and saves a claim that names the pack. A Python check reads the format from its document, builds every table again from the files, and computes every claim again.
+
+**The plan.**
+
+1. **A second source, from another publisher.** The format is not frozen before a second real source is built into a pack. Each candidate is confirmed first from its publisher's own site: the terms, a stable address, and whether a file changes without notice.
+2. **Publish the NHANES pack** beside the check page, with its SHA-256. Then a person needs one download of 570 kB, not six files.
+3. **The check page computes a shared comparison again**, when the reader gives it the pack.
+4. **A publisher signs.** A record by the publisher's bean identity names a pack's SHA-256, and travels as a bundle. This is built when a second publisher exists.
+5. **A pointer on relays.** A publisher announces a pack on Nostr relays: title, SHA-256, where it is. The relays hold a pointer and no health record. bean keys can already be Nostr keys.
+6. **More kinds of cell**, each when a real source needs it: percentile points, a fitted curve, counts of a category. REFERENCE.md says what each may state.
+
+**Who is paid for what.** A host may charge for bytes. A publisher may sell a pack that took work to build. Nobody is paid to compute a comparison: the request would carry the cohort or the value. bean holds no wallet.
+
+**Open.**
+
+- Which second source. Leads, none confirmed: other parts of NHANES (blood pressure, sleep), other open survey files of the US government, and population counts of genetic variants. Fitness and heart-rate tables in journals may not be free to hand on.
+- A pack from data that is not public cannot be built again by others. It needs the publisher's signature, and a way to say so in the pack.
+- A cohort by ethnicity, body or food needs the files today. Should a pack carry such cohorts, or should a person build a pack of their own?
+- The digests of the NHANES files, and so of the pack, come from one download. A second person must confirm them from their own connection.
+
 ## Order
 
-1. Path 1, the passphrase package. It is small, and Path 2 starts with it.
-2. Path 3, the written format, the checker and the software device. The hardware decisions will not wait.
-3. Path 2, steps 2 and 3.
+1. Path 1, step 7: a public address for the check page, and the first release. Everything a reader does starts there.
+2. Path 2, steps 2 and 3: a signed reply, and two people side by side.
+3. Path 4, steps 1 and 2: a second source, and the NHANES pack published.
 4. Path 3, pairing and import, when a real device or its firmware can produce the folder.
-5. Path 2, steps 4 and 5, when real peers ask for them.
+5. Path 1, step 2: a package sealed to a reader's key.
+6. Path 2, steps 4 and 5, and Path 4, steps 4 and 5, when real peers and a second publisher ask for them.
 
 ## Smaller open paths
 
-- **Compare without the download.** A reference pack: one small signed file per data set, with the table that the method needs for each cohort on a fixed menu. Anyone can build it again from the public files and compare the digest ([COMPARE.md](COMPARE.md)).
 - **More tests and cohort rules.** Each is one row in `internal/nhanes`, from the file's own label and a real report's name.
 - **More importers,** each from a real file, never from memory. A time zone flag for CSV times.
 - **A check of a whole export in Python.**
-- **Release.** A `go install` path and a neutral home ([GOVERNANCE-PROPOSAL.md](GOVERNANCE-PROPOSAL.md)). Each release publishes `bean-check.html` with its SHA-256 and the Go that built it.
+- **Release.** A `go install` path and a neutral home ([GOVERNANCE-PROPOSAL.md](GOVERNANCE-PROPOSAL.md)). A tag that starts with `v` publishes `bean-check.html` with its SHA-256 (`release.yml`). No tag exists yet.
 - **The owner's to do.** Confirm the NHANES digests from a second connection. Open the repository to the people who will try it. Then require the CI check on `main`.
 - **Freeze at `v` 0** (CORE.md section 6), after two weeks of real use with no change to CORE.md.
 
@@ -156,4 +184,4 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 
 ## Not planned
 
-A central data platform that a person cannot leave. A UI beyond a static report. Relay publishing of health records. Encryption of record files at rest (use an encrypted volume). Whoop and Oura importers until there is a real export. Zero-knowledge proofs, and distributed trust scores. Any output that diagnoses, predicts or advises.
+A central data platform that a person cannot leave. A UI beyond a static report. Relay publishing of health records. A service that computes a comparison from a person's value or cohort, paid or free. A wallet in bean. Encryption of record files at rest (use an encrypted volume). Whoop and Oura importers until there is a real export. Zero-knowledge proofs, and distributed trust scores. Any output that diagnoses, predicts or advises.

@@ -39,7 +39,7 @@ jobs:
           path: dist/
       - name: Verify build, tests and vectors
         run: |
-          make fmt vet build prose test vectors second compare bundles device example demo
+          make fmt vet build prose test vectors second compare pack bundles device example demo
       - name: Differential against base
         if: github.event_name == 'pull_request'
         env:

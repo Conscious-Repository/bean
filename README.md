@@ -198,7 +198,9 @@ lab.cholesterol-total  187 mg/dL  46          44.2%  3.5%  164 to 213   188     
 - `-save` keeps a result as a signed record that names each file by its SHA-256, the cohort and the method. Anyone can compute it again without bean: `tools/compare/reproduce.py` does, in Python.
 - Twelve blood tests today: total and HDL cholesterol, hemoglobin A1c and the blood count. Each test needs its own file, and a rule on BMI needs `BMX_J`: the loop above fetches all six, about 7 MB. [COMPARE.md](docs/COMPARE.md) lists the type names and units to use when you type a reading by hand.
 
-[docs/COMPARE.md](docs/COMPARE.md) has the files to download, the rules, the limits and the method.
+- **A reference pack is the general form.** A pack is one small file of public reference data, with a table for each measure and each cohort on its menu. `bean-pack-nhanes` builds one from the files, with weight and height beside the blood tests. `bean compare -pack nhanes.pack -cohort male-30-39 -type 'lab.*'` compares with it. The table comes to your value, so no host learns the value or the cohort. Any source that someone builds into a pack works the same way.
+
+[docs/COMPARE.md](docs/COMPARE.md) has the files to download, the rules, the limits and the method. [docs/REFERENCE.md](docs/REFERENCE.md) has the pack format, who hosts what, and how anyone checks a pack.
 
 ## Share with someone
 

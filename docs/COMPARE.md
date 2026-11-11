@@ -4,6 +4,8 @@
 
 It describes a position in a sample. It does not say whether a value is healthy, and it does not diagnose, predict or advise.
 
+There are two ways to compare, and both give the same numbers. This document is the first: with the survey's own files, for any cohort that you can state as rules. The second is with a reference pack, one small file with a fixed menu of cohorts: `bean compare -pack` ([REFERENCE.md](REFERENCE.md)). A pack is the general form. It holds any public source that someone has built into one, and NHANES is the first.
+
 ## The data: NHANES 2017-2018
 
 [NHANES](https://wwwn.cdc.gov/nchs/nhanes/) is a survey by the US National Center for Health Statistics (CDC). About 9,000 people of all ages are interviewed, examined and have blood drawn. The files are public, one row per person, joined by the number `SEQN`. bean reads the 2017-2018 cycle: file names ending in `_J`.
@@ -186,7 +188,7 @@ This is the one place the method is written. Inputs: the value v of the reading;
 7. lower = 100 B / W, same = 100 E / W, percentile = 100 (B + E/2) / W. Round each to one decimal: floor(10 y + 0.5) / 10, with the multiplication and the addition as two steps.
 8. The 25th, 50th and 75th percentile of the cohort, for q = 0.25, 0.5 and 0.75. Each is the smallest x such that the g of the values up to and including x, added in rising order, reach q W.
 
-After step 5 only n and the table of g(x) are used. So a published table of g(x) for a cohort gives the same result, to the last bit, as the files it was made from. That is how a comparison will work without the files ([ROADMAP](ROADMAP.md)).
+After step 5 only n and the table of g(x) are used. So a published table of g(x) for a cohort gives the same result, to the last bit, as the files it was made from. A reference pack is that table for each cohort on a menu ([REFERENCE.md](REFERENCE.md)).
 
 The caveats of a saved claim are in a fixed order. First come the three that every comparison has. Then the top age, if the age range ends at 80. Then the one day of food, if a rule names `DR1TOT_J`. Then the small cohort, if n is below 100. Then one for each file that was not on record. Last, the reading's signer, if it is not the person. Their texts are in [`cmd/bean/compare.go`](../cmd/bean/compare.go) and in `reproduce.py`, and a test keeps them equal.
 

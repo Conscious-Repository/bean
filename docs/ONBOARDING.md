@@ -36,7 +36,7 @@ echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.zshrc && source ~/.zshrc
 bean version
 ```
 
-Poppler provides `pdftotext`, which reads PDFs. `go install` puts `bean`, `bean-import-lab`, `bean-import-apple-health`, `bean-import-csv` and `bean-import-nhanes` in `$(go env GOPATH)/bin`, or in `$GOBIN` if you set it. `bean version` should say `bean 0.6.0 (records v 0)` or later. An older version means another `bean` comes first on your `PATH`: `which -a bean` lists them. `package crypto/hkdf is not in GOROOT` means your Go is too old: `brew upgrade go`.
+Poppler provides `pdftotext`, which reads PDFs. `go install` puts `bean`, `bean-import-lab`, `bean-import-apple-health`, `bean-import-csv`, `bean-import-nhanes` and `bean-pack-nhanes` in `$(go env GOPATH)/bin`, or in `$GOBIN` if you set it. `bean version` should say `bean 0.6.0 (records v 0)` or later. An older version means another `bean` comes first on your `PATH`: `which -a bean` lists them. `package crypto/hkdf is not in GOROOT` means your Go is too old: `brew upgrade go`.
 
 ## 2. Create your log
 
