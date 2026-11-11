@@ -51,6 +51,11 @@ func TestConvert(t *testing.T) {
 	if occ(3) != 0.0 || occ(4) != 1.0 {
 		t.Errorf("occurrences %v %v", occ(3), occ(4))
 	}
+	// A column of units would sit as text beside a value stored under the
+	// unit of -unit: 5.2 mmol/L would read as 5.2 mg/dL.
+	if err := convert(strings.NewReader("time,value,unit\n2026-10-22T07:30:00-05:00,5.2,mmol/L\n"), &bytes.Buffer{}, options{typ: "lab.cholesterol-total", unit: "mg/dL", system: "csv", precision: "second"}); err == nil || !strings.Contains(err.Error(), "a column is named unit") {
+		t.Errorf("a unit column: %v", err)
+	}
 	if err := convert(strings.NewReader("time,reading\n1,2\n"), &bytes.Buffer{}, options{typ: "x"}); err == nil {
 		t.Error("no value column accepted")
 	}

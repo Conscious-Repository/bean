@@ -1,6 +1,6 @@
 # bean
 
-Keep your health record as a folder that you own. Every lab result, reading, meal, symptom and note is a small signed file. You can copy the folder anywhere, check it without a server, and let an AI or a doctor read it on your terms.
+Keep your health record as a folder that you own. Every lab result, reading, meal, symptom and note is a small signed file. You can copy the folder anywhere, check it without a server, and let an AI or a doctor read it on your terms. You can compare a reading with public survey data, and share chosen records in a form that anyone can check.
 
 ```
 $ bean add symptom.headache 7 -unit '{score}' -note "after a salty lunch"
@@ -28,7 +28,7 @@ New here: [docs/ONBOARDING.md](docs/ONBOARDING.md) goes from install to an impor
 
 ## Try it in five minutes
 
-One script runs the whole loop on a synthetic lab report, in a throwaway folder: import the report, fetch public survey data from the US CDC, compare, share, and check the result without bean.
+One script runs the whole loop on a synthetic lab report, in a throwaway folder. It imports the report, fetches public survey data from the US CDC, compares, and shares. Then it checks the result without bean.
 
 ```
 git clone https://github.com/Conscious-Repository/bean.git
@@ -76,7 +76,7 @@ If the build fails with `package crypto/hkdf is not in GOROOT`, your Go is too o
    bean init -nostr new
    ```
 
-   It prints your identity, your npub and 24 words, and says where the log is. **Write the 24 words on paper now.** `bean` shows them only once. They recover your identity on a new machine. Never type them into a chat, an AI or a crypto wallet. Write your identity id (the `sha256:...` on the first line) on the same paper: it is not secret, and `restore -identity` needs it if someone puts a copy of your public commitment in the folder.
+   It prints your identity, your npub and 24 words, and says where the log is. **Write the 24 words on paper now.** `bean` shows them only once. They recover your identity on a new machine. Never type them into a chat, an AI or a crypto wallet. Write your identity id (the `sha256:...` on the first line) on the same paper. It is not secret. `restore -identity` needs it if someone puts a copy of your public commitment in the folder.
 
 3. Add something:
 
@@ -148,8 +148,8 @@ bean keeps the PDF first, encrypted, as a `lab.report` record, and checks that i
 
 - `-tz` is the zone where the sample was taken: `America/New_York`, `America/Chicago`, `America/Denver`, `America/Los_Angeles`. Not `CST`. Without it, only the day is recorded. If the report says the collection time was not given, only the day is recorded too. A Quest report prints its zone, so it needs no `-tz`; one that disagrees with the printed zone is refused.
 - The first output line names the record that keeps the PDF: `kept lab.report <id>: file sha256 <hash>, stored as <blob id>`. `bean purge <id>` erases the PDF.
-- Import the same file again and nothing is added. If a later report changes a value, for example a final result replaces `Pending`, the new PDF is kept, but `bean import` names the reading, writes nothing for it, and exits 1. If the report is newer and right, run it again with `-corrections`.
-- The importer reads the text layout (Labcorp) or each word's position (Quest) and refuses any line it cannot read for sure; then nothing is written and the error names the line, or the page and how far down it is. The error can hold one of your values: do not paste it publicly ([how to share its shape](docs/ONBOARDING.md#if-the-import-is-refused)).
+- Import the same file again and nothing is added. A later report can change a value: for example, a final result replaces `Pending`. Then the new PDF is kept, but `bean import` names the reading, writes nothing for it, and exits 1. If the report is newer and right, run it again with `-corrections`.
+- The importer reads the text layout (Labcorp) or each word's position (Quest). It refuses any line it cannot read for sure. Then nothing is written, and the error names the line, or the page and how far down it is. The error can hold one of your values: do not paste it publicly ([how to share its shape](docs/ONBOARDING.md#if-the-import-is-refused)).
 - A `.txt` made with `pdftotext -layout` works too, for Labcorp. A Quest report is read by where each word is printed: give the PDF, or the `.html` that `pdftotext -bbox-layout` makes.
 
 Readings name the PDF by its SHA-256, not as a blob, so purging the `lab.report` erases the PDF. Readings from importers before 0.2.0 still name the PDF; purge them too. See [the importer notes](cmd/bean-import-lab/README.md).
@@ -159,7 +159,7 @@ Readings name the PDF by its SHA-256, not as a blob, so purging the `lab.report`
 On the iPhone, Health, your picture, Export All Health Data. Then:
 
 ```
-bean import apple-health export.zip              # keeps the export, encrypted
+bean import apple-health export.zip              # keeps the export, encrypted; asks first
 bean import apple-health -records export.zip     # also one record per reading
 ```
 
@@ -209,7 +209,7 @@ bean check-bundle for-ana          # what Ana runs: it checks the folder, then s
 
 - It shows what will leave and asks first. Only the records you choose go, with what they are about. Files go only with `-files`, and a lab report only when you name it.
 - The reader can tell that each record is yours and unchanged, and that nothing was added or removed. They can check it without bean: `tools/second/checkbundle.py`.
-- A reader with no terminal checks it in a browser: `make page` builds `bean-check.html`, one file that reads the folder or a zip file of it, runs the same check on their device, and sends nothing.
+- A reader with no terminal checks it in a browser. `make page` builds `bean-check.html`, one file that reads the folder or a zip file of it. The page runs the same check on the reader's device and sends nothing.
 - The reader cannot tell that it is complete: it is what you chose. Nor that the key that signed is still yours, if you changed keys since. bean says so on every check.
 - A bundle is not encrypted, and once sent it cannot be taken back.
 
@@ -329,7 +329,7 @@ If `restore` says `ambiguous`, the folder holds more than one identity made from
 
 Sync every copy before you rotate or restore, then check what the sync brought in. `bean rotate` works the same way as `restore`: without `-seal-all` it only shows the list. Records that a copy made with the old key and did not sync before the rotation stop being valid. A log of more than 200,000 records per key rotates into a succession plus `seal part` records; copy all of them. Until every part is in a copy, `bean verify` there says `incomplete seals` and the old key's records do not count, but nothing is deleted.
 
-**Never rotate or restore on two machines from the same point.** That freezes the identity for good, and `bean migrate <empty folder>` then starts a new identity with your own records.
+**Never rotate or restore on two machines from the same point.** That freezes the identity for good. `bean migrate <empty folder>` then starts a new identity with your own records.
 
 ### Upgrading
 
@@ -339,7 +339,7 @@ Read [UPGRADING.md](UPGRADING.md) before you run a new build on your log. It lis
 
 A record is a JSON file in `objects/`, named by the SHA-256 hash of its content and signed with your key. Your identity is the hash of your first record, so it never changes when keys change. Corrections and deletions are new records. The protocol says who may make them, so every copy reaches the same result from the same files. Stored files (PDFs, photos) are encrypted in `blobs/`. Sync copies the files that one copy has and the other does not.
 
-Every record is checked when it is first read, then cached, the same way git trusts its object store. `bean verify` checks everything again. At 20,000 records, `add` and an AI query take about 0.2 s and `verify` about 1 s. At 230,000 records on one machine (measured 2026-10-30), `add` takes about 7 s, `verify` about 11 s, `rotate` about 9 s, and each needs about 2.5 GB of memory. Every write goes to disk before it counts.
+Every record is checked when it is first read, then cached, the same way git trusts its object store. `bean verify` checks everything again. At 20,000 records, `add` and an AI query take under 1 s and `verify` about 1.3 s (4-core Linux virtual machine, measured 2026-11-10). At 230,000 records on one machine (measured 2026-10-30), `add` takes about 7 s, `verify` about 11 s and `rotate` about 9 s. Each needs about 2.5 GB of memory. Every write goes to disk before it counts.
 
 [CORE.md](CORE.md) is a short summary of the protocol. [SPEC.md](SPEC.md) has every rule: enough to write a second implementation.
 
@@ -356,13 +356,19 @@ bean protects who wrote what, and protects your identity against a stolen device
 | [docs/IMPORTERS.md](docs/IMPORTERS.md) | Write an importer for your own source; community importers. |
 | [docs/COMPARE.md](docs/COMPARE.md) | Compare a reading with people like you: files, rules, limits, method. |
 | [docs/SHARE.md](docs/SHARE.md) | Share chosen records as a bundle anyone can check: what goes in, limits, format. |
+| [examples/blood](examples/blood/README.md) | The whole loop in one script, on a synthetic report. |
 | [cmd/bean/vocabulary.md](cmd/bean/vocabulary.md) | The usual record types and units. |
+| Importer notes: [lab](cmd/bean-import-lab/README.md), [Apple Health](cmd/bean-import-apple-health/README.md), [NHANES](cmd/bean-import-nhanes/README.md) | What each importer reads, keeps and refuses. |
 | [SECURITY.md](SECURITY.md) | What is protected, and the keys. |
 | [CORE.md](CORE.md) | The protocol, in short. |
 | [UPGRADING.md](UPGRADING.md) | Changes that alter results for an existing log. |
 | [SPEC.md](SPEC.md) | The full protocol: every rule, error and conformance test. |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | What is done and what comes next. |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Every design decision, numbered, with the reason. |
+| [docs/EXTENSIONS.md](docs/EXTENSIONS.md) | Two draft extensions that no code implements yet: computed results and device capture. |
+| [docs/PROVIDER-INGESTION.md](docs/PROVIDER-INGESTION.md) | How data from a provider gets in, one source at a time. |
+| [docs/GOVERNANCE-PROPOSAL.md](docs/GOVERNANCE-PROPOSAL.md) | A proposal for who decides changes to the protocol. Not decided. |
+| [tools/second/README.md](tools/second/README.md) | The second verifier, in Python, written from the documents alone. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Build, test and change the code. |
 
 ## License

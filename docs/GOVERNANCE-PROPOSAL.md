@@ -13,7 +13,7 @@ Status: proposal. The open points at the end are not decided. SPEC.md section 19
    - after the freeze: two independent implementations that agree on the vectors and on the conformance logs before the change is final. The Go reference and the Python second verifier (`tools/second`) are the first two.
 5. **Compatibility.** A change never makes an old valid record invalid without a change note that says so and a version step (SPEC 8.4). Old verifiers stop on newer records (`too new`) and erase nothing.
 6. **Implementations are equal.** The reference implementation is a test of the spec, not its authority. Where it and the spec disagree, the disagreement is a bug in one of them, and the change rule decides which.
-7. **Security reports.** SECURITY.md names a private contact for reports. A fix that changes validity follows the change rule, with a short embargo when a fix is needed before disclosure.
+7. **Security reports.** SECURITY.md says how to report a problem in private. A fix that changes validity follows the change rule, with a short embargo when a fix is needed before disclosure.
 
 ## Contribution rules (proposal)
 

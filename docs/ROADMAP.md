@@ -1,10 +1,10 @@
 # Roadmap
 
-What comes next. Work that is done is in the git history, and the reasons are in [DECISIONS.md](DECISIONS.md). Nothing here is final.
+What is done in the first loop, and what comes next. Earlier work is in the git history, and the reasons are in [DECISIONS.md](DECISIONS.md). Nothing here is final.
 
 ## What bean is for
 
-bean is an open format for personal health evidence that anyone can check without trusting the person who keeps it, or the program that wrote it. A record is a claim, not a fact. On top of the core sit three layers, kept apart:
+bean is an open format for personal health evidence. Anyone can check that evidence without trusting the person who keeps it, or the program that wrote it. A record is a claim, not a fact. On top of the core sit three layers, kept apart:
 
 1. **Evidence.** What was observed, who signed it, from which original file. This is the core, and it is built.
 2. **Exchange.** A person hands chosen records, with their files, to someone else, who can check them without bean or an account.
@@ -28,7 +28,7 @@ In order. Each step is done only when its test passes.
    - A real report imports: 71 readings, each checked by hand against the PDF (DECISIONS 230, 231). Its layout, with synthetic content, is `cmd/bean-import-lab/testdata/real-layout.txt`. The real text never enters the repository.
    - `bean import` shows what it read and asks before it saves; `-yes` skips that for scripts (DECISIONS 234).
 2. **Reference data: NHANES 2017–2018. Done.**
-   - `bean import nhanes <file.XPT>` keeps a public file as a `reference.file` record, on the same rail as a lab report: encrypted blob, SHA-256, the data set, CDC's URL, each variable with its label (DECISIONS 236).
+   - `bean import nhanes <file.XPT>` keeps a public file as a `reference.file` record, on the same rail as a lab report. The record has an encrypted blob, its SHA-256 and the data set's name (DECISIONS 236, 258).
    - One record per file, not one per release: CDC publishes files, and each is pinned on its own.
    - The person who imports it signs for having kept it. It is never written as CDC's claim.
    - `internal/xpt` reads SAS transport itself. On ten CDC files it gives the same bits as pandas for every value but zero, which pandas reads as 5.4e-79.
@@ -41,68 +41,68 @@ In order. Each step is done only when its test passes.
    - It says where a value lies in a sample. It does not diagnose, flag risk or advise.
    - Same inputs, same bytes.
 4. **Independent reproduction. Done.**
-   - `tools/compare/reproduce.py` (Python, pandas) computes every number of a saved claim again from the claim, the reading and the files. It shares no code with bean and has no table of tests; it knows the method and the files' digests.
+   - `tools/compare/reproduce.py` (Python, pandas) computes every number of a saved claim again from the claim, the reading and the files. It shares no code with bean. It holds the same tables as bean: the tests, the weights, the caveats and the files' digests. A test keeps them equal.
    - `make compare` fails if one number differs, in CI on synthetic files; with `BEAN_NHANES_DIR` it runs on CDC's files.
 5. **`bean share` and `bean check-bundle`. Done.**
-   - `bean share -out <folder> <ids> | -type <type>` writes the chosen records, the records they are about, the identity records that verify them, and one `share` record signed by the person that lists exactly what the bundle holds. Files go only with `-files`, as plaintext named by SHA-256 (DECISIONS 251, [SHARE.md](SHARE.md)).
-   - A bundle is a small log, so the checks of a log apply unchanged. `bean check-bundle <folder>` needs no log, and `tools/second/checkbundle.py`, which follows SHARE.md and shares no code with bean, gives the same verdict: `make bundles` checks both on bundles good and damaged.
+   - `bean share -out <folder> <ids> | -type <type>` writes the chosen records, the records they are about, and the identity records that verify them. It adds one `share` record, signed by the person, that lists exactly what the bundle holds. Files go only with `-files`, as plaintext named by SHA-256 (DECISIONS 251, [SHARE.md](SHARE.md)).
+   - A bundle is a small log, so the checks of a log apply unchanged. `bean check-bundle <folder>` needs no log. `tools/second/checkbundle.py`, which follows SHARE.md and shares no code with bean, gives the same verdict. `make bundles` checks both on bundles good and damaged.
    - The person sees what leaves and confirms. The share record stays in the log as the record of the disclosure.
    - A bundle proves that what it holds is authentic and exactly what the person listed. It does not prove completeness, and every check says so.
    - A shared comparison computes again from its bundle (`reproduce.py <bundle>`).
 6. **Quickstart and release to peers.**
-   - Done: `examples/blood/run.sh` runs steps 1 to 5 on a synthetic report with values a person could have: import, fetch the NHANES files, compare, share, check without bean. It fails if a number differs from `expected.txt`. `make example` runs it offline on synthetic reference files, in CI.
+   - Done: `examples/blood/run.sh` runs steps 1 to 5 on a synthetic report with values a person could have. The steps are: import, fetch the NHANES files, compare, share, check without bean. It fails if a number differs from `expected.txt`. `make example` runs it offline on synthetic reference files, in CI.
    - Done: the README has the five-minute path.
-   - Open, and the owner's to do: confirm the NHANES digests from a second connection; open the repository to the people who will try it; then require the CI check on `main`. A private repository on the free plan cannot, so until then a PR merges only after CI passes on its exact head.
+   - Open, and the owner's to do: confirm the NHANES digests from a second connection, and open the repository to the people who will try it. Then require the CI check on `main`. A private repository on the free plan cannot, so until then a PR merges only after CI passes on its exact head.
 
 Not this week: Apple Health readings beyond what exists, `bean-import-csv -map`, `-to <npub>` encryption, `bean attest` and `bean trust`, NIP-46, nutrition.
 
 ## What it is for, and where it stands
 
-bean is meant to become the canonical log of what a person's measuring hardware acquires. Until that hardware is here, it has to be worth using for what people already have: import it, share parts of it with a doctor or a peer in a way they can check, and compare it with public data. Measured against that on 2026-11-10 (DECISIONS 262 to 268):
+bean is meant to become the canonical log of what a person's measuring hardware acquires. Until that hardware is here, bean has to be worth using for what people already have. They import it, share parts of it with a doctor or a peer in a way they can check, and compare it with public data. Measured against that on 2026-11-11 (DECISIONS 262 to 273):
 
 | Use | Today | What is missing first |
 |---|---|---|
-| Import what exists | Works: two lab layouts, Apple Health, CSV. | More layouts, each from a real file. |
+| Import what exists | Works: two lab layouts, Apple Health, CSV. A CSV needs times with an offset, which few spreadsheets write. | More layouts, each from a real file. A time zone flag for CSV. |
 | Compare with public data | Works for twelve blood tests, on files the person downloads. | The reference pack below, so that nothing large is downloaded. |
 | Share with a peer | Works with friction: each reads the other's bundle, in a browser or with bean or Python; nothing sets two people's results side by side. | A bundle encrypted to its reader. |
-| Share with a doctor | Works with friction: the doctor opens one page in a browser and chooses the folder or its zip file, with no install. The page has to reach them first: today the person builds it (`make page`) and sends it along, and a page that comes with a bundle is only as good as its sender. | The page published with a release, with its SHA-256. |
-| A device's readings | Not built. A device can sign as a paired key today, and such readings list, share and check; but it runs the whole of bean, a pairing for devices and the device clock (EXTENSIONS 11) are not there, the Python checker takes minutes on thousands of device-signed records, and every command reads the whole log. | A real instrument. Then device capture, from what it shows. |
+| Share with a doctor | Works with friction: the doctor opens one page in a browser and chooses the folder or its zip file, with no install. The page has to reach them first: today the person builds it (`make page`) and sends it along. A page that comes with a bundle is only as good as its sender. | The page published with a release, with its SHA-256. |
+| A device's readings | Not built. A device can sign as a paired key today, and such readings list, share and check. But the device runs the whole of bean. A pairing for devices and the device clock (EXTENSIONS 11) are not there. The Python checker takes minutes on thousands of device-signed records. Every command reads the whole log. | A real instrument. Then device capture, from what it shows. |
 
 ## After the loop: compare without the download
 
-Today a person downloads the survey files to compare with them. That is right for someone who wants every rule and every check in their own hands, and too much for most people, who will meet bean inside a phone app. The way to drop the download without sending anyone's number anywhere:
+Today a person downloads the survey files to compare with them. That is right for someone who wants every rule and every check in their own hands. It is too much for most people, who will meet bean inside a phone app. The way to drop the download without sending anyone's number anywhere:
 
-- **A reference pack.** One small signed file per data set that holds, for every cohort on a fixed menu (sex and age band first), the weight of each distinct value of each test: the table that steps 6 to 8 of the method need ([COMPARE.md](COMPARE.md)). The same table gives the same result, to the last bit, as the files.
+- **A reference pack.** One small signed file per data set. For every cohort on a fixed menu (sex and age band first), it holds the weight of each distinct value of each test. That is the table that steps 6 to 8 of the method need ([COMPARE.md](COMPARE.md)). The same table gives the same result, to the last bit, as the files.
 - **Blind by construction.** Everyone fetches the same file, so the host learns neither a person's value nor which cohort they looked at. The comparison runs on the device. No encryption scheme is needed for this, and none is planned for it.
 - **Checkable by anyone.** A pack is a deterministic output of public files, a menu and the method. Whoever has the files builds the same bytes and compares the digest. Most people never will; that anyone can is what keeps a publisher honest. A saved comparison pins the pack's digest and the cohort.
 - **Raw files stay.** A cohort off the menu, such as a diet pattern, needs the files on the person's own machine, as today.
-- **Other sources, the same shape.** A pack built from AION devices' pooled data, with a floor on n and only for people who agreed: nobody outside can rebuild it, so comparisons with it carry that as a caveat. A table from a published study, with its citation. A friend's bundle.
-- **Custody is a separate choice.** A host that holds a person's data and computes for them is the easy path for many, and makes that host a handler of health values, with what follows from that. It uses the same method and writes the same claim, signed by the host.
+- **Other sources, the same shape.** A pack built from AION devices' pooled data, with a floor on n and only for people who agreed. Nobody outside can rebuild it, so comparisons with it carry that as a caveat. A table from a published study, with its citation. A friend's bundle.
+- **Custody is a separate choice.** A host that holds a person's data and computes for them is the easy path for many. It makes that host a handler of health values, with what follows from that. It uses the same method and writes the same claim, signed by the host.
 
-Not now: computing on encrypted values (homomorphic encryption, multi-party computation). A reference pack does not need it: the public table goes to the value, not the value to the table. It is the right tool for one thing that may come: statistics across peers who each keep their values to themselves, with no host that sees them. That is a real path for peer-to-peer growth and stays open. It waits for a concrete case, such as a group of people who want their own shared distribution, and for the simpler steps before it: a bundle encrypted to its reader, then a pack built from people who agreed.
+Not now: computing on encrypted values (homomorphic encryption, multi-party computation). A reference pack does not need it: the public table goes to the value, not the value to the table. It is the right tool for one thing that may come: statistics across peers who each keep their values to themselves. No host sees the values. That is a real path for peer-to-peer growth and stays open. It waits for a concrete case, such as a group of people who want their own shared distribution. It also waits for the simpler steps before it: a bundle encrypted to its reader, then a pack built from people who agreed.
 
 ## After that: people like me
 
-The first question a person asks is not "where is my cholesterol" but "how do I compare with people like me, who eat what I eat". The rule-based cohort is the start. In order of value for the effort:
+The first question a person asks is not "where is my cholesterol". It is "how do I compare with people like me, who eat what I eat". The rule-based cohort is the start. In order of value for the effort:
 
-- **More tests.** Each is one row in `internal/nhanes`, from the file's own label and a real report's name for the test. Next: the biochemistry profile, hs-CRP, ferritin, vitamin D. Fasting tests (glucose, triglycerides, LDL, insulin) need the fasting weight first. Quest's names come with its importer.
+- **More tests.** Each is one row in `internal/nhanes`, from the file's own label and a real report's name for the test. Next: the biochemistry profile, hs-CRP, ferritin, vitamin D. Fasting tests (glucose, triglycerides, LDL, insulin) need the fasting weight first.
 - **More people.** One cycle has about 9,000 people, so three rules often leave fewer than 30. Pool cycles (2017 to March 2020 is published as one file set), with the weights CDC gives for pooling.
 - **Your own food as the rule.** Work out the ranges from the person's own `food.estimate` records, and say how many days they cover. One recalled day in NHANES is not a usual diet; the two-day files and their weight come first.
 - **Check a recommended range.** Given a range someone recommends, show the share of the cohort inside it. That is a fact about the sample, not advice.
 - **Outcomes.** NHANES has linked mortality files. Associations only, and only after a regulatory read.
-- **Genetics.** NHANES publishes no genotypes. This is another rail with the same shape: the person's genotype file, a public score file pinned by its digest, computed locally, saved as a signed claim.
+- **Genetics.** NHANES publishes no genotypes. This is another rail with the same shape: the person's genotype file and a public score file pinned by its digest. The score is computed locally and saved as a signed claim.
 - **An assistant asks for a comparison.** `bean mcp` can read saved comparisons today. A tool that runs one comes after the person has used the command for a while.
 
 ## Also after the loop
 
-1. **Read PDFs by word position.** `pdftotext -bbox-layout` gives each word's box; columns come from where the header words sit, not from counted spaces. Most attacks on the layout grammar (DECISIONS 219 to 231) were artifacts of `-layout` spacing.
-2. **Unknown layouts, with an assistant if the person wants.** The person's own assistant, or a local model, proposes each reading with the page and words it read it from. bean checks every value against those words in the PDF and refuses what is not printed there; the person confirms the table, and the readings are theirs, with the extractor in context. bean ships no model and no key. A scanned PDF has no words to check against: the person confirms each value. Design it on a second real report from another lab, never from memory.
+1. **Read Labcorp PDFs by word position too.** Quest reports are read this way since 0.5.0. `pdftotext -bbox-layout` gives each word's box; columns come from where the header words sit, not from counted spaces. Most attacks on the layout grammar (DECISIONS 219 to 231) were artifacts of `-layout` spacing.
+2. **Unknown layouts, with an assistant if the person wants.** The person's own assistant, or a local model, proposes each reading with the page and words it read it from. bean checks every value against those words in the PDF and refuses what is not printed there. The person confirms the table, and the readings are theirs, with the extractor in context. bean ships no model and no key. A scanned PDF has no words to check against: the person confirms each value. Design it on a second real report from another lab, never from memory.
 3. **Freeze at `v` 0** (CORE.md section 6). After two weeks of real use (lab results, Apple Health, chat and agent logging) with no change to CORE.md, every DEFAULT in SPEC.md is final.
 4. **Longitudinal comparison.** A reading over time against what published studies saw over the same interval: baseline, cadence, follow-up and attrition. This needs a time-course matching contract first.
 5. **Summary-statistics references.** Many studies publish only aggregates. A reference may be a published table, with its citation, as well as participant-level files. Access-restricted datasets stay outside the repository.
 6. **Comparison packages.** Standardize the interface of a comparison (inputs, method, cohort, caveats), and let others publish datasets and methods for it. Extension 1's replay rules wait until two kinds of comparison exist.
 7. **Nutrition as exposure.** `food` and `food.estimate` exist. Next comes a source-backed estimate (USDA FoodData Central) with its uncertainty, kept apart from what the person said they ate. No causal claims.
-8. **Share and trust, further.** `check-bundle -key <key>` to compare the signing key with one the person gave, `-to <npub>` encryption of a bundle, a share that does not carry the stable identity id, expiring links, `bean attest <id>`, and `bean trust <identity or npub> <1-100>`. Readers compute trust; the core does not.
+8. **Share and trust, further.** `check-bundle -key <key>` to compare the signing key with one the person gave, and `-to <npub>` encryption of a bundle. A share that does not carry the stable identity id, and expiring links. `bean attest <id>`, and `bean trust <identity or npub> <1-100>`. Readers compute trust; the core does not.
 9. **Release.** A `go install` path and a neutral home ([GOVERNANCE-PROPOSAL.md](GOVERNANCE-PROPOSAL.md)). Each release publishes `bean-check.html`, the page that checks a bundle in a browser, with its SHA-256 and the Go that built it.
 10. **NIP-46 remote signing,** so that the nsec never sits on the host.
 11. **Device capture** (Extension 2). Wait for a real instrument, not a synthetic one.
@@ -110,11 +110,11 @@ The first question a person asks is not "where is my cholesterol" but "how do I 
 
 ## Limits to say out loud
 
-- **The lab importer is proven on one real report.** Thirteen attack rounds found ways to make it store a wrong value, fewer each round, but not none. It refuses what it cannot read, so it refuses unfamiliar layouts, and it shows what it read before it saves.
+- **The lab importer is proven on one real report of each layout.** Thirteen attack rounds found ways to make it store a wrong value, fewer each round, but not none. It refuses what it cannot read, so it refuses unfamiliar layouts, and it shows what it read before it saves.
 - **A signature proves who signed, not that the number is right.** It does not prove that a lab or device produced the number, nor anyone's credentials.
 - **A shared subset proves authenticity, not completeness.** Record files are readable JSON; only blobs are encrypted. Share by bundle, never by copying the log folder. The subject id is stable, so two bundles from one person can be linked.
 - **Regulatory.** Storing, verifying and displaying are kept apart from interpreting. A percentile against public data is a function that needs its own review before any clinical use. bean does not interpret, predict or advise.
-- **A comparison is as good as its cohort.** NHANES is one country, one two-year window, about 9,000 people. A lab and the survey measure with different instruments. A narrow cohort has few people, and no interval of uncertainty is computed yet. Every result says its n and its reasons.
+- **A comparison is as good as its cohort.** NHANES is one country, one two-year window, about 9,000 people. A lab and the survey measure with different instruments. A narrow cohort has few people, and no interval of uncertainty is computed yet. Every result says its n and its caveats.
 
 ## Known gaps
 
@@ -141,4 +141,4 @@ The first question a person asks is not "where is my cholesterol" but "how do I 
 
 ## Not planned
 
-A central data platform that a person cannot leave, a UI beyond a static report, relay publishing of records, encryption of record files at rest (use an encrypted volume), Whoop and Oura importers until there is a real export, zero-knowledge proofs, and distributed trust scores. Custody by a host a person chooses, and computing on encrypted values, are not in this list: see "compare without the download" above.
+A central data platform that a person cannot leave. A UI beyond a static report. Relay publishing of records. Encryption of record files at rest (use an encrypted volume). Whoop and Oura importers until there is a real export. Zero-knowledge proofs, and distributed trust scores. Custody by a host a person chooses, and computing on encrypted values, are not in this list: see "compare without the download" above.

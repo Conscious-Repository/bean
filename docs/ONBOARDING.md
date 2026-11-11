@@ -7,7 +7,7 @@ From nothing to a working log: install, identity, a checked lab import, an AI as
 - A Mac with [Homebrew](https://brew.sh). Linux works with the same tools.
 - Access to this repository on GitHub. It is private for now: sign in first, with `gh auth login` or an SSH key.
 - An encrypted disk. On a Mac, turn on FileVault. bean signs records but does not encrypt the record files.
-- A lab report PDF, if you have one. bean reads the layouts it knows; today, the Labcorp patient report and the Quest Diagnostics report. To practice, use `cmd/bean-import-lab/testdata/real-layout.txt` (Labcorp) or `quest-layout.html` (Quest): real layouts with synthetic content.
+- A lab report PDF, if you have one. bean reads the layouts it knows; today, the Labcorp patient report and the Quest Diagnostics report. To practice, use `cmd/bean-import-lab/testdata/real-layout.txt` (Labcorp) or `quest-layout.html` (Quest): real layouts with synthetic content. Practice in a throwaway folder, not in your log: `bean -dir /tmp/practice init`, then `bean -dir /tmp/practice import lab ...`.
 - Pen and paper for 24 words.
 
 ## Working with an AI assistant
@@ -23,7 +23,7 @@ Give the assistant these rules first:
 > 1. Never ask for my 24 words. Never run `bean init`, `bean rotate` or `bean restore`: I run them myself, in a terminal you cannot read. If I start to type or paste the words to you, stop me. I also run `bean import` myself: it shows my values for me to check. Never pass `-yes` for me.
 > 2. Do not look at my health data. Do not open my lab reports or log files, and do not run `bean ls`, `bean show`, `bean compare`, `bean check-bundle`, `bean export` or `bean blob get` unless I ask. Never run `bean share`: I decide what leaves, at my own terminal. Use exit codes and counts: the `added` line of an import, the `summary` line of `bean verify`.
 > 3. If an import is refused, ask for the shape of the line, as the guide shows, not its contents.
-> 4. Keep my data on my machine. Do not upload files or paste my records anywhere. Connecting you to my log through MCP is where my records start to reach your provider: do it only when I say so, read-only first (`bean mcp`, no `-write` or `-blobs`). Ask before `-write` or `-blobs`.
+> 4. Keep my data on my machine. Do not upload files or paste my records anywhere. Connecting you to my log through MCP is where my records start to reach your provider. Do it only when I say so, read-only first (`bean mcp`, no `-write` or `-blobs`). Ask before `-write` or `-blobs`.
 
 ## 1. Install
 
@@ -121,7 +121,7 @@ A `.txt` from `pdftotext -layout report.pdf report.txt` imports the same way. Ap
 
 ## Compare and share
 
-Once readings are in, [COMPARE.md](COMPARE.md) shows where they lie among people you describe, and [SHARE.md](SHARE.md) hands chosen records to someone who can check them without bean. [examples/blood](../examples/blood/README.md) runs both on a synthetic report.
+Once readings are in, [COMPARE.md](COMPARE.md) shows where they lie among people you describe. [SHARE.md](SHARE.md) hands chosen records to someone who can check them without bean. [examples/blood](../examples/blood/README.md) runs both on a synthetic report.
 
 ## 5. Connect an AI assistant (optional)
 
@@ -218,7 +218,7 @@ bean -dir ~/health-restored blob get <stored as id> | shasum -a 256
 
 The hash matches your original. To use the restored log, point `BEAN_DIR` and your MCP config at `~/health-restored`. Never `bean init` for this: a new identity cannot read your export.
 
-Saved comparisons, the reference files you kept and the records of your shares are in the export like every record, and a comparison can be checked from the export alone ([COMPARE.md](COMPARE.md)). The bundles you sent are folders outside your log: keep those yourself.
+Saved comparisons, the reference files you kept and the records of your shares are in the export like every record. A comparison can be checked from the export alone ([COMPARE.md](COMPARE.md)). The bundles you sent are folders outside your log: keep those yourself.
 
 ## Troubleshooting
 
@@ -230,7 +230,7 @@ Saved comparisons, the reference files you kept and the records of your shares a
 | `unknown time zone` | A zone name such as `America/Chicago`, not `CST`. |
 | `the file was not accepted, and nothing was written` | A line the importer could not read for sure. See [If the import is refused](#if-the-import-is-refused). |
 | `bean: input missing: <id>` | Use the record id from `bean ls` or the `kept` line, not the `stored as` id. |
-| `changed: ... this file says ...` | A newer report changed a value. If it is right, import again with `-corrections`. |
+| `changed: ... this input says ...` | A newer report changed a value. If it is right, import again with `-corrections`. |
 | `bean: undecided: ...` from `restore` | Expected on the first run. Read the list, then `-seal-all` (step 7). |
 
 Every command, flag and exit code: [COMMANDS.md](COMMANDS.md).

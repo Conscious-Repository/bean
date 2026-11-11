@@ -172,6 +172,10 @@ func convert(in io.Reader, out io.Writer, o options) error {
 			ii = i
 		case "raw_time":
 			return errors.New("line 1: a column is named raw_time, which holds a time the importer cannot read")
+		case "unit":
+			// The unit of every value comes from -unit. A column of units
+			// would be kept as text beside a value stored under another unit.
+			return errors.New("line 1: a column is named unit, and every value gets the unit of -unit. Remove or rename the column, and import the rows of each unit apart")
 		case "file_sha256":
 			if o.digest != "" {
 				return errors.New("line 1: a column is named file_sha256, which names the kept file")

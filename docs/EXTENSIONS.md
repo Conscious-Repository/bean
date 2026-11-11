@@ -1,6 +1,6 @@
 # bean extensions (draft, not implemented)
 
-These two extensions were part of SPEC.md up to v0.5. No code implements them, so they are not part of the core. They come back into the specification only with an implementation and test vectors. The section numbers are the old SPEC.md numbers.
+These two extensions were part of SPEC.md up to v0.5. No code implements them, so they are not part of the core. `comparison.percentile` is not an Extension 1 result: it has its own method ([COMPARE.md](COMPARE.md)). They come back into the specification only with an implementation and test vectors. The section numbers are the old SPEC.md numbers.
 
 ## 10. Extension 1: computed results
 

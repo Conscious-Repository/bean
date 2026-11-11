@@ -97,7 +97,7 @@ func (l *Loaded) supersededForReaders(id string) bool {
 }
 
 // isSetup reports pairing claims: configuration, not things that happened.
-func isSetup(typ string) bool { return typ == "agent.pair" || typ == "device.pair" }
+func isSetup(typ string) bool { return typ == "agent.pair" }
 
 // List returns the matching records in time order, then by id.
 func (s *Store) List(f Filter) ([]*Record, *Loaded, error) {

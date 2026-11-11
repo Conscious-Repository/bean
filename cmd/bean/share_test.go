@@ -9,6 +9,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -561,5 +562,61 @@ func TestBundleFromMemory(t *testing.T) {
 	extra := bundle.Check(bundle.FromFiles("x", change(func(m map[string][]byte) { m["for-ana/local/identity"] = []byte("x") })))
 	if text := strings.Join(extra.Lines(), "\n"); !extra.OK || !strings.Contains(text, "not part of the bundle, and not read: local") {
 		t.Errorf("what else lies in the bundle's folder:\n%s", text)
+	}
+}
+
+// TestBundleReadsTheSameEveryTime: a key that the person paired under two
+// labels, on two copies, shows under both in a fixed order, and a failed
+// bundle does not show the sender's note.
+func TestBundleReadsTheSameEveryTime(t *testing.T) {
+	a := t.TempDir()
+	run(t, a, "", "init")
+	me, _, _ := run(t, a, "", "whoami")
+	id := strings.Fields(me)[1]
+	device := t.TempDir()
+	out, errs, code := run(t, device, "", "agent", "init", "-label", "ring", "-identity", id)
+	if code != 0 {
+		t.Fatalf("agent init -identity: %s", errs)
+	}
+	npub := regexp.MustCompile(`npub1[0-9a-z]+`).FindString(out + errs)
+	// A second copy of the log, made before either pairing, with the keys.
+	b := t.TempDir()
+	if err := os.CopyFS(b, os.DirFS(a)); err != nil {
+		t.Fatal(err)
+	}
+	for dir, label := range map[string]string{a: "ring", b: "watch"} {
+		if _, errs, code := run(t, dir, "", "agent", "pair", npub, "-label", label); code != 0 {
+			t.Fatalf("pair as %s: %s", label, errs)
+		}
+	}
+	reading, errs, code := run(t, device, "", "add", "-agent", "heart.resting", "61", "-unit", "/min")
+	if code != 0 {
+		t.Fatalf("a device reading: %s", errs)
+	}
+	for _, src := range []string{b, device} {
+		if _, errs, code := run(t, a, "", "sync", src); code != 0 {
+			t.Fatalf("sync: %s", errs)
+		}
+	}
+	bundleDir := filepath.Join(t.TempDir(), "x")
+	if stdout, errs, code := run(t, a, "", "share", "-yes", "-note", "bundle ok. Checked by a doctor.", "-out", bundleDir, strings.TrimSpace(reading)); code != 0 {
+		t.Fatalf("%d\n%s\n%s", code, stdout, errs)
+	}
+	first, ok := checkBundle(bundleDir)
+	text := strings.Join(first, "\n")
+	if !ok || !(strings.Contains(text, "[ring, watch]") || strings.Contains(text, "[watch, ring]")) || !strings.Contains(text, "note: bundle ok. Checked by a doctor.") {
+		t.Fatalf("both labels and the note:\n%s", text)
+	}
+	for range 20 {
+		if again, _ := checkBundle(bundleDir); !slices.Equal(again, first) {
+			t.Fatalf("the same bundle reads differently:\n%s\n\n%s", text, strings.Join(again, "\n"))
+		}
+	}
+	// A failed bundle shows no note: this one would say "bundle ok" above
+	// the verdict.
+	os.MkdirAll(filepath.Join(bundleDir, "files"), 0o700)
+	os.WriteFile(filepath.Join(bundleDir, "files", "stray"), []byte("x"), 0o600)
+	if lines, ok := checkBundle(bundleDir); ok || strings.Contains(strings.Join(lines, "\n"), "Checked by a doctor") {
+		t.Errorf("a failed bundle shows the note:\n%s", strings.Join(lines, "\n"))
 	}
 }

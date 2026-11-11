@@ -32,7 +32,7 @@ bean uses a kept file only when its SHA-256 is the one on record. A download tha
 
 Each file is kept encrypted, as a `reference.file` record with its SHA-256. You sign for having kept it. That does not make it CDC's claim: anyone can check the SHA-256 against the copy CDC serves. The importer says whether the file is the one bean has on record ([the digests](../internal/nhanes/nhanes.go)).
 
-The digests on record come from one download, on 2026-11-09, through a proxy that could read the traffic. Until a second person has confirmed them from their own connection, treat "the file on record" as "the file one download saw", and check for yourself: `shasum -a 256 DEMO_J.xpt` against the table in the code. bean knows of no digests that CDC publishes for these files.
+The digests on record come from one download, on 2026-11-09, through a proxy that could read the traffic. Until a second person has confirmed them from their own connection, treat "the file on record" as "the file one download saw". Check for yourself: `shasum -a 256 DEMO_J.xpt` against the table in the code. bean knows of no digests that CDC publishes for these files.
 
 ## Compare
 
@@ -47,10 +47,12 @@ bean compare -sex female -age 40-49 3fa9c1
 Compared with NHANES 2017-2018: male, age 30-39.
 READING                VALUE      PERCENTILE  LOWER  SAME  MIDDLE HALF  MEDIAN  N    NOTE  ID
 lab.cholesterol-total  187 mg/dL  46          44.2%  3.5%  164 to 213   188     339        fca23ea91778
+PERCENTILE is the weighted share of the cohort with a lower value, plus half of those with the same value. It says where a value lies in this sample, not whether it is healthy.
 Read each number with these caveats:
   - the lab that measured the reading and NHANES used their own instruments and methods
   - NHANES is a sample of people living in the United States in the survey years, not a reference range
   - you chose the cohort: bean does not know whether you belong to it
+Not saved. Pass -save to keep these comparisons as signed records.
 ```
 
 - **PERCENTILE**: the weighted share of the cohort with a lower value, plus half of those with the same value.
@@ -63,7 +65,7 @@ The numbers in this example are statistics of the public files, not anyone's rea
 
 ### People like you: more rules
 
-Each `-where` narrows the cohort by one NHANES variable: `<FILE>.<VARIABLE>=<value>` or `=<from>-<to>`, both ends included. A measurement such as BMI needs a range: `=24` matches nobody, `=22-26` does. A person with no value for a rule's variable is left out. The nutrient totals are sums, and some sit a hair off a whole number (14.999999999999998 g of fiber), so a bound exactly on a whole number can leave a few people out: put bounds between the values you mean, such as 14.5-60.
+Each `-where` narrows the cohort by one NHANES variable: `<DATASET>.<VARIABLE>=<value>` or `=<from>-<to>`, both ends included. A measurement such as BMI needs a range: `=24` matches nobody, `=22-26` does. A person with no value for a rule's variable is left out. The nutrient totals are sums, and some sit a hair off a whole number (14.999999999999998 g of fiber). So a bound exactly on a whole number can leave a few people out. Put bounds between the values you mean, such as 14.5-60.
 
 ```
 bean compare -sex male -age 30-39 -where DEMO_J.RIDRETH3=3 -where BMX_J.BMXBMI=20-27 -type 'lab.*'
@@ -89,13 +91,13 @@ Every rule shrinks the cohort. Sex and a ten-year age range leave about 340 peop
 
 A row is one of two things.
 
-- **No number**, and a few words on why: bean has no reference data for the type; the reading is text, not above zero, or in another unit; a file is not in the log, or is not the file on record; the cohort has fewer than 30 people. What to do about it is said once, under the table.
+- **No number**, and a few words on why. bean has no reference data for the type. The reading is text, not above zero, or in another unit. A file is not in the log, or is not the file on record. The cohort has fewer than 30 people. What to do about it is said once, under the table.
 - **A number, with caveats.** No comparison of a lab reading with NHANES is like for like, and bean never says one is. Every one comes with these:
   - the lab that measured the reading and NHANES used their own instruments and methods;
   - NHANES is a sample of people living in the United States in the survey years, not a reference range;
   - you chose the cohort: bean does not know whether you belong to it.
 
-  And where it applies: ages of 80 and over are recorded as 80; a cohort chosen by one day's food says little about what people usually eat; the cohort is small; a file is not the one on record; an agent or another key signed the reading, not you.
+  And where it applies: ages of 80 and over are recorded as 80. A cohort chosen by one day's food says little about what people usually eat. The cohort is small. A file is not the one on record. An agent or another key signed the reading, not you.
 
 Limits beyond those:
 
@@ -110,6 +112,8 @@ Limits beyond those:
 bean compare -sex male -age 30-39 -type 'lab.*' -save
 ```
 
+A comparison is kept once. Two saves at one moment can each save the same one, and so can two copies that you then sync. bean then deletes all but one and says so.
+
 `-save` writes one `comparison.percentile` record per result, signed by you. Without it nothing is written: try cohorts freely, and save what you will act on or share. The same inputs twice add nothing. A comparison you deleted is saved again when you ask again.
 
 The record holds the percentile, and in `context` only what is needed to compute it again:
@@ -123,7 +127,7 @@ The record holds the percentile, and in `context` only what is needed to compute
 
 **A saved comparison says who you compared yourself with, and gives the value away.** The cohort (sex, age range, and any rule on ethnicity, body or food) is in the record, which is plain JSON like every record. And the shares of the cohort below and at your value, with the public files, let anyone work the value out. Anyone who reads your log, or a share that holds the comparison, has both. bean says so when it saves.
 
-**A comparison does not outlive its reading.** When you correct or delete a reading (`add -corrects`, `import -corrections`, `purge`), or such a change arrives with `sync`, bean deletes the saved comparisons of that reading and says how many. The deletion is a record, so every copy obeys it. Run `bean compare` again for the corrected reading. The cleanup also runs with `bean verify`, which is what to run after copying a log with another tool, and before a share. Until it has run, no command shows the old reading's value, and the comparison cannot be shared. To correct a lab value, import the corrected report with `-corrections`; `bean add -corrects` needs `-at` with the reading's own time, or the correction is dated now.
+**A comparison does not outlive its reading.** You can correct or delete a reading (`add -corrects`, `import -corrections`, `purge`), or such a change can arrive with `sync`. bean then deletes the saved comparisons of that reading and says how many. The deletion is a record, so every copy obeys it. Run `bean compare` again for the corrected reading. The cleanup also runs with `bean verify`, which is what to run after copying a log with another tool, and before a share. Until it has run, no command shows the old reading's value, and the comparison cannot be shared. To correct a lab value, import the corrected report with `-corrections`; `bean add -corrects` needs `-at` with the reading's own time, or the correction is dated now.
 
 ### Check one without bean
 
@@ -140,16 +144,16 @@ A folder is read whole, so a `bean export` or a bundle shared with `-files` is e
 
 The tool finds each file by its SHA-256, so the bytes are the same wherever you got them. What fetching from CDC yourself adds is the knowledge that CDC serves a file with that digest.
 
-[`tools/compare/reproduce.py`](../tools/compare/reproduce.py) is a second implementation in Python. It shares no code with bean. It holds the same small tables as bean (which variable each kind of reading may be set against and in which unit, the weights, the caveats, the files' digests), and a test keeps them equal. For each comparison it checks that:
+[`tools/compare/reproduce.py`](../tools/compare/reproduce.py) is a second implementation in Python. It shares no code with bean. It holds the same small tables as bean, and a test keeps them equal. The tables say which variable each kind of reading may be set against, and in which unit. They also give the weights, the caveats and the files' digests. For each comparison it checks that:
 
 1. the claim and the reading are what their ids say, and their signatures are good (the checks of the second verifier, `tools/second/beanverify.py`);
 2. each file has the SHA-256 the claim names;
-3. the claim is one the method could have made: the reading is of a kind and in a unit that the method sets against that variable, the cohort starts with one sex and an age range, its text says what its rules say, the weight is the one step 4 gives, the caveats are the ones the inputs give, and each variable has, in its file, the label the claim gives it;
+3. the claim is one the method could have made. The reading is of a kind and in a unit that the method sets against that variable. The cohort starts with one sex and an age range, and its text says what its rules say. The weight is the one step 4 gives, and the caveats are the ones the inputs give. Each variable has, in its file, the label the claim gives it;
 4. the method below gives every number of the result.
 
-A signature alone is not enough for 3: anyone can sign a record of this type by hand. A claim that computes but says "female, age 20-29" over rules that say otherwise is refused, and so is one that sets a weight in kilograms against cholesterol.
+A signature alone is not enough for 3: anyone can sign a record of this type by hand. A claim that computes but says "female, age 20-29" over rules that say otherwise is refused. So is one that sets a weight in kilograms against cholesterol.
 
-It prints the reading next to the variable it was set against, for example `lab.cholesterol-total 187 mg/dL against LBXTC 'Total Cholesterol (mg/dL)'`. It says for itself which files are not the ones on record. A good signature shows which key signed; whether that key speaks for the person is answered by `bean verify` on the log, or by `bean check-bundle` on a bundle. `make compare` runs all of this against bean on synthetic files in CI, and on CDC's files when `BEAN_NHANES_DIR` names a folder of them.
+It prints the reading next to the variable it was set against, for example `lab.cholesterol-total 187 mg/dL against LBXTC 'Total Cholesterol (mg/dL)'`. It says for itself which files are not the ones on record. A good signature shows which key signed. `bean verify` on the log, or `bean check-bundle` on a bundle, shows whether that key speaks for the person. `make compare` runs all of this against bean on synthetic files in CI, and on CDC's files when `BEAN_NHANES_DIR` names a folder of them.
 
 ## The method, version 1
 
@@ -158,17 +162,17 @@ This is the one place the method is written. Inputs: the value v of the reading;
 0. v must be above zero. None of these quantities can be zero or less.
 1. Take the rows of the test's file in file order. Skip a row with no value.
 2. `DEMO_J` must have a row with the same `SEQN`. If not, stop: the files are not of one release.
-3. For each rule, find the row of its file with the same `SEQN`. Skip the row if there is none, if it has no value of the variable, or if the value is below the rule's minimum or above its maximum. Sex is the rule `RIAGENDR` = 1 (male) or 2 (female); age is a rule on `RIDAGEYR`.
+3. For each rule, find the row of its file with the same `SEQN`. Skip the row if there is none, or if it has no value of the variable. Also skip it if the value is below the rule's minimum or above its maximum. Sex is the rule `RIAGENDR` = 1 (male) or 2 (female); age is a rule on `RIDAGEYR`.
 4. The weight is `WTDRD1` of `DR1TOT_J` if a rule names that file, else `WTMEC2YR` of `DEMO_J`. CDC's notes on the dietary file say to use the day one weight whenever day one nutrient data are used, alone or with examination data. Skip the row if the weight is missing or not above zero.
-5. n is the number of rows left. With fewer than 30, give n and no other number. For each distinct value x among them, g(x) is the sum of the weights of the rows with that value, added in file order, in IEEE 754 doubles.
-6. Going through the distinct values in rising order: W is the sum of every g(x), B the sum of g(x) for x below v, and E is g(v), or zero when no row has the value v.
+5. n is the number of rows left. With fewer than 30, give n and no other number. For each distinct value x among them, g(x) is the sum of the weights of the rows with that value. Add them in file order, in IEEE 754 doubles.
+6. Go through the distinct values in rising order. W is the sum of every g(x), and B is the sum of g(x) for x below v. E is g(v), or zero when no row has the value v.
 7. lower = 100 B / W, same = 100 E / W, percentile = 100 (B + E/2) / W. Round each to one decimal: floor(10 y + 0.5) / 10, with the multiplication and the addition as two steps.
-8. The 25th, 50th and 75th percentile of the cohort: the smallest x such that the g of the values up to and including x, added in rising order, reach q W, for q = 0.25, 0.5 and 0.75.
+8. The 25th, 50th and 75th percentile of the cohort, for q = 0.25, 0.5 and 0.75. Each is the smallest x such that the g of the values up to and including x, added in rising order, reach q W.
 
-After step 5 only n and the table of g(x) are used. So a published table of g(x) for a cohort gives the same result, to the last bit, as the files it was made from: that is how a comparison will work without the files ([ROADMAP](ROADMAP.md)).
+After step 5 only n and the table of g(x) are used. So a published table of g(x) for a cohort gives the same result, to the last bit, as the files it was made from. That is how a comparison will work without the files ([ROADMAP](ROADMAP.md)).
 
-The caveats of a saved claim, in order: the three that every comparison has; the top age, if the age range ends at 80; the one day of food, if a rule names `DR1TOT_J`; the small cohort, if n is below 100; one for each file that was not on record; the reading's signer, if it is not the person. Their texts are in [`cmd/bean/compare.go`](../cmd/bean/compare.go) and in `reproduce.py`, and a test keeps them equal.
+The caveats of a saved claim are in a fixed order. First come the three that every comparison has. Then the top age, if the age range ends at 80. Then the one day of food, if a rule names `DR1TOT_J`. Then the small cohort, if n is below 100. Then one for each file that was not on record. Last, the reading's signer, if it is not the person. Their texts are in [`cmd/bean/compare.go`](../cmd/bean/compare.go) and in `reproduce.py`, and a test keeps them equal.
 
-A file is SAS transport, version 5. A number that an IEEE double cannot hold exactly is refused, and so is one that SAS does not write: not normalized, or below 1e-70. bean's reader gives the same bits as pandas for every value of the ten CDC files it was tried on, but for zero, which pandas reads as 5.4e-79.
+A file is SAS transport, version 5. A number that an IEEE double cannot hold exactly is refused, and so is one that SAS does not write: not normalized, or below 1e-70. bean's reader gives the same bits as pandas for every value of the ten CDC files it was tried on. The one exception is zero, which pandas reads as 5.4e-79.
 
 A change to any step is a new method version.

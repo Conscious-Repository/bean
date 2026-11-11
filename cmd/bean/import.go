@@ -74,6 +74,11 @@ func cmdImport(s *core.Store, args []string) {
 	// The review is printed and answered: both ends must be a person's
 	// terminal, or the readings would land in a pipe.
 	o.terminal = isTerminal(os.Stdin) && isTerminal(os.Stdout)
+	// Refused before the importer runs: its error for a line it cannot read
+	// names that line, and the line can hold a value.
+	if !o.yes && !o.terminal {
+		fail(phaseError("review", errors.New("review needs a terminal: run bean import yourself to check what it read, or pass -yes to save without review")))
+	}
 	bin, err := importerPath(source)
 	if err != nil {
 		fail(err)

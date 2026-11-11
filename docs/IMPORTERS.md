@@ -1,6 +1,6 @@
 # Importers
 
-An importer turns one kind of file into bean records. It is a separate program, named `bean-import-<name>`, in any language. `bean import <name> [flags] <file>` finds it next to `bean` or on your `PATH`, runs it, and does the rest: it keeps the file, checks what the importer wrote, shows it to you, and signs only what you confirm.
+An importer turns one kind of file into bean records. It is a separate program, named `bean-import-<name>`, in any language. `bean import <name> [flags] <file>` finds it next to `bean` or on your `PATH` and runs it. bean does the rest: it keeps the file, checks what the importer wrote, shows it to you, and signs only what you confirm.
 
 bean does not need to know your source. Anyone can write an importer for theirs, and anyone can check what it writes.
 
@@ -11,7 +11,7 @@ bean does not need to know your source. Anyone can write an importer for theirs,
 | `bean import lab` | Lab report PDFs, in the layouts it knows: the Labcorp and Quest Diagnostics patient reports | [README](../cmd/bean-import-lab/README.md) |
 | `bean import apple-health` | An Apple Health `export.zip` or `export.xml` | [README](../cmd/bean-import-apple-health/README.md) |
 | `bean import csv` | A CSV with a `value` column | [COMMANDS](COMMANDS.md) |
-| `bean import nhanes` | A public NHANES data file (`.XPT`, 2017-2018), kept as reference data for `bean compare`. No readings. | [COMPARE](COMPARE.md) |
+| `bean import nhanes` | A public NHANES data file (`.XPT`, 2017-2018), kept as reference data for `bean compare`. No readings. | [COMPARE](COMPARE.md), [notes](../cmd/bean-import-nhanes/README.md) |
 
 ## Community importers
 

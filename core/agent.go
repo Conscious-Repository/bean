@@ -21,8 +21,8 @@ import (
 // Each machine makes its own agent key, because local/ never syncs. A
 // replica can hold an agent key without the person's signing key (an
 // agent-only replica, for example a cloud machine that runs an agent).
-// The person vouches for an agent with an agent.pair claim, the same shape
-// as device.pair (SPEC.md 11.3). The core does not check pairing.
+// The person vouches for an agent with an agent.pair claim. The core does
+// not check pairing.
 
 // ErrNoAgent is returned when local/agent-key does not exist.
 var ErrNoAgent = errors.New("no agent key: run bean agent init")

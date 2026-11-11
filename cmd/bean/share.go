@@ -10,10 +10,12 @@ import (
 	"io"
 	"maps"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/Conscious-Repository/bean/core"
@@ -352,21 +354,41 @@ func cmdShare(s *core.Store, args []string) {
 	// The bundle is written next to its place, checked as its reader will
 	// check it, and moved there whole. Only then does the share record go
 	// into the log: a failure leaves no bundle and no record of one.
+	// From here a signal does not end bean by itself. Before the move it is
+	// obeyed between two writes, never during one: a remover that ran beside
+	// the writer left a folder of plaintext behind. From the move on it
+	// waits: a bundle in place with no share record in the log is a
+	// disclosure the log does not know.
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, importSignals...)
+	defer signal.Stop(sig)
 	tmp, err := os.MkdirTemp(filepath.Dir(out), ".bean-share-*")
 	if err != nil {
 		fail(err)
 	}
-	// Ctrl-C must not leave a folder of plaintext behind.
-	untrap := removeOnSignal(tmp)
 	gone := func(err error) {
 		os.RemoveAll(tmp)
 		fail(fmt.Errorf("nothing was shared: %w", err))
+	}
+	stopped := func() {
+		select {
+		case got := <-sig:
+			os.RemoveAll(tmp)
+			fmt.Fprintf(os.Stderr, "bean: stopped by %s; nothing was shared, and the half-built bundle is removed\n", got)
+			code := 1
+			if n, ok := got.(syscall.Signal); ok {
+				code = 128 + int(n)
+			}
+			os.Exit(code)
+		default:
+		}
 	}
 	write := map[string][]byte{shareID: shareBytes}
 	for _, r := range append(shared, proof...) {
 		write[r.ID] = r.Bytes
 	}
 	for id, data := range write {
+		stopped()
 		p := filepath.Join(tmp, filepath.FromSlash(core.PathOf(id)))
 		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 			gone(err)
@@ -383,6 +405,7 @@ func cmdShare(s *core.Store, args []string) {
 			if sf.data == nil {
 				continue
 			}
+			stopped()
 			if err := os.WriteFile(filepath.Join(tmp, "files", sf.digest), sf.data, 0o600); err != nil {
 				gone(err)
 			}
@@ -397,13 +420,13 @@ func cmdShare(s *core.Store, args []string) {
 		}
 		gone(errors.New("the bundle does not pass bean check-bundle"))
 	}
+	stopped() // the last moment: after this the share runs to its end
 	if err := os.Remove(out); err != nil && !errors.Is(err, os.ErrNotExist) {
 		gone(err)
 	}
 	if err := os.Rename(tmp, out); err != nil {
 		gone(err)
 	}
-	untrap()
 	if err := s.AddSigned(shareID, shareBytes); err != nil {
 		fail(fmt.Errorf("the bundle is written, in %s, and its share record could not be added to your log: %w", out, err))
 	}

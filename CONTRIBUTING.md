@@ -10,6 +10,7 @@ Needs Go 1.24 or later. Check with `go version`. The `toolchain` line in `go.mod
 go build ./...
 go test -race ./...                  # unit, conformance folder, vector, CLI and concurrency tests
 go vet ./... && gofmt -l .           # gofmt must print nothing
+make prose                           # no sentence of a document is longer than 25 words
 ./demo.sh                            # two-folder walkthrough: import, sync, purge, gc, export
 python3 -I tools/checksecp256k1.py   # independent BIP-340 and npub check, pure Python
 python3 -I tools/checkvectors.py     # independent check of the vectors; needs `pip install -r tools/requirements.txt`
@@ -18,7 +19,7 @@ PY=python3 bash tools/compare/run.sh # every saved comparison computed again wit
 PY=python3 bash tools/second/bundles.sh # share bundles, good and damaged, checked by bean and by Python
 ```
 
-Run all of them before every commit; `make check` runs them, plus staticcheck, govulncheck and a check that `tools/genvectors` reproduces every vector byte for byte. `make fuzz` runs the fuzz targets (2 minutes each) and `make smoke` runs the end-to-end and adversarial suite in `tools/smoke.sh`. When you change a test vector, run `go run ./tools/genvectors` and the Python checks. The conformance folders come from `tools/second/cases.py`: delete `vectors/conformance`, run `python3 tools/second/cases.py vectors/conformance`, then `go run ./tools/genvectors` to write each `expected.txt`. Every vector is reproducible; V6 uses an RFC 6979 nonce since 2026-10-30.
+Run all of them before every commit; `make check` runs them, plus staticcheck, govulncheck and a check that `tools/genvectors` reproduces every vector byte for byte. It also runs the example, the page in a browser, and a comparison with the build of `origin/main`. So it needs node (for `bundles`), node with Playwright and Chromium (for `pagetest`), and `origin/main` (for `differential`). `make fuzz` runs the fuzz targets (2 minutes each) and `make smoke` runs the end-to-end and adversarial suite in `tools/smoke.sh`. When you change a test vector, run `go run ./tools/genvectors` and the Python checks. The conformance folders come from `tools/second/cases.py`: delete `vectors/conformance`, run `python3 tools/second/cases.py vectors/conformance`, then `go run ./tools/genvectors` to write each `expected.txt`. Every vector is reproducible; V6 uses an RFC 6979 nonce since 2026-10-30.
 
 ## Layout
 
@@ -36,7 +37,17 @@ internal/xpt/             reads SAS transport (XPT) files
 internal/nhanes/          the files, the table of tests, and the method of
                           bean compare; testdata/ has synthetic files
 cmd/bean-import-csv/      CSV importer
-cmd/bean-import-lab/  Lab report PDF importer (labcorp.go: the one layout it knows)
+cmd/bean-import-lab/      lab report PDF importer (labcorp.go, quest.go: the two
+                          layouts it knows)
+cmd/bean-import-apple-health/  Apple Health export importer
+cmd/bean-import-nhanes/   keeps a public NHANES file as a reference file
+internal/bundle/          the check of a share bundle; bean check-bundle and the
+                          page run it
+internal/view/            the words a record is shown in
+tools/page/               builds bean-check.html, the page that checks a bundle
+                          in a browser
+tools/differential/       compares this build's output with another build's
+tools/adversary/          writes hostile logs for the smoke suite
 examples/blood/           the whole loop on a synthetic report, as one script
 tools/genvectors/         writes vectors/
 tools/check*.py           independent checks of the vectors
@@ -64,7 +75,7 @@ vectors/                  published test vectors (SPEC.md 14); conformance/ has
    - `times.observed`, or null when the source has no time. Never invent a time.
    - `source.system` and `source.adapter` (`bean-import-<source>@<version>`).
    - `source.ref_input`: `["bean/v0/ref","id",<system>,<native id>,0]` when the source has an id for the reading. `bean append` turns it into the dedupe ref, so a second import adds nothing.
-4. Put the original file in `blobs` with `bean blob put`, and take its id with a `-blob` flag.
+4. Keep the original file: follow the contract in [docs/IMPORTERS.md](docs/IMPORTERS.md). `bean import` stores the file and passes its id with `-blob`; the importer's first line is the record that keeps it.
 5. Do not copy names, birth dates or patient ids into records.
 6. Test with a synthetic file that has the same layout. Document the native id in the command's doc comment.
 

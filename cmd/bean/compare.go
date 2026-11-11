@@ -186,6 +186,10 @@ func cmdCompare(s *core.Store, args []string) {
 		fmt.Println("Each saved comparison states the cohort you chose and, with the public files, gives the reading's value away, in a record anyone with the log or a share of it can read.")
 	}
 	fmt.Printf("added %d, already there %d\n", res.Added, already)
+	// Another save at the same moment may have added the same claim.
+	if res.Added > 0 {
+		sweepComparisons(s)
+	}
 }
 
 // parseCohort reads -sex, -age and each -where. Sex and age are required:
@@ -382,28 +386,49 @@ func staleComparison(l *core.Loaded, deleted map[string]bool, r *core.Record) bo
 // public files, so it must not outlive it. The deletion is a record, so
 // every copy and every reader obeys it. It can be computed again from the
 // reading that replaced it. A comparison whose reading this copy has never
-// seen is left alone: the reading may not have arrived yet.
+// seen is left alone: the reading may not have arrived yet. It also keeps
+// one of each comparison that was saved more than once.
 func sweepComparisons(s *core.Store) {
 	l, err := s.Load()
 	if err != nil || l.ID == "" || l.Local == nil || l.IsTooNew() || l.IsFrozen() {
 		return
 	}
 	deleted := deletedByPerson(l)
-	var stale []string
+	// The same claim saved twice is kept once, under its lowest id. Two
+	// saves at one moment each see a log without the other's record, and
+	// two copies that each saved it meet at a sync.
+	var stale, twice []string
+	seen := map[string]bool{}
 	for _, id := range slices.Sorted(maps.Keys(l.Report.Records)) {
-		if r := l.Report.Records[id]; r.Author == l.ID && r.Subject == l.ID && l.Current(id) && staleComparison(l, deleted, r) {
+		r := l.Report.Records[id]
+		if r.Author != l.ID || r.Subject != l.ID || !l.Current(id) || !strings.HasPrefix(r.Type, "comparison.") {
+			continue
+		}
+		if staleComparison(l, deleted, r) {
 			stale = append(stale, id)
+		} else if key := string(core.Canonical(r.Raw["context"])); seen[key] {
+			twice = append(twice, id)
+		} else {
+			seen[key] = true
 		}
 	}
-	if len(stale) == 0 {
-		return
+	if len(stale) > 0 {
+		n, err := s.PurgeMany(stale, "its reading was corrected or deleted")
+		if n > 0 {
+			fmt.Fprintf(os.Stderr, "bean: deleted %d saved comparisons: their readings were corrected or deleted. Run bean compare again for the current readings\n", n)
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "bean: a comparison of a reading that is gone could not be deleted: %s\n", safe(err.Error()))
+		}
 	}
-	n, err := s.PurgeMany(stale, "its reading was corrected or deleted")
-	if n > 0 {
-		fmt.Fprintf(os.Stderr, "bean: deleted %d saved comparisons: their readings were corrected or deleted. Run bean compare again for the current readings\n", n)
-	}
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "bean: a comparison of a reading that is gone could not be deleted: %s\n", safe(err.Error()))
+	if len(twice) > 0 {
+		n, err := s.PurgeMany(twice, "the same comparison is saved once")
+		if n > 0 {
+			fmt.Fprintf(os.Stderr, "bean: deleted %d saved comparisons that were saved twice; one of each stays\n", n)
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "bean: a comparison that was saved twice could not be deleted: %s\n", safe(err.Error()))
+		}
 	}
 }
 

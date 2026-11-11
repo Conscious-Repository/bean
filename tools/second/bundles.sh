@@ -54,6 +54,10 @@ both() {
   if [ "$j" != "$g" ] || ! cmp -s "$T/go.txt" "$T/js.txt"; then
     echo "DIFFER $1: the page (exit $j) does not say what bean says (exit $g)"; diff "$T/go.txt" "$T/js.txt" | head -6 | sed 's/^/    /'; rc=1
   fi
+  # A failed bundle shows no note of the sender: a note could say "bundle ok".
+  if [ "$want" = 1 ] && grep -q '^note: ' "$T/go.txt" "$T/py.txt"; then
+    echo "DIFFER $1: a failed bundle shows the sender's note"; rc=1
+  fi
   # On a good bundle the two must also count the same records, files and signers.
   if [ "$want" = 0 ] && [ "$(grep -E '^(share|records:|signed:|corrections:) ' "$T/go.txt")" != "$(grep -E '^(share|records:|signed:|corrections:) ' "$T/py.txt")" ]; then
     echo "DIFFER $1: the two count differently"; grep -E '^(records:|signed:) ' "$T/go.txt" "$T/py.txt" | sed 's/^/    /'; rc=1
@@ -98,6 +102,8 @@ grep -q '^reproduced ' "$T/repro.txt" || { echo "DIFFER: nothing reproduced from
 # Damage: each copy of a good bundle with one change must be refused by both.
 damage() { rm -rf "$T/d"; cp -R "$1" "$T/d"; }
 damage "$T/cmpf"; rm "$(obj "$T/d" "$R1")";                                   both "a listed record removed" "$T/d" bad
+grep -q '^note: for a friend' <(bean check-bundle "$T/type") || { echo "DIFFER: a good bundle does not show its note"; rc=1; }
+damage "$T/type"; mkdir -p "$T/d/files"; echo x >"$T/d/files/stray";          both "a bundle with a note, and a stray file" "$T/d" bad
 damage "$T/cmpf"; f=$(obj "$T/d" "$W1"); mkdir -p "$(dirname "$f")"; cp "$(obj "$L" "$W1")" "$f"; both "a record added" "$T/d" bad
 damage "$T/cmpf"; f=$(ls "$T/d/files" | head -1); printf x >>"$T/d/files/$f";  both "a file changed" "$T/d" bad
 damage "$T/cmpf"; f=$(ls "$T/d/files" | head -1); rm "$T/d/files/$f";          both "a file removed" "$T/d" bad
