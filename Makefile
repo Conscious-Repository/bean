@@ -4,11 +4,12 @@
 PY ?= python3
 FUZZTIME ?= 2m
 
-.PHONY: help check build fmt vet test lint vuln vectors second compare bundles page pagetest example differential demo fuzz smoke
+.PHONY: help check build fmt vet test lint vuln prose vectors second compare bundles page pagetest example differential demo fuzz smoke
 
 help:
-	@echo "make check         every check a commit needs (fmt vet build test lint vuln vectors second compare bundles pagetest example differential demo)"
+	@echo "make check         every check a commit needs (fmt vet build test lint vuln prose vectors second compare bundles pagetest example differential demo)"
 	@echo "make test          go test -race -failfast ./..."
+	@echo "make prose         no sentence of a document is longer than 25 words"
 	@echo "make vectors       regenerate vectors/ and check them byte for byte and with Python"
 	@echo "make second        compare bean with the second verifier and the conformance folders"
 	@echo "make compare       compute every saved comparison again with Python and pandas"
@@ -20,7 +21,7 @@ help:
 	@echo "make fuzz          run each fuzz target for FUZZTIME (default 2m)"
 	@echo "make smoke         build a large log and time the commands"
 
-check: fmt vet build test lint vuln vectors second compare bundles pagetest example differential demo
+check: fmt vet build test lint vuln prose vectors second compare bundles pagetest example differential demo
 
 build:
 	go build ./...
@@ -42,6 +43,19 @@ lint:
 
 vuln:
 	govulncheck ./...
+
+# The documents use Simplified Technical English. This checks the rule of
+# it that can be counted: a sentence has at most 25 words. DECISIONS.md is a
+# dated log and is not rewritten.
+DOCS = README.md CORE.md SPEC.md SECURITY.md UPGRADING.md CONTRIBUTING.md \
+	docs/COMMANDS.md docs/ONBOARDING.md docs/SHARE.md docs/COMPARE.md \
+	docs/IMPORTERS.md docs/ROADMAP.md docs/EXTENSIONS.md \
+	docs/PROVIDER-INGESTION.md docs/GOVERNANCE-PROPOSAL.md \
+	cmd/bean/vocabulary.md cmd/bean-import-lab/README.md \
+	cmd/bean-import-apple-health/README.md cmd/bean-import-nhanes/README.md \
+	examples/blood/README.md tools/second/README.md
+prose:
+	$(PY) -I tools/checkprose.py $(DOCS)
 
 # The generator must reproduce every committed vector byte for byte.
 vectors:

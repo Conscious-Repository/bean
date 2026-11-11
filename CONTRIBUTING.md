@@ -10,6 +10,7 @@ Needs Go 1.24 or later. Check with `go version`. The `toolchain` line in `go.mod
 go build ./...
 go test -race ./...                  # unit, conformance folder, vector, CLI and concurrency tests
 go vet ./... && gofmt -l .           # gofmt must print nothing
+make prose                           # no sentence of a document is longer than 25 words
 ./demo.sh                            # two-folder walkthrough: import, sync, purge, gc, export
 python3 -I tools/checksecp256k1.py   # independent BIP-340 and npub check, pure Python
 python3 -I tools/checkvectors.py     # independent check of the vectors; needs `pip install -r tools/requirements.txt`
