@@ -708,7 +708,7 @@ func TestShareSealed(t *testing.T) {
 	zipPath := filepath.Join(where, "plain.zip")
 	os.WriteFile(zipPath, packed, 0o600)
 	want, _ := checkBundle(folder)
-	if got, ok := checkPackage(zipPath); !ok || len(got) != len(want) {
+	if got, ok, _ := checkPackage(zipPath); !ok || len(got) != len(want) {
 		t.Errorf("a zip file of the folder:\n%s", strings.Join(got, "\n"))
 	}
 	if again, _ := bundle.Pack(folder); !bytes.Equal(again, packed) {
@@ -745,5 +745,63 @@ func TestCorrectOnce(t *testing.T) {
 	}
 	if _, errs, code := run(t, dir, "", "show", "000000"); code == 0 || !strings.Contains(errs, "no record has this id") {
 		t.Errorf("an id of no record: %d\n%s", code, errs)
+	}
+}
+
+// TestSealedFilesComeOut: a reader gets a carried file out of a sealed
+// package with check-bundle -unpack, and the folder it writes checks as a
+// bundle. A sealed share writes the package and nothing else.
+func TestSealedFilesComeOut(t *testing.T) {
+	dir, _, ids := compareLog(t, "TCHOL_J", "DEMO_J")
+	if out, errs, code := run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", "-save", ids[0]); code != 0 {
+		t.Fatalf("%s\n%s", out, errs)
+	}
+	where := t.TempDir()
+	pkg := filepath.Join(where, "p.bean")
+	stdout, errs, code := run(t, dir, "", "share", "-yes", "-seal", "-files", "-out", pkg, "-type", "comparison.*")
+	if code != 0 || !strings.Contains(stdout, "shared 4 records and 2 files") {
+		t.Fatalf("%d\n%s\n%s", code, stdout, errs)
+	}
+	// No folder of plain records was made beside the package.
+	if entries, _ := os.ReadDir(where); len(entries) != 1 || entries[0].Name() != "p.bean" {
+		t.Errorf("a sealed share wrote more than the package: %v", entries)
+	}
+	words := ""
+	for _, line := range strings.Split(stdout, "\n") {
+		if strings.HasPrefix(line, "  ") {
+			words = strings.TrimSpace(line)
+		}
+	}
+	data, _ := os.ReadFile(pkg)
+	res := bundle.Check(bundle.FromPackage("p", data, words))
+	if !res.OK || len(res.Carried) != 2 || res.Carried[0].Type != "reference.file" || res.Carried[0].Bytes == 0 {
+		t.Fatalf("the files a package carries: %+v", res.Carried)
+	}
+	// With the words, -unpack writes the bundle, and its files are the files.
+	open := filepath.Join(where, "open")
+	if stdout, errs, code := run(t, t.TempDir(), words+"\n", "check-bundle", "-unpack", open, pkg); code != 0 || !strings.Contains(stdout, "unpacked into") {
+		t.Fatalf("-unpack: %d\n%s\n%s", code, stdout, errs)
+	}
+	if lines, ok := checkBundle(open); !ok {
+		t.Errorf("the unpacked folder does not check:\n%s", strings.Join(lines, "\n"))
+	}
+	for _, c := range res.Carried {
+		if fileDigest(filepath.Join(open, "files", c.SHA256)) != c.SHA256 {
+			t.Errorf("files/%s is not the file that was checked", c.SHA256)
+		}
+	}
+	// Without the words nothing is unpacked, and a folder that is there is not written into.
+	other := filepath.Join(where, "other")
+	if _, _, code := run(t, t.TempDir(), "abandon ability able about above absent\n", "check-bundle", "-unpack", other, pkg); code == 0 {
+		t.Error("-unpack with other words passed")
+	}
+	if _, err := os.Stat(other); err == nil {
+		t.Error("-unpack with other words wrote a folder")
+	}
+	if _, errs, code := run(t, t.TempDir(), words+"\n", "check-bundle", "-unpack", open, pkg); code == 0 || !strings.Contains(errs, "nothing was unpacked") {
+		t.Errorf("-unpack into a folder that is there: %d\n%s", code, errs)
+	}
+	if _, errs, code := run(t, t.TempDir(), "", "check-bundle", "-unpack", other, open); code == 0 || !strings.Contains(errs, "a folder is unpacked already") {
+		t.Errorf("-unpack of a folder: %d\n%s", code, errs)
 	}
 }

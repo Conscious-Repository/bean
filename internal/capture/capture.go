@@ -10,6 +10,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	"github.com/Conscious-Repository/bean/core"
+	"github.com/Conscious-Repository/bean/internal/view"
 )
 
 // The tags of the three objects of the format.
@@ -28,9 +30,23 @@ const (
 )
 
 var (
-	hex64 = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	kind  = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*(\.[a-z0-9_-]+)*$`)
+	hex64  = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	kind   = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*(\.[a-z0-9_-]+)*$`)
+	utcSec = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$`)
 )
+
+// aTime reports a time as a device writes it: empty, or a real UTC time to
+// the second, in a year from 1 on. No fraction and no other zone.
+func aTime(t string) bool {
+	if t == "" {
+		return true
+	}
+	if !utcSec.MatchString(t) {
+		return false
+	}
+	at, err := time.Parse("2006-01-02T15:04:05Z", t)
+	return err == nil && at.Year() >= 1
+}
 
 // ID is the id of a statement or a certificate: the SHA-256 of its
 // canonical bytes without the sig member. The signature is over this id,
@@ -107,6 +123,8 @@ type Statement struct {
 	Prev    string
 	Raw     []Raw
 	Line    []byte
+	Model   string
+	HW      string
 }
 
 // Raw is one raw file that a statement names.
@@ -141,7 +159,7 @@ func ParseStatement(line []byte) (*Statement, error) {
 			return nil, fmt.Errorf("device.%s is not plain text", k)
 		}
 	}
-	st := &Statement{Line: line, ID: ID(obj)}
+	st := &Statement{Line: line, ID: ID(obj), Model: dev["model"].(string), HW: dev["hw"].(string)}
 	if st.Key, ok = text(dev, "key"); !ok || !deviceKey(st.Key) {
 		return nil, fmt.Errorf("device.key is not a P-256 or Ed25519 key")
 	}
@@ -156,12 +174,8 @@ func ParseStatement(line []byte) (*Statement, error) {
 	if s, ok := text(obj, "selftest"); !ok || (s != "pass" && s != "fail" && s != "none") {
 		return nil, fmt.Errorf("selftest is not pass, fail or none")
 	}
-	if t, ok := text(obj, "time"); !ok {
-		return nil, fmt.Errorf("time is not text")
-	} else if t != "" {
-		if _, err := time.Parse("2006-01-02T15:04:05Z", t); err != nil {
-			return nil, fmt.Errorf("time is not empty and not like 2026-11-11T17:00:00Z")
-		}
+	if t, ok := text(obj, "time"); !ok || !aTime(t) {
+		return nil, fmt.Errorf("time is not empty and not like 2026-11-11T17:00:00Z")
 	}
 	seq, _ := obj["seq"].(map[string]any)
 	if !keys(seq, []string{"boot", "capture"}) {
@@ -211,25 +225,28 @@ func ParseStatement(line []byte) (*Statement, error) {
 	return st, nil
 }
 
-// checkCert checks a factory certificate for key, and returns its issuer.
-func checkCert(v any, key string) (string, error) {
+// checkCert checks a factory certificate for key, and returns it.
+func checkCert(v any, key string) (map[string]any, error) {
 	cert, ok := v.(map[string]any)
 	if !ok || !keys(cert, []string{"bean", "hw", "issuer", "key", "model", "sig"}) {
-		return "", fmt.Errorf("the certificate needs bean, hw, issuer, key, model and sig, and nothing else")
+		return nil, fmt.Errorf("the certificate needs bean, hw, issuer, key, model and sig, and nothing else")
 	}
 	for _, k := range []string{"bean", "hw", "issuer", "key", "model", "sig"} {
 		if _, ok := text(cert, k); !ok {
-			return "", fmt.Errorf("the certificate's %s is not plain text", k)
+			return nil, fmt.Errorf("the certificate's %s is not plain text", k)
 		}
 	}
 	issuer := cert["issuer"].(string)
 	if cert["bean"] != CertTag || cert["key"] != key || !deviceKey(issuer) {
-		return "", fmt.Errorf("the certificate is not one for this device key")
+		return nil, fmt.Errorf("the certificate is not one for this device key")
+	}
+	if cert["model"] == "" || cert["hw"] == "" {
+		return nil, fmt.Errorf("the certificate names no model or no hardware revision")
 	}
 	if core.Verify(issuer, ID(cert), cert["sig"].(string)) != nil {
-		return "", fmt.Errorf("the certificate is not signed by its issuer")
+		return nil, fmt.Errorf("the certificate is not signed by its issuer")
 	}
-	return issuer, nil
+	return cert, nil
 }
 
 // CheckFolder checks a folder that a device handed over. It returns the
@@ -242,10 +259,27 @@ func CheckFolder(dir string) ([]string, bool) {
 		for _, p := range problems {
 			lines = append(lines, "problem: "+p)
 		}
+		// A name in the folder is text from a stranger: it must not draw a
+		// line of its own.
+		for i := range lines {
+			lines[i] = view.Safe(lines[i])
+		}
 		if len(problems) > 0 {
 			return append(lines, fmt.Sprintf("device folder FAILED: %d problems", len(problems))), false
 		}
 		return append(lines, "device folder ok"), true
+	}
+	// The folder holds device.json, captures.jsonl and raw, and nothing
+	// else: what a check does not read must not travel under its verdict.
+	top, err := os.ReadDir(dir)
+	if err != nil {
+		bad("the folder cannot be read")
+		return done()
+	}
+	for _, e := range top {
+		if n := e.Name(); n != "device.json" && n != "captures.jsonl" && n != "raw" {
+			bad("%s is in the folder, and is not part of it", n)
+		}
 	}
 	// device.json: whose folder this is.
 	data, err := os.ReadFile(filepath.Join(dir, "device.json"))
@@ -253,9 +287,14 @@ func CheckFolder(dir string) ([]string, bool) {
 		bad("device.json cannot be read")
 		return done()
 	}
-	v, err := core.Parse(bytes.TrimRight(data, "\n"))
+	data = bytes.TrimSuffix(data, []byte("\n"))
+	v, err := core.Parse(data)
 	dev, ok := v.(map[string]any)
-	if err != nil || !ok || !keys(dev, []string{"bean", "key", "time"}, "cert") || dev["bean"] != DeviceTag {
+	if err != nil || !ok || !bytes.Equal(core.Canonical(dev), data) {
+		bad("device.json is not one object in the form of the format, with at most one line end after it")
+		return done()
+	}
+	if !keys(dev, []string{"bean", "key", "time"}, "cert") || dev["bean"] != DeviceTag {
 		bad("device.json is not a device object: bean, key, time, and cert if there is one")
 		return done()
 	}
@@ -265,18 +304,17 @@ func CheckFolder(dir string) ([]string, bool) {
 		return done()
 	}
 	lines = append(lines, "device "+key)
-	if t, ok := text(dev, "time"); !ok {
-		bad("device.json: time is not text")
-	} else if t != "" {
-		if _, err := time.Parse("2006-01-02T15:04:05Z", t); err != nil {
-			bad("device.json: time is not empty and not like 2026-11-11T17:00:00Z")
-		}
+	if t, ok := text(dev, "time"); !ok || !aTime(t) {
+		bad("device.json: time is not empty and not like 2026-11-11T17:00:00Z")
 	}
+	// A certificate says which model and hardware the key belongs to. It
+	// counts for a reader who knows the issuer's key, and for no other.
+	var cert map[string]any
 	if c, has := dev["cert"]; has {
-		if issuer, err := checkCert(c, key); err != nil {
+		if cert, err = checkCert(c, key); err != nil {
 			bad("device.json: %s", err)
 		} else {
-			lines = append(lines, "certificate: issued by "+issuer)
+			lines = append(lines, fmt.Sprintf("certificate: model %s, hardware %s, issued by %s. Trust it only if you know this issuer's key", cert["model"], cert["hw"], cert["issuer"]))
 		}
 	} else {
 		lines = append(lines, "certificate: none")
@@ -287,7 +325,7 @@ func CheckFolder(dir string) ([]string, bool) {
 		bad("captures.jsonl cannot be read")
 		return done()
 	}
-	var prev *Statement
+	var prev, first *Statement
 	named := map[string]int64{}
 	n := 0
 	for i, line := range bytes.Split(bytes.TrimSuffix(data, []byte("\n")), []byte("\n")) {
@@ -303,6 +341,15 @@ func CheckFolder(dir string) ([]string, bool) {
 		n++
 		if st.Key != key {
 			bad("captures.jsonl line %d: signed by another key than the device's", i+1)
+		}
+		if cert != nil && (st.Model != cert["model"] || st.HW != cert["hw"]) {
+			bad("captures.jsonl line %d: its model or hardware is not the one the certificate names", i+1)
+		}
+		if first != nil && (st.Model != first.Model || st.HW != first.HW) {
+			bad("captures.jsonl line %d: its model or hardware differs from the first line's", i+1)
+		}
+		if first == nil {
+			first = st
 		}
 		if prev != nil {
 			if st.Capture != prev.Capture+1 || st.Prev != prev.ID {
@@ -327,15 +374,14 @@ func CheckFolder(dir string) ([]string, bool) {
 	if n == 0 {
 		bad("captures.jsonl holds no statement")
 	}
-	// raw/: exactly the files that the statements name.
-	entries, err := os.ReadDir(filepath.Join(dir, "raw"))
-	if err != nil {
-		bad("the raw folder cannot be read")
+	// raw/: a real folder with exactly the files that the statements name.
+	var entries []os.DirEntry
+	if info, err := os.Lstat(filepath.Join(dir, "raw")); err != nil || !info.IsDir() {
+		bad("the raw folder cannot be read, or is not a folder")
+	} else if entries, err = os.ReadDir(filepath.Join(dir, "raw")); err != nil {
+		bad("the raw folder cannot be read, or is not a folder")
 	}
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), ".") {
-			continue
-		}
 		size, ok := named[e.Name()]
 		if !ok {
 			bad("raw/%s is named by no statement", e.Name())
@@ -347,8 +393,14 @@ func CheckFolder(dir string) ([]string, bool) {
 			bad("raw/%s is not a plain file of the size its statement gives", e.Name())
 			continue
 		}
-		file, err := os.ReadFile(filepath.Join(dir, "raw", e.Name()))
-		if sum := sha256.Sum256(file); err != nil || hex.EncodeToString(sum[:]) != e.Name() {
+		// Hashed as it is read: a raw file can be larger than memory.
+		h := sha256.New()
+		f, err := os.Open(filepath.Join(dir, "raw", e.Name()))
+		if err == nil {
+			_, err = io.Copy(h, f)
+			f.Close()
+		}
+		if err != nil || hex.EncodeToString(h.Sum(nil)) != e.Name() {
 			bad("raw/%s does not have the SHA-256 of its name", e.Name())
 		}
 	}

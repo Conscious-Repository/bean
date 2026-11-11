@@ -21,7 +21,7 @@ cp -R "$T/ex/bundle" "$T/b/bad"
 f=$(ls "$T"/b/bad/objects/*/*.json | head -1)
 "$PY" -I -c 'import sys; d = bytearray(open(sys.argv[1], "rb").read()); d[len(d) // 2] ^= 1; open(sys.argv[1], "wb").write(d)' "$f"
 (cd "$T/b" && "$PY" -I -c 'import shutil; shutil.make_archive("good", "zip", ".", "good")')
-# A sealed package of the same records, and its six words.
-"$T/ex/bin/bean" -dir "$T/ex/log" share -yes -seal -out "$T/b/sealed.bean" -type 'comparison.*' >"$T/seal.txt" 2>/dev/null
+# A sealed package of the same records with their files, and its six words.
+"$T/ex/bin/bean" -dir "$T/ex/log" share -yes -seal -files -out "$T/b/sealed.bean" -type 'comparison.*' >"$T/seal.txt" 2>/dev/null
 WORDS=$(sed -n 's/^  //p' "$T/seal.txt" | head -1)
 "$NODE" "$HERE/smoke.cjs" "$T/bean-check.html" "$T/b" "$WORDS"

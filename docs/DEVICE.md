@@ -25,7 +25,7 @@ python3 tools/device/check.py /tmp/dev                 # the check, in one Pytho
 make device                                            # both checks, on folders good and wrong
 ```
 
-`tools/device/check.py` needs Python 3 and the `cryptography` package, and no code of bean. Run it on what your firmware writes. When it prints `device folder ok`, bean will take the folder.
+`tools/device/check.py` needs Python 3 and the `cryptography` package, and no code of bean. Run it on what your firmware writes. It is the check that bean will apply: `make device` holds it and bean's own check to one verdict.
 
 ## The folder
 
@@ -64,7 +64,7 @@ Write a fraction as a whole number in a smaller unit: `depth_mm`, not `depth_cm`
 | `device.model`, `device.hw`, `device.fw` | The model, the hardware revision and the firmware version. |
 | `kind` | What was acquired, as a name in lower case with dots: `ultrasound.bmode`. |
 | `prev` | The id of the statement before this one. Empty for capture 1. |
-| `raw` | One entry or more. Each has `name`, `sha256` (64 hex digits) and `bytes`. |
+| `raw` | One entry or more. Each has `name`, `sha256` (64 lower-case hex digits) and `bytes`. `name` is a label and never a path: a reader finds the file by its SHA-256. |
 | `selftest` | `pass`, `fail` or `none`. |
 | `seq.capture` | The count of acquisitions since manufacture. It starts at 1 and goes up by one. |
 | `seq.boot` | The count of starts since manufacture. It never goes back. |
@@ -72,7 +72,7 @@ Write a fraction as a whole number in a smaller unit: `depth_mm`, not `depth_cm`
 | `sig` | The signature (below). |
 | `time` | The device's time in UTC, as `2026-11-11T17:01:00Z`. Empty if the device has no clock. |
 
-A statement has these members and no other.
+A statement has these members and no other. `fw`, `hw`, `model`, a raw `name`, and `calibration` when it is there, are not empty. `kind` uses lower-case letters, digits, `_`, `-` and dots, and starts with a letter or a digit. `model` and `hw` are the same in every statement of a folder.
 
 The device's time is a claim. The counters give the order. `prev` ties each statement to the one before it, so a statement cannot be taken out of the middle or put in.
 
@@ -105,14 +105,23 @@ The signature is the signature of a bean record (SPEC.md 4.5):
 {"bean":"device-cert/0","hw":"A","issuer":"p256:0291...","key":"p256:02e0...","model":"sim-1","sig":"p256:96d4..."}
 ```
 
-The manufacturer signs each device's key, model and hardware revision at the factory, with its own key. The signature is made the same way as a statement's, by `issuer`. A reader decides whether they trust the issuer: the manufacturer publishes its key.
+The manufacturer signs each device's key, model and hardware revision at the factory, with its own key. The signature is made the same way as a statement's, by `issuer`. The certificate's `model` and `hw` must be the ones in every statement. A reader decides whether they trust the issuer: the manufacturer publishes its key. A check prints the issuer's key and says so. A certificate from an unknown key shows nothing.
+
+## Rules for the firmware
+
+- **One line, one statement.** `captures.jsonl` ends each statement with one line feed (LF). It has no blank line and no carriage return. `device.json` is one object with at most one line feed after it.
+- **Nothing else in the folder.** The folder holds `device.json`, `captures.jsonl` and `raw`, and `raw` holds only files that a statement names. A check refuses anything more.
+- **A number is used once, and only for a statement that exists.** `seq.capture` goes up by one for each statement. If an acquisition fails, write a statement for it with `selftest` `fail`, or do not count it. A folder is a run with no gap: one lost statement makes every later hand-over that spans it fail.
+- **Keep the id of the last statement.** The device needs it for `prev` of the next one. It must survive a loss of power, with the two counters.
+- **A later hand-over starts in the middle.** The first statement of a folder has a `prev` that a check cannot follow: the statement before it was handed over earlier. A check ties each later line to the one before it.
+- **What a carrier can do.** A carrier cannot take a statement out of the middle of a run. A carrier can drop statements from the start or the end of a folder. A carrier can also change `device.json`, which is not signed: its time, or whether a certificate is there.
 
 ## What the hardware needs
 
 - A place for the key that the firmware cannot read out: a secure element, or the secure key store of the processor.
 - A step on the production line that reads the public key and issues the certificate.
 - Signed firmware. A device key signs whatever the firmware hands it.
-- Two counters that survive a loss of power.
+- Two counters, and the id of the last statement, that survive a loss of power.
 - Enough storage and time to hash each raw acquisition as it is written.
 
 ## What a check refuses
@@ -125,11 +134,14 @@ The manufacturer signs each device's key, model and hardware revision at the fac
 - a fraction, an escape, an accent, `true` or `null`, a nested setting, or a member that the format does not have;
 - keys that are not in order, or a space inside a line;
 - a signature whose s is in the upper half;
-- a certificate for another key, or one that its issuer did not sign.
+- a certificate for another key or another model, or one that its issuer did not sign;
+- an Ed25519 key or signature that is not a real point, such as the key that makes every signature pass;
+- a time with a fraction, a key in upper-case hex, or a file in the folder that is not part of it.
 
 ## Not decided
 
 - How the person's record points at a statement, and what bean shows for it. `bean pair` and `bean import-device` are not built ([ROADMAP.md](ROADMAP.md), path 3).
 - Whether a device may report a value of its own, beside raw data. Today it may not: a value comes from raw data, by a method that anyone can run again.
 - How a key or a model is withdrawn after a fault.
+- How the host confirms that it holds an acquisition, so that the device may delete it.
 - The largest raw file, and whether raw data may stay outside the log.

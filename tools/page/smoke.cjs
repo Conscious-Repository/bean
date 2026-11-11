@@ -10,7 +10,7 @@ const path = require("path");
   const [pagePath, dir] = process.argv.slice(2, 4).map((p) => path.resolve(p));
   const words = process.argv[4] || "";
   const browser = await chromium.launch();
-  const page = await (await browser.newContext()).newPage();
+  const page = await (await browser.newContext({ acceptDownloads: true })).newPage();
   const requests = [], errors = [];
   page.on("request", (r) => requests.push(r.url()));
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -74,6 +74,15 @@ const path = require("path");
   await page.click("#open");
   await settled();
   expect("the six words open the package", (await title()) === "This bundle passed the check." && (await page.locator("#rows tr").count()) > 0 && !(await page.locator("#words-box").isVisible()));
+  expect("no typed word stays in the page", (await page.inputValue("#words")) === "");
+
+  // A file that the package carries can be saved, and is the file that was
+  // checked: its SHA-256 starts the name the page gives it.
+  expect("the carried files are listed", (await page.locator("#files button").count()) > 0);
+  const [download] = await Promise.all([page.waitForEvent("download"), page.locator("#files button").first().click()]);
+  const saved = require("fs").readFileSync(await download.path());
+  const digest = require("crypto").createHash("sha256").update(saved).digest("hex");
+  expect("a saved file is the file that was checked", download.suggestedFilename().includes("-" + digest.slice(0, 8) + "."));
 
   // The page loaded nothing but itself, and a request from inside it fails.
   const reach = await page.evaluate(() => fetch("https://example.com/").then(() => "reached", () => "blocked"));
@@ -84,5 +93,5 @@ const path = require("path");
 
   await browser.close();
   if (failed) process.exit(1);
-  console.log("page: a real browser opens it from the disk, passes a good bundle as a folder and as a zip file, opens a sealed package with its words only, fails a damaged one, keeps no earlier verdict, and loads nothing");
+  console.log("page: a real browser opens it from the disk, passes a good bundle as a folder and as a zip file, opens a sealed package with its words only and saves a file it carries, fails a damaged one, keeps no earlier verdict, and loads nothing");
 })().catch((err) => { console.error(err); process.exit(1); });

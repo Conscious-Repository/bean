@@ -112,8 +112,28 @@ opens "a sealed package, with its words" "$T/sealed.bean" "$WORDS" ok
 opens "a sealed package, with other words" "$T/sealed.bean" "abandon ability able about above absent" bad
 opens "a sealed package, with no words" "$T/sealed.bean" "" bad
 opens "a sealed package, with one byte changed" "$T/sealed-changed.bean" "$WORDS" bad
+# A header that was changed on the way, with the right words: the three
+# openers read the format strictly, and none takes it.
+for change in work-016 work-18 mac-padded trailing-byte cut; do
+  "$PY" -I -c 'import sys
+d = open(sys.argv[1], "rb").read(); how = sys.argv[3]
+mac = d.index(b"\n--- "); end = d.index(b"\n", mac + 1)
+if how == "work-016": d = d.replace(b" 16\n", b" 016\n", 1)
+if how == "work-18": d = d.replace(b" 16\n", b" 18\n", 1)
+if how == "mac-padded": d = d[:end] + b"=" + d[end:]
+if how == "trailing-byte": d += b"x"
+if how == "cut": d = d[:-100]
+open(sys.argv[2], "wb").write(d)' "$T/sealed.bean" "$T/v.bean" "$change"
+  opens "a sealed package, changed: $change" "$T/v.bean" "$WORDS" bad
+done
+# The words as a person may write them, with hyphens and capitals.
+opens "a sealed package, its words with hyphens" "$T/sealed.bean" "$(echo "$WORDS" | tr ' a-z' '-A-Z')" ok
 grep -aq "$(echo "$R1" | cut -c8-30)" "$T/sealed.bean" && { echo "DIFFER: a sealed package shows a record's id in the clear"; rc=1; }
 [ -z "$(ls -A "$T" | grep '^\.bean-share-')" ] || { echo "DIFFER: a sealed share left its working folder behind"; rc=1; }
+# A sealed share writes one file and nothing else: no plaintext beside it,
+# at any moment. The folder it writes into holds exactly the package.
+mkdir "$T/alone"; b share -yes -seal -files -out "$T/alone/p.bean" "$C1" >/dev/null 2>&1
+[ "$(ls -A "$T/alone")" = "p.bean" ] || { echo "DIFFER: a sealed share wrote more than the package: $(ls -A "$T/alone" | tr '\n' ' ')"; rc=1; }
 
 # A correction travels without the record it replaces, and the reader is told.
 K1=$(b add weight 82.5 -unit kg -at 2026-11-02 -corrects "$W1")

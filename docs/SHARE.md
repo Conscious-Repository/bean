@@ -24,7 +24,10 @@ The package is sealed. It opens with these six words:
 - **Send the file one way and the words another.** Send the file by e-mail or any other way. Give the words by a phone call, in person, or in a message on another service. Whoever has only the file can read nothing in it: no record, no type, no note.
 - **The reader needs no key and no account.** They open the file in a browser with `bean-check.html`, which asks for the words, or with `bean check-bundle for-ana.bean`. Both open it on the reader's device and then check it as they check a folder.
 - **bean makes the words and does not keep them.** Six words of a list of 2048 are 66 bits that no person chose. If the words are lost, share again: a new package gets new words.
-- **A changed package does not open.** Nor does a package that was cut short.
+- **A changed package does not open.** Nor does a package that was cut short. The three openers read the format strictly, and `make bundles` holds them to one verdict.
+- **Nothing of it is written in the clear.** bean builds, checks and encrypts the package in memory, then writes the one file. No folder of plain records is made beside it, at any moment.
+- **The reader can get a carried file out.** The page lists each file that the package carries, with a button to save it. `bean check-bundle -unpack <new folder> for-ana.bean` writes the bundle's folder, with its files. What is saved is what was checked.
+- **What its size shows.** A package grows by about 700 bytes a record, and by the size of each file. Whoever sees the file can estimate how much it holds, and can tell that bean sealed it.
 - **The format is not bean's own.** A package is the bundle's folder as a zip file, encrypted in the age format (age-encryption.org/v1) with the words as its passphrase. `age -d` opens one. So does `tools/second/unseal.py`, which reads the format from its specification and shares no code with bean.
 - **What it does not do.** A reader who has opened a package holds a copy for good. Whoever learns both the file and the words can open it. The words protect the package on its way, not after.
 
@@ -43,7 +46,7 @@ Your log's share record says `"seal": "passphrase"`. It does not hold the words.
 
 bean shows the list and asks before it writes: each record, the cohort of a comparison, each file, and how many identity records go along. `-yes` skips that, for scripts. Without a terminal and without `-yes` it writes nothing. That stops an assistant from sharing through a tool that has no terminal. It does not stop a program that has your shell and passes `-yes`: what runs as you can do what you can.
 
-The bundle is written whole or not at all: it is built beside its place, checked as its reader will check it, and moved there. Only then does the share record go into your log, as type `share`: your own record of what you disclosed and when. `bean ls -type share` lists them. A share that fails leaves no bundle and no record. Ctrl-C before the bundle is in place removes what was built. From that moment the share runs to its end, so that no bundle exists without its record. Only a kill that cannot be caught (`kill -9`) can leave one without the other.
+The bundle is written whole or not at all: it is built beside its place, checked as its reader will check it, and moved there. Only then does the share record go into your log, as type `share`: your own record of what you disclosed and when. `bean ls -type share` lists them. A share that fails leaves no bundle and no record. Ctrl-C before the bundle is in place removes what was built. From that moment the share runs to its end, so that no bundle exists without its record. Only a kill that cannot be caught (`kill -9`) can leave one without the other. For a plain bundle, such a kill can also leave the half-built folder, named `.bean-share-` and a number, beside the place you named: remove it. For a sealed package it can leave a package that nobody can open.
 
 ## Reading a bundle someone sent you
 

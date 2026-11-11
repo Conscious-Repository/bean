@@ -6,6 +6,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"syscall/js"
@@ -14,9 +16,48 @@ import (
 	"github.com/Conscious-Repository/bean/internal/view"
 )
 
+// carried holds the files of the last bundle that passed, by SHA-256, for
+// a reader who wants to save one.
+var carried = map[string]func() ([]byte, error){}
+
 func main() {
 	js.Global().Set("beanCheck", js.FuncOf(check))
+	js.Global().Set("beanFile", js.FuncOf(file))
 	select {}
+}
+
+// file is beanFile(sha256): the bytes of a file that the last passed
+// bundle carries, or null. The bytes are hashed once more, so that what
+// is saved is what was checked.
+func file(_ js.Value, args []js.Value) (out any) {
+	defer func() {
+		if recover() != nil {
+			out = js.Null()
+		}
+	}()
+	read := carried[args[0].String()]
+	if read == nil {
+		return js.Null()
+	}
+	data, err := read()
+	if sum := sha256.Sum256(data); err != nil || hex.EncodeToString(sum[:]) != args[0].String() {
+		return js.Null()
+	}
+	arr := js.Global().Get("Uint8Array").New(len(data))
+	js.CopyBytesToJS(arr, data)
+	return arr
+}
+
+// checked runs the check, and keeps the files of a bundle that passed.
+func checked(in bundle.Input) bundle.Result {
+	res := bundle.Check(in)
+	carried = map[string]func() ([]byte, error){}
+	if res.OK {
+		for _, f := range in.Files {
+			carried[f.Name] = f.Read
+		}
+	}
+	return res
 }
 
 // check is beanCheck(name, file, paths, datas, words). file is the bytes of
@@ -38,7 +79,7 @@ func check(_ js.Value, args []js.Value) (out any) {
 		if len(args) > 4 && args[4].Type() == js.TypeString {
 			words = args[4].String()
 		}
-		return encode(bundle.Check(bundle.FromPackage(name, bytesOf(args[1]), words)))
+		return encode(checked(bundle.FromPackage(name, bytesOf(args[1]), words)))
 	}
 	files := map[string][]byte{}
 	for i := range args[2].Length() {
@@ -48,7 +89,7 @@ func check(_ js.Value, args []js.Value) (out any) {
 		}
 		files[path] = bytesOf(args[3].Index(i))
 	}
-	return encode(bundle.Check(bundle.FromFiles(name, files)))
+	return encode(checked(bundle.FromFiles(name, files)))
 }
 
 func bytesOf(v js.Value) []byte {
@@ -75,6 +116,13 @@ func encode(res bundle.Result) string {
 		shown.Rows = make([]bundle.Row, len(res.Rows))
 		for i, r := range res.Rows {
 			shown.Rows[i] = bundle.Row{When: view.Safe(r.When), Type: view.Safe(r.Type), Text: view.Safe(r.Text), By: view.Safe(r.By), ID: r.ID}
+		}
+	}
+	if res.Carried != nil {
+		shown.Carried = make([]bundle.Carried, len(res.Carried))
+		for i, c := range res.Carried {
+			c.Type, c.Media = view.Safe(c.Type), view.Safe(c.Media)
+			shown.Carried[i] = c
 		}
 	}
 	data, err := json.Marshal(shown)
