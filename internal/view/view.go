@@ -98,6 +98,42 @@ func Mark(r *core.Record, reading func(id string) *core.Record) string {
 	return mark
 }
 
+// texts returns a list of texts, or nil when v is not one.
+func texts(v any) []string {
+	list, _ := v.([]any)
+	out := make([]string, 0, len(list))
+	for _, x := range list {
+		text, ok := x.(string)
+		if !ok {
+			return nil
+		}
+		out = append(out, text)
+	}
+	return out
+}
+
+// small reports whether the claim's own n is below the size under which a
+// result is qualified, or nil when the claim states no n.
+func small(r *core.Record) *bool {
+	result, _ := r.Context["result"].(map[string]any)
+	n, ok := result["n"].(float64)
+	if !ok {
+		return nil
+	}
+	is := n < pack.SmallN
+	return &is
+}
+
+// otherSigner reports whether the reading was signed by another key than
+// the claim, or nil when the reading is not at hand.
+func otherSigner(r, of *core.Record) *bool {
+	if of == nil {
+		return nil
+	}
+	is := of.Author != r.Author
+	return &is
+}
+
 // namesFiles reports a list of files as a comparison with files names
 // them: one or more, each a data set and a SHA-256.
 func namesFiles(v any) bool {
@@ -160,6 +196,11 @@ func reference(r *core.Record, claimed string, of *core.Record) (against, among,
 			among = own
 		} else if onRecord {
 			misstates = true
+		}
+		// The caveats are the pack's too: a claim cannot drop one, or put
+		// words of its own among them.
+		if onRecord && !misstates {
+			misstates = !known.ClaimCaveats(measure, cohortID, texts(r.Context["caveats"]), small(r), otherSigner(r, of))
 		}
 	}
 	switch {

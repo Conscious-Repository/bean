@@ -182,7 +182,7 @@ bean has one pack on record: the NHANES pack, by its SHA-256. For any other pack
 - `bean check-bundle` and the check page mark the row: `by pack 7f3fda515b16 (NOT on record)`. They show what the reading was set against in quotation marks: it is the claim's word. They show the title only as what the sender calls it.
 - `tools/compare/reproduce.py` computes the claim again, prints `NOT on record`, and fails. A reader who trusts the pack's publisher names the SHA-256: `-accept-pack <SHA-256>`.
 
-For the pack on record, bean holds each measure's label, the types and units that it takes, and each cohort in words. A row shows those, whatever the claim says. A claim that says otherwise is marked `(the claim MISSTATES this pack)`. So is one that sets a reading against a measure that does not take it.
+For the pack on record, bean holds each measure's label, the types and units that it takes, each cohort in words, and the caveats. A row shows the label and the cohort, whatever the claim says. A claim that says otherwise is marked `(the claim MISSTATES this pack)`. So is one that sets a reading against a measure that does not take it, and one that drops a caveat or adds one.
 
 Three more marks. `(names NO reference data)`: the comparison names no pack and no files. `(names BOTH a pack and files)`: a comparison is made with one. `(is NOT about a reading)`: it is about one of bean's own records, such as another comparison.
 

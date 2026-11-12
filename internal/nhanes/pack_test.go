@@ -144,6 +144,19 @@ func TestRealPack(t *testing.T) {
 			t.Errorf("measure %s: bean holds the types %v, the pack has %v", id, known.Same[id], m.Same)
 		}
 	}
+	if !reflect.DeepEqual(known.Caveats, p.Caveats) {
+		t.Errorf("bean holds the caveats %v, the pack has %v", known.Caveats, p.Caveats)
+	}
+	for id, m := range p.Measures {
+		if !reflect.DeepEqual(known.MeasureCaveats[id], m.Caveats) {
+			t.Errorf("measure %s: bean holds the caveats %v, the pack has %v", id, known.MeasureCaveats[id], m.Caveats)
+		}
+	}
+	for id, c := range p.Cohorts {
+		if len(known.CohortCaveats[id]) != len(c.Caveats) || (len(c.Caveats) > 0 && !reflect.DeepEqual(known.CohortCaveats[id], c.Caveats)) {
+			t.Errorf("cohort %s: bean holds the caveats %v, the pack has %v", id, known.CohortCaveats[id], c.Caveats)
+		}
+	}
 	if len(known.Same) != len(p.Measures) {
 		t.Errorf("bean holds the types of %d measures, the pack has %d", len(known.Same), len(p.Measures))
 	}

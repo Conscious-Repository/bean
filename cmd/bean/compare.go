@@ -44,11 +44,11 @@ const (
 const (
 	caveatMethod     = nhanes.CaveatLab
 	caveatPopulation = nhanes.CaveatPopulation
-	caveatCohort     = "you chose the cohort: bean does not know whether you belong to it"
+	caveatCohort     = pack.CaveatCohort
 	caveatTopAge     = nhanes.CaveatTopAge
-	caveatSmall      = "the cohort is small: fewer than %d people"
+	caveatSmall      = pack.CaveatSmall
 	caveatUnknown    = nhanes.CaveatUnknown
-	caveatAuthor     = "the reading was signed by an agent or another key, not by you"
+	caveatAuthor     = pack.CaveatAuthor
 )
 
 // comparison is one row of the output.
