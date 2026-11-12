@@ -58,7 +58,9 @@ func syntheticFiles() (map[string][]byte, error) {
 		if rng.below(30) == 0 {
 			bmi = nan
 		}
-		bmx = append(bmx, []float64{seqn, bmi})
+		// A weight that follows from the BMI, so that it draws no number
+		// of its own and every other column stays what it was.
+		bmx = append(bmx, []float64{seqn, bmi, math.Round(bmi*29) / 10})
 		// The day one recall: done and reliable (1), not reliable (2) or
 		// not done (5). Only a reliable one has nutrients, and a recall
 		// that was not done has a weight of zero.
@@ -102,8 +104,8 @@ func syntheticFiles() (map[string][]byte, error) {
 			[]string{"Respondent Sequence Number", "Total Cholesterol (mg/dL)", "Total Cholesterol (mmol/L)"}, tchol},
 		{"HDL_J", []string{"SEQN", "LBDHDD", "LBDHDDSI"},
 			[]string{"Respondent Sequence Number", "Direct HDL-Cholesterol (mg/dL)", "Direct HDL-Cholesterol (mmol/L)"}, hdl},
-		{"BMX_J", []string{"SEQN", "BMXBMI"},
-			[]string{"Respondent sequence number", "Body Mass Index (kg/m**2)"}, bmx},
+		{"BMX_J", []string{"SEQN", "BMXBMI", "BMXWT"},
+			[]string{"Respondent sequence number", "Body Mass Index (kg/m**2)", "Weight (kg)"}, bmx},
 		{"DR1TOT_J", []string{"SEQN", "WTDRD1", "DR1DRSTZ", "DR1TKCAL", "DR1TPROT", "DR1TFIBE"},
 			[]string{"Respondent sequence number", "Dietary day one sample weight", "Dietary recall status", "Energy (kcal)", "Protein (gm)", "Dietary fiber (gm)"}, diet},
 	} {

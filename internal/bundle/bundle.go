@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/Conscious-Repository/bean/core"
+	"github.com/Conscious-Repository/bean/internal/pack"
 	"github.com/Conscious-Repository/bean/internal/view"
 )
 
@@ -27,7 +28,7 @@ const ShareType = "share"
 var Caveats = []string{
 	"These are selected records, not a complete history: a correction or a deletion that the share leaves out does not show.",
 	"A signature shows which identity signed, not that a value is true, nor who that identity is.",
-	"The key above is the one that signed. A bundle cannot show that it is still the person's key: a key change made since is not in it. When it matters, ask the person for their current key (bean whoami).",
+	"The check shows the key that signed. A bundle cannot show that it is still the person's key: a key change made since is not in it. When it matters, ask the person for their current key (bean whoami).",
 }
 
 // IsPairing reports a pairing in force that the person signed about
@@ -89,6 +90,9 @@ type Input struct {
 	Files []File
 	// FilesFault says why files/ could not be listed, or "".
 	FilesFault string
+	// Locked reports a sealed package that did not open: no words, wrong
+	// words, or a changed file. Opened reports one that its words opened.
+	Locked, Opened bool
 }
 
 // Carried is one file that a bundle carries.
@@ -115,6 +119,19 @@ type Result struct {
 	// Unread reports that what was given could not be read as a bundle at
 	// all: the wrong folder, not a zip file. Nothing was checked.
 	Unread bool `json:"unread"`
+	// Locked reports a sealed package that did not open, and Opened one
+	// that its words opened. Only someone who knows the words can have
+	// sealed a package that they open.
+	Locked bool `json:"locked"`
+	Opened bool `json:"opened"`
+	// Identity is the id of the identity that signed the share record, and
+	// Words that id as six words that a person can read out. Key is the
+	// key that signed, and When the time that the share record states.
+	// They are set when every check passed.
+	Identity string `json:"identity"`
+	Words    string `json:"words"`
+	Key      string `json:"key"`
+	When     string `json:"when"`
 	// Head is what the check says before the records: who shared, when, and
 	// the counts.
 	Head []string `json:"head"`
@@ -173,9 +190,10 @@ func Check(in Input) Result {
 		return res
 	}
 	if len(in.Fatal) > 0 {
-		res.Problems, res.Unread = slices.Clone(in.Fatal), true
+		res.Problems, res.Unread, res.Locked = slices.Clone(in.Fatal), true, in.Locked
 		return done()
 	}
+	res.Opened = in.Opened
 	res.Problems = slices.Clone(in.Problems)
 	// Rule 1: every record file passes the checks of a log, with nothing
 	// left over: no error, no warning, no record of a newer format.
@@ -408,6 +426,7 @@ func Check(in Input) Result {
 	res.Head = append(res.Head,
 		fmt.Sprintf("share %s", share.ID),
 		fmt.Sprintf("signed by identity %s, with key %s, at %s", person, share.Kid, when),
+		fmt.Sprintf("identity words: %s", core.IDWords(person)),
 		fmt.Sprintf("records: %d listed; files: %d included, %d named and not included", len(listed), included, named),
 		fmt.Sprintf("signed: %d by the person, %d by an agent the person paired, %d by another key", byPerson, byAgent, byOther),
 		fmt.Sprintf("corrections: %d of the listed records replace an earlier record, which is not in the bundle", corrections),
@@ -427,6 +446,7 @@ func Check(in Input) Result {
 	// What it holds, shown only when every check passed.
 	if len(res.Problems) == 0 {
 		res.Note, _ = share.Context["note"].(string)
+		res.Identity, res.Words, res.Key, res.When = person, core.IDWords(person), share.Kid, when
 		res.Files = included
 		res.Carried = carried
 		var rows []*core.Record
@@ -446,7 +466,7 @@ func Check(in Input) Result {
 			}
 			return nil
 		}
-		var caveats []string
+		var caveats, packs []string
 		res.Rows = []Row{}
 		for _, r := range rows {
 			by := ""
@@ -458,6 +478,20 @@ func Check(in Input) Result {
 				by = "[signed by another key: " + core.Npub(r.Author) + "]"
 			}
 			res.Rows = append(res.Rows, Row{When: sharedWhen(r), Type: r.Type, Text: view.Record(r, inBundle), By: by, ID: r.ID[7:19]})
+			// A comparison with a reference pack names it by SHA-256.
+			if ref, ok := r.Context["reference"].(map[string]any); ok && strings.HasPrefix(r.Type, "comparison.") {
+				digest, _ := ref["pack"].(string)
+				title, _ := ref["title"].(string)
+				// A title is the sender's word. It is shown only for a pack
+				// that bean does not know, and as what the sender calls it.
+				line := fmt.Sprintf("  - %s: %s", digest, pack.OnRecord(digest))
+				if !pack.IsKnown(digest) {
+					line += fmt.Sprintf(". The sender calls it %q. Whoever built it chose its tables, its caveats and what each reading is set against", title)
+				}
+				if len(digest) == 64 && !slices.Contains(packs, line) {
+					packs = append(packs, line)
+				}
+			}
 			list, _ := r.Context["caveats"].([]any)
 			for _, x := range list {
 				if text, _ := x.(string); text != "" && strings.HasPrefix(r.Type, "comparison.") && !slices.Contains(caveats, text) {
@@ -468,10 +502,16 @@ func Check(in Input) Result {
 		// A comparison is shown as its claim states it. This check proves
 		// who signed the claim, not its arithmetic.
 		if len(caveats) > 0 {
-			res.Tail = append(res.Tail, "The comparisons above are shown as claimed, and are not computed again here: tools/compare/reproduce.py does that. Their own caveats:")
+			res.Tail = append(res.Tail, "The comparisons above are shown as claimed, and are not computed again here: tools/compare/reproduce.py does that. What they say of themselves, in the sender's words and the words of what they were made with, not this check's:")
 			for _, text := range caveats {
 				res.Tail = append(res.Tail, "  - "+text)
 			}
+		}
+		// The reader needs the pack to compute such a comparison again, and
+		// the title is the sender's word: the SHA-256 is what names a pack.
+		if len(packs) > 0 {
+			res.Tail = append(res.Tail, "A comparison by a pack was made with a file of reference data that is not in this bundle. To compute it again, get the pack with that SHA-256 and give it to tools/compare/reproduce.py with the bundle. The SHA-256 names the pack:")
+			res.Tail = append(res.Tail, packs...)
 		}
 	}
 	res.Tail = append(res.Tail, Caveats...)

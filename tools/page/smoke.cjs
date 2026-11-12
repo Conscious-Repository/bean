@@ -25,17 +25,19 @@ const path = require("path");
 
   await page.setInputFiles("#zip", path.join(dir, "good.zip"));
   await settled();
-  expect("a good zip file passes", (await title()) === "This bundle passed the check." && (await page.locator("#rows tr").count()) > 0);
-  expect("what is not part of the bundle is named in the verdict", (await page.textContent("#verdict-text")).includes("README.txt"));
+  expect("a good zip file passes", (await title()) === "These records passed the check." && (await page.locator("#rows tr").count()) > 0);
+  expect("what is not part of the bundle is named in the details", (await page.textContent("#head")).includes("not read: README.txt"));
+  expect("the signer's identity words are shown", /^([a-z]+ ){5}[a-z]+$/.test(await page.textContent("#who")) && (await page.locator("#who-box").isVisible()));
 
   await page.setInputFiles("#folder", path.join(dir, "good"));
   await settled();
-  expect("a good folder passes", (await title()) === "This bundle passed the check." && (await page.locator("#rows tr").count()) > 0);
+  expect("a good folder passes", (await title()) === "These records passed the check." && (await page.locator("#rows tr").count()) > 0);
 
   // A damaged bundle after a good one: no row of the good one stays.
   await page.setInputFiles("#folder", path.join(dir, "bad"));
   await settled();
-  expect("a damaged folder fails", (await title()) === "This bundle FAILED the check.");
+  expect("a damaged folder fails", (await title()) === "These records FAILED the check.");
+  expect("a failed bundle does not show who signed", !(await page.locator("#who-box").isVisible()) && !(await page.textContent("#head")).includes("signed by identity"));
   expect("a failed bundle shows no record", !(await rowsShown()) && (await page.locator("#rows tr").count()) === 0);
 
   // A good one again, then a zip file that is none: the pass does not stay.
@@ -69,20 +71,27 @@ const path = require("path");
   await page.fill("#words", "abandon ability able about above absent");
   await page.click("#open");
   await settled();
-  expect("other words open nothing", (await title()) === "Nothing was checked." && !(await rowsShown()) && (await page.locator("#words-box").isVisible()));
+  expect("other words open nothing", (await title()) === "This file did not open." && !(await rowsShown()) && (await page.locator("#words-box").isVisible()));
   await page.fill("#words", "  " + words.toUpperCase() + " ");
   await page.click("#open");
   await settled();
-  expect("the six words open the package", (await title()) === "This bundle passed the check." && (await page.locator("#rows tr").count()) > 0 && !(await page.locator("#words-box").isVisible()));
+  expect("the six words open the package", (await title()) === "These records passed the check." && (await page.locator("#rows tr").count()) > 0 && !(await page.locator("#words-box").isVisible()));
   expect("no typed word stays in the page", (await page.inputValue("#words")) === "");
 
   // A file that the package carries can be saved, and is the file that was
   // checked: its SHA-256 starts the name the page gives it.
   expect("the carried files are listed", (await page.locator("#files button").count()) > 0);
-  const [download] = await Promise.all([page.waitForEvent("download"), page.locator("#files button").first().click()]);
+  const [download] = await Promise.all([page.waitForEvent("download"), page.locator("#files button.quiet").first().click()]);
   const saved = require("fs").readFileSync(await download.path());
   const digest = require("crypto").createHash("sha256").update(saved).digest("hex");
   expect("a saved file is the file that was checked", download.suggestedFilename().includes("-" + digest.slice(0, 8) + "."));
+
+  // A text file can be read in the page, as text.
+  const readers = page.locator("#files button:not(.quiet)");
+  if (await readers.count()) {
+    await readers.first().click();
+    expect("a text file is shown in the page", (await page.locator("#reader-box").isVisible()) && (await page.textContent("#reader")).length > 0);
+  }
 
   // The page loaded nothing but itself, and a request from inside it fails.
   const reach = await page.evaluate(() => fetch("https://example.com/").then(() => "reached", () => "blocked"));

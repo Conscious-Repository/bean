@@ -9,7 +9,7 @@
      script never does that, and holds no link. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
-<title>Check a bean bundle</title>
+<title>Check shared health records</title>
 <style>
 :root {
   --bg: #fbfaf7; --fg: #1d1c1a; --muted: #5f5c55; --line: #dcd8cf; --card: #ffffff;
@@ -37,6 +37,15 @@ button:disabled { opacity: .5; cursor: default; }
 .verdict { margin: 1.5rem 0 1rem; padding: 1rem 1.25rem; border-radius: .5rem; border: 1px solid; }
 .verdict strong { display: block; font-size: 1.2rem; }
 .verdict div div { margin-top: .25rem; }
+.verdict:focus { outline: 2px solid currentColor; outline-offset: 2px; }
+.who { margin: 1rem 0; padding: .9rem 1.25rem; border: 1px solid var(--line); border-radius: .5rem; background: var(--card); }
+.who b { display: block; margin: .25rem 0; font-size: 1.25rem; letter-spacing: .02em; overflow-wrap: anywhere; }
+#status { display: block; margin-top: .25rem; }
+button.quiet { background: transparent; color: var(--accent); }
+details { margin-top: 2rem; }
+summary { cursor: pointer; color: var(--muted); }
+.print-only { display: none; }
+#problems li, #tail li, #files li { overflow-wrap: anywhere; }
 .verdict.ok { color: var(--ok); background: var(--ok-bg); }
 .verdict.bad { color: var(--bad); background: var(--bad-bg); }
 ul { margin: .5rem 0; padding-left: 1.25rem; max-width: 52rem; }
@@ -63,30 +72,43 @@ footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--line
   td.by::before { content: "Signed by "; color: var(--muted); }
   td.id::before { content: "Id "; color: var(--muted); font: .9rem system-ui, sans-serif; }
 }
-@media print { .drop, footer { display: none; } body { background: #fff; color: #000; } }
+@media print {
+  .drop, footer, button, #intro { display: none; }
+  body { background: #fff; color: #000; }
+  .print-only { display: block; margin-top: 2rem; font-size: .9rem; }
+  details > summary { display: none; }
+}
 </style>
 </head>
 <body>
 <main>
-<h1>Check a bean bundle</h1>
-<p>A bundle is a folder of health records that one person chose to share, or one sealed file of it that opens with six words. This page checks that every record is what that person signed and that nothing was added or removed. Then it shows what the bundle holds.</p>
+<h1>Check shared health records</h1>
+<div id="intro">
+<p>Someone shared health records with you: one sealed file that opens with six words, or a folder. This page checks that every record is signed and that nothing was added or taken out. Then it shows the records.</p>
 <p class="muted">The check runs on this device. This page sends nothing: its script makes no request, and its policy blocks every load.</p>
+</div>
 
 <div class="drop" id="drop">
-  <button id="pick-folder" disabled>Choose the bundle's folder</button>
-  <button id="pick-zip" disabled>Choose a package or .zip file</button>
+  <button id="pick-zip" disabled>Choose the file you received</button>
+  <button id="pick-folder" class="quiet" disabled>Or choose a folder</button>
   <span class="muted" id="status">Getting ready…</span>
   <input type="file" id="folder" webkitdirectory hidden>
   <input type="file" id="zip" hidden>
   <form id="words-box" hidden>
-    <p><label for="words">This package is sealed. Type the six words that its sender gave you:</label></p>
+    <p><label for="words">This file is sealed. Type the six words that its sender gave you, with a space between them:</label></p>
     <input type="text" id="words" autocomplete="off" autocapitalize="none" spellcheck="false" size="48">
     <button id="open" type="submit">Open</button>
   </form>
 </div>
 
 <section id="result" hidden>
-  <div class="verdict" id="verdict"><strong id="verdict-title"></strong><div id="verdict-text"></div></div>
+  <div class="verdict" id="verdict" role="status" tabindex="-1"><strong id="verdict-title"></strong><div id="verdict-text"></div></div>
+  <div class="who" id="who-box" hidden>
+    Signed by the identity with these words:
+    <b id="who"></b>
+    <span class="muted">This page cannot tell who that is. Ask the sender to read their identity words to you, by phone or face to face. If the words are not the same, do not rely on these records.</span>
+    <div class="muted" id="opened" hidden>This file opened with the six words that you typed. Only someone who knows those words can have sealed it.</div>
+  </div>
   <p id="note-box" hidden>The sender's note: <q id="note"></q></p>
   <div id="problems-box" hidden>
     <h2 id="problems-title">What failed</h2>
@@ -98,24 +120,30 @@ footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--line
       <thead><tr><th>When</th><th>What</th><th>Value</th><th>Signed by</th><th>Id</th></tr></thead>
       <tbody id="rows"></tbody>
     </table></div>
+    <p class="muted" id="compare-note" hidden>A comparison is the sender's own claim about where a value lies among other people. This page does not compute it again, and it is not a medical finding. Read “Keep in mind” below.</p>
   </div>
   <div id="files-box" hidden>
     <h2>Files it carries</h2>
     <ul id="files"></ul>
-  </div>
-  <div id="head-box" hidden>
-    <h2>Who shared it, and what was counted</h2>
-    <pre id="head"></pre>
+    <div id="reader-box" hidden>
+      <h2 id="reader-title"></h2>
+      <pre id="reader"></pre>
+    </div>
   </div>
   <div id="tail-box" hidden>
     <h2>Keep in mind</h2>
     <ul id="tail"></ul>
   </div>
+  <details id="head-box" hidden>
+    <summary>Details for a technical reader</summary>
+    <pre id="head"></pre>
+  </details>
+  <p class="print-only" id="printed"></p>
 </section>
 
 <footer class="muted">
-  <p>This page is one file. It holds the same check as the command <code>bean check-bundle</code>, built with <!--GO-->. A second check that shares no code with it is <code>tools/second/checkbundle.py</code>.</p>
-  <p>A page that came with a bundle is only as good as whoever sent both. When it matters, get this page from the bean project, or build it (<code>make page</code>), and compare its SHA-256.</p>
+  <p>This page is one file: bean-check, <span id="version"><!--VERSION--></span>, built with <!--GO-->. It holds the same check as the command <code>bean check-bundle</code>. A second check that shares no code with it is <code>tools/second/checkbundle.py</code>.</p>
+  <p>Do not use a copy of this page that came with the records: whoever sent both could have changed it. Get the page from the bean project. Anyone can build it from that commit with that Go (<code>make page</code>) and gets the same file, byte for byte.</p>
 </footer>
 </main>
 
@@ -173,15 +201,21 @@ function show(name, res, packed) {
   $("verdict").className = "verdict " + (res.ok ? "ok" : "bad");
   const lines = [];
   if (res.ok) {
-    $("verdict-title").textContent = "This bundle passed the check.";
-    lines.push("Every record of the bundle in " + clean(name) + " is what the person signed, and nothing was added to the bundle or removed from it.");
-    if (res.ignored && res.ignored.length) lines.push("Also in the folder, not signed and not checked: " + res.ignored.join(", ") + ".");
-    if (res.files) lines.push("It carries " + res.files + (res.files === 1 ? " file" : " files") + ". Save one below to open it: what is saved is what was checked.");
+    $("verdict-title").textContent = "These records passed the check.";
+    lines.push("Every record in " + clean(name) + " is signed by one identity, or by a key that this identity paired. The records are the ones that the signer listed: nothing was added or taken out.");
+    lines.push("The check does not show that a value is true, or who the signer is.");
+    // bean writes a README.txt beside the records: it is not one of them.
+    const extra = (res.ignored || []).filter((n) => n !== "README.txt");
+    if (extra.length) lines.push("Also there, not signed and not checked: " + extra.join(", ") + ".");
+    if (res.files) lines.push("It carries " + res.files + (res.files === 1 ? " file" : " files") + ", listed below: what you read or save is what was checked.");
+  } else if (res.locked) {
+    $("verdict-title").textContent = "This file did not open.";
+    lines.push("Nothing is known about " + clean(name) + ". Check the six words and type them again. If they are right, the file was changed on the way: ask the sender for a new one.");
   } else if (res.unread) {
     $("verdict-title").textContent = "Nothing was checked.";
-    lines.push(clean(name) + " could not be read as a bundle. Nothing is known about it.");
+    lines.push(clean(name) + " could not be read as shared records. Nothing is known about it.");
   } else {
-    $("verdict-title").textContent = "This bundle FAILED the check.";
+    $("verdict-title").textContent = "These records FAILED the check.";
     lines.push("Do not rely on anything in " + clean(name) + ". Ask the sender for a new copy.");
   }
   $("verdict-text").replaceChildren(...lines.map((text) => {
@@ -189,6 +223,9 @@ function show(name, res, packed) {
     div.textContent = text;
     return div;
   }));
+  $("who-box").hidden = !(res.ok && res.words);
+  $("who").textContent = res.words || "";
+  $("opened").hidden = !res.opened;
   $("note-box").hidden = !(res.ok && res.note);
   $("note").textContent = res.note || "";
   $("problems-box").hidden = res.ok;
@@ -206,13 +243,24 @@ function show(name, res, packed) {
     }
     return tr;
   }));
+  $("compare-note").hidden = !(rows || []).some((r) => r.type.startsWith("comparison."));
   const files = res.ok && res.carried ? res.carried : [];
   $("files-box").hidden = !files.length;
+  $("reader-box").hidden = true;
+  $("reader").textContent = "";
   $("files").replaceChildren(...files.map((f) => {
     const li = document.createElement("li");
-    const name = f.type + "-" + f.sha256.slice(0, 8) + "." + (KINDS[f.media] || "bin");
-    li.textContent = "kept by " + f.record + " (" + f.type + "): " + (f.media || "a file") + ", " + f.bytes + " bytes ";
+    const kind = KINDS[f.media] || ["bin", "file"];
+    const name = f.type + "-" + f.sha256.slice(0, 8) + "." + kind[0];
+    li.textContent = f.type + ": " + kind[1] + ", " + size(f.bytes) + " (record " + f.record + ") ";
+    if (f.media === "text/plain" || f.media === "text/csv") {
+      const read = document.createElement("button");
+      read.textContent = "Read here";
+      read.onclick = () => readFile(f.sha256, f.type);
+      li.append(read);
+    }
     const save = document.createElement("button");
+    save.className = "quiet";
     save.textContent = "Save as " + name;
     save.onclick = () => saveFile(f.sha256, name);
     li.append(save);
@@ -220,16 +268,42 @@ function show(name, res, packed) {
   }));
   $("tail-box").hidden = !(res.tail && res.tail.length);
   fill($("tail"), res.tail || []);
-  $("head-box").hidden = !(res.head && res.head.length);
-  $("head").textContent = (res.head || []).join("\n");
+  // Of records that failed, only the faults are shown: not who signed.
+  const head = (res.head || []).filter((line) => res.ok || /^(error|warning): /.test(line));
+  $("head-box").hidden = !head.length;
+  $("head-box").open = !res.ok;
+  $("head").textContent = head.join("\n");
+  $("printed").textContent = "Checked " + clean(name) + " on " + new Date().toString() + " with bean-check, " + $("version").textContent + ".";
   $("verdict").scrollIntoView({ block: "nearest" });
+  $("verdict").focus({ preventScroll: true });
+}
+
+// size writes a count of bytes for a reader.
+function size(bytes) {
+  if (bytes < 1000) return bytes + " bytes";
+  if (bytes < 1e6) return (bytes / 1000).toFixed(1) + " KB";
+  return (bytes / 1e6).toFixed(1) + " MB";
 }
 
 // The ending of a saved file's name, by the media type its record states.
+// The ending of a saved file's name and what to call it, by the media type
+// that its record states.
 const KINDS = {
-  "application/pdf": "pdf", "text/plain": "txt", "text/csv": "csv", "image/jpeg": "jpg", "image/png": "png",
-  "application/zip": "zip", "application/xml": "xml", "text/xml": "xml", "application/x-sas-xport": "xpt",
+  "application/pdf": ["pdf", "PDF document"], "text/plain": ["txt", "text"], "text/csv": ["csv", "table as text"],
+  "image/jpeg": ["jpg", "picture"], "image/png": ["png", "picture"], "application/zip": ["zip", "zip file"],
+  "application/xml": ["xml", "XML file"], "text/xml": ["xml", "XML file"], "application/x-sas-xport": ["xpt", "public data file"],
 };
+
+// readFile shows a text file that the checked records carry, as text and
+// never as markup. The bytes come from the check, which hashes them again.
+function readFile(sha256, type) {
+  const bytes = beanFile(sha256);
+  if (!bytes) return unread(type, "the file could not be read again. Check the records once more.");
+  $("reader-title").textContent = type;
+  $("reader").textContent = new TextDecoder().decode(bytes.subarray(0, 2 << 20)) + (bytes.length > 2 << 20 ? "\n[The rest is not shown here. Save the file to read all of it.]" : "");
+  $("reader-box").hidden = false;
+  $("reader-title").scrollIntoView({ block: "start" });
+}
 
 // saveFile hands the reader a file that the checked bundle carries. The
 // bytes come from the check, which hashes them once more. Saving is a
@@ -307,7 +381,10 @@ async function checkFolder(name, list) {
 // first, and turns anything that goes wrong into "nothing was checked".
 let busy = true; // until the check has loaded
 async function run(name, work) {
-  if (busy) return;
+  if (busy) {
+    if (go && !go.exited) $("status").textContent = "Wait for this check to end, then choose again.";
+    return;
+  }
   busy = true;
   $("result").hidden = true;
   if (!waiting || waiting.name !== name) {
@@ -321,7 +398,7 @@ async function run(name, work) {
   await new Promise((next) => setTimeout(next, 30));
   try {
     await work();
-    $("status").textContent = waiting ? "This package is not open yet." : "You can check another.";
+    $("status").textContent = waiting ? "This file is not open yet." : "You can check another.";
   } catch (err) {
     unread(name, go.exited
       ? "the check stopped, most likely because this is too large for a browser. Reload this page before you check anything else."
@@ -361,7 +438,7 @@ addEventListener("drop", (ev) => {
   const entry = items.length === 1 && items[0].webkitGetAsEntry ? items[0].webkitGetAsEntry() : null;
   const file = items.length === 1 ? items[0].getAsFile() : null;
   if (!file || (entry && entry.isDirectory)) {
-    return run("what you dropped", async () => unread("what you dropped", "drop one package or .zip file. For a folder, use the button."));
+    return run("what you dropped", async () => unread("what you dropped", "drop one file. For a folder, use the button."));
   }
   run(file.name, () => checkZip(file));
 });
@@ -369,7 +446,7 @@ addEventListener("drop", (ev) => {
 start().then(() => {
   for (const b of document.querySelectorAll("button")) b.disabled = false;
   busy = false;
-  $("status").textContent = "Or drop a package or a .zip file here.";
+  $("status").textContent = "Or drop the file here.";
 }, (err) => {
   $("status").textContent = "This browser cannot run the check (" + (err && err.message ? err.message : err) + "). Use a current Chrome, Edge, Firefox or Safari.";
 });

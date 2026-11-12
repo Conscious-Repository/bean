@@ -78,6 +78,7 @@ func cmdWhoami(s *core.Store, args []string) {
 		fail(err)
 	}
 	fmt.Println("identity", id)
+	fmt.Println("identity words", core.IDWords(id))
 	if local, err := s.ReadLocal(); err == nil {
 		fmt.Println("key", local.Signer.Public())
 		if npub := core.Npub(local.Signer.Public()); npub != "" {
@@ -162,6 +163,7 @@ func cmdRotate(s *core.Store, args []string, restore bool) {
 		var id string
 		if res, id, err = s.Restore(core.ParseWords(string(text)), c, key, *ident); err == nil {
 			fmt.Println("identity", id)
+			fmt.Println("identity words", core.IDWords(id))
 		}
 	} else {
 		res, err = s.Rotate(core.ParseWords(string(text)), c, key)

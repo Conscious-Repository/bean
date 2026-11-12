@@ -633,7 +633,7 @@ func TestShareSealed(t *testing.T) {
 	}
 	words := ""
 	for _, line := range strings.Split(stdout, "\n") {
-		if strings.HasPrefix(line, "  ") {
+		if strings.HasPrefix(line, "  ") && words == "" {
 			words = strings.TrimSpace(line)
 		}
 	}
@@ -661,7 +661,16 @@ func TestShareSealed(t *testing.T) {
 	if res := bundle.Check(bundle.FromPackage("p", data, strings.ToUpper(words)+"  ")); !res.OK || len(res.Rows) != 1 || res.Note != "for Ana" {
 		t.Errorf("the words do not open it: %v", res.Lines())
 	}
-	if stdout, _, code := run(t, t.TempDir(), words+"\n", "check-bundle", out); code != 0 || !strings.Contains(stdout, "bundle ok") {
+	// A full stop after the last word is how a sentence ends. An opened
+	// package says that words opened it, and names the signer in words.
+	res := bundle.Check(bundle.FromPackage("p", data, strings.ReplaceAll(words, " ", ", ")+"."))
+	if !res.OK || !res.Opened || res.Locked || len(strings.Fields(res.Words)) != 6 || res.Words == words {
+		t.Errorf("the words with commas and a full stop: %v", res.Lines())
+	}
+	if res := bundle.Check(bundle.FromPackage("p", data, "abandon ability able about above absent")); res.OK || !res.Locked || !res.Unread || res.Words != "" {
+		t.Errorf("other words: locked %v, unread %v", res.Locked, res.Unread)
+	}
+	if stdout, _, code := run(t, t.TempDir(), words+"\n", "check-bundle", out); code != 0 || !strings.Contains(stdout, "bundle ok") || !strings.Contains(stdout, "identity words: "+res.Words) {
 		t.Errorf("check-bundle with the words: %d\n%s", code, stdout)
 	}
 	// Nothing else does: other words, a misspelt word, no words, a changed byte.
@@ -768,7 +777,7 @@ func TestSealedFilesComeOut(t *testing.T) {
 	}
 	words := ""
 	for _, line := range strings.Split(stdout, "\n") {
-		if strings.HasPrefix(line, "  ") {
+		if strings.HasPrefix(line, "  ") && words == "" {
 			words = strings.TrimSpace(line)
 		}
 	}

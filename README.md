@@ -55,7 +55,7 @@ cd bean
 go install ./cmd/...
 ```
 
-This puts `bean`, `bean-import-lab`, `bean-import-apple-health`, `bean-import-csv` and `bean-import-nhanes` in `$(go env GOPATH)/bin`, usually `~/go/bin`. If your shell cannot find `bean`, add that folder to your `PATH`:
+This puts `bean`, `bean-import-lab`, `bean-import-apple-health`, `bean-import-csv`, `bean-import-nhanes` and `bean-pack-nhanes` in `$(go env GOPATH)/bin`, usually `~/go/bin`. If your shell cannot find `bean`, add that folder to your `PATH`:
 
 ```
 echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.zshrc && source ~/.zshrc
@@ -198,7 +198,9 @@ lab.cholesterol-total  187 mg/dL  46          44.2%  3.5%  164 to 213   188     
 - `-save` keeps a result as a signed record that names each file by its SHA-256, the cohort and the method. Anyone can compute it again without bean: `tools/compare/reproduce.py` does, in Python.
 - Twelve blood tests today: total and HDL cholesterol, hemoglobin A1c and the blood count. Each test needs its own file, and a rule on BMI needs `BMX_J`: the loop above fetches all six, about 7 MB. [COMPARE.md](docs/COMPARE.md) lists the type names and units to use when you type a reading by hand.
 
-[docs/COMPARE.md](docs/COMPARE.md) has the files to download, the rules, the limits and the method.
+- **A reference pack is the general form.** A pack is one small file of public reference data, with a table for each measure and each cohort on its menu. `bean-pack-nhanes -out nhanes.pack *.xpt` builds one from the files you downloaded, with weight beside the blood tests. `bean compare -pack nhanes.pack -cohort male-30-39 -type 'lab.*'` compares with it. Keep the pack file: your log names it by its SHA-256 and does not hold it. The table comes to your value, so no host learns the value or the cohort. Any source that someone builds into a pack works the same way.
+
+[docs/COMPARE.md](docs/COMPARE.md) has the files to download, the rules, the limits and the method. [docs/REFERENCE.md](docs/REFERENCE.md) has the pack format, who hosts what, and how anyone checks a pack.
 
 ## Share with someone
 
@@ -211,7 +213,7 @@ bean check-bundle for-ana.bean     # what Ana runs: it asks for the six words, c
 
 - It shows what will leave and asks first. Only the records you choose go, with what they are about. Files go only with `-files`, and a lab report only when you name it.
 - The reader can tell that each record is yours and unchanged, and that nothing was added or removed. They can check it without bean: `tools/second/checkbundle.py`.
-- A reader with no terminal checks it in a browser. `make page` builds `bean-check.html`, one file that reads the folder or a zip file of it. The page runs the same check on the reader's device and sends nothing. It lists each file that the bundle carries, with a button to save it.
+- A reader with no terminal checks it in a browser. `make page` builds `bean-check.html`, one file that reads the folder or a zip file of it. The page runs the same check on the reader's device and sends nothing. It shows the signer as six identity words, which you read to your reader (`bean whoami`). They are not the six words that open the package: those are a secret, and these are not. It lists each file that the bundle carries, to read or to save.
 - The reader cannot tell that it is complete: it is what you chose. Nor that the key that signed is still yours, if you changed keys since. bean says so on every check.
 - Without `-seal` a bundle is a plain folder that anyone who carries it can read. Sealed or not, once it is opened it cannot be taken back.
 
@@ -357,6 +359,7 @@ bean protects who wrote what, and protects your identity against a stolen device
 | [docs/COMMANDS.md](docs/COMMANDS.md) | Every command, flag and exit code. |
 | [docs/IMPORTERS.md](docs/IMPORTERS.md) | Write an importer for your own source; community importers. |
 | [docs/COMPARE.md](docs/COMPARE.md) | Compare a reading with people like you: files, rules, limits, method. |
+| [docs/REFERENCE.md](docs/REFERENCE.md) | Reference packs: public data as one file, its format, who hosts what, and the checks. |
 | [docs/SHARE.md](docs/SHARE.md) | Share chosen records as a bundle anyone can check: what goes in, limits, format. |
 | [examples/blood](examples/blood/README.md) | The whole loop in one script, on a synthetic report. |
 | [cmd/bean/vocabulary.md](cmd/bean/vocabulary.md) | The usual record types and units. |

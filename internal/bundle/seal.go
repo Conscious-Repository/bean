@@ -60,8 +60,9 @@ func NewWords() (string, error) {
 // with any space between. It refuses what cannot be a package's words, so
 // that a typing mistake is named before any work is done.
 func CleanWords(text string) (string, error) {
-	// A person may write the words with commas or hyphens between them.
-	words := strings.Fields(strings.NewReplacer(",", " ", "-", " ").Replace(strings.ToLower(text)))
+	// A person may write the words with commas, hyphens, full stops or
+	// semicolons between them, or after the last one.
+	words := strings.Fields(strings.NewReplacer(",", " ", "-", " ", ".", " ", ";", " ").Replace(strings.ToLower(text)))
 	if len(words) != sealWords {
 		return "", fmt.Errorf("a package opens with %d words, and these are %d", sealWords, len(words))
 	}
@@ -198,11 +199,13 @@ func FromPackage(name string, data []byte, words string) Input {
 		return FromZip(name, data)
 	}
 	if strings.TrimSpace(words) == "" {
-		return Input{Fatal: []string{fmt.Sprintf("%s is sealed: it opens with the six words that its sender gave you", name)}}
+		return Input{Fatal: []string{fmt.Sprintf("%s is sealed: it opens with the six words that its sender gave you", name)}, Locked: true}
 	}
 	packed, err := Unseal(data, words)
 	if err != nil {
-		return Input{Fatal: []string{fmt.Sprintf("%s was not opened: %s", name, err)}}
+		return Input{Fatal: []string{fmt.Sprintf("%s was not opened: %s", name, err)}, Locked: true}
 	}
-	return FromZip(name, packed)
+	in := FromZip(name, packed)
+	in.Opened = true
+	return in
 }

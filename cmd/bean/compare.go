@@ -18,6 +18,7 @@ import (
 
 	"github.com/Conscious-Repository/bean/core"
 	"github.com/Conscious-Repository/bean/internal/nhanes"
+	"github.com/Conscious-Repository/bean/internal/pack"
 	"github.com/Conscious-Repository/bean/internal/xpt"
 )
 
@@ -41,12 +42,12 @@ const (
 // The texts are part of the saved claim, and tools/compare/reproduce.py
 // holds the same texts: a test keeps the two equal.
 const (
-	caveatMethod     = "the lab that measured the reading and NHANES used their own instruments and methods"
-	caveatPopulation = "NHANES is a sample of people living in the United States in the survey years, not a reference range"
+	caveatMethod     = nhanes.CaveatLab
+	caveatPopulation = nhanes.CaveatPopulation
 	caveatCohort     = "you chose the cohort: bean does not know whether you belong to it"
-	caveatTopAge     = "NHANES records every age of 80 and over as 80"
+	caveatTopAge     = nhanes.CaveatTopAge
 	caveatSmall      = "the cohort is small: fewer than %d people"
-	caveatUnknown    = "this copy of %s is not the file on record: its SHA-256 differs"
+	caveatUnknown    = nhanes.CaveatUnknown
 	caveatAuthor     = "the reading was signed by an agent or another key, not by you"
 )
 
@@ -63,6 +64,8 @@ type comparison struct {
 	result   nhanes.Result
 	caveats  []string
 	files    []*refFile // the analyte's file, the demographics file, then each rule's file
+	measure  string     // with a pack: the id of the pack's measure
+	against  string     // with a pack: the reading's type and unit, and the measure's label
 }
 
 // refFile is a kept NHANES file.
@@ -84,18 +87,69 @@ func cmdCompare(s *core.Store, args []string) {
 	fs.Var(&where, "where", "a further rule, <DATASET>.<VARIABLE>=<value> or =<from>-<to>; may repeat")
 	typ := fs.String("type", "", "compare every current reading of this type, or prefix ending in *")
 	save := fs.Bool("save", false, "keep each comparison as a signed record")
+	packPath := fs.String("pack", "", "compare with a reference pack: a file")
+	packCohort := fs.String("cohort", "", "with -pack: a cohort of the pack's menu")
+	unknownPack := fs.Bool("unknown-pack", false, "with -pack: also compare with a pack that bean has no record of")
 	pos, err := parseInterspersed(fs, args)
-	if err != nil || (len(pos) == 0) == (*typ == "") {
+	if err != nil {
+		usage()
+	}
+	if *packPath != "" {
+		if *sex != "" || *age != "" || len(where) > 0 || *unknown {
+			badArg(errors.New("with -pack, name a cohort of the pack's menu with -cohort: -sex, -age, -where and -unknown-files are for the files"))
+		}
+		comparePack(s, *packPath, *packCohort, *typ, pos, *save, *unknownPack)
+		return
+	}
+	if *packCohort != "" || *unknownPack || (len(pos) == 0) == (*typ == "") {
 		usage()
 	}
 	cohort, err := parseCohort(*sex, *age, where)
 	if err != nil {
 		badArg(err)
 	}
+	readings, l := compareReadings(s, *typ, pos)
+	files := map[string]*refFile{}
+	labels := l.AgentLabels()
+	var rows []comparison
+	for _, r := range readings {
+		c := compareOne(s, l, files, *unknown, r, cohort)
+		// A reading that someone else signed is marked as in bean ls, and
+		// the comparison says so: the person did not write its value.
+		if c.by = byText(r, l.ID, labels); c.by != "" && c.refused == "" {
+			c.caveats = append(c.caveats, caveatAuthor)
+		}
+		rows = append(rows, c)
+	}
+	printComparisons(os.Stdout, rows, fmt.Sprintf("Compared with NHANES %s: %s.", nhanes.Years, cohort), comparable(), *typ == "")
+	var claims []map[string]any
+	for _, c := range rows {
+		if c.refused == "" {
+			claims = append(claims, comparisonRecord(c, cohort))
+		}
+	}
+	saveComparisons(s, l, claims, *save, "the public files")
+}
+
+// claimKey is what makes two saved comparisons the same claim: everything
+// that a comparison states. A claim with the same inputs and another
+// value, or about one record more, is another claim: it is not deleted as
+// one that was saved twice, and a check of it shows that it does not
+// compute.
+func claimKey(raw map[string]any) string {
+	times, _ := raw["times"].(map[string]any)
+	return string(core.Canonical(map[string]any{
+		"type": raw["type"], "value": raw["value"], "refs": raw["refs"], "observed": times["observed"], "context": raw["context"],
+	}))
+}
+
+// compareReadings returns the readings to compare: every current reading
+// of a type, or the records named by id.
+func compareReadings(s *core.Store, typ string, pos []string) ([]*core.Record, *core.Loaded) {
 	// A comparison whose reading was corrected or deleted meanwhile, on
 	// this machine or another, goes before anything is shown.
 	sweepComparisons(s)
-	recs, l, err := s.List(core.Filter{Type: *typ})
+	recs, l, err := s.List(core.Filter{Type: typ})
 	if err != nil {
 		fail(err)
 	}
@@ -103,14 +157,14 @@ func cmdCompare(s *core.Store, args []string) {
 		fail(core.ErrNotInitialized)
 	}
 	var readings []*core.Record
-	if *typ != "" {
+	if typ != "" {
 		for _, r := range recs {
-			if r.Subject == l.ID && r.Type != compareType && r.Type != nhanes.FileType && r.Value["blob"] == nil {
+			if r.Subject == l.ID && !strings.HasPrefix(r.Type, "comparison.") && r.Type != nhanes.FileType && r.Value["blob"] == nil {
 				readings = append(readings, r)
 			}
 		}
 		if len(readings) == 0 {
-			fail(fmt.Errorf("no current reading of type %s", *typ))
+			fail(fmt.Errorf("no current reading of type %s", typ))
 		}
 	}
 	for _, id := range pos {
@@ -123,30 +177,20 @@ func cmdCompare(s *core.Store, args []string) {
 		}
 		readings = append(readings, r)
 	}
-	files := map[string]*refFile{}
-	labels := l.AgentLabels()
-	var rows []comparison
-	done := 0
-	for _, r := range readings {
-		c := compareOne(s, l, files, *unknown, r, cohort)
-		// A reading that someone else signed is marked as in bean ls, and
-		// the comparison says so: the person did not write its value.
-		if c.by = byText(r, l.ID, labels); c.by != "" && c.refused == "" {
-			c.caveats = append(c.caveats, caveatAuthor)
-		}
-		if c.refused == "" {
-			done++
-		}
-		rows = append(rows, c)
-	}
-	printComparisons(os.Stdout, rows, cohort, *typ == "")
+	return readings, l
+}
+
+// saveComparisons ends a comparison: it stops if nothing was compared, and
+// with save it signs each claim that the log does not hold yet. with names
+// what, together with a claim, gives the reading's value away.
+func saveComparisons(s *core.Store, l *core.Loaded, claims []map[string]any, save bool, with string) {
 	if warnFrozen(l) {
 		os.Exit(4)
 	}
-	if done == 0 {
+	if len(claims) == 0 {
 		fail(errors.New("nothing could be compared"))
 	}
-	if !*save {
+	if !save {
 		fmt.Println("Not saved. Pass -save to keep these comparisons as signed records.")
 		return
 	}
@@ -156,17 +200,13 @@ func cmdCompare(s *core.Store, args []string) {
 	have := map[string]bool{}
 	for id, r := range l.Report.Records {
 		if r.Type == compareType && r.Author == l.ID && l.Current(id) {
-			have[string(core.Canonical(r.Raw["context"]))] = true
+			have[claimKey(r.Raw)] = true
 		}
 	}
 	var in bytes.Buffer
 	already := 0
-	for _, c := range rows {
-		if c.refused != "" {
-			continue
-		}
-		rec := comparisonRecord(c, cohort)
-		if key := string(core.Canonical(rec["context"])); have[key] {
+	for _, rec := range claims {
+		if key := claimKey(rec); have[key] {
 			already++
 			continue
 		} else {
@@ -183,7 +223,7 @@ func cmdCompare(s *core.Store, args []string) {
 		fmt.Println("saved", id)
 	}
 	if res.Added > 0 {
-		fmt.Println("Each saved comparison states the cohort you chose and, with the public files, gives the reading's value away, in a record anyone with the log or a share of it can read.")
+		fmt.Printf("Each saved comparison states the cohort you chose and, with %s, gives the reading's value away, in a record anyone with the log or a share of it can read.\n", with)
 	}
 	fmt.Printf("added %d, already there %d\n", res.Added, already)
 	// Another save at the same moment may have added the same claim.
@@ -406,7 +446,7 @@ func sweepComparisons(s *core.Store) {
 		}
 		if staleComparison(l, deleted, r) {
 			stale = append(stale, id)
-		} else if key := string(core.Canonical(r.Raw["context"])); seen[key] {
+		} else if key := claimKey(r.Raw); seen[key] {
 			twice = append(twice, id)
 		} else {
 			seen[key] = true
@@ -454,11 +494,13 @@ func comparable() string {
 // said once below the table. Unless all is set, the readings of a type that
 // bean has no reference data for are only named: with -type they are most of
 // a lab report.
-func printComparisons(w io.Writer, rows []comparison, cohort nhanes.Cohort, all bool) {
-	fmt.Fprintf(w, "Compared with NHANES %s: %s.\n", nhanes.Years, cohort)
+func printComparisons(w io.Writer, rows []comparison, head, known string, all bool) {
+	for _, line := range strings.Split(head, "\n") {
+		fmt.Fprintln(w, safe(line))
+	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "READING\tVALUE\tPERCENTILE\tLOWER\tSAME\tMIDDLE HALF\tMEDIAN\tN\tNOTE\tID")
-	var caveats, help, unmapped []string
+	var caveats, help, unmapped, against []string
 	once := func(list *[]string, text string) {
 		if text != "" && !slices.Contains(*list, text) {
 			*list = append(*list, text)
@@ -490,14 +532,26 @@ func printComparisons(w io.Writer, rows []comparison, cohort nhanes.Cohort, all 
 					once(&note, "file not on record")
 				}
 			}
+			if slices.Contains(c.caveats, pack.CaveatNotOnRecord) {
+				note = append(note, "pack not on record")
+			}
 			fmt.Fprintf(tw, "%s\t%s\t%s\t%s%%\t%s%%\t%s to %s\t%s\t%d\t%s\t%s\n", r.Type, value,
 				nhanes.Num(res.Percentile), nhanes.Num(res.Below), nhanes.Num(res.Equal), nhanes.Num(res.P25), nhanes.Num(res.P75), nhanes.Num(res.P50), res.N, strings.Join(note, ", "), r.ID[7:19])
 			for _, text := range c.caveats {
 				once(&caveats, text)
 			}
+			once(&against, c.against)
 		}
 	}
 	tw.Flush()
+	// Which measure a reading is set against is the pack's claim, so it is
+	// shown.
+	if len(against) > 0 {
+		fmt.Fprintln(w, "The pack sets each reading against one of its measures:")
+		for _, text := range against {
+			fmt.Fprintln(w, "  - "+safe(text))
+		}
+	}
 	for _, text := range help {
 		fmt.Fprintln(w, safe(text))
 	}
@@ -509,7 +563,7 @@ func printComparisons(w io.Writer, rows []comparison, cohort nhanes.Cohort, all 
 		}
 		fmt.Fprintf(w, "No reference data for %d other %s: %s.\n", len(unmapped), types, strings.Join(unmapped, ", "))
 		// A type typed by hand may be one letter off a type bean compares.
-		fmt.Fprintf(w, "bean compares these types, each in this unit: %s.\n", comparable())
+		fmt.Fprintf(w, "These types have reference data, each in this unit: %s.\n", safe(known))
 	}
 	if len(caveats) > 0 {
 		fmt.Fprintln(w, "PERCENTILE is the weighted share of the cohort with a lower value, plus half of those with the same value. It says where a value lies in this sample, not whether it is healthy.")

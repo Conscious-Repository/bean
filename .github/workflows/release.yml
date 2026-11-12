@@ -1,0 +1,27 @@
+name: Release
+
+# A tag that starts with v publishes the check page with its SHA-256. The
+# page is built here, from the tagged commit, so the releaser's own machine
+# is not trusted for it. Anyone can build the same bytes: make page.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build the check page
+        run: make dist
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/bean-check.html dist/SHA256SUMS --title "$GITHUB_REF_NAME" --notes-file dist/NOTES.md

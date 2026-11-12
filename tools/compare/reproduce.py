@@ -4,11 +4,12 @@ without bean.
 
     reproduce.py <path>...
 
-A path is a folder, a .jsonl file of records, or a data file. A folder is
-read whole: every .json file in it is a record, every other file a data
-file. So a `bean export` folder or a share bundle with its files is enough
-by itself, and so is the output of `bean ls -json` next to the NHANES files
-you downloaded from CDC.
+A path is a folder, a .jsonl file of records, a reference pack (a file whose
+name ends in .pack), or a data file. A folder is read whole: every .json file
+in it is a record, every .pack file at its top level a pack, every other file
+a data file. So a `bean export` folder or a share bundle with its files is
+enough by itself, and so is the output of `bean ls -json` next to the NHANES
+files you downloaded from CDC, or next to a pack.
 
 For each comparison.percentile record it checks, in this order:
 
@@ -22,6 +23,13 @@ For each comparison.percentile record it checks, in this order:
     variable has, in its file, the label the claim gives it;
  4. the method of docs/COMPARE.md, computed here from the claim's own
     cohort and the reading's value, gives every number of the result.
+
+A claim whose method is `weighted-percentile` version 1 is checked against a
+pack (docs/REFERENCE.md, "The claim"), found by the SHA-256 that the claim
+names: the pack has that SHA-256 and is a good pack (tools/pack/check.py);
+the cell is there; the reading's type and unit are in the measure's `same`
+list; the texts and the caveats are the pack's; and the method gives every
+number of the result. A run given only packs and records needs no pandas.
 
 It prints one line per comparison, with the reading and the variable it
 was set against, and exits 1 if any check fails or cannot be made.
@@ -37,18 +45,33 @@ speaks for the person is a question for the whole log or bundle: bean
 verify, bean check-bundle or their Python twins answer it.
 """
 import hashlib
+import importlib.util
 import json
 import math
 import os
+import re
 import sys
+from decimal import Decimal
 
-import numpy as np  # for writing a number the way bean does
-import pandas as pd
-
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "second"))
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "..", "second"))
 import beanverify  # noqa: E402
 
+
+def _load_packcheck():
+    """tools/pack/check.py, by its path: the name `check` is too common to
+    take from sys.path."""
+    spec = importlib.util.spec_from_file_location("bean_pack_check", os.path.join(HERE, "..", "pack", "check.py"))
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+packcheck = _load_packcheck()
+
 METHOD = ("nhanes-weighted-percentile", "1")
+PACK_METHOD = ("weighted-percentile", "1")
 MIN_N = 30
 SMALL_N = 100
 MAX_AGE = 80
@@ -98,6 +121,20 @@ CAVEAT_DIET = "the cohort is chosen by what people said they ate on one day, whi
 CAVEAT_SMALL = "the cohort is small: fewer than 100 people"
 CAVEAT_UNKNOWN = "this copy of %s is not the file on record: its SHA-256 differs"
 CAVEAT_AUTHOR = "the reading was signed by an agent or another key, not by you"
+CAVEAT_UNKNOWN_PACK = "bean has no record of this pack: nobody has checked its tables, its caveats, or what it sets a reading against"
+
+# The packs on record, by SHA-256: the pack that the builder gives from the
+# six NHANES files on record. bean holds the same table, and a test keeps
+# the two equal. A comparison with any other pack is computed again, and
+# marked: whoever built that pack chose its tables, its caveats and what
+# each reading is set against.
+KNOWN_PACKS = {
+    "10555d6769421d4305cbcd4ff14960d8b966ddd829a50581a9584a60a84d29e2": "the NHANES 2017-2018 pack",
+}
+# The members of a pack claim's context (docs/REFERENCE.md, "The claim").
+PACK_CONTEXT = {"reading", "reference", "cohort", "method", "result", "caveats"}
+PACK_REFERENCE = {"pack", "title", "source", "measure", "label", "unit", "cohort"}
+PACK_RESULT = {"n", "percentile", "below", "equal", "p25", "p50", "p75"}
 
 
 class Missing(Exception):
@@ -113,6 +150,7 @@ def safe(s):
 def read_xpt(path):
     """A transport file as a table, indexed by SEQN, with each variable's
     label in table.attrs."""
+    import pandas as pd  # only a run that reads data files needs it
     with pd.read_sas(path, format="xport", iterator=True) as reader:
         labels = {f["name"].decode("latin-1"): f["label"].decode("latin-1") for f in reader.fields}
         table = reader.read()
@@ -128,7 +166,8 @@ def read_xpt(path):
 
 def num(x):
     """A number the short way, in digits and never with an exponent."""
-    return np.format_float_positional(float(x), trim="-")
+    f = float(x)
+    return "0" if f == 0 else format(Decimal(repr(f)).normalize(), "f")
 
 
 def is_number(x):
@@ -265,6 +304,9 @@ class Inputs:
         self.bad = {}       # id or name -> why a record was not accepted
         self.files = {}     # SHA-256 -> path
         self.tables = {}    # SHA-256 -> table
+        self.packs = {}     # SHA-256 -> pack, checked
+        self.packbad = {}   # SHA-256 -> (path, why a pack was not accepted)
+        self.unrecorded = set()  # SHA-256 of each pack not on record that a claim was computed with
 
     def add_record(self, name, data):
         try:
@@ -287,11 +329,30 @@ class Inputs:
             return
         self.records[claimed] = json.loads(data)
 
-    def add(self, path):
+    def add_pack(self, path):
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            data = f.read(packcheck.MAX_BYTES + 1)
+            h.update(data)
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        digest = h.hexdigest()
+        try:
+            pack = packcheck.parse_pack(data)
+        except packcheck.Refused as err:
+            self.packbad[digest] = (path, str(err))
+            return
+        pack.sha256 = digest
+        self.packs[digest] = pack
+
+    def add(self, path, nested=False):
         if os.path.isdir(path):
             for base, _, names in sorted(os.walk(path)):
                 for n in sorted(names):
-                    self.add(os.path.join(base, n))
+                    # A pack is looked for at the top of a folder only.
+                    self.add(os.path.join(base, n), nested=nested or base != path)
+        elif path.endswith(".pack") and not nested:
+            self.add_pack(path)
         elif path.endswith(".jsonl"):
             with open(path, "rb") as f:
                 for i, line in enumerate(f):
@@ -313,13 +374,9 @@ class Inputs:
         return self.tables[digest]
 
 
-def check(claim, inputs):
-    """Returns the text for one comparison that reproduces. Raises Missing
-    when an input is not there, ValueError when a check fails."""
+def find_reading(claim, inputs):
+    """The reading a claim is about, and its value, or an error."""
     ctx = claim["context"]
-    method = ctx["method"]
-    if (method.get("id"), method.get("version")) != METHOD:
-        raise ValueError("a method this tool does not know: %s@%s" % (method.get("id"), method.get("version")))
     rid = ctx["reading"]
     reading = inputs.records.get(rid)
     if reading is None and rid in inputs.bad:
@@ -331,6 +388,19 @@ def check(claim, inputs):
     value = reading.get("value", {}).get("n")
     if not is_number(value) or not value > 0:
         raise ValueError("the reading is not a number above zero")
+    return reading, value
+
+
+def check(claim, inputs):
+    """Returns the text for one comparison that reproduces. Raises Missing
+    when an input is not there, ValueError when a check fails."""
+    ctx = claim["context"]
+    method = ctx["method"]
+    if (method.get("id"), method.get("version")) == PACK_METHOD:
+        return check_pack_claim(claim, inputs)
+    if (method.get("id"), method.get("version")) != METHOD:
+        raise ValueError("a method this tool does not know: %s@%s" % (method.get("id"), method.get("version")))
+    reading, value = find_reading(claim, inputs)
     caveats, by = check_form(claim, reading)
     ref = ctx["reference"]
     tables, off_record = {}, []
@@ -363,12 +433,105 @@ def check(claim, inputs):
     return "%s: percentile %s, n %s%s" % (what, got["percentile"], got["n"], note)
 
 
+def same_number(a, b):
+    """Two JSON numbers that are equal, neither of them a boolean."""
+    return is_number(a) and is_number(b) and a == b
+
+
+def check_pack_claim(claim, inputs):
+    """A claim of the method weighted-percentile, version 1, against a pack:
+    the four steps of docs/REFERENCE.md, "The claim"."""
+    ctx = claim["context"]
+    reading, value = find_reading(claim, inputs)
+    if claim.get("author") != claim.get("subject"):
+        raise ValueError("the claim is not signed by the person it is about")
+    # The context has the members the document names, and no others.
+    for name, got, want in (("context", ctx, PACK_CONTEXT), ("reference", ctx["reference"], PACK_REFERENCE),
+                            ("cohort", ctx["cohort"], {"text"}), ("method", ctx["method"], {"id", "version"}),
+                            ("result", ctx["result"], PACK_RESULT)):
+        if not isinstance(got, dict) or set(got) != want:
+            raise ValueError("the %s of the claim does not have exactly the members the format names" % name)
+    ref, want = ctx["reference"], ctx["result"]
+    digest = ref["pack"]
+    if not isinstance(digest, str) or not packcheck.SHA_RE.fullmatch(digest):
+        raise ValueError("reference.pack is not a SHA-256")
+    # Step 1: the pack has the SHA-256 the claim names.
+    if digest in inputs.packbad:
+        raise ValueError("the pack %s is not a pack: %s" % (digest[:12], inputs.packbad[digest][1]))
+    # The claim is about its reading and nothing else.
+    if claim.get("refs") != [{"rel": "about", "id": ctx["reading"]}]:
+        raise ValueError("the claim's refs are not the one reading it is about")
+    # A pack is what its SHA-256 says, whatever its file is called.
+    if digest not in inputs.packs and digest not in inputs.packbad and digest in inputs.files:
+        inputs.add_pack(inputs.files[digest])
+        if digest in inputs.packbad:
+            raise ValueError("the pack %s is not a pack: %s" % (digest[:12], inputs.packbad[digest][1]))
+    pack = inputs.packs.get(digest)
+    if pack is None:
+        raise Missing("the pack with SHA-256 %s is not among the paths given: get that pack and give its file" % digest)
+    if pack.sha256 != digest:
+        raise ValueError("the pack does not have the SHA-256 the claim names")
+    mid, cid = ref["measure"], ref["cohort"]
+    if not isinstance(mid, str) or not isinstance(cid, str):
+        raise ValueError("reference.measure and reference.cohort are not ids")
+    measure, cohort = pack["measures"].get(mid), pack["cohorts"].get(cid)
+    if measure is None or cohort is None:
+        raise ValueError("the pack has no %s %s" % (("measure", mid) if measure is None else ("cohort", cid)))
+    cell = pack.cells.get((mid, cid))
+    if cell is None:
+        raise ValueError("the pack has no cell for measure %s and cohort %s" % (mid, cid))
+    # Step 2: the reading's type and unit are in the measure's same list.
+    kind = (reading.get("type"), (reading.get("value") or {}).get("unit"))
+    if {"type": kind[0], "unit": kind[1]} not in measure["same"]:
+        raise ValueError("the pack does not set %s in %s against %s" % (kind[0], kind[1], mid))
+    # Step 3: the texts and the caveats are the pack's.
+    for what, got, expect in (("title", ref["title"], pack["title"]), ("source", ref["source"], pack["source"]["name"]),
+                              ("label", ref["label"], measure["label"]), ("unit", ref["unit"], measure["unit"]),
+                              ("cohort.text", ctx["cohort"]["text"], cohort["text"])):
+        if got != expect:
+            raise ValueError("%s is not the pack's: %r" % (what, expect))
+    if (ctx["method"]["id"], ctx["method"]["version"]) != PACK_METHOD:
+        raise ValueError("a method this tool does not know")
+    caveats = list(pack["caveats"]) + list(measure["caveats"]) + list(cohort["caveats"]) + [CAVEAT_COHORT]
+    if cell["n"] < SMALL_N:
+        caveats.append(CAVEAT_SMALL)
+    if digest not in KNOWN_PACKS:
+        caveats.append(CAVEAT_UNKNOWN_PACK)
+        inputs.unrecorded.add(digest)
+    if reading.get("author") != claim["author"]:
+        caveats.append(CAVEAT_AUTHOR)
+    known = "on record" if digest in KNOWN_PACKS else "NOT on record"
+    what = "%s %s %s against %s %r in pack %s (%s)" % (reading["type"], value, reading["value"].get("unit", ""), mid, measure["label"], digest[:12], known)
+    # Step 4: the method gives every number of the result.
+    got = packcheck.place(cell, float(value))
+    if not all(same_number(got[k], want[k]) for k in PACK_RESULT):
+        raise ValueError("%s: the claim says %s, this tool computes %s" % (what, json.dumps(want, sort_keys=True), json.dumps(got, sort_keys=True)))
+    cv = claim["value"]
+    if not isinstance(cv, dict) or set(cv) != {"n", "unit"} or not same_number(cv["n"], got["percentile"]) or cv["unit"] != "{percentile}":
+        raise ValueError("%s: the claim's value is not the percentile in {percentile}" % what)
+    if ctx["caveats"] != caveats:
+        raise ValueError("%s: the caveats are not the ones these inputs give" % what)
+    return "%s, %s: percentile %s, n %s" % (what, cohort["text"], packcheck.num(got["percentile"]), got["n"])
+
+
 def main(argv):
     if len(argv) < 2:
         sys.stderr.write(__doc__)
         return 2
     inputs = Inputs()
-    for path in argv[1:]:
+    # -accept-pack <SHA-256>: the reader names a pack that is not on record
+    # and that they got from a publisher they trust.
+    accepted, paths, args = set(), [], argv[1:]
+    while args:
+        arg = args.pop(0)
+        if arg == "-accept-pack":
+            if not args or not re.fullmatch(r"[0-9a-f]{64}", args[0]):
+                print("-accept-pack takes the SHA-256 of a pack: 64 lower-case hex digits")
+                return 2
+            accepted.add(args.pop(0))
+        else:
+            paths.append(arg)
+    for path in paths:
         try:
             inputs.add(path)
         except OSError as err:
@@ -376,6 +539,9 @@ def main(argv):
             return 1
     claims = [r for r in inputs.records.values() if r["type"] == "comparison.percentile"]
     bad = 0
+    for digest, (path, why) in sorted(inputs.packbad.items()):
+        print("REFUSED pack %s %s" % (digest[:12], safe("%s: %s" % (path, why))))
+        bad += 1
     for rid, why in sorted(inputs.bad.items()):
         if why != "not a record":
             print("REFUSED %s %s" % (safe(str(rid)[7:19] if str(rid).startswith("sha256:") else rid), safe(why)))
@@ -390,12 +556,18 @@ def main(argv):
             signers[claim["kid"]] = signers.get(claim["kid"], 0) + 1
         except Missing as err:
             word, text = "CANNOT CHECK", str(err)
-        except (KeyError, TypeError, ValueError, AttributeError, OSError) as err:
+        except (KeyError, TypeError, ValueError, AttributeError, OSError, OverflowError, packcheck.NotPlaced) as err:
             word, text = "DIFFERS", "%s" % err
         bad += word != "reproduced"
         print("%s %s %s" % (word, claim["id"][7:19], safe(text)))
     for kid, n in sorted(signers.items()):
         print("signed by %s: %d" % (safe(kid), n))
+    # A comparison computes again with any pack that is well formed. What
+    # it means depends on who built the pack, and this tool knows one pack.
+    for digest in sorted(inputs.unrecorded - accepted):
+        print("NOT ON RECORD pack %s: this tool does not know who built it. Its tables, its caveats and what it sets a reading "
+              "against are its builder's word. If you trust its publisher, compare the SHA-256 with the one they state and pass -accept-pack %s" % (digest, digest))
+        bad += 1
     return 1 if bad else 0
 
 

@@ -4,6 +4,8 @@
 
 It describes a position in a sample. It does not say whether a value is healthy, and it does not diagnose, predict or advise.
 
+There are two ways to compare, and both give the same numbers. This document is the first: with the survey's own files, for any cohort that you can state as rules. The second is with a reference pack, one small file with a fixed menu of cohorts: `bean compare -pack` ([REFERENCE.md](REFERENCE.md)). A pack is the general form. It holds any public source that someone has built into one, and NHANES is the first.
+
 ## The data: NHANES 2017-2018
 
 [NHANES](https://wwwn.cdc.gov/nchs/nhanes/) is a survey by the US National Center for Health Statistics (CDC). About 9,000 people of all ages are interviewed, examined and have blood drawn. The files are public, one row per person, joined by the number `SEQN`. bean reads the 2017-2018 cycle: file names ending in `_J`.
@@ -49,7 +51,7 @@ A reading you typed and a reading you imported are two readings, even with the s
 
 Each file is kept encrypted, as a `reference.file` record with its SHA-256. You sign for having kept it. That does not make it CDC's claim: anyone can check the SHA-256 against the copy CDC serves. The importer says whether the file is the one bean has on record ([the digests](../internal/nhanes/nhanes.go)).
 
-The digests on record come from one download, on 2026-11-09, through a proxy that could read the traffic. Until a second person has confirmed them from their own connection, treat "the file on record" as "the file one download saw". Check for yourself: `shasum -a 256 DEMO_J.xpt` against the table in the code. bean knows of no digests that CDC publishes for these files.
+The digests on record come from one download, on 2026-11-09, through a proxy that could read the traffic. The `Reference data` workflow fetches the files again from the code host's network and checks each digest: a second network, by the same owner. Until a second person has confirmed them from their own connection, treat "the file on record" as "the file that two downloads saw". Check for yourself: `shasum -a 256 DEMO_J.xpt` against the table in the code. bean knows of no digests that CDC publishes for these files.
 
 ## Compare
 
@@ -157,6 +159,8 @@ python3 tools/compare/reproduce.py <a bundle> DEMO_J.xpt TCHOL_J.xpt
 python3 tools/compare/reproduce.py records.jsonl DEMO_J.xpt TCHOL_J.xpt
 ```
 
+A comparison that was made with a reference pack needs the pack and no other file: `python3 tools/compare/reproduce.py <a bundle> nhanes.pack`. The tool finds the pack by its SHA-256, whatever its file is called.
+
 A folder is read whole, so a `bean export` or a bundle shared with `-files` is enough by itself. Without the files in the folder, give them: the ones named in each claim, fetched from CDC. `records.jsonl` is the output of `bean ls -json`. A file that is missing gives `CANNOT CHECK` and its name, not a result that differs.
 
 The tool finds each file by its SHA-256, so the bytes are the same wherever you got them. What fetching from CDC yourself adds is the knowledge that CDC serves a file with that digest.
@@ -186,7 +190,7 @@ This is the one place the method is written. Inputs: the value v of the reading;
 7. lower = 100 B / W, same = 100 E / W, percentile = 100 (B + E/2) / W. Round each to one decimal: floor(10 y + 0.5) / 10, with the multiplication and the addition as two steps.
 8. The 25th, 50th and 75th percentile of the cohort, for q = 0.25, 0.5 and 0.75. Each is the smallest x such that the g of the values up to and including x, added in rising order, reach q W.
 
-After step 5 only n and the table of g(x) are used. So a published table of g(x) for a cohort gives the same result, to the last bit, as the files it was made from. That is how a comparison will work without the files ([ROADMAP](ROADMAP.md)).
+After step 5 only n and the table of g(x) are used. So a published table of g(x) for a cohort gives the same result, to the last bit, as the files it was made from. A reference pack is that table for each cohort on a menu ([REFERENCE.md](REFERENCE.md)).
 
 The caveats of a saved claim are in a fixed order. First come the three that every comparison has. Then the top age, if the age range ends at 80. Then the one day of food, if a rule names `DR1TOT_J`. Then the small cohort, if n is below 100. Then one for each file that was not on record. Last, the reading's signer, if it is not the person. Their texts are in [`cmd/bean/compare.go`](../cmd/bean/compare.go) and in `reproduce.py`, and a test keeps them equal.
 
