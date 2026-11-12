@@ -36,6 +36,37 @@ bean-pack-nhanes -out "$T/strict.pack" "${SYN[@]}" >/dev/null 2>&1 && say "a pac
 "$PY" -I "$HERE/check.py" "$T/syn.pack" >"$T/py.txt" 2>&1 || say "check.py refuses the pack: $(cat "$T/py.txt")"
 grep -qx "sha256 $DIGEST" "$T/py.txt" || say "check.py gives another SHA-256 than the builder"
 "$PY" -I "$HERE/rebuild_nhanes.py" "$T/syn.pack" "${SYN[@]}" >"$T/re.txt" 2>&1 || say "rebuild_nhanes.py: $(tail -1 "$T/re.txt")"
+# The rebuild covers every member: a pack with true tables and one other
+# thing changed is not the pack that the files give.
+i=0
+for change in 's/, not a reference range//' 's/"type":"lab.hdl-cholesterol"/"type":"lab.ldl-cholesterol"/' 's/adults by sex/people by sex/' 's/"version":"1"/"version":"2"/' 's/"text":"male, age 30-39"/"text":"male, age 30-40"/' 's/"n":\([0-9]*\)/"n":1\1/'; do
+  i=$((i + 1))
+  sed "$change" "$T/syn.pack" >"$T/lie$i.pack"
+  cmp -s "$T/syn.pack" "$T/lie$i.pack" && { say "the change $change changes nothing"; continue; }
+  "$PY" -I "$HERE/rebuild_nhanes.py" "$T/lie$i.pack" "${SYN[@]}" >"$T/lie.txt" 2>&1 && say "rebuild_nhanes.py passes a pack that the files do not give: $change"
+  grep -q "^DIFFERS: " "$T/lie.txt" || say "rebuild_nhanes.py does not say what differs: $change: $(tail -1 "$T/lie.txt")"
+done
+
+# The four vectors of the method in docs/REFERENCE.md, asked of check.py.
+"$PY" -I - "$T/syn.pack" "$T" <<'EOF3' || { echo "the vector packs were not made"; exit 1; }
+import json, os, sys
+p = json.load(open(sys.argv[1]))
+cell = p["cells"][0]
+p["cells"] = [cell]
+for i, (values, weights) in enumerate([([1, 2, 3, 4], [1, 1, 1, 1]), ([10, 20, 30], [1, 1, 8]), ([10, 20], [0.3, 0.1])]):
+    cell.update(n=30, values=values, weights=weights)
+    json.dump(p, open(os.path.join(sys.argv[2], "vector%d.pack" % i), "w"))
+open(os.path.join(sys.argv[2], "vector.cell"), "w").write(cell["measure"] + " " + cell["cohort"])
+EOF3
+read -r VM VC <"$T/vector.cell"
+vector() {
+  got=$("$PY" -I "$HERE/check.py" "$T/vector$1.pack" place "$VM" "$VC" "$2" 2>&1)
+  [ "$got" = "$3" ] || say "vector $1 at $2: check.py gives '$got', the document gives '$3'"
+}
+vector 0 2 "n=30 percentile=37.5 below=25 equal=25 p25=1 p50=2 p75=3"
+vector 0 2.5 "n=30 percentile=50 below=50 equal=0 p25=1 p50=2 p75=3"
+vector 1 30 "n=30 percentile=60 below=20 equal=80 p25=30 p50=30 p75=30"
+vector 2 15 "n=30 percentile=75 below=75 equal=0 p25=10 p50=10 p75=20"
 
 # Comparisons that bean saves with the pack, computed again in Python.
 b() { bean -dir "$T/log" "$@"; }
@@ -45,18 +76,28 @@ for v in 29 44 52 60 72; do b add lab.hdl-cholesterol $v -unit mg/dL -at 2026-11
 b agent init -label assistant >/dev/null 2>&1
 b add -agent lab.cholesterol-total 181 -unit mg/dL -at 2026-11-01 >/dev/null || { echo "agent add failed"; exit 1; }
 saved=0
+# The pack of the synthetic files is not one that bean has on record: bean
+# uses it only when told to, and each claim then says so.
+b compare -pack "$T/syn.pack" -cohort male-30-39 -type 'lab.*' >"$T/cmp.txt" 2>&1 && say "bean compares with a pack that it has no record of, without -unknown-pack"
+grep -q "pass -unknown-pack" "$T/cmp.txt" || say "bean does not say how to use a pack that it has no record of"
 for cohort in $(b compare -pack "$T/syn.pack" | sed -n 's/^  \([a-z]*-[0-9]*-[a-z0-9]*\): .*/\1/p'); do
-  b compare -pack "$T/syn.pack" -cohort "$cohort" -type 'lab.*' -save >"$T/cmp.txt" 2>&1 && saved=$((saved + $(grep -c '^saved ' "$T/cmp.txt")))
+  b compare -pack "$T/syn.pack" -unknown-pack -cohort "$cohort" -type 'lab.*' -save >"$T/cmp.txt" 2>&1 && saved=$((saved + $(grep -c '^saved ' "$T/cmp.txt")))
 done
 [ "$saved" -ge 50 ] || say "bean saved only $saved comparisons with the pack"
 b ls -json >"$T/records.jsonl"
-"$PY" -I "$ROOT/tools/compare/reproduce.py" "$T/records.jsonl" "$T/syn.pack" >"$T/rp.txt" 2>&1 || say "reproduce.py does not get what bean saved: $(tail -2 "$T/rp.txt")"
+"$PY" -I "$ROOT/tools/compare/reproduce.py" -accept-pack "$DIGEST" "$T/records.jsonl" "$T/syn.pack" >"$T/rp.txt" 2>&1 || say "reproduce.py does not get what bean saved: $(tail -2 "$T/rp.txt")"
+# A reader who has not named the pack is told that it is not on record,
+# and the run fails: a comparison computes again with any pack.
+"$PY" -I "$ROOT/tools/compare/reproduce.py" "$T/records.jsonl" "$T/syn.pack" >"$T/rpu.txt" 2>&1 && say "reproduce.py passes comparisons with a pack that is not on record"
+grep -q "^NOT ON RECORD pack $DIGEST" "$T/rpu.txt" || say "reproduce.py does not say that the pack is not on record"
 # A shared bundle of such comparisons, and the pack under another name: a
 # pack is what its SHA-256 says.
 b share -yes -out "$T/bundle" -type 'comparison.*' >/dev/null 2>&1 || say "the comparisons were not shared"
-bean check-bundle "$T/bundle" 2>&1 | grep -q "get the pack with that SHA-256" || say "check-bundle does not tell the reader that a pack is needed"
+bean check-bundle "$T/bundle" >"$T/cb.txt" 2>&1
+grep -q "get the pack with that SHA-256" "$T/cb.txt" || say "check-bundle does not tell the reader that a pack is needed"
+grep -q "(NOT on record)" "$T/cb.txt" || say "check-bundle does not mark a comparison with a pack that is not on record"
 cp "$T/syn.pack" "$T/reference-data.bin"
-"$PY" -I "$ROOT/tools/compare/reproduce.py" "$T/bundle" "$T/reference-data.bin" >"$T/rpb.txt" 2>&1 || say "reproduce.py does not compute a shared comparison again from the bundle and the pack: $(tail -2 "$T/rpb.txt")"
+"$PY" -I "$ROOT/tools/compare/reproduce.py" -accept-pack "$DIGEST" "$T/bundle" "$T/reference-data.bin" >"$T/rpb.txt" 2>&1 || say "reproduce.py does not compute a shared comparison again from the bundle and the pack: $(tail -2 "$T/rpb.txt")"
 # Without the pack the claims cannot be checked, and that is said.
 "$PY" -I "$ROOT/tools/compare/reproduce.py" "$T/records.jsonl" >"$T/rp0.txt" 2>&1 && say "reproduce.py passes claims without their pack"
 grep -q "CANNOT CHECK" "$T/rp0.txt" || say "reproduce.py does not say that it cannot check without the pack"
@@ -64,7 +105,7 @@ grep -q "CANNOT CHECK" "$T/rp0.txt" || say "reproduce.py does not say that it ca
 for change in 's/"percentile":\([0-9.]*\)/"percentile":99.9/' 's/"text":"male, age 30-39"/"text":"male, age 20-29"/' 's/you chose the cohort: [^"]*"/"/'; do
   sed "$change" "$T/records.jsonl" >"$T/changed.jsonl"
   cmp -s "$T/records.jsonl" "$T/changed.jsonl" && { say "the change $change changes nothing"; continue; }
-  "$PY" -I "$ROOT/tools/compare/reproduce.py" "$T/changed.jsonl" "$T/syn.pack" >/dev/null 2>&1 && say "reproduce.py passes a changed claim: $change"
+  "$PY" -I "$ROOT/tools/compare/reproduce.py" -accept-pack "$DIGEST" "$T/changed.jsonl" "$T/syn.pack" >/dev/null 2>&1 && say "reproduce.py passes a changed claim: $change"
 done
 
 # Packs with one thing wrong. bean and check.py must both refuse each.
@@ -174,5 +215,5 @@ if [ -n "${BEAN_NHANES_DIR:-}" ]; then
   "$PY" -I "$HERE/rebuild_nhanes.py" "$T/real.pack" "${REAL[@]}" >"$T/re.txt" 2>&1 || say "rebuild_nhanes.py on CDC's files: $(tail -1 "$T/re.txt")"
   real=", and the pack of CDC's files is the one on record"
 fi
-[ "$rc" = 0 ] && echo "pack: check.py reads the pack that bean builds, rebuild_nhanes.py builds every table again from the files, reproduce.py computes $saved saved comparisons again, and bean and check.py both refuse $wrong packs with one thing wrong$real"
+[ "$rc" = 0 ] && echo "pack: check.py reads the pack that bean builds and gives the method's four vectors, rebuild_nhanes.py builds the same pack byte for byte and refuses $i with one other member changed, reproduce.py computes $saved saved comparisons again and fails on a pack that is not on record, and bean and check.py both refuse $wrong packs with one thing wrong$real"
 exit $rc

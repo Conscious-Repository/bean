@@ -92,6 +92,25 @@ func TestPlace(t *testing.T) {
 			t.Errorf("Place(%v) gives a result", v)
 		}
 	}
+	// The vectors of docs/REFERENCE.md. In the last one the weights add up
+	// to 0.4, and three quarters of that is a hair above 0.3 in doubles:
+	// the first value does not reach it. tools/pack/run.sh asks the Python
+	// check for the same four.
+	for _, tc := range []struct {
+		values, weights []float64
+		v               float64
+		want            Result
+	}{
+		{[]float64{1, 2, 3, 4}, []float64{1, 1, 1, 1}, 2, Result{30, 37.5, 25, 25, 1, 2, 3}},
+		{[]float64{1, 2, 3, 4}, []float64{1, 1, 1, 1}, 2.5, Result{30, 50, 50, 0, 1, 2, 3}},
+		{[]float64{10, 20, 30}, []float64{1, 1, 8}, 30, Result{30, 60, 20, 80, 30, 30, 30}},
+		{[]float64{10, 20}, []float64{0.3, 0.1}, 15, Result{30, 75, 75, 0, 10, 10, 20}},
+	} {
+		got, err := (&Cell{N: 30, Values: tc.values, Weights: tc.weights}).Place(tc.v)
+		if err != nil || got != tc.want {
+			t.Errorf("vector %v %v at %v: %+v, %v; want %+v", tc.values, tc.weights, tc.v, got, err, tc.want)
+		}
+	}
 	// Weights that are not equal move the quartiles.
 	w := &Cell{N: 30, Values: []float64{10, 20, 30}, Weights: []float64{1, 1, 8}}
 	if got, _ := w.Place(30); got != (Result{30, 60, 20, 80, 30, 30, 30}) {

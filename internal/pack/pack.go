@@ -21,7 +21,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/Conscious-Repository/bean/core"
-	"github.com/Conscious-Repository/bean/internal/view"
 )
 
 // Format is the value of a pack's "bean" member.
@@ -58,8 +57,16 @@ func OnRecord(sha256 string) string {
 	if what, ok := Known[sha256]; ok {
 		return "this is " + what + " that bean has on record"
 	}
-	return "bean has no record of this pack"
+	return "bean has NO record of this pack"
 }
+
+// IsKnown reports a pack that bean has on record.
+func IsKnown(sha256 string) bool { _, ok := Known[sha256]; return ok }
+
+// CaveatUnknown is the caveat of a comparison with a pack that bean has no
+// record of. Whoever built such a pack chose its tables, its caveats and
+// what each reading is set against, and nothing here has checked them.
+const CaveatUnknown = "bean has no record of this pack: nobody has checked its tables, its caveats, or what it sets a reading against"
 
 // MinNumber and MaxNumber bound each value and each weight. Inside them no
 // sum of the method overflows, and no half of a weight is lost.
@@ -194,7 +201,7 @@ func (r *reader) object(v any, where string, members ...string) map[string]any {
 	}
 	for _, name := range slices.Sorted(maps.Keys(obj)) {
 		if !slices.Contains(members, name) {
-			r.fail("%s has a member that the format does not have: %s", where, view.Safe(name))
+			r.fail("%s has a member that the format does not have: %q", where, name)
 		}
 	}
 	for _, name := range members {
@@ -317,7 +324,7 @@ func Read(data []byte) (*Pack, error) {
 		if !idPattern.MatchString(id) {
 			r.fail("a measure's id is not a short name of letters, digits, dots, - and _")
 		}
-		m := r.object(measures[id], "measure "+view.Safe(id), "label", "unit", "caveats", "same")
+		m := r.object(measures[id], fmt.Sprintf("measure %q", id), "label", "unit", "caveats", "same")
 		measure := Measure{Label: r.text(m["label"], "a measure's label"), Unit: r.text(m["unit"], "a measure's unit"), Caveats: r.texts(m["caveats"], "a measure's caveats")}
 		same, ok := m["same"].([]any)
 		if !ok || len(same) == 0 {
@@ -342,7 +349,7 @@ func Read(data []byte) (*Pack, error) {
 		if !idPattern.MatchString(id) {
 			r.fail("a cohort's id is not a short name of letters, digits, dots, - and _")
 		}
-		c := r.object(cohorts[id], "cohort "+view.Safe(id), "text", "caveats")
+		c := r.object(cohorts[id], fmt.Sprintf("cohort %q", id), "text", "caveats")
 		p.Cohorts[id] = Cohort{Text: r.text(c["text"], "a cohort's text"), Caveats: r.texts(c["caveats"], "a cohort's caveats")}
 	}
 	if len(p.Measures) == 0 || len(p.Cohorts) == 0 {
@@ -358,7 +365,7 @@ func Read(data []byte) (*Pack, error) {
 		cell := Cell{}
 		cell.Measure, _ = c["measure"].(string)
 		cell.Cohort, _ = c["cohort"].(string)
-		where := fmt.Sprintf("the cell of %s in %s", view.Safe(cell.Measure), view.Safe(cell.Cohort))
+		where := fmt.Sprintf("the cell of %q in %q", cell.Measure, cell.Cohort)
 		if _, has := p.Measures[cell.Measure]; !has {
 			r.fail("%s names a measure that the pack does not have", where)
 		}
@@ -370,7 +377,7 @@ func Read(data []byte) (*Pack, error) {
 		}
 		seen[[2]string{cell.Measure, cell.Cohort}] = true
 		if kind, _ := c["kind"].(string); kind != Kind {
-			r.fail("%s is of kind %q, and this version reads only %q: a table is not read by a guess", where, view.Safe(kind), Kind)
+			r.fail("%s is of kind %q, and this version reads only %q: a table is not read by a guess", where, kind, Kind)
 		}
 		cell.Values, cell.Weights = r.numbers(c["values"], where), r.numbers(c["weights"], where)
 		n, isNumber := c["n"].(float64)

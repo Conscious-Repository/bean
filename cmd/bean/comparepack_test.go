@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/Conscious-Repository/bean/internal/nhanes"
+	"github.com/Conscious-Repository/bean/internal/pack"
 	"github.com/Conscious-Repository/bean/internal/xpt"
 )
 
@@ -63,32 +64,32 @@ func TestComparePack(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("%d\n%s\n%s", code, out, errs)
 	}
-	for _, want := range []string{"NHANES 2017-2018: adults by sex and ten years of age", "sha256 " + digest, "TCHOL_J.xpt", "lab.cholesterol-total (mg/dL)", "male-30-39: male, age 30-39", "female-80-over: female, age 80 and over", "bean has no record of this pack"} {
+	for _, want := range []string{"NHANES 2017-2018: adults by sex and ten years of age", "sha256 " + digest, "TCHOL_J.xpt", "lab.cholesterol-total (mg/dL)", "male-30-39: male, age 30-39", "female-80-over: female, age 80 and over", "bean has NO record of this pack"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the menu has no %q:\n%s", want, out)
 		}
 	}
 	// The same numbers as with the files.
-	out, errs, code = run(t, dir, "", "compare", "-pack", path, "-cohort", "male-30-39", ids[0])
+	out, errs, code = run(t, dir, "", "compare", "-pack", path, "-unknown-pack", "-cohort", "male-30-39", ids[0])
 	if code != 0 {
 		t.Fatalf("%d\n%s\n%s", code, out, errs)
 	}
 	byFiles, _, _ := run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", ids[0])
-	got, want := packRow(out, ids[0]), strings.Replace(packRow(byFiles, ids[0]), "small cohort, file not on record ", "small cohort ", 1)
+	got, want := packRow(out, ids[0]), strings.Replace(packRow(byFiles, ids[0]), "small cohort, file not on record ", "small cohort, pack not on record ", 1)
 	if got == "" || got != want {
 		t.Errorf("with the pack:  %s\nwith the files: %s", got, want)
 	}
-	for _, want := range []string{"SHA-256 " + digest, "male, age 30-39", "lab.cholesterol-total in mg/dL against Total Cholesterol (mg/dL)", "this copy of TCHOL_J is not the file on record", "you chose the cohort", "Not saved"} {
+	for _, want := range []string{"SHA-256 " + digest, "male, age 30-39", "WARNING: bean has NO record of this pack", "pack not on record", "nobody has checked its tables", "lab.cholesterol-total in mg/dL against Total Cholesterol (mg/dL)", "this copy of TCHOL_J is not the file on record", "you chose the cohort", "Not saved"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("no %q in\n%s", want, out)
 		}
 	}
 	// -save signs a claim, once.
-	out, errs, code = run(t, dir, "", "compare", "-pack", path, "-cohort", "male-30-39", "-type", "lab.*", "-save")
+	out, errs, code = run(t, dir, "", "compare", "-pack", path, "-unknown-pack", "-cohort", "male-30-39", "-type", "lab.*", "-save")
 	if code != 0 || !strings.Contains(out, "added 2, already there 0") || !strings.Contains(out, "No reference data for 1 other type: lab.tsh.") || !strings.Contains(out, "with the pack, gives the reading's value away") {
 		t.Fatalf("-save: %d\n%s\n%s", code, out, errs)
 	}
-	if out, _, _ := run(t, dir, "", "compare", "-pack", path, "-cohort", "male-30-39", "-type", "lab.*", "-save"); !strings.Contains(out, "added 0, already there 2") {
+	if out, _, _ := run(t, dir, "", "compare", "-pack", path, "-unknown-pack", "-cohort", "male-30-39", "-type", "lab.*", "-save"); !strings.Contains(out, "added 0, already there 2") {
 		t.Errorf("a second -save:\n%s", out)
 	}
 	ls, _, _ := run(t, dir, "", "ls", "-json", "-type", "comparison.percentile")
@@ -108,7 +109,7 @@ func TestComparePack(t *testing.T) {
 		t.Fatalf("share: %d\n%s\n%s", code, out, errs)
 	}
 	checked, _, code := run(t, t.TempDir(), "", "check-bundle", bundle)
-	for _, want := range []string{"bundle ok", "among male, age 30-39 (n ", ", by pack " + digest[:12], "get the pack with that SHA-256", digest + `, titled "NHANES 2017-2018: adults by sex and ten years of age": bean has no record of this pack`} {
+	for _, want := range []string{"bundle ok", "among male, age 30-39 (n ", " against Total Cholesterol (mg/dL), among male", ", by pack " + digest[:12] + " (NOT on record)", "get the pack with that SHA-256", digest + `: bean has NO record of this pack. The sender calls it "NHANES 2017-2018: adults by sex and ten years of age".`, "nobody has checked its tables"} {
 		if code != 0 || !strings.Contains(checked, want) {
 			t.Errorf("check-bundle: %d, no %q in\n%s", code, want, checked)
 		}
@@ -137,16 +138,16 @@ func TestComparePackRefuses(t *testing.T) {
 		args []string
 		want string
 	}{
-		"another kind of cell":            {[]string{"compare", "-pack", bad, "-cohort", "male-30-39", ids[0]}, "this version reads only"},
+		"another kind of cell":            {[]string{"compare", "-pack", bad, "-unknown-pack", "-cohort", "male-30-39", ids[0]}, "this version reads only"},
 		"a pack cut short":                {[]string{"compare", "-pack", cut}, "it is not a pack"},
 		"no such file":                    {[]string{"compare", "-pack", filepath.Join(dir, "none.pack")}, "no such file"},
-		"a cohort not there":              {[]string{"compare", "-pack", path, "-cohort", "male-35-44", ids[0]}, "the pack has no cohort"},
+		"a cohort not there":              {[]string{"compare", "-pack", path, "-unknown-pack", "-cohort", "male-35-44", ids[0]}, "the pack has no cohort"},
 		"no cohort":                       {[]string{"compare", "-pack", path, ids[0]}, "name a cohort of the pack with -cohort"},
 		"-sex with a pack":                {[]string{"compare", "-pack", path, "-sex", "male", "-age", "30-39", ids[0]}, "with -pack, name a cohort"},
 		"-cohort with no pack":            {[]string{"compare", "-cohort", "male-30-39", ids[0]}, "usage"},
 		"no reading":                      {[]string{"compare", "-pack", path, "-cohort", "male-30-39"}, "say which readings to compare"},
 		"-save with no cohort":            {[]string{"compare", "-pack", path, "-save"}, "name a cohort of the pack with -cohort"},
-		"only what has no reference data": {[]string{"compare", "-pack", path, "-cohort", "male-30-39", ids[2]}, "nothing could be compared"},
+		"only what has no reference data": {[]string{"compare", "-pack", path, "-unknown-pack", "-cohort", "male-30-39", ids[2]}, "nothing could be compared"},
 	} {
 		out, errs, code := run(t, dir, "", tc.args...)
 		if code == 0 || !strings.Contains(out+errs, tc.want) {
@@ -155,11 +156,48 @@ func TestComparePackRefuses(t *testing.T) {
 	}
 	// A reading in another unit gets a row that says so, and no number.
 	id, _, _ := run(t, dir, "", "add", "lab.cholesterol-total", "4.9", "-unit", "mmol/L", "-at", "2026-11-02")
-	out, _, code := run(t, dir, "", "compare", "-pack", path, "-cohort", "male-30-39", strings.TrimSpace(id))
+	out, _, code := run(t, dir, "", "compare", "-pack", path, "-unknown-pack", "-cohort", "male-30-39", strings.TrimSpace(id))
 	if code == 0 || !strings.Contains(out, `the reading is in "mmol/L", and the pack takes this type only in mg/dL`) {
 		t.Errorf("another unit: %d\n%s", code, out)
 	}
 	if ls, _, _ := run(t, dir, "", "ls", "-type", "comparison.percentile"); ls != "" {
 		t.Errorf("a refusal saved a comparison:\n%s", ls)
+	}
+}
+
+// TestComparisonThatNamesNothing: a comparison signed by hand that names
+// neither a pack nor files is marked wherever it is shown. Nobody can
+// compute it again.
+func TestComparisonThatNamesNothing(t *testing.T) {
+	dir, _, ids := compareLog(t, "TCHOL_J", "DEMO_J")
+	claim := `{"type":"comparison.percentile","source":{"system":"by-hand","adapter":"test@1","ref":null},"times":{"observed":{"start":"2026-11-01T00:00:00Z","precision":"day"}},"value":{"n":95,"unit":"{percentile}"},"refs":[{"rel":"about","id":"` + ids[0] + `"}],"context":{"reading":"` + ids[0] + `","cohort":{"text":"male, age 30-39"},"result":{"n":339}}}`
+	if out, errs, code := run(t, dir, claim+"\n", "append"); code != 0 {
+		t.Fatalf("append: %d\n%s\n%s", code, out, errs)
+	}
+	ls, _, _ := run(t, dir, "", "ls", "-type", "comparison.percentile")
+	if !strings.Contains(ls, "percentile 95 of lab.cholesterol-total 193 mg/dL, among male, age 30-39 (n 339) (names NO reference data)") {
+		t.Errorf("ls:\n%s", ls)
+	}
+}
+
+// TestPythonHoldsThePackTables: the Python tools hold the packs on record
+// and the caveat of a pack that is not, as bean does. The texts and rows of
+// the NHANES pack need no such test: tools/pack/rebuild_nhanes.py builds the
+// pack from its own and compares the bytes (make pack).
+func TestPythonHoldsThePackTables(t *testing.T) {
+	py, err := os.ReadFile("../../tools/compare/reproduce.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(py), `"`+pack.CaveatUnknown+`"`) {
+		t.Errorf("tools/compare/reproduce.py does not have the caveat %q", pack.CaveatUnknown)
+	}
+	for digest, what := range pack.Known {
+		if !strings.Contains(string(py), `"`+digest+`": "`+what+`"`) {
+			t.Errorf("tools/compare/reproduce.py does not have the pack on record %s", digest)
+		}
+	}
+	if n := strings.Count(string(py), `": "the `); n != len(pack.Known) {
+		t.Errorf("tools/compare/reproduce.py has %d packs on record, bean has %d", n, len(pack.Known))
 	}
 }

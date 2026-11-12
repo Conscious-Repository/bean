@@ -482,7 +482,13 @@ func Check(in Input) Result {
 			if ref, ok := r.Context["reference"].(map[string]any); ok && strings.HasPrefix(r.Type, "comparison.") {
 				digest, _ := ref["pack"].(string)
 				title, _ := ref["title"].(string)
-				if line := fmt.Sprintf("  - %s, titled %q: %s", digest, title, pack.OnRecord(digest)); len(digest) == 64 && !slices.Contains(packs, line) {
+				// A title is the sender's word. It is shown only for a pack
+				// that bean does not know, and as what the sender calls it.
+				line := fmt.Sprintf("  - %s: %s", digest, pack.OnRecord(digest))
+				if !pack.IsKnown(digest) {
+					line += fmt.Sprintf(". The sender calls it %q. Whoever built it chose its tables, its caveats and what each reading is set against", title)
+				}
+				if len(digest) == 64 && !slices.Contains(packs, line) {
 					packs = append(packs, line)
 				}
 			}
@@ -496,7 +502,7 @@ func Check(in Input) Result {
 		// A comparison is shown as its claim states it. This check proves
 		// who signed the claim, not its arithmetic.
 		if len(caveats) > 0 {
-			res.Tail = append(res.Tail, "The comparisons above are shown as claimed, and are not computed again here: tools/compare/reproduce.py does that. Their own caveats:")
+			res.Tail = append(res.Tail, "The comparisons above are shown as claimed, and are not computed again here: tools/compare/reproduce.py does that. What they say of themselves, in the sender's words and the words of what they were made with, not this check's:")
 			for _, text := range caveats {
 				res.Tail = append(res.Tail, "  - "+text)
 			}
@@ -504,7 +510,7 @@ func Check(in Input) Result {
 		// The reader needs the pack to compute such a comparison again, and
 		// the title is the sender's word: the SHA-256 is what names a pack.
 		if len(packs) > 0 {
-			res.Tail = append(res.Tail, "A comparison by a pack was made with a file of reference data that is not in this bundle. To compute it again, get the pack with that SHA-256 and give it to tools/compare/reproduce.py with the bundle. A title is the sender's word; the SHA-256 names the pack:")
+			res.Tail = append(res.Tail, "A comparison by a pack was made with a file of reference data that is not in this bundle. To compute it again, get the pack with that SHA-256 and give it to tools/compare/reproduce.py with the bundle. The SHA-256 names the pack:")
 			res.Tail = append(res.Tail, packs...)
 		}
 	}

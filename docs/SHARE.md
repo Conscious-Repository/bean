@@ -135,13 +135,13 @@ python3 tools/compare/reproduce.py for-ana DEMO_J.xpt TCHOL_J.xpt
 python3 tools/compare/reproduce.py for-ana ~/bean-export/blobs
 ```
 
-A comparison that was made with a reference pack needs that pack ([REFERENCE.md](REFERENCE.md)). `bean check-bundle` and the page show `by pack` and the first digits of its SHA-256 in the row. Below the records they give the full SHA-256, and say whether bean has that pack on record. Send the pack file with the package, or tell your reader where it is: it is public data.
+A comparison that was made with a reference pack needs that pack ([REFERENCE.md](REFERENCE.md)). `bean check-bundle` and the page show in the row what the reading was set against, and `by pack` with the first digits of its SHA-256. A pack that bean has no record of is marked there: `(NOT on record)`. Below the records they give the full SHA-256. Send the pack file with the package, or tell your reader where it is: it is public data.
 
 ```
 python3 tools/compare/reproduce.py for-ana nhanes.pack
 ```
 
-The pack's title in a claim is the sender's word. The SHA-256 is what names a pack.
+A comparison computes again with any pack that is well formed, and a made-up pack is well formed. So `reproduce.py` fails for a pack that is not on record, and says so. A reader who trusts that pack's publisher passes `-accept-pack` and its SHA-256. A comparison that names no pack and no files is marked `(names NO reference data)`: nobody can compute it again.
 
 ## The bundle, exactly
 

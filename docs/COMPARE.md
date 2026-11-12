@@ -51,7 +51,7 @@ A reading you typed and a reading you imported are two readings, even with the s
 
 Each file is kept encrypted, as a `reference.file` record with its SHA-256. You sign for having kept it. That does not make it CDC's claim: anyone can check the SHA-256 against the copy CDC serves. The importer says whether the file is the one bean has on record ([the digests](../internal/nhanes/nhanes.go)).
 
-The digests on record come from one download, on 2026-11-09, through a proxy that could read the traffic. Until a second person has confirmed them from their own connection, treat "the file on record" as "the file one download saw". Check for yourself: `shasum -a 256 DEMO_J.xpt` against the table in the code. bean knows of no digests that CDC publishes for these files.
+The digests on record come from one download, on 2026-11-09, through a proxy that could read the traffic. The `Reference data` workflow fetches the files again from the code host's network and checks each digest: a second network, by the same owner. Until a second person has confirmed them from their own connection, treat "the file on record" as "the file that two downloads saw". Check for yourself: `shasum -a 256 DEMO_J.xpt` against the table in the code. bean knows of no digests that CDC publishes for these files.
 
 ## Compare
 

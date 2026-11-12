@@ -9,8 +9,8 @@ It is a draft at version 0. One source has been built into a pack: NHANES 2017-2
 - A pack is one file of public reference data. Its name is the SHA-256 of its bytes.
 - The pack holds a table for each measure and each cohort on its menu. The table is all that the method needs.
 - The table comes to the value. The person's reading never leaves their machine, and nobody learns which cohort they chose.
-- Anyone can hold a pack and hand it on. A host is not trusted: the SHA-256 says whether the bytes are right.
-- The pack names the files of its source by SHA-256. Anyone can build the pack again from them and compare.
+- Anyone can hold a pack and hand it on. The SHA-256 says whether the bytes are the ones that were named. It does not say who built them: that is a separate question, answered below.
+- The pack names the files of its source by SHA-256. For the NHANES pack, anyone can build the same bytes again from those files, with bean or with Python.
 - A comparison is the person's signed claim. It names the reading, the pack, the cell and the method. Anyone with the pack computes it again.
 
 NHANES and cholesterol are one case. Nothing in the format knows a survey, a blood test or a unit.
@@ -39,13 +39,14 @@ bean compare -pack nhanes.pack                                         # what th
 bean compare -pack nhanes.pack -cohort male-30-39 -type 'lab.*'        # compare
 bean compare -pack nhanes.pack -cohort male-30-39 -type weight -save   # compare, and keep the result
 python3 tools/pack/check.py nhanes.pack                                # the check, without bean
+python3 tools/pack/rebuild_nhanes.py nhanes.pack *.xpt                 # build the same bytes again, without bean
 make pack                                                              # both, on packs good and wrong
 ```
 
 [COMPARE.md](COMPARE.md) says where the NHANES files are: its loop downloads these six, and one more that a pack does not use. `bean-pack-nhanes` reads the files that you give it and goes nowhere.
 
 - **A pack holds the tests whose files you give.** `DEMO_J` is always needed. A file that a pack holds nothing of is named and left out, so `*.xpt` works. With the six files above, the pack is the one on record, and bean says so.
-- **A file that is not the one on record is refused.** It may be a download that was cut short. `-unknown-files` builds from it, and the pack then says so in its caveats.
+- **A file that is not the one on record is refused.** It may be a download that was cut short. `-unknown-files` builds from it, and the pack then says so in its caveats. Such a pack is not the pack on record: `bean compare` takes it only with `-unknown-pack`.
 - **Keep the pack file.** Your log names a pack by its SHA-256 and does not hold it. A reader of a comparison that you share needs the same pack to compute it again.
 - **Use the type names and units that the pack lists.** `bean compare -pack nhanes.pack` shows them: a reading in another unit gets no number.
 
@@ -113,10 +114,19 @@ The method's id is `weighted-percentile`, and this is version 1. Inputs: the val
 1. v must be a number above zero. Every measure of version 0 is a quantity above zero.
 2. W is the sum of the weights, added in the cell's order. B is the sum of the weights of the values below v, in that order. E is the weight of the value v, or zero when the cell does not have it.
 3. lower = 100 B / W, same = 100 E / W, percentile = 100 (B + E/2) / W. Round each to one decimal: floor(10 y + 0.5) / 10, with the multiplication and the addition as two steps.
-4. The 25th, 50th and 75th percentile, for q = 0.25, 0.5 and 0.75. Each is the first value at which the weights, added in the cell's order, reach q W.
+4. The 25th, 50th and 75th percentile, for q = 0.25, 0.5 and 0.75. Add the weights in the cell's order, and call the sum so far S. Each percentile is the first value at which S >= q × W. Compute q × W as one multiplication, and compare S with it as doubles. If no value reaches it, take the last value.
 5. n is the cell's n.
 
 Every sum is in IEEE 754 doubles, in the order given. So every implementation gets the same bits. A change to any step is a new version.
+
+Four vectors, each a cell and a value. An implementation that divides in step 4, where this one multiplies, gets the last one wrong.
+
+| Values | Weights | v | percentile | lower | same | 25th | 50th | 75th |
+|---|---|---|---|---|---|---|---|---|
+| 1, 2, 3, 4 | 1, 1, 1, 1 | 2 | 37.5 | 25 | 25 | 1 | 2 | 3 |
+| 1, 2, 3, 4 | 1, 1, 1, 1 | 2.5 | 50 | 50 | 0 | 1 | 2 | 3 |
+| 10, 20, 30 | 1, 1, 8 | 30 | 60 | 20 | 80 | 30 | 30 | 30 |
+| 10, 20 | 0.3, 0.1 | 15 | 75 | 75 | 0 | 10 | 10 | 20 |
 
 These are steps 6 to 8 of the method in [COMPARE.md](COMPARE.md). So a comparison with a pack gives the same numbers as a comparison with the files that the pack was built from.
 
@@ -131,17 +141,18 @@ These are steps 6 to 8 of the method in [COMPARE.md](COMPARE.md). So a compariso
 | `cohort.text` | The cohort in words, as the pack gives it. |
 | `method` | `id` and `version`. |
 | `result` | `n`, `percentile`, `below`, `equal`, `p25`, `p50`, `p75`. |
-| `caveats` | In this order: the pack's, the measure's, the cohort's, then the three below where they apply. |
+| `caveats` | In this order: the pack's, the measure's, the cohort's, then the four below where they apply. |
 
 The claim's `refs` has one entry: it is `about` the reading. Its value is the percentile, with the unit `{percentile}`.
 
-The three caveats that a claim adds:
+The four caveats that a claim adds, in this order:
 
 - `you chose the cohort: bean does not know whether you belong to it`, always;
 - `the cohort is small: fewer than 100 people`, when n is below 100;
+- `bean has no record of this pack: nobody has checked its tables, its caveats, or what it sets a reading against`, when the pack is not one on record;
 - `the reading was signed by an agent or another key, not by you`, when that is so.
 
-A reader with the pack checks a claim in four steps. The pack has the SHA-256 that the claim names. The reading's type and unit are in the measure's `same` list. The texts and the caveats are the ones that the pack gives. The method gives every number of the result. `tools/compare/reproduce.py` does this, and shares no code with bean.
+A reader with the pack checks a claim in four steps. The pack has the SHA-256 that the claim names. The reading's type and unit are in the measure's `same` list. The texts and the caveats are the ones that the pack gives. The method gives every number of the result. `tools/compare/reproduce.py` does this, and shares no code with bean. It fails for a pack that is not on record, unless the reader names that pack.
 
 A saved comparison gives the reading's value away to anyone with the pack ([COMPARE.md](COMPARE.md)). It does not outlive its reading.
 
@@ -153,6 +164,18 @@ A saved comparison gives the reading's value away to anyone with the pack ([COMP
 - **Take each `same` entry from a real reading.** Use the type and the unit that a real importer or a real report writes. A second name or unit for a quantity is a second entry.
 - **Say what does not carry over.** A caveat is part of the pack. Each comparison shows it, and each saved claim holds it.
 - **Use the weights that the source says to use.** A wrong weight gives a number that looks right.
+
+## A pack that is not on record
+
+A pack is well formed or not, and a check can tell. Whether its tables are true is another matter. Whoever builds a pack chooses its tables, its caveats and which reading each measure takes. So a made-up pack computes as well as a real one.
+
+bean has one pack on record: the NHANES pack, by its SHA-256. For any other pack:
+
+- `bean compare -pack` shows a warning, and compares only with `-unknown-pack`. Each result then has the caveat above, in the output and in the saved claim.
+- `bean check-bundle` and the check page mark the row: `by pack 7f3fda515b16 (NOT on record)`. They show what the reading was set against, from the claim. They show the title only as what the sender calls it.
+- `tools/compare/reproduce.py` computes the claim again, prints `NOT ON RECORD`, and fails. A reader who trusts the pack's publisher names the SHA-256: `-accept-pack <SHA-256>`.
+
+One list in bean's code is not how many publishers will be known. A publisher's signature is the next step ([ROADMAP.md](ROADMAP.md)).
 
 ## What a check refuses
 
@@ -179,7 +202,7 @@ A pack is public data, and a file. It needs no account and no server of its own.
 - **A pointer is not the data.** A publisher can announce a pack: its title, its SHA-256 and where it is. A signed note on Nostr relays can carry that. The relays then hold a pointer and no health record.
 - **A host may charge for bytes.** Storage and bandwidth cost money, and a host can ask for payment before it serves a file. bean holds no wallet. A person pays a host, if they must, with their own tools.
 - **Nobody is paid to compute.** A paid comparison would send the cohort or the value to the one who computes. That is the disclosure that a pack exists to prevent.
-- **Who says that a pack is the right one.** Today: this repository states the SHA-256 of the NHANES pack, below. Anyone can build the pack and get the same SHA-256.
+- **Who says that a pack is the right one.** Today: this repository states the SHA-256 of the NHANES pack, below. Two builders that share no code give that SHA-256 from the files: `bean-pack-nhanes`, and `tools/pack/rebuild_nhanes.py` in Python.
 
 The pack that `bean-pack-nhanes` version 1 builds from the six files on record has this SHA-256. The files are `DEMO_J`, `TCHOL_J`, `HDL_J`, `GHB_J`, `CBC_J` and `BMX_J`.
 
@@ -187,7 +210,7 @@ The pack that `bean-pack-nhanes` version 1 builds from the six files on record h
 efbb252a361b1994c67207618a088d492d1b0dafb8ea5ff88f857f97abc69277
 ```
 
-`bean compare -pack` says whether a pack is this one. The digests of the six files come from one download ([COMPARE.md](COMPARE.md)). Until a second person has confirmed them, the pack is "the pack that one download gives".
+`bean compare -pack` says whether a pack is this one. The digests of the six files come from one download ([COMPARE.md](COMPARE.md)). The `Reference data` workflow fetches the files from CDC again, from the code host's network, and checks each digest and the pack. That is a second network and not yet a second person.
 
 ## The NHANES pack
 

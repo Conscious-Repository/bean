@@ -1,35 +1,31 @@
 #!/usr/bin/env python3
-"""rebuild_nhanes.py: build an NHANES pack's tables again from the NHANES
-files, and compare them with the pack, exactly.
+"""rebuild_nhanes.py: build an NHANES pack again from the NHANES files,
+without bean, and compare it with the pack byte for byte.
 
     rebuild_nhanes.py <pack> <xpt file>...
 
 It checks that the pack is a good pack (tools/pack/check.py), that each file
 given has the SHA-256 the pack names for it (a file is matched by its data
 set name, such as DEMO_J, whatever the case of its name on disk), and that
-every file the pack names is given. Then, for each measure and each cohort of
-the pack, it takes steps 1 to 5 of "The method, version 1" in docs/COMPARE.md
-on the files:
+every file the pack names is given. Then it builds the whole pack from the
+files and from its own tables: the title, the source, the caveats, each
+measure with its label, its unit and the types that it takes, each cohort,
+and each cell by steps 1 to 5 of "The method, version 1" in docs/COMPARE.md.
+It writes that pack in canonical JSON and compares the bytes.
 
-  - a measure's id is the NHANES variable; the file that has it is the one
-    that is given and holds that variable;
-  - a cohort's id is `<sex>-<from>-<to>` or `<sex>-80-over` (male is
-    RIAGENDR 1, female 2; age is RIDAGEYR from..to, both ends included;
-    `80-over` is 80..80);
-  - the weight is WTMEC2YR of DEMO_J.
+So a pack passes only when every member is what the files and the builder
+give: a table, and also a caveat, a title, or which reading a measure
+takes. It shares no code with bean.
 
-A pair whose rebuilt cohort has fewer than 30 people must not be a cell of
-the pack, and a pair with 30 or more must be one, with the same n, the same
-values and the same weights, bit for bit.
-
-It prints `rebuilt <N> cells of <pack>: every table is the one the files
-give` and exits 0, or one line `DIFFERS: ...` (or `REFUSED: ...` for a pack
-or a file that cannot be used) and exits 1.
+It prints `rebuilt <pack>: the pack is, byte for byte, the one that these
+files give` and exits 0, or one line `DIFFERS: ...` that names the first
+member that differs (or `REFUSED: ...` for a pack or a file that cannot be
+used) and exits 1.
 """
 import hashlib
+import json
 import math
 import os
-import re
 import struct
 import sys
 
@@ -41,7 +37,6 @@ import reproduce  # noqa: E402
 
 MIN_N = 30
 DEMO, SEX, AGE, WEIGHT = "DEMO_J", "RIAGENDR", "RIDAGEYR", "WTMEC2YR"
-COHORT_RE = re.compile(r"(male|female)-([0-9]{1,3})-(?:([0-9]{1,3})|over)")
 
 
 class Stop(Exception):
@@ -55,26 +50,6 @@ def bits(x):
 def dataset(name):
     """The data set name of a file: DEMO_J of demo_j.XPT."""
     return os.path.splitext(os.path.basename(name))[0].upper()
-
-
-def parse_cohort(cid, text):
-    """Sex code, youngest and oldest age of a cohort id, and the cohort's
-    words, or None when the id is not one this tool knows."""
-    m = COHORT_RE.fullmatch(cid)
-    if not m:
-        return None
-    sex = 1 if m.group(1) == "male" else 2
-    lo = int(m.group(2))
-    if m.group(3) is None:
-        if lo != 80:
-            return None
-        hi, words = 80, "%s, age 80 and over" % m.group(1)
-    else:
-        hi = int(m.group(3))
-        words = "%s, age %d-%d" % (m.group(1), lo, hi)
-    if lo > hi:
-        return None
-    return sex, lo, hi, words
 
 
 def load(pack, paths):
@@ -141,8 +116,61 @@ def cell_of(rows, sex, lo, hi):
     return n, values, [by_value[x] for x in values]
 
 
-def rebuild(pack, paths):
-    given = load(pack, paths)
+# What the builder writes beside the tables. bean holds the same texts and
+# the same rows (internal/nhanes); this tool builds the whole pack from its
+# own, so a pack that differs in any member, not only in a table, is found.
+TITLE = "NHANES 2017-2018: adults by sex and ten years of age"
+SOURCE = {"name": "NHANES 2017-2018", "publisher": "US National Center for Health Statistics (CDC)", "home": "https://wwwn.cdc.gov/nchs/nhanes/"}
+URL = "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/"
+BUILDER = {"name": "bean-pack-nhanes", "version": "1"}
+CAVEAT_BODY = "the reading and NHANES were measured with their own instruments and methods"
+# The body measures: the data set, the variable, and each type and unit
+# that is the same quantity.
+BODY = [
+    ("BMX_J", "BMXWT", [("weight", "kg"), ("apple-health.body-mass", "kg")]),
+    ("BMX_J", "BMXHT", [("apple-health.height", "cm")]),
+]
+AGES = [(20, 29), (30, 39), (40, 49), (50, 59), (60, 69), (70, 79), (80, 80)]
+
+
+def number(x):
+    """A number as bean's canonical JSON writes it (RFC 8785): the shortest
+    digits that read back as the same double, with an exponent only below
+    1e-6 and from 1e21."""
+    if isinstance(x, int):
+        return str(x)
+    if x == int(x) and abs(x) < 1e21:
+        return str(int(x))
+    if abs(x) >= 1e-6:
+        return packcheck.num(x)
+    mantissa, _, exponent = repr(x).partition("e")
+    return "%se-%d" % (mantissa, -int(exponent))
+
+
+def canonical(x):
+    if isinstance(x, dict):
+        return "{" + ",".join(json.dumps(k, ensure_ascii=False) + ":" + canonical(x[k]) for k in sorted(x)) + "}"
+    if isinstance(x, list):
+        return "[" + ",".join(canonical(v) for v in x) + "]"
+    if isinstance(x, str):
+        return json.dumps(x, ensure_ascii=False)
+    return number(x)
+
+
+def specs():
+    """Each measure that a pack can hold, in the builder's order: the lab
+    tests, each once with every name and unit that a report prints, then
+    the body measures."""
+    out = {}
+    for (kind, unit), (d, variable) in reproduce.ANALYTES.items():
+        out.setdefault(variable, {"dataset": d, "caveat": reproduce.CAVEAT_METHOD, "same": []})["same"].append({"type": kind, "unit": unit})
+    for d, variable, same in BODY:
+        out[variable] = {"dataset": d, "caveat": CAVEAT_BODY, "same": [{"type": t, "unit": u} for t, u in same]}
+    return out
+
+
+def build(given, sizes, digests):
+    """The whole pack that the files give, as the builder writes it."""
     tables = {}
 
     def table(d):
@@ -151,44 +179,85 @@ def rebuild(pack, paths):
         return tables[d]
 
     demo = demographics(table(DEMO))
-    checked = 0
-    for mid, measure in pack["measures"].items():
-        homes = [d for d in sorted(given) if d != DEMO and mid in table(d).columns]
-        if len(homes) != 1:
-            raise Stop("DIFFERS: measure %s: %s" % (reproduce.safe(mid), "no file given has this variable" if not homes else "more than one file has this variable: " + ", ".join(homes)))
-        label = table(homes[0]).attrs["labels"].get(mid)
-        if label != measure["label"]:
-            raise Stop("DIFFERS: measure %s is labelled %r in %s, and %r in the pack" % (reproduce.safe(mid), label, homes[0], reproduce.safe(measure["label"])))
-        rows = rows_of(table(homes[0]), mid, demo)
-        for cid, cohort in pack["cohorts"].items():
-            known = parse_cohort(cid, cohort["text"])
-            if known is None:
-                raise Stop("DIFFERS: cohort %s is not a cohort id this tool knows" % reproduce.safe(cid))
-            sex, lo, hi, words = known
-            if cohort["text"] != words:
-                raise Stop("DIFFERS: cohort %s has the text %r, not %r" % (reproduce.safe(cid), reproduce.safe(cohort["text"]), words))
-            n, values, weights = cell_of(rows, sex, lo, hi)
-            cell = pack.cells.get((mid, cid))
-            where = "cell %s %s" % (reproduce.safe(mid), reproduce.safe(cid))
-            if n < MIN_N:
-                if cell is not None:
-                    raise Stop("DIFFERS: %s is in the pack, and the files give %d people" % (where, n))
-                continue
-            if cell is None:
-                raise Stop("DIFFERS: %s is not in the pack, and the files give %d people" % (where, n))
-            checked += 1
-            if cell["n"] != n:
-                raise Stop("DIFFERS: %s has n %s, and the files give %d" % (where, cell["n"], n))
-            if len(cell["values"]) != len(values):
-                raise Stop("DIFFERS: %s has %d values, and the files give %d" % (where, len(cell["values"]), len(values)))
-            for i, (x, w) in enumerate(zip(values, weights)):
-                if bits(cell["values"][i]) != bits(x):
-                    raise Stop("DIFFERS: %s value %d is %s, and the files give %s" % (where, i, packcheck.num(cell["values"][i]), packcheck.num(x)))
-                if bits(cell["weights"][i]) != bits(w):
-                    raise Stop("DIFFERS: %s weight %d of the value %s is %s, and the files give %s" % (where, i, packcheck.num(x), packcheck.num(cell["weights"][i]), packcheck.num(w)))
-    if checked != len(pack["cells"]):
-        raise Stop("DIFFERS: the pack has %d cells, and %d pairs of its measures and cohorts are rebuilt" % (len(pack["cells"]), checked))
-    return checked
+    caveats = [reproduce.CAVEAT_POPULATION]
+    files = []
+    for d in sorted(given):
+        files.append({"name": d + ".xpt", "sha256": digests[d], "bytes": sizes[d], "url": URL + d + ".xpt"})
+        if reproduce.KNOWN.get(d) != digests[d]:
+            caveats.append(reproduce.CAVEAT_UNKNOWN % d)
+    cohorts, menu = {}, []
+    for sex, code in (("female", 2), ("male", 1)):
+        for lo, hi in AGES:
+            cid = "%s-%d-over" % (sex, lo) if hi == 80 else "%s-%d-%d" % (sex, lo, hi)
+            text = "%s, age %d and over" % (sex, lo) if hi == 80 else "%s, age %d-%d" % (sex, lo, hi)
+            cohorts[cid] = {"text": text, "caveats": [reproduce.CAVEAT_TOP_AGE] if hi == 80 else []}
+            menu.append((cid, code, lo, hi))
+    measures, cells = {}, []
+    for variable, spec in specs().items():
+        d = spec["dataset"]
+        if d not in given or variable not in table(d).columns:
+            continue
+        label = table(d).attrs["labels"].get(variable) or ""
+        if not label.endswith(")") or "(" not in label:
+            raise Stop("DIFFERS: %s is labelled %r in %s, with no unit" % (variable, label, d))
+        measures[variable] = {"label": label, "unit": label[label.rindex("(") + 1:-1], "caveats": [spec["caveat"]], "same": spec["same"]}
+        rows = rows_of(table(d), variable, demo)
+        for cid, code, lo, hi in menu:
+            n, values, weights = cell_of(rows, code, lo, hi)
+            if n >= MIN_N:
+                cells.append({"measure": variable, "cohort": cid, "kind": "weights", "n": n, "values": values, "weights": weights})
+    cells.sort(key=lambda c: (c["measure"], c["cohort"]))
+    return {"bean": "pack/0", "title": TITLE, "source": dict(SOURCE, files=files), "builder": BUILDER,
+            "caveats": caveats, "measures": measures, "cohorts": cohorts, "cells": cells}
+
+
+def difference(pack, mine):
+    """In words, the first member in which a pack differs from the one
+    that this tool builds."""
+    for name in ("title", "source", "builder", "caveats", "cohorts"):
+        if pack[name] != mine[name]:
+            return "the pack's %s is not what the files and the builder give: it has %s, and this tool builds %s" % (
+                name, reproduce.safe(json.dumps(pack[name], sort_keys=True))[:300], json.dumps(mine[name], sort_keys=True)[:300])
+    for mid in sorted(set(pack["measures"]) | set(mine["measures"])):
+        got, want = pack["measures"].get(mid), mine["measures"].get(mid)
+        if got != want:
+            return "measure %s is not what the files and the builder give: it has %s, and this tool builds %s" % (
+                reproduce.safe(mid), reproduce.safe(json.dumps(got, sort_keys=True))[:300], json.dumps(want, sort_keys=True)[:300])
+    theirs = {(c["measure"], c["cohort"]): c for c in pack["cells"]}
+    for c in mine["cells"]:
+        where = "cell %s %s" % (c["measure"], c["cohort"])
+        got = theirs.pop((c["measure"], c["cohort"]), None)
+        if got is None:
+            return "%s is not in the pack, and the files give %d people" % (where, c["n"])
+        if got["n"] != c["n"]:
+            return "%s has n %s, and the files give %d" % (where, got["n"], c["n"])
+        if len(got["values"]) != len(c["values"]):
+            return "%s has %d values, and the files give %d" % (where, len(got["values"]), len(c["values"]))
+        for i, (x, w) in enumerate(zip(c["values"], c["weights"])):
+            if bits(got["values"][i]) != bits(x):
+                return "%s value %d is %s, and the files give %s" % (where, i, packcheck.num(got["values"][i]), packcheck.num(x))
+            if bits(got["weights"][i]) != bits(w):
+                return "%s weight %d of the value %s is %s, and the files give %s" % (where, i, packcheck.num(x), packcheck.num(got["weights"][i]), packcheck.num(w))
+    for (mid, cid) in sorted(theirs):
+        return "cell %s %s is in the pack, and the files give fewer than %d people for it" % (reproduce.safe(mid), reproduce.safe(cid), MIN_N)
+    return "the pack holds what this tool builds, and is not written as the builder writes it: its bytes are not in canonical form"
+
+
+def rebuild(path, paths):
+    with open(path, "rb") as f:
+        raw = f.read()
+    pack = packcheck.parse_pack(raw)
+    given = load(pack, paths)
+    sizes, digests = {}, {}
+    for d, p in given.items():
+        with open(p, "rb") as f:
+            data = f.read()
+        sizes[d], digests[d] = len(data), hashlib.sha256(data).hexdigest()
+    mine = build(given, sizes, digests)
+    built = (canonical(mine) + "\n").encode("utf-8")
+    if built != raw:
+        raise Stop("DIFFERS: " + difference(pack, mine))
+    return len(mine["cells"]), hashlib.sha256(raw).hexdigest()
 
 
 def main(argv):
@@ -200,8 +269,7 @@ def main(argv):
         sys.stderr.write(__doc__)
         return 2
     try:
-        pack = packcheck.read_pack(argv[1])
-        n = rebuild(pack, argv[2:])
+        n, digest = rebuild(argv[1], argv[2:])
     except packcheck.Refused as err:
         print("REFUSED: not a pack: %s" % err)
         return 1
@@ -211,7 +279,7 @@ def main(argv):
     except (OSError, ValueError, KeyError) as err:
         print("REFUSED: %s" % reproduce.safe(err))
         return 1
-    print("rebuilt %d cells of %s: every table is the one the files give" % (n, reproduce.safe(argv[1])))
+    print("rebuilt %s: the pack is, byte for byte, the one that these files give (%d cells, SHA-256 %s)" % (reproduce.safe(argv[1]), n, digest))
     return 0
 
 

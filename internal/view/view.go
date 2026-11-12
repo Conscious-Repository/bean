@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/Conscious-Repository/bean/core"
+	"github.com/Conscious-Repository/bean/internal/pack"
 )
 
 // Blob is a one-line view of a {"blob": id} value. SPEC 3.4 uses that
@@ -55,6 +56,16 @@ func Record(r *core.Record, reading func(id string) *core.Record) string {
 	if of := reading(id); of != nil {
 		out += " of " + of.Type + " " + Value(of)
 	}
+	// With a pack, what the reading was set against is the pack's claim,
+	// so it is shown.
+	ref, _ := r.Context["reference"].(map[string]any)
+	digest, byPack := ref["pack"].(string)
+	if label, _ := ref["label"].(string); byPack && label != "" {
+		if rs := []rune(label); len(rs) > 80 {
+			label = string(rs[:77]) + "..."
+		}
+		out += " against " + label
+	}
 	among = strings.Join(strings.Fields(among), " ")
 	if rs := []rune(among); len(rs) > 160 {
 		among = string(rs[:157]) + "..."
@@ -65,12 +76,17 @@ func Record(r *core.Record, reading func(id string) *core.Record) string {
 			out += " (n " + strconv.FormatFloat(n, 'g', -1, 64) + ")"
 		}
 	}
-	// A comparison with a reference pack names the pack: two packs can
-	// place one reading differently.
-	if ref, ok := r.Context["reference"].(map[string]any); ok {
-		if digest, _ := ref["pack"].(string); len(digest) == 64 {
-			out += ", by pack " + digest[:12]
-		}
+	// A comparison names what it was made with: a pack, or files. A pack
+	// that bean has no record of is marked in the row itself, and so is a
+	// comparison that names nothing: nobody can compute that one again.
+	_, byFiles := ref["files"].([]any)
+	switch {
+	case byPack && len(digest) == 64 && pack.IsKnown(digest):
+		out += ", by pack " + digest[:12]
+	case byPack && len(digest) == 64:
+		out += ", by pack " + digest[:12] + " (NOT on record)"
+	case !byFiles:
+		out += " (names NO reference data)"
 	}
 	return out
 }

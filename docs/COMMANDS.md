@@ -153,13 +153,14 @@ Each row has the reading, its value, the percentile, and the shares of the cohor
 
 A comparison says where a value lies in a sample. It does not say whether the value is healthy.
 
-### `compare -pack <file> [-cohort <cohort> [-save] <id>... | -type <type>]`
+### `compare -pack <file> [-cohort <cohort> [-unknown-pack] [-save] <id>... | -type <type>]`
 
 Compares with a reference pack: one file of public reference data, with a table for each measure and each cohort on its menu. [REFERENCE.md](REFERENCE.md) has the format, the method and how a pack is built.
 
 - With only `-pack`, it shows what the pack holds: its SHA-256, its source and the files it was built from. Then come the types and units it takes, and its cohorts. It says whether this is the pack that bean has on record.
 - `-cohort` names one cohort of the pack's menu, such as `male-30-39`. The output and `-save` are as above. A saved claim names the pack by its SHA-256.
-- The pack decides which types and units it takes. A reading in another unit gets a row that says so, and no number.
+- A pack that bean has no record of is refused, with a warning. `-unknown-pack` uses it as it is: each row then says `pack not on record`, and each saved claim has that caveat. Whoever built such a pack chose its tables, its caveats and what each reading is set against.
+- The pack decides which types and units it takes. The output shows which measure each reading was set against. A reading in another unit gets a row that says so, and no number.
 - bean reads the file and goes nowhere. `-sex`, `-age`, `-where` and `-unknown-files` are for the files, and are refused with `-pack`.
 
 `bean-pack-nhanes -out <new file> <DEMO_J.xpt> <a test's .xpt>...` builds the NHANES pack from files that you downloaded. The same files give the same pack, byte for byte.

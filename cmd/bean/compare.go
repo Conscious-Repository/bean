@@ -18,6 +18,7 @@ import (
 
 	"github.com/Conscious-Repository/bean/core"
 	"github.com/Conscious-Repository/bean/internal/nhanes"
+	"github.com/Conscious-Repository/bean/internal/pack"
 	"github.com/Conscious-Repository/bean/internal/xpt"
 )
 
@@ -88,6 +89,7 @@ func cmdCompare(s *core.Store, args []string) {
 	save := fs.Bool("save", false, "keep each comparison as a signed record")
 	packPath := fs.String("pack", "", "compare with a reference pack: a file")
 	packCohort := fs.String("cohort", "", "with -pack: a cohort of the pack's menu")
+	unknownPack := fs.Bool("unknown-pack", false, "with -pack: also compare with a pack that bean has no record of")
 	pos, err := parseInterspersed(fs, args)
 	if err != nil {
 		usage()
@@ -96,10 +98,10 @@ func cmdCompare(s *core.Store, args []string) {
 		if *sex != "" || *age != "" || len(where) > 0 || *unknown {
 			badArg(errors.New("with -pack, name a cohort of the pack's menu with -cohort: -sex, -age, -where and -unknown-files are for the files"))
 		}
-		comparePack(s, *packPath, *packCohort, *typ, pos, *save)
+		comparePack(s, *packPath, *packCohort, *typ, pos, *save, *unknownPack)
 		return
 	}
-	if *packCohort != "" || (len(pos) == 0) == (*typ == "") {
+	if *packCohort != "" || *unknownPack || (len(pos) == 0) == (*typ == "") {
 		usage()
 	}
 	cohort, err := parseCohort(*sex, *age, where)
@@ -517,6 +519,9 @@ func printComparisons(w io.Writer, rows []comparison, head, known string, all bo
 				if !f.onRecord {
 					once(&note, "file not on record")
 				}
+			}
+			if slices.Contains(c.caveats, pack.CaveatUnknown) {
+				note = append(note, "pack not on record")
 			}
 			fmt.Fprintf(tw, "%s\t%s\t%s\t%s%%\t%s%%\t%s to %s\t%s\t%d\t%s\t%s\n", r.Type, value,
 				nhanes.Num(res.Percentile), nhanes.Num(res.Below), nhanes.Num(res.Equal), nhanes.Num(res.P25), nhanes.Num(res.P75), nhanes.Num(res.P50), res.N, strings.Join(note, ", "), r.ID[7:19])

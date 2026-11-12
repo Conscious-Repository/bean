@@ -49,6 +49,7 @@ import importlib.util
 import json
 import math
 import os
+import re
 import sys
 from decimal import Decimal
 
@@ -120,6 +121,16 @@ CAVEAT_DIET = "the cohort is chosen by what people said they ate on one day, whi
 CAVEAT_SMALL = "the cohort is small: fewer than 100 people"
 CAVEAT_UNKNOWN = "this copy of %s is not the file on record: its SHA-256 differs"
 CAVEAT_AUTHOR = "the reading was signed by an agent or another key, not by you"
+CAVEAT_UNKNOWN_PACK = "bean has no record of this pack: nobody has checked its tables, its caveats, or what it sets a reading against"
+
+# The packs on record, by SHA-256: the pack that the builder gives from the
+# six NHANES files on record. bean holds the same table, and a test keeps
+# the two equal. A comparison with any other pack is computed again, and
+# marked: whoever built that pack chose its tables, its caveats and what
+# each reading is set against.
+KNOWN_PACKS = {
+    "efbb252a361b1994c67207618a088d492d1b0dafb8ea5ff88f857f97abc69277": "the NHANES 2017-2018 pack",
+}
 # The members of a pack claim's context (docs/REFERENCE.md, "The claim").
 PACK_CONTEXT = {"reading", "reference", "cohort", "method", "result", "caveats"}
 PACK_REFERENCE = {"pack", "title", "source", "measure", "label", "unit", "cohort"}
@@ -295,6 +306,7 @@ class Inputs:
         self.tables = {}    # SHA-256 -> table
         self.packs = {}     # SHA-256 -> pack, checked
         self.packbad = {}   # SHA-256 -> (path, why a pack was not accepted)
+        self.unrecorded = set()  # SHA-256 of each pack not on record that a claim was computed with
 
     def add_record(self, name, data):
         try:
@@ -483,9 +495,13 @@ def check_pack_claim(claim, inputs):
     caveats = list(pack["caveats"]) + list(measure["caveats"]) + list(cohort["caveats"]) + [CAVEAT_COHORT]
     if cell["n"] < SMALL_N:
         caveats.append(CAVEAT_SMALL)
+    if digest not in KNOWN_PACKS:
+        caveats.append(CAVEAT_UNKNOWN_PACK)
+        inputs.unrecorded.add(digest)
     if reading.get("author") != claim["author"]:
         caveats.append(CAVEAT_AUTHOR)
-    what = "%s %s %s against %s %r in pack %s" % (reading["type"], value, reading["value"].get("unit", ""), mid, measure["label"], digest[:12])
+    known = "on record" if digest in KNOWN_PACKS else "NOT on record"
+    what = "%s %s %s against %s %r in pack %s (%s)" % (reading["type"], value, reading["value"].get("unit", ""), mid, measure["label"], digest[:12], known)
     # Step 4: the method gives every number of the result.
     got = packcheck.place(cell, float(value))
     if not all(same_number(got[k], want[k]) for k in PACK_RESULT):
@@ -503,7 +519,19 @@ def main(argv):
         sys.stderr.write(__doc__)
         return 2
     inputs = Inputs()
-    for path in argv[1:]:
+    # -accept-pack <SHA-256>: the reader names a pack that is not on record
+    # and that they got from a publisher they trust.
+    accepted, paths, args = set(), [], argv[1:]
+    while args:
+        arg = args.pop(0)
+        if arg == "-accept-pack":
+            if not args or not re.fullmatch(r"[0-9a-f]{64}", args[0]):
+                print("-accept-pack takes the SHA-256 of a pack: 64 lower-case hex digits")
+                return 2
+            accepted.add(args.pop(0))
+        else:
+            paths.append(arg)
+    for path in paths:
         try:
             inputs.add(path)
         except OSError as err:
@@ -534,6 +562,12 @@ def main(argv):
         print("%s %s %s" % (word, claim["id"][7:19], safe(text)))
     for kid, n in sorted(signers.items()):
         print("signed by %s: %d" % (safe(kid), n))
+    # A comparison computes again with any pack that is well formed. What
+    # it means depends on who built the pack, and this tool knows one pack.
+    for digest in sorted(inputs.unrecorded - accepted):
+        print("NOT ON RECORD pack %s: this tool does not know who built it. Its tables, its caveats and what it sets a reading "
+              "against are its builder's word. If you trust its publisher, compare the SHA-256 with the one they state and pass -accept-pack %s" % (digest, digest))
+        bad += 1
     return 1 if bad else 0
 
 

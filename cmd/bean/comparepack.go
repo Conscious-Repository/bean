@@ -17,7 +17,7 @@ import (
 // reference pack (docs/REFERENCE.md). The pack is a file on this machine.
 // bean reads it, checks every rule of its format and goes nowhere. Without
 // a cohort it shows the pack's menu.
-func comparePack(s *core.Store, path, cohort, typ string, pos []string, save bool) {
+func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, unknown bool) {
 	info, err := os.Stat(path)
 	if err != nil {
 		fail(err)
@@ -48,6 +48,13 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save boo
 	if (len(pos) == 0) == (typ == "") {
 		badArg(errors.New("say which readings to compare: record ids, or -type, and not both"))
 	}
+	// A pack that bean has no record of is used only when told to, as a
+	// file that is not the one on record is. Whoever built it chose its
+	// tables, its caveats and what each reading is set against.
+	onRec := pack.IsKnown(p.SHA256)
+	if !onRec && !unknown {
+		fail(fmt.Errorf("bean has no record of this pack (SHA-256 %s). Whoever built it chose its tables, its caveats and what each reading is set against. Compare its SHA-256 with the one that its publisher states, or build the pack again from the files that it names. To use it as it is, pass -unknown-pack: each result then says so", p.SHA256))
+	}
 	readings, l := compareReadings(s, typ, pos)
 	labels := l.AgentLabels()
 	var rows []comparison
@@ -76,7 +83,7 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save boo
 			c.measure = id
 			c.against = fmt.Sprintf("%s in %s against %s", r.Type, unit, p.Measures[id].Label)
 			c.result = nhanes.Result{N: res.N, Percentile: res.Percentile, Below: res.Below, Equal: res.Equal, P25: res.P25, P50: res.P50, P75: res.P75}
-			c.caveats = packCaveats(p, id, cohort, res.N, c.by != "")
+			c.caveats = packCaveats(p, id, cohort, res.N, onRec, c.by != "")
 			claims = append(claims, packRecord(c, p, cohort, co))
 		}
 		rows = append(rows, c)
@@ -95,12 +102,15 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save boo
 
 // packCaveats are the caveats of one comparison with a pack, in the order
 // that every implementation gives them: the pack's, the measure's, the
-// cohort's, that the person chose the cohort, the small cohort, and the
-// reading's signer.
-func packCaveats(p *pack.Pack, measure, cohort string, n int, otherSigner bool) []string {
+// cohort's, that the person chose the cohort, the small cohort, a pack
+// that bean has no record of, and the reading's signer.
+func packCaveats(p *pack.Pack, measure, cohort string, n int, known, otherSigner bool) []string {
 	out := slices.Concat(p.Caveats, p.Measures[measure].Caveats, p.Cohorts[cohort].Caveats, []string{caveatCohort})
 	if n < pack.SmallN {
 		out = append(out, fmt.Sprintf(caveatSmall, pack.SmallN))
+	}
+	if !known {
+		out = append(out, pack.CaveatUnknown)
 	}
 	if otherSigner {
 		out = append(out, caveatAuthor)
@@ -140,10 +150,10 @@ func printPack(p *pack.Pack) {
 // onRecord says whether bean knows the pack. A pack is what its SHA-256
 // says, and bean has one on record.
 func onRecord(p *pack.Pack) string {
-	if _, ok := pack.Known[p.SHA256]; ok {
+	if pack.IsKnown(p.SHA256) {
 		return "This is the NHANES pack that bean has on record."
 	}
-	return "bean has no record of this pack. Compare its SHA-256 with the one that its publisher states, or build the pack again from the files that it names."
+	return "WARNING: bean has NO record of this pack. Whoever built it chose its tables, its caveats and what each reading is set against. Compare its SHA-256 with the one that its publisher states, or build the pack again from the files that it names."
 }
 
 // packRecord is the claim that -save signs for a comparison with a pack.
