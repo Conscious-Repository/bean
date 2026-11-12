@@ -195,16 +195,17 @@ func TestReplyRefuses(t *testing.T) {
 		args       []string
 		want       string
 	}{
-		"one's own share":              {ben, words, []string{"reply", "-to", pkg, "-out", "x.bean", ids[0], "a note"}, "this share is your own"},
-		"a record that was not shared": {ana, words, []string{"reply", "-to", pkg, "-out", "x.bean", strings.TrimSpace(other), "a note"}, "is not a record of this share"},
-		"an id that is too short":      {ana, words, []string{"reply", "-to", pkg, "-out", "x.bean", ids[0][7:11], "a note"}, "is not an id"},
-		"a note with no text":          {ana, words, []string{"reply", "-to", pkg, "-out", "x.bean", ids[0], " "}, "a note is a text"},
-		"a note too long":              {ana, words, []string{"reply", "-to", pkg, "-out", "x.bean", ids[0], strings.Repeat("a", reply.MaxNote+1)}, "a note is a text"},
-		"an id with no note":           {ana, words, []string{"reply", "-to", pkg, "-out", "x.bean", ids[0]}, "usage"},
-		"no place to write":            {ana, words, []string{"reply", "-to", pkg, ids[0], "a note"}, "usage"},
-		"other words":                  {ana, "abandon ability able about above absent", []string{"reply", "-to", pkg, "-out", "x.bean", ids[0], "a note"}, "what you reply to did not open"},
-		"a place inside the log":       {ana, words, []string{"reply", "-to", pkg, "-out", filepath.Join(ana, "objects", "x.bean"), ids[0], "a note"}, "is inside your log"},
-		"a file that is there":         {ana, words, []string{"reply", "-to", pkg, "-out", pkg, ids[0], "a note"}, "is there already"},
+		"one's own share":                {ben, words, []string{"reply", "-to", pkg, "-out", "x.bean", ids[0], "a note"}, "this share is your own"},
+		"a record that was not shared":   {ana, words, []string{"reply", "-to", pkg, "-out", "x.bean", strings.TrimSpace(other), "a note"}, "is not a record of this share"},
+		"an id that is too short":        {ana, words, []string{"reply", "-to", pkg, "-out", "x.bean", ids[0][7:11], "a note"}, "is not an id"},
+		"a note with no text":            {ana, words, []string{"reply", "-to", pkg, "-out", "x.bean", ids[0], " "}, "a note is a text"},
+		"a note too long":                {ana, words, []string{"reply", "-to", pkg, "-out", "x.bean", ids[0], strings.Repeat("a", reply.MaxNote+1)}, "a note is a text"},
+		"a note that starts with a dash": {ana, words, []string{"reply", "-to", pkg, "-out", "x.bean", ids[0], "-x"}, "Put -- before the first id"},
+		"an id with no note":             {ana, words, []string{"reply", "-to", pkg, "-out", "x.bean", ids[0]}, "usage"},
+		"no place to write":              {ana, words, []string{"reply", "-to", pkg, ids[0], "a note"}, "usage"},
+		"other words":                    {ana, "abandon ability able about above absent", []string{"reply", "-to", pkg, "-out", "x.bean", ids[0], "a note"}, "what you reply to did not open"},
+		"a place inside the log":         {ana, words, []string{"reply", "-to", pkg, "-out", filepath.Join(ana, "objects", "x.bean"), ids[0], "a note"}, "is inside your log"},
+		"a file that is there":           {ana, words, []string{"reply", "-to", pkg, "-out", pkg, ids[0], "a note"}, "is there already"},
 	} {
 		wd := t.TempDir()
 		for i, a := range tc.args {
@@ -367,6 +368,11 @@ func TestAcceptRefuses(t *testing.T) {
 				o["refs"] = []any{map[string]any{"rel": "about", "id": ids[0]}, map[string]any{"rel": "about", "id": ids[1]}}
 			})
 		}, "it is not about exactly one record"},
+		"a note with a file": {func() (string, string) {
+			return one(ids[0], func(o map[string]any) {
+				o["blobs"] = []any{map[string]any{"hash": "sha256:" + strings.Repeat("b", 64), "role": "photo", "media_type": "image/png"}}
+			})
+		}, "it holds more than a text"},
 		"a note with more than a text": {func() (string, string) {
 			return one(ids[0], func(o map[string]any) { o["context"] = map[string]any{"verified": "by a hospital"} })
 		}, "it holds more than a text"},

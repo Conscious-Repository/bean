@@ -2,6 +2,8 @@ package core
 
 import (
 	"crypto/ed25519"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -163,5 +165,46 @@ func TestPeerNames(t *testing.T) {
 	}
 	if labels := l.AgentLabels(); labels[k1] != "" || labels[k3] != "helper" {
 		t.Errorf("labels after the name was taken back: %v", labels)
+	}
+}
+
+// TestPeerUnlocksNoFile: a paired agent's record may name a file of the
+// person. A peer's may not: a peer who knows the id of a deleted photo
+// must not bring the photo back into an export.
+func TestPeerUnlocksNoFile(t *testing.T) {
+	for _, peer := range []bool{true, false} {
+		s, id := initStore(t)
+		photo, err := s.Add("photo", "rash", AddOptions{Photo: []byte("DELETED PHOTO"), PhotoType: "image/jpeg"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		l, _ := s.Load()
+		hash := l.Report.Records[photo].Blobs[0].Hash
+		k := reKey(t)
+		if peer {
+			_, err = s.PairPeer(k.Public(), "Ana", "sha256:"+strings.Repeat("a", 64), "sha256:"+strings.Repeat("1", 64))
+		} else {
+			_, err = s.Pair(k.Public(), "phone")
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		o := reClaim(k, k.Public(), id, "note", map[string]any{"s": "x"})
+		o["blobs"] = []any{map[string]any{"hash": hash, "role": "x", "media_type": "image/jpeg"}}
+		rePlant(t, s, o, k)
+		if _, err := s.Purge(photo, ""); err != nil {
+			t.Fatal(err)
+		}
+		dir := filepath.Join(t.TempDir(), "out")
+		if _, err := s.ExportAll(dir); err != nil {
+			t.Fatal(err)
+		}
+		_, rerr := os.ReadFile(filepath.Join(dir, "blobs", hash[7:]))
+		if peer && rerr == nil {
+			t.Errorf("a peer's record unlocked a photo that the person deleted")
+		}
+		if !peer && rerr != nil {
+			t.Errorf("a paired agent's record no longer unlocks a file: %v", rerr)
+		}
 	}
 }

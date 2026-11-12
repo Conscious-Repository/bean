@@ -63,6 +63,9 @@ func cmdReply(s *core.Store, args []string) {
 	to := fs.String("to", "", "what you received: a sealed package, or a bundle's folder or zip file")
 	out := fs.String("out", "", "the reply to write: a new file")
 	pos, err := parseInterspersed(fs, args)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "A note that starts with - is read as an option. Put -- before the first id.")
+	}
 	if err != nil || *to == "" || *out == "" || len(pos) == 0 || len(pos)%2 != 0 {
 		usage()
 	}

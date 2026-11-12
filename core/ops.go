@@ -975,6 +975,12 @@ func pastHeadHalt(u *Report, union map[string][]byte, proven map[string]bool, id
 // supersedes it (DECISIONS 217).
 func (l *Loaded) fileLabels() map[string]string {
 	out := l.AgentLabels()
+	// A peer is not an agent: a peer's record unlocks no file.
+	for key := range out {
+		if l.IsPeer(key) {
+			delete(out, key)
+		}
+	}
 	if !l.IsTooNew() {
 		return out
 	}

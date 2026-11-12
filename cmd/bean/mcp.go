@@ -765,7 +765,7 @@ func toolReadBlob(s *core.Store, f core.Filter, id string, max int) (any, error)
 	mediaType, named := "", false
 	labels := l.AgentLabels()
 	for rid, r := range l.Report.Records {
-		if !l.Current(rid) || !inScope(r, f) || (r.Author != l.ID && labels[r.Author] == "") {
+		if !l.Current(rid) || !inScope(r, f) || (r.Author != l.ID && (labels[r.Author] == "" || l.IsPeer(r.Author))) {
 			continue
 		}
 		for _, b := range r.Blobs {

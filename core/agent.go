@@ -487,6 +487,17 @@ func (l *Loaded) AgentLabels() map[string]string {
 	return out
 }
 
+// IsPeer returns whether key is paired as a peer: another person's key.
+// A peer's record names no file, so it unlocks none (DECISIONS 293).
+func (l *Loaded) IsPeer(key string) bool {
+	for _, p := range livePairings(l.agentPairings(key)) {
+		if p.peer {
+			return true
+		}
+	}
+	return false
+}
+
 // AppendAsAgent is Append signed by the local agent key, with the agent's
 // key as the author and the local identity as the default subject.
 func (s *Store) AppendAsAgent(in io.Reader) (AppendResult, error) { return s.appendAs(in, true, false) }
