@@ -77,7 +77,7 @@ share "$T/about" "$N1";                     both "a note with what it is about" 
 share "$T/cmp" "$C1";                       both "a comparison, files named" "$T/cmp" ok
 share "$T/cmpf" -files "$C1";               both "a comparison with its files" "$T/cmpf" ok
 share "$T/agent" "$A1";                     both "a reading an agent signed" "$T/agent" ok
-grep -q '^signed: 0 by the person, 1 by an agent the person paired, 0 by another key' "$T/go.txt" || { echo "DIFFER: an agent's reading is not counted as one"; rc=1; }
+grep -q '^signed: 0 by the person, 1 by an agent or a peer the person paired, 0 by another key' "$T/go.txt" || { echo "DIFFER: an agent's reading is not counted as one"; rc=1; }
 share "$T/rot" "$R1" "$R2";                 both "records from before and after a key rotation" "$T/rot" ok
 share "$T/type" -type 'lab.*' -note "for a friend"; both "by type" "$T/type" ok
 # As a zip file, which is how a folder travels: the page reads it packed,
@@ -291,7 +291,7 @@ grep -q '^records: 1 listed; files: 1 included, 0 named and not included' "$T/go
 PF=$(grep -l '"type":"agent.pair"' "$L"/objects/*/*.json | head -1)
 "$PY" -I -c 'import sys, json; r = json.load(open(sys.argv[1])); print(json.dumps({"type": "agent.pair", "value": {"key": r["value"]["key"], "status": "unpaired"}, "times": {"observed": None}, "source": {"system": "self", "adapter": "t@1", "ref": None}, "refs": [{"rel": "supersedes", "id": r["id"]}]}))' "$PF" | b append >/dev/null 2>&1 || { echo "append failed"; exit 1; }
 share "$T/unpaired" "$A1";                  both "a reading of an agent unpaired since" "$T/unpaired" ok
-grep -q '^signed: 0 by the person, 0 by an agent the person paired, 1 by another key' "$T/go.txt" || { echo "DIFFER: an unpaired agent's reading is counted as a paired one"; rc=1; }
+grep -q '^signed: 0 by the person, 0 by an agent or a peer the person paired, 1 by another key' "$T/go.txt" || { echo "DIFFER: an unpaired agent's reading is counted as a paired one"; rc=1; }
 grep -q '"type":"agent.pair"' "$T"/unpaired/objects/*/*.json && { echo "DIFFER: a pairing that was undone went as proof"; rc=1; }
 
 both "a folder that is not a bundle" "$T/bin" bad

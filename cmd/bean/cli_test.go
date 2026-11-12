@@ -26,6 +26,12 @@ func run(t *testing.T, dir, stdin string, args ...string) (string, string, int) 
 	t.Helper()
 	cmd := exec.Command(os.Args[0], args...)
 	cmd.Env = append(os.Environ(), "BEAN_TEST_MAIN=1", "BEAN_DIR="+dir, "BEAN_NOW=")
+	// A program built with the race detector sleeps for a second when it
+	// exits. Hundreds of runs made the tests pass their time limit in CI.
+	// A race is still reported, and still fails the run.
+	if os.Getenv("GORACE") == "" {
+		cmd.Env = append(cmd.Env, "GORACE=atexit_sleep_ms=0")
+	}
 	cmd.Stdin = strings.NewReader(stdin)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb

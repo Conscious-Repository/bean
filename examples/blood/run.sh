@@ -6,7 +6,8 @@
 #   3. compare the readings with men of 30 to 39, and save the comparisons;
 #   4. share them as a bundle;
 #   5. check the bundle and compute every comparison again, without bean;
-#   6. seal the same records into one file for one reader, and open it.
+#   6. seal the same records into one file for one reader, and open it;
+#   7. as that reader, sign a note about one record, and take it into the log.
 #
 #   examples/blood/run.sh [work folder]
 #   examples/blood/run.sh --synthetic [work folder]
@@ -90,6 +91,20 @@ if python3 -c 'import cryptography' 2>/dev/null; then
   echo "$WORDS" | python3 -I "$ROOT/tools/second/unseal.py" "$WORK/for-a-reader.bean" "$WORK/opened" | sed "s|$WORK/||"
   python3 -I "$ROOT/tools/second/checkbundle.py" "$WORK/opened" | tail -1
 fi
+
+say "7. The reader signs a note about one record, and you take it into your log"
+# The reader has a log of their own: a second throwaway identity.
+mkdir -p "$WORK/reader-log"
+bean -dir "$WORK/reader-log" init >/dev/null 2>&1
+ABOUT=$(bean ls -type lab.cholesterol-total | awk '{print $NF}' | head -1)
+echo "$WORDS" | bean -dir "$WORK/reader-log" reply -to "$WORK/for-a-reader.bean" -out "$WORK/reply.bean" "$ABOUT" "Received. Can you send the report as well?" >"$WORK/reply.txt" 2>/dev/null
+REPLYWORDS=$(sed -n 's/^  //p' "$WORK/reply.txt" | head -1)
+READERWORDS=$(sed -n 's/^  //p' "$WORK/reply.txt" | sed -n 2p)
+# You type the reply's words, hear the reader's identity words from them,
+# and give the reader a name. Here the words are piped in and passed.
+echo "$REPLYWORDS" | bean accept -yes -label reader -words "$READERWORDS" "$WORK/reply.bean" 2>/dev/null |
+  sed "s|$WORK/||; s/ [0-9a-f]\{12\})/)/; s/sha256:[0-9a-f]*/sha256:.../; s/id starts [0-9a-f]\{12\}/id starts .../; s/key [a-z0-9]*:[0-9a-f]*/key .../"
+bean ls -type note | sed 's/  *[0-9a-f]\{12\}$//'
 
 # The numbers must be the ones this example was written with. Ids differ
 # from run to run, so they are cut off, and the rows sorted. Rows with no

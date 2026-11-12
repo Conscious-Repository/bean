@@ -2,11 +2,11 @@
 
 This file is the one place for open paths: what bean should do next, in what order, and what is not decided. Work that is done is in the git history, and the reasons are in [DECISIONS.md](DECISIONS.md). Nothing here is final.
 
-## Where bean stands (2026-11-11)
+## Where bean stands (2026-11-12)
 
-A person can keep a log, and import lab reports, Apple Health and CSV files. They can compare a reading with public reference data: with a survey's own files, or with a reference pack. They can share chosen records as one sealed file that opens with six words, and a reader checks it in a browser. Independent second implementations and a real-browser test guard those paths.
+A person can keep a log, and import lab reports, Apple Health and CSV files. They can compare a reading with public reference data: with a survey's own files, or with a reference pack. They can share chosen records as one sealed file that opens with six words, and a reader checks it in a browser. A reader who runs bean can answer with signed notes, and the person takes them into their log. Independent second implementations and a real-browser test guard those paths.
 
-Four things are missing before other people use it. The check page has no public address. A peer cannot send a signed reply. A device cannot sign what it captures. Only one public source has been built into a pack. They are the four paths below.
+Four things are missing before other people use it. The check page has no public address. Two people cannot see their records side by side. A device cannot sign what it captures. Only one public source has been built into a pack. They are the four paths below.
 
 ## Path 1: a sealed package for one reader
 
@@ -38,7 +38,7 @@ Four things are missing before other people use it. The check page has no public
 **The plan, in steps that each stand alone.**
 
 1. **One person to one person.** Path 1 is this step. A person sends a sealed package, such as a biopsy report with their notes, to a peer they already know. The peer checks it and reads it.
-2. **A reply that the owner can keep.** The peer signs notes about the records they received, and sends them back sealed. The owner adds those notes to their log, marked with who signed them. Today a log takes records from the person, their paired agents and nobody else.
+2. **A reply that the owner can keep. Done:** `bean reply` and `bean accept` ([SHARE.md](SHARE.md), DECISIONS 290). A peer who runs bean signs notes about the records that they received, and sends them back sealed. The owner compares the peer's identity words and the reply's id, and takes the notes into their log under a name. A note is text about one shared record, and a reply that holds anything else is refused. The log remembers how far a peer's chain of keys had got, so a retired key takes nothing later. `bean unpair` takes a name back.
 3. **Side by side.** bean shows the records of two people next to each other, each with its signer and its caveats. It computes nothing across them.
 4. **Finding each other.** A person publishes a short card: a condition, what they look for, and a reader address. It holds no measurement. Others answer with a sealed package. Where cards live is not decided.
 5. **A statistic over a group.** A group wants its own distribution, and no member wants to show their values. This is the one step that needs computing on hidden values. It waits for a real group, and for steps 1 to 4.
@@ -54,6 +54,10 @@ Four things are missing before other people use it. The check page has no public
 **Open.**
 
 - The first peers are people who already know and trust each other (the owner, 2026-11-11). So steps 1 to 3 come first, and step 4 waits.
+- A reply from a reader who has only a browser. The page would make a key for that reader and sign with it, which is step 2 of path 1.
+- A peer's notes in the peer's own log. Today the peer keeps the reply file and its words. Their log holds only a record that they replied.
+- A reply to a reply. Today a note is about a record of a share, and the owner answers with a new share.
+- A check of a reply without bean, in Python, as bundles and packs have.
 - Who runs the place where cards live: nobody (people pass addresses by hand), an open network, or AION?
 
 ## Path 3: a device signs what it captures
@@ -161,7 +165,7 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 ## Order
 
 1. Path 1, step 7: a public address for the check page, and the first release, with its Blossom mirrors. Everything a reader does starts there.
-2. Path 2, steps 2 and 3: a signed reply, and two people side by side.
+2. Path 2, step 3: two people side by side. Step 2, the signed reply, is done.
 3. Path 4, steps 1 and 2: a second source, and the NHANES pack published.
 4. Path 3, pairing and import, when a real device or its firmware can produce the folder.
 5. Path 1, step 2: a package sealed to a reader's key.

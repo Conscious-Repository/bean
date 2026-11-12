@@ -22,6 +22,7 @@ import (
 	"github.com/Conscious-Repository/bean/internal/bundle"
 	"github.com/Conscious-Repository/bean/internal/nhanes"
 	"github.com/Conscious-Repository/bean/internal/pack"
+	"github.com/Conscious-Repository/bean/internal/reply"
 )
 
 // bean share writes chosen records, and with -files the files they keep,
@@ -216,9 +217,16 @@ func cmdShare(s *core.Store, args []string) {
 	var kept []sharedFile
 	distinct := map[string]bool{}
 	seen := map[string]bool{}
+	// Only a record of the person or of a paired agent opens a file, as in
+	// an export. Anyone can write a record that names a file of the log,
+	// also a file whose record the person deleted.
+	opens := l.FileLabels()
 	for _, r := range shared {
 		public := r.Type == nhanes.FileType && r.Author == l.ID
 		travels := *files && (named[r.ID] || public)
+		if travels && len(r.Blobs) > 0 && r.Author != l.ID && opens[r.Author] == "" {
+			fail(fmt.Errorf("%s names a file, and it is not your record or a paired agent's: such a record opens no file, so nothing was shared. Share it without -files, or delete it: bean purge %s", r.ID[7:19], r.ID[7:19]))
+		}
 		for _, b := range r.Blobs {
 			if seen[b.Hash+" "+r.ID] {
 				continue // a record may name one file twice
@@ -452,38 +460,13 @@ func cmdShare(s *core.Store, args []string) {
 			}
 			fail(errors.New("nothing was shared: the bundle does not pass bean check-bundle"))
 		}
-		packed, err := bundle.PackFiles(bundleFiles)
-		if err == nil {
-			words, err = bundle.NewWords()
-		}
-		var data []byte
-		if err == nil {
-			data, err = bundle.Seal(packed, words)
-		}
-		if err == nil {
-			if res := bundle.Check(bundle.FromPackage(out, data, words)); !res.OK {
-				err = errors.New("the sealed package does not open and pass the check")
-			}
-		}
+		data, w, err := sealPackage(out, bundleFiles, func(in bundle.Input) bool { return bundle.Check(in).OK })
 		if err != nil {
 			fail(fmt.Errorf("nothing was shared: %w", err))
 		}
+		words = w
 		stopped() // the last moment: after this the share runs to its end
-		// The file is made new, or not at all: a file that appeared at
-		// this path since the first look is not replaced.
-		f, err := os.OpenFile(out, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-		if err != nil {
-			fail(fmt.Errorf("nothing was shared: %w", err))
-		}
-		_, err = f.Write(data)
-		if err == nil {
-			err = f.Sync()
-		}
-		if cerr := f.Close(); err == nil {
-			err = cerr
-		}
-		if err != nil {
-			os.Remove(out)
+		if err := writeNew(out, data); err != nil {
 			fail(fmt.Errorf("nothing was shared: %w", err))
 		}
 	} else {
@@ -544,10 +527,61 @@ func cmdShare(s *core.Store, args []string) {
 	fmt.Println("The bundle is not encrypted: anyone who gets the folder can read it. Share with -seal to write one file that only its reader can open.")
 }
 
+// sealPackage packs files and seals them with new words. It opens the
+// result once more with those words, as its reader will: passes says
+// whether what came out is what was meant. It returns the sealed bytes and
+// the words. A share and a reply are sealed the same way.
+func sealPackage(name string, files map[string][]byte, passes func(bundle.Input) bool) ([]byte, string, error) {
+	packed, err := bundle.PackFiles(files)
+	if err != nil {
+		return nil, "", err
+	}
+	words, err := bundle.NewWords()
+	if err != nil {
+		return nil, "", err
+	}
+	data, err := bundle.Seal(packed, words)
+	if err != nil {
+		return nil, "", err
+	}
+	if !passes(bundle.FromPackage(name, data, words)) {
+		return nil, "", errors.New("the sealed package does not open and pass the check")
+	}
+	return data, words, nil
+}
+
+// writeNew writes a file that is made new, or not at all: a file that is
+// at this path already is not replaced, and a file that cannot be written
+// whole is removed.
+func writeNew(path string, data []byte) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(data)
+	if err == nil {
+		err = f.Sync()
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		os.Remove(path)
+	}
+	return err
+}
+
+// insideLog reports a path that lies in the log's folder: nothing that is
+// sent to another person is written there.
+func insideLog(out string) bool {
+	rel, err := filepath.Rel(logDir, out)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
 // bundleTarget refuses a place a bundle must not go: inside the log, onto
 // a file, or into a folder that holds anything.
 func bundleTarget(out string) error {
-	if rel, err := filepath.Rel(logDir, out); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	if insideLog(out) {
 		return fmt.Errorf("%s is inside your log: a bundle goes somewhere else", out)
 	}
 	if info, err := os.Lstat(out); err == nil && !info.IsDir() {
@@ -587,6 +621,10 @@ func cmdCheckBundle(args []string) {
 		fmt.Println(safe(line))
 	}
 	if !ok {
+		// A reply is not a bundle, and its reader has another command.
+		if reply.Check(in).OK {
+			fmt.Println("This is a reply to a share, not a bundle: the person it is for reads it with bean accept.")
+		}
 		os.Exit(1)
 	}
 	if *unpack != "" {
@@ -637,25 +675,7 @@ func unpackBundle(in bundle.Input, dir string) error {
 // or a sealed package. For a sealed one it asks for the six words, and
 // reads them from standard input.
 func checkPackage(path string) ([]string, bool, bundle.Input) {
-	fatal := func(format string, a ...any) ([]string, bool, bundle.Input) {
-		res := bundle.Check(bundle.Input{Fatal: []string{fmt.Sprintf(format, a...)}})
-		return res.Lines(), false, bundle.Input{}
-	}
-	info, err := os.Stat(path)
-	if err != nil || info.Size() > 2<<30 {
-		return fatal("%s cannot be read, or is too large to be a package", path)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return fatal("%s cannot be read: %s", path, err)
-	}
-	words := ""
-	if bundle.IsSealed(data) {
-		fmt.Fprintln(os.Stderr, "Type the six words of this package, then Enter:")
-		line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-		words = line
-	}
-	in := bundle.FromPackage(path, data, words)
+	in := readPackage(path, bufio.NewReader(os.Stdin))
 	res := bundle.Check(in)
 	return res.Lines(), res.OK, in
 }

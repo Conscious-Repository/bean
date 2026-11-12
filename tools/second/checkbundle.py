@@ -211,6 +211,8 @@ def check(folder):
     for i in sorted(proof):
         if i in records and pairing(records[i]) and i in valid:
             key, label = records[i]["value"]["key"], records[i]["value"].get("label") or "agent"
+            if records[i]["value"].get("role") == "peer":
+                label = "peer " + label  # another person, not an agent
             if key not in paired:
                 paired[key] = label
             elif label not in paired[key].split(", "):
@@ -303,7 +305,7 @@ def main(argv):
         print("signed by identity %s, with key %s, at %s" % (person, share["kid"], safe(str(obs.get("start", "-")))))
         print("identity words: %s" % id_words(person))
         print("records: %d listed; files: %d included, %d named and not included" % (n, included, named))
-        print("signed: %d by the person, %d by an agent the person paired, %d by another key" % tuple(signed))
+        print("signed: %d by the person, %d by an agent or a peer the person paired, %d by another key" % tuple(signed))
         print("corrections: %d of the listed records replace an earlier record, which is not in the bundle" % corrections)
         # The note is shown only with a bundle that passed.
         note = (share.get("context") or {}).get("note")

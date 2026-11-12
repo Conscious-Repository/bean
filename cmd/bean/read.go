@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Conscious-Repository/bean/core"
+	"github.com/Conscious-Repository/bean/internal/view"
 )
 
 // parseInterspersed lets flags come before or after the positional
@@ -109,7 +110,11 @@ func cmdList(s *core.Store, args []string) {
 		if l.Report.InDoubt(r.ID) {
 			by = strings.TrimSpace(by + " [in doubt]")
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", whenText(r), r.Type, safe(recordText(r, currentRecord(l))), safe(by), r.ID[7:19])
+		text := recordText(r, currentRecord(l))
+		if by != "" {
+			text = view.Said(r, text)
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", whenText(r), r.Type, safe(text), safe(by), r.ID[7:19])
 	}
 	tw.Flush()
 	if warnFrozen(l) {
@@ -165,6 +170,7 @@ func cmdShow(s *core.Store, args []string) {
 	for _, b := range r.Blobs {
 		fmt.Printf("blob %s %s %s\n", b.Hash, safe(b.Role), safe(b.MediaType))
 	}
+	labels := l.AgentLabels()
 	for _, x := range l.Replies(r.ID) {
 		rel := ""
 		for _, ref := range x.Refs {
@@ -173,7 +179,12 @@ func cmdShow(s *core.Store, args []string) {
 				break
 			}
 		}
-		fmt.Printf("reply %s %s %s %s\n", x.ID, rel, x.Type, safe(valueText(x)))
+		// Who wrote each one: a note of a peer is not the person's own.
+		text, by := valueText(x), byText(x, l.ID, labels)
+		if by != "" {
+			text = view.Said(x, text) + "  " + by
+		}
+		fmt.Printf("reply %s %s %s %s\n", x.ID, rel, x.Type, safe(text))
 	}
 	if warnFrozen(l) {
 		os.Exit(4)

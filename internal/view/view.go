@@ -218,6 +218,17 @@ func reference(r *core.Record, claimed string, of *core.Record) (against, among,
 	return against, among, by, mark
 }
 
+// Said is a record's text for a listing, when someone other than the
+// person signed it. Words that another key wrote are shown in quotation
+// marks, so that they read as that key's words: a note cannot look like a
+// part of the listing, or like a mark of the tool that shows it.
+func Said(r *core.Record, text string) string {
+	if s, ok := r.Value["s"].(string); ok && s != "" {
+		return strconv.Quote(text)
+	}
+	return text
+}
+
 // Value is a one-line view of value and context.note.
 func Value(r *core.Record) string {
 	v := r.Value

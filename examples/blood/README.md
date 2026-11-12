@@ -14,6 +14,7 @@ One script, in a throwaway folder. It prints each command's own output, so what 
 | 4 | `bean share -out bundle -type 'comparison.*'` | The saved comparisons, their readings, the records of the reference files and the identity records, as a folder. |
 | 5 | `bean check-bundle`, `checkbundle.py`, `reproduce.py` | The bundle is checked, and every comparison computed again in Python, with no bean. |
 | 6 | `bean share -seal -out for-a-reader.bean`, `bean check-bundle`, `unseal.py` | The same records as one encrypted file that opens with six words. It is opened with the words, by bean and by Python, and not with other words. |
+| 7 | `bean reply`, `bean accept` | The reader, with a log of their own, signs a note about one reading and seals it. You see who signed it and take the note into your log under a name. |
 
 ## Be the reader, in a browser
 

@@ -140,6 +140,10 @@ type Result struct {
 	// this is: a person can make many, and a reader may be handed an older
 	// one.
 	Share string `json:"share"`
+	// Listed are the ids of the shared records, in full, set when every
+	// check passed. A reply names the record that each of its notes is
+	// about.
+	Listed []string `json:"-"`
 	// Head is what the check says before the records: who shared, when, and
 	// the counts.
 	Head []string `json:"head"`
@@ -332,6 +336,11 @@ func Check(in Input) Result {
 			if label == "" {
 				label = "agent"
 			}
+			// A peer is another person, and their records show as a
+			// peer's: nobody takes them for an agent's.
+			if role, _ := r.Value["role"].(string); role == "peer" {
+				label = "peer " + label
+			}
 			switch has := paired[r.ValueKey()]; {
 			case has == "":
 				paired[r.ValueKey()] = label
@@ -441,7 +450,7 @@ func Check(in Input) Result {
 		fmt.Sprintf("signed by identity %s, with key %s, at %s", person, share.Kid, when),
 		fmt.Sprintf("identity words: %s", core.IDWords(person)),
 		fmt.Sprintf("records: %d listed; files: %d included, %d named and not included", len(listed), included, named),
-		fmt.Sprintf("signed: %d by the person, %d by an agent the person paired, %d by another key", byPerson, byAgent, byOther),
+		fmt.Sprintf("signed: %d by the person, %d by an agent or a peer the person paired, %d by another key", byPerson, byAgent, byOther),
 		fmt.Sprintf("corrections: %d of the listed records replace an earlier record, which is not in the bundle", corrections),
 	)
 	// The person's note is shown only with a bundle that passed: on a
@@ -450,7 +459,7 @@ func Check(in Input) Result {
 		res.Head = append(res.Head, "note: "+n)
 	}
 	for _, key := range slices.Sorted(maps.Keys(paired)) {
-		res.Head = append(res.Head, fmt.Sprintf("paired by the person: %s, key %s", paired[key], core.Npub(key)))
+		res.Head = append(res.Head, fmt.Sprintf("paired by the person: %s, key %s", paired[key], keyName(key)))
 	}
 	for _, name := range in.Ignored {
 		// bean writes a README.txt for a reader with no checker. It is not
@@ -466,6 +475,7 @@ func Check(in Input) Result {
 	if len(res.Problems) == 0 {
 		res.Note, _ = share.Context["note"].(string)
 		res.Identity, res.Words, res.Key, res.When, res.Share = person, core.IDWords(person), share.Kid, when, share.ID
+		res.Listed = slices.Sorted(maps.Keys(listed))
 		res.Files = included
 		res.Carried = carried
 		var rows []*core.Record
@@ -494,9 +504,13 @@ func Check(in Input) Result {
 			case paired[r.Author] != "":
 				by = "[" + paired[r.Author] + "]"
 			default:
-				by = "[signed by another key: " + core.Npub(r.Author) + "]"
+				by = "[signed by another key: " + keyName(r.Author) + "]"
 			}
-			res.Rows = append(res.Rows, Row{When: sharedWhen(r), Type: r.Type, Text: view.Record(r, inBundle), By: by, ID: r.ID[7:19], Mark: view.Mark(r, inBundle)})
+			text := view.Record(r, inBundle)
+			if by != "" {
+				text = view.Said(r, text)
+			}
+			res.Rows = append(res.Rows, Row{When: When(r), Type: r.Type, Text: text, By: by, ID: r.ID[7:19], Mark: view.Mark(r, inBundle)})
 			// A comparison with a reference pack names it by SHA-256.
 			if ref, ok := r.Context["reference"].(map[string]any); ok && strings.HasPrefix(r.Type, "comparison.") {
 				digest, _ := ref["pack"].(string)
@@ -537,10 +551,19 @@ func Check(in Input) Result {
 	return done()
 }
 
-// sharedWhen is a record's observed time as the record states it, with its
+// keyName is how a key is shown: as an npub when it is a Nostr key, and as
+// the tagged key when it is not. A peer's key need not be a Nostr key.
+func keyName(key string) string {
+	if npub := core.Npub(key); npub != "" {
+		return npub
+	}
+	return key
+}
+
+// When is a record's observed time as the record states it, with its
 // own offset from UTC: a reader in another time zone sees the time the
 // sender recorded, not a shifted one.
-func sharedWhen(r *core.Record) string {
+func When(r *core.Record) string {
 	obs, ok := r.Observed.(map[string]any)
 	if !ok {
 		return "-"

@@ -132,6 +132,73 @@ And you should know:
 - **A correction travels without what it corrects.** A record that replaces an earlier one is shared alone; the earlier one stays home. The check says how many such corrections a bundle holds.
 - **A shared comparison gives its reading away**, with the public files ([COMPARE.md](COMPARE.md)). Its reading is in the bundle anyway.
 
+## A signed reply
+
+A reader can answer. They sign notes about the records that you shared, and send them back sealed. You see who signed them, and take them into your log under a name that you give.
+
+The reader needs bean and a log of their own: a note is signed with their key. A reader who has only a browser cannot reply yet ([ROADMAP.md](ROADMAP.md)).
+
+```
+# the reader, after: bean check-bundle for-ana.bean
+bean reply -to for-ana.bean -out reply-to-ben.bean 3fa9c1 "Looks fine to me. Ask about ApoB."
+
+# you
+bean accept -label Ana reply-to-ben.bean
+```
+
+**The reader's side.**
+
+- `-to` is what they received. It must pass its check, so a sealed package asks for its six words.
+- Then come pairs: a record of the share, and the text of a note about it. Name the record by its id from the check, or by the first 6 or more hex digits. The id of the share record names the share as a whole.
+- bean writes one sealed file and prints six words that open it. The reader sends the file one way and gives you the words another, as you did.
+- bean also prints the reader's identity words and the start of the reply's id. They tell you both.
+- The reader's log keeps a `reply` record: to whom, to which share, and the ids of the notes. It does not hold the notes. The reader keeps the file and its words to read them again.
+- **What a reply shows of the reader.** It holds their identity records, as a share holds yours. They show the reader's identity id and key, when they made their log, and when they changed a key.
+
+**Your side.** `bean accept` asks for the six words and checks the reply. Then it shows:
+
+- the share that it answers, with your note on that share;
+- the start of the reply's id, and the key that signed it;
+- the eight identity words of the identity that the key speaks for;
+- whether you have seen this identity or this key before;
+- each note in quotation marks, with the record that it is about.
+
+Ask the reader two things: whether they sent a reply whose id starts so, and to read their identity words. If either is not the same, do not accept. Then bean asks before it writes.
+
+- **`-label` is the name under which this person's notes show.** The first reply of an identity needs it. A later reply needs none. A name belongs to one identity: bean does not rename one, and does not give one name to two.
+- **`-yes` is for scripts, and needs `-words`.** A script cannot compare words by eye, so it states the eight words that you heard. bean takes nothing when they are not the signer's. Without a terminal and without `-yes` it takes nothing.
+- **What goes into your log.** The notes, and one record of your own that pairs the reader's key with the name. That record holds the reader's identity id and how far their chain of keys had got. The reader's identity records and their reply record stay out.
+- **Where you see them.** `bean ls` shows a note in quotation marks, with `[peer Ana]`. `bean show <id>` lists the notes about a record.
+- **A note is a record about you.** It stays through a change of your key, it is in an export, and you can share it on. A reader of that share sees `[peer Ana]`, the reader's key, and your record of the name with their identity id.
+
+**What a note is.** It is the reader's key speaking by itself about you: text about one record of that share. It holds no value and no file. It cannot correct a record or delete one. A record of a reader's key opens no file of yours, as a paired agent's does: not in a share, and not in an export. A reply that one of your own agent keys signed takes nothing. bean refuses a reply that holds anything else, such as a lab value in the place of a note.
+
+**What a reply shows, and what it does not.**
+
+- **A note is the word of the person who wrote it.** bean does not check what it says, and it is not medical advice.
+- **The name is your word.** The reply shows that the key is the last key of an identity, by the identity records that came with it. It does not show that those records are all there are. You compared the eight words and the reply's id by voice: that is the check that the reply is this person's.
+- **bean cannot tell whether a key is still current.** A reply shows the changes of key that were made before it. Someone who holds an older key of the reader shows the same eight words. The reply's id is what such a person cannot match: the reader never sent it.
+- **Your log remembers how far a reader's keys had got.** A later reply must show the same chain of keys, or a longer one. So once you accept a reply of a reader's new key, a reply of their old key takes nothing. Nor does one with another history.
+- **A reader who changes their key keeps their name.** Their next reply shows the change, and bean says that it is another key of an identity that you know.
+- **If a reader's 24 words are stolen, the thief can change the key as the reader can.** Then a reply of the thief shows a longer chain and the same words. Only the reader can tell you, by voice, that the reply is not theirs.
+- **Take your word back with `bean unpair <name>`.** A later reply of that key takes nothing. The notes that it signed stay in your log, and show as an unpaired key's. `bean purge <id>` deletes one: every record in your log is about you, and yours to delete. A note that you deleted is not taken again.
+- **What the reader's own log says.** Their `reply` record names your identity id, the id of your share and the ids of the notes. It travels if they share that record, as when they share all of their records.
+
+### The reply, exactly
+
+A reply is a sealed package like a share: record files under `objects/`, packed and encrypted with six words. A check passes when all of these hold.
+
+1. It holds records and nothing else: no file, and nothing beside the records. A name that starts with a dot is not read, as in a bundle. Every record file passes the checks of a log, of this format and no newer. One warning is expected: a note is about a person whose identity records are not in the reply.
+2. It holds exactly one record of type `reply`, with `source.system` `bean-reply`. A person signed it about themselves, with the last key of their identity's chain. That key is the reply's key. The chain is whole and not frozen.
+3. The `reply` record's `context` has `to`, the identity id that the reply is for: not the replier's own. It has `share`, the id of the share record. It has `notes`, the ids of the notes, each once: from 1 to 200. `value.n` is their count.
+4. Every other record is an identity record on that person's chain, or a note that the `reply` record lists. Every listed note is there.
+5. A note has the type `note`. Its `author` and its `kid` are the reply's key. Its `subject` is `to`. Its `value` is `{"s": text}`: a text of 1 to 4000 bytes in UTF-8 that is not only spaces. It has one ref, `about` one record, and no `context` and no file.
+6. A note's `source.system` is `bean-reply`, and its `source.ref` is null. It states one time, the time it was written: `times.observed` is null, or lies in the minute of `times.imported`.
+
+`bean accept` adds what only your log can tell. `to` is your identity. `share` is a share record of yours. Each note is about a record that the share lists, or about the share record. The reply is one sealed file of at most 64 MiB. No note says that it was written later than a day from now. The reply's key is not a key that you unpaired. A note about a record that you deleted is left out, and so is a note that you deleted. The chain holds every head of that identity that you recorded before. The name is not one that another identity or an agent has.
+
+Your record of the name is an `agent.pair` record with `value.role` `peer`. Its `value` also has `key`, `label`, `identity`, and `head`: the id of the last record of the reader's chain as the reply showed it.
+
 ## Check a shared comparison
 
 A comparison with the survey's files, shared with `-files`, can be computed again from the bundle alone. Without `-files` it needs the bundle and the files: fetched from CDC, or your own kept copies in a `bean export`.
