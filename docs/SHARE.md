@@ -19,19 +19,24 @@ shared 1 records and 0 files in for-ana.bean
 share record sha256:41ae...
 The package is sealed. It opens with these six words:
   moral arrive identify have dress oblige
+They are a secret between you and the reader. ...
+
 Your identity words, which are not a secret:
-  injury glow drink patch dynamic submit
+  injury glow drink patch dynamic submit plate robust
+The check also shows this share's time and the start of its id, 41ae07c2d9e1: ...
 ```
 
 - **Send the file one way and the words another.** Send the file by e-mail or any other way. Give the words by a phone call, in person, or in a message on another service. Whoever has only the file can read nothing in it: no record, no type, no note.
-- **Read your identity words to the reader, in the same call.** They are six words made from your identity id, and `bean whoami` shows them. The reader's check shows the identity words of whoever signed. If the two are the same, the records are from your identity. A changed package cannot pass this: nobody else can sign as your identity.
-- **The words also show who sealed it.** A package opens only with its own six words. So whoever sealed a package that opens knew the words: you, or someone you told.
+- **Read your identity words to the reader, in the same call.** They are eight words made from your identity id, and `bean whoami` shows them. The reader's check shows the identity words of whoever signed. If the two are the same, the records are from your identity.
+- **What eight words are worth.** They are the first 88 bits of the id. An id is a hash, and an attacker can search for one without making a key. A second identity with your eight words costs about 2^88 hashes: out of reach today. Against many people at once it costs less, and it is still far out of reach.
+- **The opening words do not show who sealed it.** They keep the package closed on its way. Anyone who knows them can seal another bundle of yours under them, such as an older share. The signatures and your identity words show that the records are yours.
+- **Tell the reader which share it is.** The check shows the time of the share and the start of its id, and `bean share` prints both. A person can make many shares.
 - **The reader needs no key and no account.** They open the file in a browser with `bean-check.html`, which asks for the words, or with `bean check-bundle for-ana.bean`. Both open it on the reader's device and then check it as they check a folder.
 - **bean makes the words and does not keep them.** Six words of a list of 2048 are 66 bits that no person chose. If the words are lost, share again: a new package gets new words.
 - **A changed package does not open.** Nor does a package that was cut short. The three openers read the format strictly, and `make bundles` holds them to one verdict.
 - **Nothing of it is written in the clear.** bean builds, checks and encrypts the package in memory, then writes the one file. No folder of plain records is made beside it, at any moment.
 - **The reader can get a carried file out.** The page lists each file that the package carries, with a button to save it. `bean check-bundle -unpack <new folder> for-ana.bean` writes the bundle's folder, with its files. What is saved is what was checked.
-- **What its size shows.** A package grows by about 700 bytes a record, and by the size of each file. Whoever sees the file can estimate how much it holds, and can tell that bean sealed it.
+- **What its size shows.** A package grows by about 1 kB a record, more for a comparison, and by the size of each file. Whoever sees the file can estimate how much it holds, and can tell that bean sealed it.
 - **The format is not bean's own.** A package is the bundle's folder as a zip file, encrypted in the age format (age-encryption.org/v1) with the words as its passphrase. `age -d` opens one. So does `tools/second/unseal.py`, which reads the format from its specification and shares no code with bean.
 - **What it does not do.** A reader who has opened a package holds a copy for good. Whoever learns both the file and the words can open it. The words protect the package on its way, not after.
 
@@ -69,7 +74,7 @@ A comparison is shown as its claim states it. The check proves who signed the cl
 
 A reader with no terminal opens one page, `bean-check.html`, and chooses the file they received, or a folder. The page gives one of four verdicts:
 
-- **The records passed.** The page says what the check shows and what it does not. It shows the signer's identity words, your note, each record, and what no bundle can show. A text file that the package carries can be read in the page, and any file can be saved.
+- **The records passed.** The page says what the check shows and what it does not. It shows the signer's identity words, the time and id of the share, your note, each record, and what no bundle can show. The box is green. It is amber, and counts the rows to read, when the check marks a comparison or when a record is not signed by the person. A comparison's numbers are labelled "as claimed, not computed here". A text file that the package carries can be read in the page, and any file can be saved.
 - **The records failed.** The page shows what failed and nothing else: no record, no note, and not who signed.
 - **The file did not open.** The words were wrong, or the file was changed. The form stays, to try again.
 - **Nothing was checked.** The wrong folder, or a file that is not a bundle.
@@ -90,7 +95,8 @@ No earlier verdict stays on the page. The technical lines of `bean check-bundle`
 
 A page cannot prove itself: a forged page prints whatever its maker likes, and a page cannot compute the SHA-256 of its own file. So the trust comes from where the reader got the page.
 
-- **A reader with no terminal** gets the page from the bean project, not from the sender. The sender tells them where, in the same call that gives the words. Today the project has no public address for the page: that is the next step ([ROADMAP.md](ROADMAP.md)). Until then, such a reader trusts the sender for the page as well.
+- **A reader with no terminal** gets the page from the bean project, not from the sender. The sender tells them where, in the same call that gives the words. Today the project has no public address for the page, and the page says so: that is the next step ([ROADMAP.md](ROADMAP.md)). Until then, such a reader trusts the sender for the page as well.
+- **What to tell a first reader today.** "Get the page from me by another way than the file, or build it yourself. It came from me, so its verdict is not independent of me. The eight words that I read to you show that the records are mine, on a page that you trust." A page that travels with the file can be replaced with it, and can show any words.
 - **A reader with a terminal** builds the page (`make page`) at the commit that a copy names, and compares the SHA-256 of the two files. Or they do not use the page: `bean check-bundle` and `tools/second/checkbundle.py` are the same check.
 - **What a second source adds.** One address can serve one reader a changed page. A SHA-256 that is published in a second place, or a build of one's own, is what catches that.
 
@@ -116,6 +122,7 @@ They cannot tell, and bean says so on every check:
 
 And you should know:
 
+- **What travels beside the values.** Each record carries the time when it was entered, your key and the version of bean. Your identity records show when you made your log, when you changed a key, and how many records you had at each change. A comparison carries its cohort: a sex and an age range. The review before a share says so.
 - **A bundle is a disclosure.** It is not encrypted, and once sent it cannot be taken back. Deleting or correcting a record later does not reach a bundle you sent: send a new one.
 - **Keep the folder you sent** if you want to know later what was in it. The share record in your log lists ids; a record you deleted since is gone from your log, and the bundle is the only copy.
 - **One share holds up to about 14,000 records.** Its list must fit one record. Share a long series in parts, by `-since` and `-until`.
@@ -127,7 +134,7 @@ And you should know:
 
 ## Check a shared comparison
 
-A comparison shared with `-files` can be computed again from the bundle alone. Without `-files` it needs the bundle and the files: fetched from CDC, or your own kept copies in a `bean export`.
+A comparison with the survey's files, shared with `-files`, can be computed again from the bundle alone. Without `-files` it needs the bundle and the files: fetched from CDC, or your own kept copies in a `bean export`.
 
 ```
 python3 tools/compare/reproduce.py with-files

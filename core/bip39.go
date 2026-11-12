@@ -109,16 +109,19 @@ func IsWord(w string) bool {
 	return ok
 }
 
-// IDWords writes the first 66 bits of an id as six words of the word list.
-// A person can read them out, and a reader can compare them with what a
-// check shows: the words say which identity signed, in a form that a voice
-// can carry. They are not a secret. It returns "" for what is not an id.
+// IDWords writes the first 88 bits of an id as eight words of the word
+// list. A person can read them out, and a reader can compare them with what
+// a check shows: the words say which identity signed, in a form that a
+// voice can carry. They are not a secret. Eight words, because an id is a
+// hash that an attacker can search without making a key: a second identity
+// with the same words costs about 2^88 hashes. It returns "" for what is
+// not an id.
 func IDWords(id string) string {
 	hx, ok := strings.CutPrefix(id, "sha256:")
 	if !ok || len(hx) != 64 {
 		return ""
 	}
-	bits := make([]byte, 9)
+	bits := make([]byte, idWords*11/8)
 	for i := range bits {
 		hi, lo := strings.IndexByte("0123456789abcdef", hx[2*i]), strings.IndexByte("0123456789abcdef", hx[2*i+1])
 		if hi < 0 || lo < 0 {
@@ -126,7 +129,7 @@ func IDWords(id string) string {
 		}
 		bits[i] = byte(hi<<4 | lo)
 	}
-	words := make([]string, 6)
+	words := make([]string, idWords)
 	for i := range words {
 		var idx int
 		for j := 0; j < 11; j++ {
@@ -137,3 +140,6 @@ func IDWords(id string) string {
 	}
 	return strings.Join(words, " ")
 }
+
+// idWords is how many words name an identity: 88 bits.
+const idWords = 8

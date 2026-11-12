@@ -664,7 +664,7 @@ func TestShareSealed(t *testing.T) {
 	// A full stop after the last word is how a sentence ends. An opened
 	// package says that words opened it, and names the signer in words.
 	res := bundle.Check(bundle.FromPackage("p", data, strings.ReplaceAll(words, " ", ", ")+"."))
-	if !res.OK || !res.Opened || res.Locked || len(strings.Fields(res.Words)) != 6 || res.Words == words {
+	if !res.OK || !res.Opened || res.Locked || len(strings.Fields(res.Words)) != 8 || res.Words == words {
 		t.Errorf("the words with commas and a full stop: %v", res.Lines())
 	}
 	if res := bundle.Check(bundle.FromPackage("p", data, "abandon ability able about above absent")); res.OK || !res.Locked || !res.Unread || res.Words != "" {

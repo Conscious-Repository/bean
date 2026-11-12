@@ -25,13 +25,13 @@ const path = require("path");
 
   await page.setInputFiles("#zip", path.join(dir, "good.zip"));
   await settled();
-  expect("a good zip file passes", (await title()) === "These records passed the check." && (await page.locator("#rows tr").count()) > 0);
+  expect("a good zip file passes", (await title()).startsWith("These records passed the check.") && (await page.locator("#rows tr").count()) > 0);
   expect("what is not part of the bundle is named in the details", (await page.textContent("#head")).includes("not read: README.txt"));
-  expect("the signer's identity words are shown", /^([a-z]+ ){5}[a-z]+$/.test(await page.textContent("#who")) && (await page.locator("#who-box").isVisible()));
+  expect("the signer's identity words are shown", /^([a-z]+ ){7}[a-z]+$/.test(await page.textContent("#who")) && (await page.locator("#who-box").isVisible()));
 
   await page.setInputFiles("#folder", path.join(dir, "good"));
   await settled();
-  expect("a good folder passes", (await title()) === "These records passed the check." && (await page.locator("#rows tr").count()) > 0);
+  expect("a good folder passes", (await title()).startsWith("These records passed the check.") && (await page.locator("#rows tr").count()) > 0);
 
   // A damaged bundle after a good one: no row of the good one stays.
   await page.setInputFiles("#folder", path.join(dir, "bad"));
@@ -75,8 +75,15 @@ const path = require("path");
   await page.fill("#words", "  " + words.toUpperCase() + " ");
   await page.click("#open");
   await settled();
-  expect("the six words open the package", (await title()) === "These records passed the check." && (await page.locator("#rows tr").count()) > 0 && !(await page.locator("#words-box").isVisible()));
+  expect("the six words open the package", (await title()).startsWith("These records passed the check.") && (await page.locator("#rows tr").count()) > 0 && !(await page.locator("#words-box").isVisible()));
   expect("no typed word stays in the page", (await page.inputValue("#words")) === "");
+
+  // An opened package says which share it is, and that the words do not
+  // show who sealed it. Rows with nothing to remark leave the box green.
+  expect("the page says which share this is", /its id starts [0-9a-f]{12}\./.test(await page.textContent("#share-line")));
+  expect("the page does not say that the words show who sealed it", (await page.textContent("#opened")).includes("They do not show who sealed it"));
+  expect("a pass with no marked row is green", (await page.getAttribute("#verdict", "class")) === "verdict ok");
+  expect("a comparison's numbers are labelled as claimed", (await page.locator("#rows td.text", { hasText: "As claimed, not computed here: percentile" }).count()) > 0);
 
   // A file that the package carries can be saved, and is the file that was
   // checked: its SHA-256 starts the name the page gives it.
@@ -92,6 +99,13 @@ const path = require("path");
     await readers.first().click();
     expect("a text file is shown in the page", (await page.locator("#reader-box").isVisible()) && (await page.textContent("#reader")).length > 0);
   }
+
+  // A row that the check marks turns the box amber, counts the rows to
+  // read, and draws the mark apart from the record's own text.
+  await page.setInputFiles("#zip", path.join(dir, "marked.zip"));
+  await settled();
+  expect("a pass with a marked row is amber and says so", (await page.getAttribute("#verdict", "class")) === "verdict warn" && (await title()).includes("Read the 1 row that is marked below."));
+  expect("the mark is drawn as the check's own", (await page.textContent("#rows .mark")) === "names NO reference data");
 
   // The page loaded nothing but itself, and a request from inside it fails.
   const reach = await page.evaluate(() => fetch("https://example.com/").then(() => "reached", () => "blocked"));

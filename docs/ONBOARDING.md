@@ -206,7 +206,7 @@ bean -dir ~/health-restored restore -export ~/bean-export -nostr new
 ```
 
 1. The first run copies the records, shows what your old key signed, and stops with `bean: undecided: ...`, exit 1. That is expected: nothing is kept until you decide.
-2. If every record on the list is yours, run it again with `-seal-all`. Type the 24 words and press Ctrl-D. They show on screen as you type: clear the scrollback afterwards (Cmd-K).
+2. If every record on the list is yours, run it again with `-seal-all`. A line `DELETES A RECORD NOT IN THIS FOLDER` is a deletion of your own: the record is gone, and its deletion stays. Type the 24 words and press Ctrl-D. They show on screen as you type: clear the scrollback afterwards (Cmd-K).
 3. bean rebuilds your keys, makes a new signing key, and imports the files: `imported <n> files from the export`.
 
 Check it:
@@ -218,7 +218,7 @@ bean -dir ~/health-restored blob get <stored as id> | shasum -a 256
 
 The hash matches your original. To use the restored log, point `BEAN_DIR` and your MCP config at `~/health-restored`. Never `bean init` for this: a new identity cannot read your export.
 
-Saved comparisons, the reference files you kept and the records of your shares are in the export like every record. A comparison can be checked from the export alone ([COMPARE.md](COMPARE.md)). The bundles you sent are folders outside your log: keep those yourself.
+Saved comparisons, the reference files you kept and the records of your shares are in the export like every record. A comparison with the survey's files can be checked from the export alone ([COMPARE.md](COMPARE.md)). A comparison with a reference pack also needs the pack. Your log names it and does not hold it, so keep that file with your export. The bundles you sent are folders outside your log: keep those yourself.
 
 ## Troubleshooting
 

@@ -55,7 +55,7 @@ both() {
   if [ "$j" != "$g" ] || ! cmp -s "$T/go.txt" "$T/js.txt"; then
     echo "DIFFER $1: the page (exit $j) does not say what bean says (exit $g)"; diff "$T/go.txt" "$T/js.txt" | head -6 | sed 's/^/    /'; rc=1
   fi
-  # Both name the signer by the same six words.
+  # Both name the signer by the same eight words.
   if [ "$want" = 0 ] && [ "$(grep '^identity words: ' "$T/go.txt")" != "$(grep '^identity words: ' "$T/py.txt")" ]; then
     echo "DIFFER $1: the identity words differ"; grep -h '^identity words: ' "$T/go.txt" "$T/py.txt" | sed 's/^/    /'; rc=1
   fi

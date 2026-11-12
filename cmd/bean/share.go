@@ -21,6 +21,7 @@ import (
 	"github.com/Conscious-Repository/bean/core"
 	"github.com/Conscious-Repository/bean/internal/bundle"
 	"github.com/Conscious-Repository/bean/internal/nhanes"
+	"github.com/Conscious-Repository/bean/internal/pack"
 )
 
 // bean share writes chosen records, and with -files the files they keep,
@@ -280,6 +281,18 @@ func cmdShare(s *core.Store, args []string) {
 	if publicHome > 0 {
 		leftOut = append(leftOut, fmt.Sprintf("  not shared: the %d public files that the reference.file records keep. Add -files to share them: without them a reader needs the files from their publisher to compute a comparison again.", publicHome))
 	}
+	// A comparison with a reference pack names the pack and does not hold
+	// it: the reader needs that file to compute the comparison again.
+	var packs []string
+	for _, id := range slices.Sorted(maps.Keys(chosen)) {
+		ref, _ := chosen[id].Context["reference"].(map[string]any)
+		if digest, _ := ref["pack"].(string); pack.IsDigest(digest) && strings.HasPrefix(chosen[id].Type, "comparison.") && !slices.Contains(packs, digest) {
+			packs = append(packs, digest)
+		}
+	}
+	for _, digest := range packs {
+		leftOut = append(leftOut, fmt.Sprintf("  not shared: the reference pack %s. A comparison names it, and a reader needs that file to compute the comparison again: send it too, or say where it is.", digest))
+	}
 	if *files && travels == 0 {
 		leftOut = append(leftOut, "  -files: no record that you named keeps a file, so no file goes")
 	}
@@ -327,6 +340,7 @@ func cmdShare(s *core.Store, args []string) {
 			fmt.Fprintln(w, line)
 		}
 		fmt.Fprintf(w, "  also: your %d identity records and %d pairings, and the share record itself\n", len(proof)-pairings, pairings)
+		fmt.Fprintln(w, "Each record also carries the time when it was entered, your key and the version of bean. Your identity records show when you made your log, when you changed a key, and how many records you had at each change.")
 		if *seal {
 			fmt.Fprintln(w, "A sealed package is a disclosure: it is encrypted on its way, and once its reader has opened it, it cannot be taken back. Each record carries your identity id, so two packages of yours can be linked.")
 		} else {
@@ -517,11 +531,11 @@ func cmdShare(s *core.Store, args []string) {
 	}
 	fmt.Printf("shared %d records and %d files in %s\n", len(shared), len(distinct), out)
 	fmt.Printf("share record %s\n", shareID)
-	who := "\nYour identity words, which are not a secret:\n  " + core.IDWords(l.ID) + "\nThe reader's check shows the identity words of whoever signed. Read yours to the reader, so that they know the records are yours."
+	who := "\nYour identity words, which are not a secret:\n  " + core.IDWords(l.ID) + "\nThe reader's check shows the identity words of whoever signed. Read yours to the reader, so that they know the records are yours.\nThe check also shows this share's time and the start of its id, " + shareID[7:19] + ": tell the reader, so that they know which share this is."
 	if *seal {
 		fmt.Println("The package is sealed. It opens with these six words:")
 		fmt.Println("  " + words)
-		fmt.Println("Give the words to the reader by another way than the file, such as a phone call. bean does not keep them: if they are lost, share again.")
+		fmt.Println("They are a secret between you and the reader. Give them by another way than the file, such as a phone call. bean does not keep them: if they are lost, share again.")
 		fmt.Println(who)
 		fmt.Println("The reader opens it with bean check-bundle, or in a browser with bean-check.html.")
 		return
@@ -579,7 +593,11 @@ func cmdCheckBundle(args []string) {
 		if err := unpackBundle(in, *unpack); err != nil {
 			fail(err)
 		}
-		fmt.Printf("unpacked into %s: its files are in %s\n", *unpack, filepath.Join(*unpack, "files"))
+		if len(in.Files) > 0 {
+			fmt.Printf("unpacked into %s: its files are in %s\n", *unpack, filepath.Join(*unpack, "files"))
+		} else {
+			fmt.Printf("unpacked into %s: it carries no file\n", *unpack)
+		}
 	}
 }
 

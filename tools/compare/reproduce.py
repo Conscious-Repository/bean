@@ -2,7 +2,11 @@
 """reproduce.py: check a saved bean comparison and compute it again,
 without bean.
 
-    reproduce.py <path>...
+    reproduce.py [-accept-pack <SHA-256>]... <path>...
+
+-accept-pack names a reference pack that is not on record, and that you got
+from a publisher you trust: without it, a comparison with such a pack is
+computed again, marked, and the run fails.
 
 A path is a folder, a .jsonl file of records, a reference pack (a file whose
 name ends in .pack), or a data file. A folder is read whole: every .json file
@@ -515,7 +519,7 @@ def check_pack_claim(claim, inputs):
 
 
 def main(argv):
-    if len(argv) < 2:
+    if len(argv) < 2 or argv[1] in ("-h", "-help", "--help"):
         sys.stderr.write(__doc__)
         return 2
     inputs = Inputs()
@@ -565,8 +569,13 @@ def main(argv):
     # A comparison computes again with any pack that is well formed. What
     # it means depends on who built the pack, and this tool knows one pack.
     for digest in sorted(inputs.unrecorded - accepted):
-        print("NOT ON RECORD pack %s: this tool does not know who built it. Its tables, its caveats and what it sets a reading "
+        print("NOT on record: pack %s: this tool does not know who built it. Its tables, its caveats and what it sets a reading "
               "against are its builder's word. If you trust its publisher, compare the SHA-256 with the one they state and pass -accept-pack %s" % (digest, digest))
+        bad += 1
+    # A pack that was accepted and that no claim was computed with: the
+    # reader named the wrong pack, or a pack that is on record.
+    for digest in sorted(accepted - inputs.unrecorded):
+        print("-accept-pack %s names no pack that a comparison here was computed with" % digest)
         bad += 1
     return 1 if bad else 0
 

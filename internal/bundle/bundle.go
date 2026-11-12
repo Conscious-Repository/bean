@@ -111,6 +111,10 @@ type Row struct {
 	Text string `json:"text"`
 	By   string `json:"by"` // "" when the person signed it; otherwise who did
 	ID   string `json:"id"`
+	// Mark is what the check itself says about a comparison: its pack is
+	// not on record, the claim misstates its pack, or it names no
+	// reference. Text ends with the same words.
+	Mark string `json:"mark"`
 }
 
 // Result is what a check found.
@@ -132,6 +136,10 @@ type Result struct {
 	Words    string `json:"words"`
 	Key      string `json:"key"`
 	When     string `json:"when"`
+	// Share is the id of the share record. With When it says which share
+	// this is: a person can make many, and a reader may be handed an older
+	// one.
+	Share string `json:"share"`
 	// Head is what the check says before the records: who shared, when, and
 	// the counts.
 	Head []string `json:"head"`
@@ -173,6 +181,11 @@ func (res Result) Lines() []string {
 	lines = append(lines, res.Tail...)
 	for _, p := range res.Problems {
 		lines = append(lines, "problem: "+p)
+	}
+	// A package that did not open was not checked: that is not a bundle
+	// that failed.
+	if res.Locked {
+		return append(lines, "the package did not open: nothing was checked")
 	}
 	if !res.OK {
 		return append(lines, fmt.Sprintf("bundle FAILED: %d problems", len(res.Problems)))
@@ -440,13 +453,19 @@ func Check(in Input) Result {
 		res.Head = append(res.Head, fmt.Sprintf("paired by the person: %s, key %s", paired[key], core.Npub(key)))
 	}
 	for _, name := range in.Ignored {
+		// bean writes a README.txt for a reader with no checker. It is not
+		// a record, so it is named, and it is no fault.
+		if name == "README.txt" {
+			res.Head = append(res.Head, "a note for a reader with no checker, not signed and not read: "+name)
+			continue
+		}
 		res.Head = append(res.Head, "not part of the bundle, and not read: "+name)
 	}
 	res.Ignored = in.Ignored
 	// What it holds, shown only when every check passed.
 	if len(res.Problems) == 0 {
 		res.Note, _ = share.Context["note"].(string)
-		res.Identity, res.Words, res.Key, res.When = person, core.IDWords(person), share.Kid, when
+		res.Identity, res.Words, res.Key, res.When, res.Share = person, core.IDWords(person), share.Kid, when, share.ID
 		res.Files = included
 		res.Carried = carried
 		var rows []*core.Record
@@ -477,7 +496,7 @@ func Check(in Input) Result {
 			default:
 				by = "[signed by another key: " + core.Npub(r.Author) + "]"
 			}
-			res.Rows = append(res.Rows, Row{When: sharedWhen(r), Type: r.Type, Text: view.Record(r, inBundle), By: by, ID: r.ID[7:19]})
+			res.Rows = append(res.Rows, Row{When: sharedWhen(r), Type: r.Type, Text: view.Record(r, inBundle), By: by, ID: r.ID[7:19], Mark: view.Mark(r, inBundle)})
 			// A comparison with a reference pack names it by SHA-256.
 			if ref, ok := r.Context["reference"].(map[string]any); ok && strings.HasPrefix(r.Type, "comparison.") {
 				digest, _ := ref["pack"].(string)
@@ -488,7 +507,7 @@ func Check(in Input) Result {
 				if !pack.IsKnown(digest) {
 					line += fmt.Sprintf(". The sender calls it %q. Whoever built it chose its tables, its caveats and what each reading is set against", title)
 				}
-				if len(digest) == 64 && !slices.Contains(packs, line) {
+				if pack.IsDigest(digest) && !slices.Contains(packs, line) {
 					packs = append(packs, line)
 				}
 			}

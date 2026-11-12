@@ -37,6 +37,11 @@ bean-pack-nhanes -out "$T/strict.pack" "${SYN[@]}" >/dev/null 2>&1 && say "a pac
 grep -qx "sha256 $DIGEST" "$T/py.txt" || say "check.py gives another SHA-256 than the builder"
 "$PY" -I "$HERE/rebuild_nhanes.py" "$T/syn.pack" "${SYN[@]}" "$DATA/DR1TOT_J.XPT" >"$T/re.txt" 2>&1 || say "rebuild_nhanes.py: $(tail -1 "$T/re.txt")"
 grep -q '"BMXWT"' "$T/syn.pack" || say "the pack of the synthetic files has no body measure"
+# The same pack written another way is not what the builder writes: the
+# rebuild compares bytes, and says so.
+"$PY" -I -c 'import json, sys; json.dump(json.load(open(sys.argv[1])), open(sys.argv[2], "w"), indent=1)' "$T/syn.pack" "$T/spaced.pack"
+"$PY" -I "$HERE/rebuild_nhanes.py" "$T/spaced.pack" "${SYN[@]}" >"$T/sp.txt" 2>&1 && say "rebuild_nhanes.py passes a pack that is not written as the builder writes it"
+grep -q "not written as the builder writes it" "$T/sp.txt" || say "rebuild_nhanes.py does not say that a pack is not in canonical form: $(tail -1 "$T/sp.txt")"
 # A file that the builder uses and the pack does not name: the pack was
 # built from fewer files than are given.
 bean-pack-nhanes -unknown-files -out "$T/fewer.pack" "${SYN[0]}" "${SYN[1]}" >/dev/null
@@ -101,7 +106,10 @@ b ls -json >"$T/records.jsonl"
 # A reader who has not named the pack is told that it is not on record,
 # and the run fails: a comparison computes again with any pack.
 "$PY" -I "$ROOT/tools/compare/reproduce.py" "$T/records.jsonl" "$T/syn.pack" >"$T/rpu.txt" 2>&1 && say "reproduce.py passes comparisons with a pack that is not on record"
-grep -q "^NOT ON RECORD pack $DIGEST" "$T/rpu.txt" || say "reproduce.py does not say that the pack is not on record"
+grep -q "^NOT on record: pack $DIGEST" "$T/rpu.txt" || say "reproduce.py does not say that the pack is not on record"
+# The reader names another pack: that accepts nothing.
+"$PY" -I "$ROOT/tools/compare/reproduce.py" -accept-pack "$(printf 'a%.0s' $(seq 64))" "$T/records.jsonl" "$T/syn.pack" >"$T/rpa.txt" 2>&1 && say "reproduce.py passes comparisons when the reader accepts another pack"
+grep -q "^NOT on record: pack $DIGEST" "$T/rpa.txt" || say "reproduce.py takes any -accept-pack for the pack it was given"
 # A shared bundle of such comparisons, and the pack under another name: a
 # pack is what its SHA-256 says.
 b share -yes -out "$T/bundle" -type 'comparison.*' >/dev/null 2>&1 || say "the comparisons were not shared"
