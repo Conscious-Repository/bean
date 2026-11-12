@@ -118,7 +118,7 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 **The plan.**
 
 1. **A second source, from another publisher.** The format is not frozen before a second real source is built into a pack. Each candidate is confirmed first from its publisher's own site: the terms, a stable address, and whether a file changes without notice.
-2. **Publish the NHANES pack** beside the check page, with its SHA-256. Then a person needs one download of 500 kB, not six files.
+2. **Publish the NHANES pack** beside the check page, with its SHA-256, and mirror it (the section on where the files live). Then a person needs one download of 500 kB, not six files.
 3. **The check page computes a shared comparison again**, when the reader gives it the pack.
 4. **A publisher signs.** A record by the publisher's bean identity names a pack's SHA-256, and travels as a bundle. This is built when a second publisher exists.
 5. **A pointer on relays.** A publisher announces a pack on Nostr relays: title, SHA-256, where it is. The relays hold a pointer and no health record. bean keys can already be Nostr keys.
@@ -133,9 +133,34 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 - A cohort by ethnicity, body or food needs the files today. Should a pack carry such cohorts, or should a person build a pack of their own?
 - The digests of the NHANES files, and so of the pack, come from one download. A second person must confirm them from their own connection.
 
+## Where the files live: the project's domain, and Blossom mirrors
+
+**The need.** bean runs no server. Three files must still reach people: the check page, a reference pack, and a sealed package that is too large for e-mail.
+
+**The fit.** A Blossom server keeps a file under its SHA-256 and serves it at that address. bean names a pack and the check page by SHA-256 already. So a server needs no trust: the reader checks the bytes (DECISIONS 286).
+
+**The plan.**
+
+1. **At the first release, mirror.** Put the check page and the NHANES pack on the project's own domain. Put the same bytes on one or two Blossom servers, with an existing Blossom client. State each SHA-256 in the release notes.
+2. **One line in the documents.** A `curl` command with the server and the SHA-256, then the check. bean fetches nothing itself.
+3. **A signed note with each SHA-256.** A project key signs a note on Nostr relays: the title, the SHA-256 and the servers. This is the second place for a digest (path 1, step 7, and path 4, step 5).
+4. **A sealed package by link.** A person uploads the encrypted file with a Blossom client and sends the link. The six words go by phone, as now. SHARE.md then says what the server sees.
+5. **A fetch command in bean, only if people ask.** Until then bean stays offline.
+
+**What a server learns.** That someone fetched a file, from which address, and when. For a package it also holds the size and the ciphertext, for as long as it likes. Nobody can make a server delete a file.
+
+**What never goes there.** A record: record files are plain JSON. A request for one cohort, or one that carries a value.
+
+**Open.**
+
+- Which servers, and who pays for the bytes. How long a server keeps a file differs, so use more than one.
+- The Blossom documents are drafts. Read them again before step 1: the upload, the list of servers, and the answer that asks for payment.
+- Should the project run a Blossom server of its own? Not before someone needs it.
+- Does a link to a package need to work once only? A server that keeps the ciphertext keeps it, whatever the link does.
+
 ## Order
 
-1. Path 1, step 7: a public address for the check page, and the first release. Everything a reader does starts there.
+1. Path 1, step 7: a public address for the check page, and the first release, with its Blossom mirrors. Everything a reader does starts there.
 2. Path 2, steps 2 and 3: a signed reply, and two people side by side.
 3. Path 4, steps 1 and 2: a second source, and the NHANES pack published.
 4. Path 3, pairing and import, when a real device or its firmware can produce the folder.
