@@ -190,7 +190,7 @@ A reader with no terminal runs the same check in a browser. `make page` builds `
 Signs notes about records that someone shared with you, and seals them for that person. [SHARE.md](SHARE.md) ("A signed reply") says what a reply holds and what it shows.
 
 - `-to` is a sealed package, or a bundle's folder or zip file. It must pass `check-bundle`. For a sealed package bean asks for its six words on standard input.
-- Each `<id>` names a record of that share: its id from the check, or the first 6 or more hex digits. The id of the share record names the share itself. Each `<note>` is a text of 1 to 4000 bytes.
+- Each `<id>` names a record of that share: its id from the check, or the first 6 or more hex digits. The id of the share record names the share itself. Each `<note>` is a text of 1 to 4000 bytes. Put `--` before the first id when a note starts with `-`.
 - It needs your own log and key: a note is signed with your key, about the other person.
 - It writes one new file, sealed, and prints the six words that open it and your identity words. Your log gets a `reply` record: to whom, to which share, how many notes. The notes are in the file only.
 
@@ -205,7 +205,7 @@ Checks a reply to a share of yours and takes its notes into your log. It asks fo
 - It refuses a reply that shows its identity's chain of keys shorter than you have seen it, or with another history. That is how a retired key shows itself.
 - It adds the notes and one `agent.pair` record of yours that says the key is a peer's, with the name. A note that you deleted is not taken again.
 
-Exit 1 when nothing was taken.
+Exit 1 when the reply was refused. A reply whose notes are all in your log already takes nothing, and exits 0.
 
 ### `unpair <name>`
 

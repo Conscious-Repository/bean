@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -65,6 +66,9 @@ func cmdReply(s *core.Store, args []string) {
 	if err != nil || *to == "" || *out == "" || len(pos) == 0 || len(pos)%2 != 0 {
 		usage()
 	}
+	if abs, err := filepath.Abs(*out); err == nil && insideLog(abs) {
+		fail(fmt.Errorf("%s is inside your log: a reply goes somewhere else", *out))
+	}
 	if _, err := os.Lstat(*out); err == nil {
 		fail(fmt.Errorf("%s is there already: a reply is a new file", *out))
 	}
@@ -75,6 +79,9 @@ func cmdReply(s *core.Store, args []string) {
 	if !got.OK {
 		for _, line := range got.Lines() {
 			fmt.Fprintln(os.Stderr, safe(line))
+		}
+		if got.Locked {
+			fail(errors.New("nothing was written: what you reply to did not open"))
 		}
 		fail(errors.New("nothing was written: what you reply to does not pass bean check-bundle"))
 	}
@@ -152,30 +159,9 @@ func cmdReply(s *core.Store, args []string) {
 		}
 		fail(errors.New("nothing was written: the reply does not pass its own check"))
 	}
-	packed, err := bundle.PackFiles(files)
-	var words string
+	data, words, err := sealPackage(*out, files, func(in bundle.Input) bool { return reply.Check(in).OK })
 	if err == nil {
-		words, err = bundle.NewWords()
-	}
-	var data []byte
-	if err == nil {
-		data, err = bundle.Seal(packed, words)
-	}
-	if err == nil && !reply.Check(bundle.FromPackage(*out, data, words)).OK {
-		err = errors.New("the sealed reply does not open and pass the check")
-	}
-	if err != nil {
-		fail(fmt.Errorf("nothing was written: %w", err))
-	}
-	f, err := os.OpenFile(*out, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err == nil {
-		_, err = f.Write(data)
-		if cerr := f.Close(); err == nil {
-			err = cerr
-		}
-		if err != nil {
-			os.Remove(*out)
-		}
+		err = writeNew(*out, data)
 	}
 	if err != nil {
 		fail(fmt.Errorf("nothing was written: %w", err))
@@ -197,6 +183,9 @@ func cmdReply(s *core.Store, args []string) {
 	fmt.Println("bean keeps a record that you replied, and not the notes: keep this file and its words if you want to read them again.")
 	fmt.Println("The person takes your notes into their log with: bean accept " + *out)
 }
+
+// maxReply is the largest file that bean accept reads.
+const maxReply = 64 << 20
 
 // oneOf finds the one id in ids that is given in full or by the first 6
 // or more hex digits.
@@ -236,18 +225,24 @@ func cmdAccept(s *core.Store, args []string) {
 	if *yes && *heard == "" {
 		badArg(errors.New("-yes takes notes without a question, so it needs -words: the eight identity words that the person read to you"))
 	}
+	// A reply is one sealed file, and a small one: its notes, and the
+	// identity records of whoever wrote them.
+	if info, err := os.Stat(pos[0]); err != nil || !info.Mode().IsRegular() || info.Size() > maxReply {
+		fail(fmt.Errorf("%s is not a reply: a reply is one sealed file of at most %d MiB", pos[0], maxReply>>20))
+	}
 	stdin := bufio.NewReader(os.Stdin)
 	in := readPackage(pos[0], stdin)
 	res := reply.Check(in)
-	if !res.OK {
+	switch {
+	case res.Locked:
+		fail(errors.New("the reply did not open: nothing was checked, and nothing was taken"))
+	case !res.Unread && !in.Opened:
+		fail(errors.New("this is not a sealed file: a reply is sealed, and nothing was taken"))
+	case !res.OK && !res.Unread && bundle.Check(in).OK:
+		fail(errors.New("this is a share, not a reply: read it with bean check-bundle"))
+	case !res.OK:
 		for _, p := range res.Problems {
 			fmt.Println("problem: " + safe(p))
-		}
-		if res.Locked {
-			fail(errors.New("the reply did not open: nothing was checked, and nothing was taken"))
-		}
-		if !res.Unread && bundle.Check(in).OK {
-			fail(errors.New("this is a share, not a reply: read it with bean check-bundle"))
 		}
 		fail(errors.New("this is not a reply that passes its check: nothing was taken"))
 	}
@@ -283,8 +278,13 @@ func cmdAccept(s *core.Store, args []string) {
 			fail(fmt.Errorf("the note %s is about %s, which is not a record of that share: nothing was taken", n.ID[7:19], n.About[7:19]))
 		}
 	}
-	if res.Key == l.Local.Signer.Public() {
-		fail(errors.New("this reply is signed by your own key: nothing was taken"))
+	// A note that says it was written later than now is not taken: it
+	// would sort after everything else in the log.
+	latest := s.Now().UTC().Add(24 * time.Hour).Format("2006-01-02T15:04:05Z")
+	for _, n := range res.Notes {
+		if n.Written > latest {
+			fail(fmt.Errorf("the note %s says that it was written at %s, which is later than now: nothing was taken", n.ID[7:19], safe(n.Written)))
+		}
 	}
 	// What the person saw of this identity before. A key that they unpaired
 	// speaks under no name again. And a reply must show the identity's chain
@@ -323,11 +323,15 @@ func cmdAccept(s *core.Store, args []string) {
 	if *heard != "" && strings.Join(strings.Fields(strings.ToLower(*heard)), " ") != res.Words {
 		fail(errors.New("the identity words of whoever signed this reply are not the words that you gave: nothing was taken"))
 	}
-	fmt.Printf("A reply to your share %s, of %s.\n", share.ID[7:19], safe(sharedWhenOf(share)))
+	fmt.Printf("A reply to your share %s, of %s.\n", share.ID[7:19], safe(bundle.When(share)))
 	if n, _ := share.Context["note"].(string); n != "" {
 		fmt.Printf("  Your note on that share: %q\n", safe(n))
 	}
-	fmt.Printf("The reply's id starts %s. It says that it was written at %s.\n", res.ReplyID[7:19], safe(res.When))
+	fmt.Printf("The reply's id starts %s.", res.ReplyID[7:19])
+	if res.When != "-" {
+		fmt.Printf(" It says that it was written at %s.", safe(res.When))
+	}
+	fmt.Println()
 	fmt.Printf("It is signed by the key %s, which speaks for the identity with these words:\n  %s\n", safe(keyName(res.Key)), res.Words)
 	switch {
 	case labels[res.Key] != "":
@@ -357,6 +361,9 @@ func cmdAccept(s *core.Store, args []string) {
 		case l.DeletedByPerson(n.ID):
 			deleted++
 			state = " (you deleted this note: it is not taken again)"
+		case l.DeletedByPerson(n.About):
+			deleted++
+			state = " (you deleted the record that it is about: it is not taken)"
 		case l.Report.Records[n.ID] != nil:
 			have++
 			state = " (in your log already)"
@@ -371,7 +378,7 @@ func cmdAccept(s *core.Store, args []string) {
 		if !isTerminal(os.Stdin) || !isTerminal(os.Stderr) {
 			fail(errors.New("nothing was taken: bean accept asks before it writes, and there is no terminal to ask on. Read the list above, then pass -yes with -words"))
 		}
-		fmt.Fprintf(os.Stderr, "Take these %d notes into your log, as notes of %q? [y/N] ", len(res.Notes)-have-deleted, name)
+		fmt.Fprintf(os.Stderr, "The identity words once more: %s\nTake these %d notes into your log, as notes of %q? [y/N] ", res.Words, len(res.Notes)-have-deleted, name)
 		line, _ := stdin.ReadString('\n')
 		if a := strings.ToLower(strings.TrimSpace(line)); a != "y" && a != "yes" {
 			fail(errors.New("nothing was taken"))
@@ -383,7 +390,7 @@ func cmdAccept(s *core.Store, args []string) {
 	}
 	added := 0
 	for _, n := range res.Notes {
-		if l.Report.Records[n.ID] != nil || l.DeletedByPerson(n.ID) {
+		if l.Report.Records[n.ID] != nil || l.DeletedByPerson(n.ID) || l.DeletedByPerson(n.About) {
 			continue
 		}
 		if err := s.AddFromKey(n.ID, n.Bytes); err != nil {
@@ -426,14 +433,4 @@ func cmdUnpair(s *core.Store, args []string) {
 		fmt.Println("unpaired", key)
 	}
 	fmt.Println("The records that these keys signed stay in your log, and show as an unpaired key's. To delete one: bean purge <id>.")
-}
-
-// sharedWhenOf is the time that a share record states.
-func sharedWhenOf(share *core.Record) string {
-	if obs, ok := share.Observed.(map[string]any); ok {
-		if start, _ := obs["start"].(string); start != "" {
-			return start
-		}
-	}
-	return "an unknown time"
 }

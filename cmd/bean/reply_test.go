@@ -202,7 +202,8 @@ func TestReplyRefuses(t *testing.T) {
 		"a note too long":              {ana, words, []string{"reply", "-to", pkg, "-out", "x.bean", ids[0], strings.Repeat("a", reply.MaxNote+1)}, "a note is a text"},
 		"an id with no note":           {ana, words, []string{"reply", "-to", pkg, "-out", "x.bean", ids[0]}, "usage"},
 		"no place to write":            {ana, words, []string{"reply", "-to", pkg, ids[0], "a note"}, "usage"},
-		"other words":                  {ana, "abandon ability able about above absent", []string{"reply", "-to", pkg, "-out", "x.bean", ids[0], "a note"}, "does not pass bean check-bundle"},
+		"other words":                  {ana, "abandon ability able about above absent", []string{"reply", "-to", pkg, "-out", "x.bean", ids[0], "a note"}, "what you reply to did not open"},
+		"a place inside the log":       {ana, words, []string{"reply", "-to", pkg, "-out", filepath.Join(ana, "objects", "x.bean"), ids[0], "a note"}, "is inside your log"},
 		"a file that is there":         {ana, words, []string{"reply", "-to", pkg, "-out", pkg, ids[0], "a note"}, "is there already"},
 	} {
 		wd := t.TempDir()
@@ -307,7 +308,7 @@ func TestAcceptRefuses(t *testing.T) {
 	}
 	// forged builds a reply of the peer's identity records, the notes given
 	// and a reply record that lists them.
-	forged := func(to, share string, notes map[string][]byte, listed []string, extra map[string][]byte) (string, string) {
+	forged := func(to, share string, notes map[string][]byte, listed []string, extra map[string][]byte, tweak ...func(obj map[string]any)) (string, string) {
 		files := map[string][]byte{}
 		for path, data := range unpacked(t, rep, rwords) {
 			if v, err := core.Parse(data); err == nil && strings.HasPrefix(v.(map[string]any)["type"].(string), "bean.") {
@@ -321,12 +322,16 @@ func TestAcceptRefuses(t *testing.T) {
 		for id, data := range notes {
 			files[core.PathOf(id)] = data
 		}
-		id, data, err := core.SignRecord(map[string]any{
+		manifest := map[string]any{
 			"v": 0.0, "nonce": core.NewNonce(), "type": reply.Type, "subject": anaID, "author": anaID, "kid": key,
 			"value": map[string]any{"n": float64(len(list)), "unit": "{note}"}, "times": map[string]any{"observed": nil, "imported": stamp},
 			"source":  map[string]any{"system": reply.System, "adapter": core.Adapter, "ref": nil},
 			"context": map[string]any{"to": to, "share": share, "notes": list},
-		}, local.Signer)
+		}
+		for _, change := range tweak {
+			change(manifest)
+		}
+		id, data, err := core.SignRecord(manifest, local.Signer)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -400,6 +405,59 @@ func TestAcceptRefuses(t *testing.T) {
 			id, data := note(local.Signer, ids[0], nil)
 			return forged(benID, ids[0], map[string][]byte{id: data}, []string{id}, nil)
 		}, "which is not a share in this log"},
+		"a count that is not the number of notes": {func() (string, string) {
+			id, data := note(local.Signer, ids[0], nil)
+			return forged(benID, ids[2], map[string][]byte{id: data}, []string{id}, nil, func(o map[string]any) { o["value"] = map[string]any{"n": 2.0, "unit": "{note}"} })
+		}, "the reply record's lists are damaged"},
+		"a reply record of another source": {func() (string, string) {
+			id, data := note(local.Signer, ids[0], nil)
+			return forged(benID, ids[2], map[string][]byte{id: data}, []string{id}, nil, func(o map[string]any) {
+				o["source"] = map[string]any{"system": "a hospital", "adapter": core.Adapter, "ref": nil}
+			})
+		}, "as bean reply writes it"},
+		"a reply for its own writer": {func() (string, string) {
+			id, data := note(local.Signer, ids[0], func(o map[string]any) { o["subject"] = anaID })
+			return forged(anaID, ids[2], map[string][]byte{id: data}, []string{id}, nil)
+		}, "the reply is for the identity that wrote it"},
+		"a note that is too long": {func() (string, string) {
+			return one(ids[0], func(o map[string]any) { o["value"] = map[string]any{"s": strings.Repeat("a", reply.MaxNote+1)} })
+		}, "its value is not a text"},
+		"a note of spaces": {func() (string, string) {
+			return one(ids[0], func(o map[string]any) { o["value"] = map[string]any{"s": "  \n "} })
+		}, "its value is not a text"},
+		"a note of another source": {func() (string, string) {
+			return one(ids[0], func(o map[string]any) {
+				o["source"] = map[string]any{"system": "lab \x1b[2J", "adapter": core.Adapter, "ref": nil}
+			})
+		}, "its source is not the one that bean reply writes"},
+		"a note that places itself in the past": {func() (string, string) {
+			return one(ids[0], func(o map[string]any) {
+				o["times"] = map[string]any{"observed": map[string]any{"start": "2020-01-01T00:00:00Z", "precision": "day"}, "imported": stamp}
+			})
+		}, "it states another time than the time it was written"},
+		"a note from the future": {func() (string, string) {
+			return one(ids[0], func(o map[string]any) {
+				o["times"] = map[string]any{"observed": nil, "imported": "2999-01-01T00:00:00Z"}
+			})
+		}, "which is later than now"},
+		"more notes than a reply holds": {func() (string, string) {
+			notes, listed := map[string][]byte{}, []string{}
+			for range reply.MaxNotes + 1 {
+				id, data := note(local.Signer, ids[0], nil)
+				notes[id], listed = data, append(listed, id)
+			}
+			return forged(benID, ids[2], notes, listed, nil)
+		}, "a reply holds from 1 to"},
+		"an identity record of someone else": {func() (string, string) {
+			id, data := note(local.Signer, ids[0], nil)
+			extra := map[string][]byte{}
+			for path, data := range unpacked(t, pkg, words) {
+				if v, err := core.Parse(data); err == nil && v.(map[string]any)["type"] == "bean.genesis" {
+					extra[path] = data
+				}
+			}
+			return forged(benID, ids[2], map[string][]byte{id: data}, []string{id}, extra)
+		}, "is an identity record that is not on the replier's chain"},
 		"a file beside the records": {func() (string, string) {
 			id, data := note(local.Signer, ids[0], nil)
 			return forged(benID, ids[2], map[string][]byte{id: data}, []string{id}, map[string][]byte{"files/" + strings.Repeat("a", 64): []byte("x")})
@@ -438,6 +496,39 @@ func TestAcceptRefuses(t *testing.T) {
 	run(t, carol, "", "init")
 	if out, errs, code := run(t, carol, rwords+"\n", "accept", "-yes", "-label", "Ana", "-words", idWords(t, ana), rep); code == 0 || !strings.Contains(out+errs, "this reply is for another person") {
 		t.Errorf("a reply for someone else: %d\n%s%s", code, out, errs)
+	}
+	// A reply that is not sealed: a zip file of the same records.
+	plain := filepath.Join(t.TempDir(), "plain.zip")
+	packed, err := bundle.PackFiles(unpacked(t, rep, rwords))
+	if err != nil || os.WriteFile(plain, packed, 0o600) != nil {
+		t.Fatal(err)
+	}
+	if out, errs, code := run(t, ben, "", "accept", "-yes", "-label", "Ana", "-words", idWords(t, ana), plain); code == 0 || !strings.Contains(out+errs, "this is not a sealed file") {
+		t.Errorf("a reply that is not sealed: %d\n%s%s", code, out, errs)
+	}
+	if out, errs, code := run(t, ben, "", "accept", "-yes", "-label", "Ana", "-words", idWords(t, ana), t.TempDir()); code == 0 || !strings.Contains(out+errs, "a reply is one sealed file") {
+		t.Errorf("a folder given to accept: %d\n%s%s", code, out, errs)
+	}
+	// A reply record that an older key signed, with the chain as it is now:
+	// the key that signed is not the identity's current key.
+	if _, errs, code := run(t, ana, seedOf[ana], "rotate", "-seal-all"); code != 0 {
+		t.Fatalf("rotate: %s", errs)
+	}
+	old := unpacked(t, rep, rwords)
+	filepath.WalkDir(filepath.Join(ana, "objects"), func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		data, _ := os.ReadFile(path)
+		if v, perr := core.Parse(data); perr == nil && strings.HasPrefix(v.(map[string]any)["type"].(string), "bean.") {
+			rel, _ := filepath.Rel(ana, path)
+			old[filepath.ToSlash(rel)] = data
+		}
+		return nil
+	})
+	stale, stalewords := sealed(t, old)
+	if out, errs, code := run(t, ben, stalewords+"\n", "accept", "-yes", "-label", "Ana", "-words", idWords(t, ana), stale); code == 0 || !strings.Contains(out+errs, "not signed by the current key of its identity") {
+		t.Errorf("a reply record of a retired key, with the whole chain: %d\n%s%s", code, out, errs)
 	}
 	// A reply is not a bundle, and check-bundle says what it is.
 	if out, errs, code := run(t, t.TempDir(), rwords+"\n", "check-bundle", rep); code == 0 || !strings.Contains(out+errs, "bean accept") {

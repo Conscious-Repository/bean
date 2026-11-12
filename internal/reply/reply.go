@@ -10,6 +10,8 @@ import (
 	"maps"
 	"slices"
 	"sort"
+	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/Conscious-Repository/bean/core"
@@ -39,7 +41,10 @@ type Note struct {
 	ID    string // the note's own id
 	About string // the id of the record that it is about
 	Text  string
-	Bytes []byte // the record file, as signed
+	// Written is the time that the note states, as its record has it:
+	// times.imported, in UTC.
+	Written string
+	Bytes   []byte // the record file, as signed
 }
 
 // Result is what a check of a reply found.
@@ -123,8 +128,8 @@ func Check(in bundle.Input) Result {
 	}
 	who := manifest.Author
 	chain := rp.Chains[who]
-	if !core.IsID(who) || manifest.Subject != who || len(chain) == 0 {
-		bad("the reply record is not signed by a person about themselves")
+	if !core.IsID(who) || manifest.Subject != who || len(chain) == 0 || manifest.Source.System != System {
+		bad("the reply record is not signed by a person about themselves, as bean reply writes it")
 		return done()
 	}
 	key := manifest.Kid
@@ -176,13 +181,17 @@ func Check(in bundle.Input) Result {
 			if !bundle.OnChain(rp, r, who) {
 				bad("%s is an identity record that is not on the replier's chain", id)
 			}
+			if listed[id] {
+				bad("%s is listed as a note, and is an identity record", id)
+				delete(listed, id)
+			}
 		case listed[id]:
 			text, problem := note(r, key, to)
 			if problem != "" {
 				bad("%s is listed as a note, and %s", id, problem)
 				continue
 			}
-			res.Notes = append(res.Notes, Note{ID: id, About: r.Targets("about")[0], Text: text, Bytes: r.Bytes})
+			res.Notes = append(res.Notes, Note{ID: id, About: r.Targets("about")[0], Text: text, Written: r.Imported, Bytes: r.Bytes})
 			delete(listed, id)
 		default:
 			bad("%s is in the reply, and the reply record does not list it", id)
@@ -217,10 +226,29 @@ func note(r *core.Record, key, to string) (text, problem string) {
 		return "", "it is not about the person that the reply is for"
 	case len(r.Refs) != 1 || r.Refs[0].Rel != "about" || !core.IsID(r.Refs[0].ID):
 		return "", "it is not about exactly one record"
-	case len(r.Value) != 1 || !isText || text == "" || len(text) > MaxNote || !utf8.ValidString(text):
+	case len(r.Value) != 1 || !isText || strings.TrimSpace(text) == "" || len(text) > MaxNote || !utf8.ValidString(text):
 		return "", fmt.Sprintf("its value is not a text of 1 to %d bytes", MaxNote)
 	case len(r.Blobs) > 0 || len(r.Context) > 0:
 		return "", "it holds more than a text"
+	case r.Source.System != System || r.Source.Ref != "":
+		return "", "its source is not the one that bean reply writes"
+	case !oneTime(r):
+		return "", "it states another time than the time it was written"
 	}
 	return text, ""
+}
+
+// oneTime reports a note that states one time: when it was written. Its
+// observed time is null, or lies in the minute of its imported time. So a
+// note cannot place itself at another point of the person's history.
+func oneTime(r *core.Record) bool {
+	if r.Observed == nil {
+		return true
+	}
+	obs, _ := r.Observed.(map[string]any)
+	start, _ := obs["start"].(string)
+	at, err1 := time.Parse(time.RFC3339, start)
+	written, err2 := time.Parse(time.RFC3339, r.Imported)
+	_, hasEnd := obs["end"]
+	return err1 == nil && err2 == nil && !hasEnd && at.UTC().Truncate(time.Minute).Equal(written.UTC().Truncate(time.Minute))
 }

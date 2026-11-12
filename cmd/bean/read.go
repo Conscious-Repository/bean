@@ -170,6 +170,7 @@ func cmdShow(s *core.Store, args []string) {
 	for _, b := range r.Blobs {
 		fmt.Printf("blob %s %s %s\n", b.Hash, safe(b.Role), safe(b.MediaType))
 	}
+	labels := l.AgentLabels()
 	for _, x := range l.Replies(r.ID) {
 		rel := ""
 		for _, ref := range x.Refs {
@@ -178,7 +179,12 @@ func cmdShow(s *core.Store, args []string) {
 				break
 			}
 		}
-		fmt.Printf("reply %s %s %s %s\n", x.ID, rel, x.Type, safe(valueText(x)))
+		// Who wrote each one: a note of a peer is not the person's own.
+		text, by := valueText(x), byText(x, l.ID, labels)
+		if by != "" {
+			text = view.Said(x, text) + "  " + by
+		}
+		fmt.Printf("reply %s %s %s %s\n", x.ID, rel, x.Type, safe(text))
 	}
 	if warnFrozen(l) {
 		os.Exit(4)

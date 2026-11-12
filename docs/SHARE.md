@@ -188,13 +188,14 @@ Ask the reader two things: whether they sent a reply whose id starts so, and to 
 
 A reply is a sealed package like a share: record files under `objects/`, packed and encrypted with six words. A check passes when all of these hold.
 
-1. It holds records and nothing else. Every record file passes the checks of a log. One warning is expected: a note is about a person whose identity records are not in the reply.
-2. It holds exactly one record of type `reply`. A person signed it about themselves, with the current key of their identity. That key is the reply's key.
-3. The `reply` record's `context` has `to`, the identity id that the reply is for, and `share`, the id of the share record. It has `notes`, the ids of the notes, each once: from 1 to 200. `value.n` is their count.
+1. It holds records and nothing else: no file, and nothing beside the records. A name that starts with a dot is not read, as in a bundle. Every record file passes the checks of a log, of this format and no newer. One warning is expected: a note is about a person whose identity records are not in the reply.
+2. It holds exactly one record of type `reply`, with `source.system` `bean-reply`. A person signed it about themselves, with the last key of their identity's chain. That key is the reply's key. The chain is whole and not frozen.
+3. The `reply` record's `context` has `to`, the identity id that the reply is for: not the replier's own. It has `share`, the id of the share record. It has `notes`, the ids of the notes, each once: from 1 to 200. `value.n` is their count.
 4. Every other record is an identity record on that person's chain, or a note that the `reply` record lists. Every listed note is there.
-5. A note has the type `note`. Its `author` and its `kid` are the reply's key. Its `subject` is `to`. Its `value` is `{"s": text}`, with a text of 1 to 4000 bytes. It has one ref, `about` one record, and no `context` and no file.
+5. A note has the type `note`. Its `author` and its `kid` are the reply's key. Its `subject` is `to`. Its `value` is `{"s": text}`: a text of 1 to 4000 bytes in UTF-8 that is not only spaces. It has one ref, `about` one record, and no `context` and no file.
+6. A note's `source.system` is `bean-reply`, and its `source.ref` is null. It states one time, the time it was written: `times.observed` is null, or lies in the minute of `times.imported`.
 
-`bean accept` adds what only your log can tell. `to` is your identity. `share` is a share record of yours. Each note is about a record that the share lists, or about the share record. The reply's key is not your own, and is not a key that you unpaired. The chain holds every head of that identity that you recorded before. The name is not one that another identity or an agent has.
+`bean accept` adds what only your log can tell. `to` is your identity. `share` is a share record of yours. Each note is about a record that the share lists, or about the share record. The reply is one sealed file of at most 64 MiB. No note says that it was written later than a day from now. The reply's key is not a key that you unpaired. A note about a record that you deleted is left out, and so is a note that you deleted. The chain holds every head of that identity that you recorded before. The name is not one that another identity or an agent has.
 
 Your record of the name is an `agent.pair` record with `value.role` `peer`. Its `value` also has `key`, `label`, `identity`, and `head`: the id of the last record of the reader's chain as the reply showed it.
 

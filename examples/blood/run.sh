@@ -6,7 +6,8 @@
 #   3. compare the readings with men of 30 to 39, and save the comparisons;
 #   4. share them as a bundle;
 #   5. check the bundle and compute every comparison again, without bean;
-#   6. seal the same records into one file for one reader, and open it.
+#   6. seal the same records into one file for one reader, and open it;
+#   7. as that reader, sign a note about one record, and take it into the log.
 #
 #   examples/blood/run.sh [work folder]
 #   examples/blood/run.sh --synthetic [work folder]

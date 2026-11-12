@@ -510,7 +510,7 @@ func Check(in Input) Result {
 			if by != "" {
 				text = view.Said(r, text)
 			}
-			res.Rows = append(res.Rows, Row{When: sharedWhen(r), Type: r.Type, Text: text, By: by, ID: r.ID[7:19], Mark: view.Mark(r, inBundle)})
+			res.Rows = append(res.Rows, Row{When: When(r), Type: r.Type, Text: text, By: by, ID: r.ID[7:19], Mark: view.Mark(r, inBundle)})
 			// A comparison with a reference pack names it by SHA-256.
 			if ref, ok := r.Context["reference"].(map[string]any); ok && strings.HasPrefix(r.Type, "comparison.") {
 				digest, _ := ref["pack"].(string)
@@ -560,10 +560,10 @@ func keyName(key string) string {
 	return key
 }
 
-// sharedWhen is a record's observed time as the record states it, with its
+// When is a record's observed time as the record states it, with its
 // own offset from UTC: a reader in another time zone sees the time the
 // sender recorded, not a shifted one.
-func sharedWhen(r *core.Record) string {
+func When(r *core.Record) string {
 	obs, ok := r.Observed.(map[string]any)
 	if !ok {
 		return "-"
