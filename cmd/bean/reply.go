@@ -181,6 +181,7 @@ func cmdReply(s *core.Store, args []string) {
 	fmt.Printf("They also see the start of this reply's id, %s: tell them, so that they know which reply this is.\n", replyID[7:19])
 	fmt.Println("The reply holds your identity records. They show your identity id and your key, when you made your log, and when you changed a key.")
 	fmt.Println("bean keeps a record that you replied, and not the notes: keep this file and its words if you want to read them again.")
+	fmt.Println("That record names the person's identity id, their share and your notes. It travels when you share all of your records.")
 	fmt.Println("The person takes your notes into their log with: bean accept " + *out)
 }
 

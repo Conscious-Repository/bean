@@ -152,7 +152,7 @@ bean accept -label Ana reply-to-ben.bean
 - Then come pairs: a record of the share, and the text of a note about it. Name the record by its id from the check, or by the first 6 or more hex digits. The id of the share record names the share as a whole.
 - bean writes one sealed file and prints six words that open it. The reader sends the file one way and gives you the words another, as you did.
 - bean also prints the reader's identity words and the start of the reply's id. They tell you both.
-- The reader's log keeps a `reply` record: to whom, to which share, and how many notes. It does not hold the notes. The reader keeps the file and its words to read them again.
+- The reader's log keeps a `reply` record: to whom, to which share, and the ids of the notes. It does not hold the notes. The reader keeps the file and its words to read them again.
 - **What a reply shows of the reader.** It holds their identity records, as a share holds yours. They show the reader's identity id and key, when they made their log, and when they changed a key.
 
 **Your side.** `bean accept` asks for the six words and checks the reply. Then it shows:
@@ -182,7 +182,7 @@ Ask the reader two things: whether they sent a reply whose id starts so, and to 
 - **A reader who changes their key keeps their name.** Their next reply shows the change, and bean says that it is another key of an identity that you know.
 - **If a reader's 24 words are stolen, the thief can change the key as the reader can.** Then a reply of the thief shows a longer chain and the same words. Only the reader can tell you, by voice, that the reply is not theirs.
 - **Take your word back with `bean unpair <name>`.** A later reply of that key takes nothing. The notes that it signed stay in your log, and show as an unpaired key's. `bean purge <id>` deletes one: every record in your log is about you, and yours to delete. A note that you deleted is not taken again.
-- **What the reader's own log says.** Their `reply` record names your identity id and the id of your share. It travels if they share that record.
+- **What the reader's own log says.** Their `reply` record names your identity id, the id of your share and the ids of the notes. It travels if they share that record, as when they share all of their records.
 
 ### The reply, exactly
 
