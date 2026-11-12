@@ -20,7 +20,7 @@ Four things are missing before other people use it. The check page has no public
 4. **Say what leaves.** The review before a share also says that the person's identity id travels. It flags a file that holds a name or a birth date.
 5. **Record who it was for.** The share record says that a passphrase was used. With a reader's key it will name the reader's address.
 
-6. **The reader knows who signed. Done:** identity words (DECISIONS 280). The sender reads six words in the call that carries the opening words, and the check shows the same six.
+6. **The reader knows who signed. Done:** identity words (DECISIONS 280). The sender reads eight words in the call that carries the opening words, and the check shows the same eight (DECISIONS 287).
 7. **One public address for the check page. Not done, and the owner's to decide.** A reader with no terminal must get the page from another place than the records. The page names its commit, CI records its SHA-256 on every push, and a tag publishes both (`make dist`). What is missing is the address, and a second place that states the SHA-256.
 
 **What it cannot do.** A reader who has opened the package holds a copy for good. Withdrawing permission stops the next share, not the last one.

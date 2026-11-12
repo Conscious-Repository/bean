@@ -115,7 +115,7 @@ func encode(res bundle.Result) string {
 	if res.Rows != nil {
 		shown.Rows = make([]bundle.Row, len(res.Rows))
 		for i, r := range res.Rows {
-			shown.Rows[i] = bundle.Row{When: view.Safe(r.When), Type: view.Safe(r.Type), Text: view.Safe(r.Text), By: view.Safe(r.By), ID: r.ID}
+			shown.Rows[i] = bundle.Row{When: view.Safe(r.When), Type: view.Safe(r.Type), Text: view.Safe(r.Text), By: view.Safe(r.By), ID: r.ID, Mark: r.Mark}
 		}
 	}
 	if res.Carried != nil {

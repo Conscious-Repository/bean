@@ -327,6 +327,7 @@ func cmdShare(s *core.Store, args []string) {
 			fmt.Fprintln(w, line)
 		}
 		fmt.Fprintf(w, "  also: your %d identity records and %d pairings, and the share record itself\n", len(proof)-pairings, pairings)
+		fmt.Fprintln(w, "Each record also carries the time when it was entered, your key and the version of bean. Your identity records show when you made your log, when you changed a key, and how many records you had at each change.")
 		if *seal {
 			fmt.Fprintln(w, "A sealed package is a disclosure: it is encrypted on its way, and once its reader has opened it, it cannot be taken back. Each record carries your identity id, so two packages of yours can be linked.")
 		} else {
@@ -517,11 +518,11 @@ func cmdShare(s *core.Store, args []string) {
 	}
 	fmt.Printf("shared %d records and %d files in %s\n", len(shared), len(distinct), out)
 	fmt.Printf("share record %s\n", shareID)
-	who := "\nYour identity words, which are not a secret:\n  " + core.IDWords(l.ID) + "\nThe reader's check shows the identity words of whoever signed. Read yours to the reader, so that they know the records are yours."
+	who := "\nYour identity words, which are not a secret:\n  " + core.IDWords(l.ID) + "\nThe reader's check shows the identity words of whoever signed. Read yours to the reader, so that they know the records are yours.\nThe check also shows this share's time and the start of its id, " + shareID[7:19] + ": tell the reader, so that they know which share this is."
 	if *seal {
 		fmt.Println("The package is sealed. It opens with these six words:")
 		fmt.Println("  " + words)
-		fmt.Println("Give the words to the reader by another way than the file, such as a phone call. bean does not keep them: if they are lost, share again.")
+		fmt.Println("They are a secret between you and the reader. Give them by another way than the file, such as a phone call. bean does not keep them: if they are lost, share again.")
 		fmt.Println(who)
 		fmt.Println("The reader opens it with bean check-bundle, or in a browser with bean-check.html.")
 		return

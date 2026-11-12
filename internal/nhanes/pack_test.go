@@ -144,3 +144,24 @@ func TestRealPack(t *testing.T) {
 		}
 	}
 }
+
+// TestRealDigests: with CDC's own files, each file has the SHA-256 that
+// bean has on record for it. The Reference data workflow runs this on files
+// that it fetches from CDC again.
+func TestRealDigests(t *testing.T) {
+	dir := os.Getenv("BEAN_NHANES_DIR")
+	if dir == "" {
+		t.Skip("set BEAN_NHANES_DIR to a folder of CDC's files")
+	}
+	for name, want := range Known {
+		data, err := os.ReadFile(filepath.Join(dir, name+".XPT"))
+		if err != nil {
+			t.Errorf("%s: %v", name, err)
+			continue
+		}
+		sum := sha256.Sum256(data)
+		if got := hex.EncodeToString(sum[:]); got != want {
+			t.Errorf("%s has SHA-256 %s, and the one on record is %s", name, got, want)
+		}
+	}
+}

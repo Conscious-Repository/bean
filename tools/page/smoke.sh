@@ -24,4 +24,12 @@ f=$(ls "$T"/b/bad/objects/*/*.json | head -1)
 # A sealed package of the same records with their files, and its six words.
 "$T/ex/bin/bean" -dir "$T/ex/log" share -yes -seal -files -out "$T/b/sealed.bean" -type 'comparison.*' >"$T/seal.txt" 2>/dev/null
 WORDS=$(sed -n 's/^  //p' "$T/seal.txt" | head -1)
+# A bundle with a row that the check marks: a comparison that the person
+# signed by hand and that names no reference data.
+cp -R "$T/ex/log" "$T/marked-log"
+READING=$("$T/ex/bin/bean" -dir "$T/marked-log" ls -json -type lab.cholesterol-total | "$PY" -I -c 'import sys, json; print(json.loads(sys.stdin.readline())["id"])')
+printf '{"type":"comparison.percentile","source":{"system":"by-hand","adapter":"test@1","ref":null},"times":{"observed":{"start":"2026-11-01T00:00:00Z","precision":"day"}},"value":{"n":95,"unit":"{percentile}"},"refs":[{"rel":"about","id":"%s"}],"context":{"reading":"%s","cohort":{"text":"male, age 30-39"},"result":{"n":339}}}\n' "$READING" "$READING" |
+  "$T/ex/bin/bean" -dir "$T/marked-log" append >/dev/null
+"$T/ex/bin/bean" -dir "$T/marked-log" share -yes -out "$T/b/marked" -type 'comparison.*' >/dev/null 2>&1
+(cd "$T/b" && "$PY" -I -c 'import shutil; shutil.make_archive("marked", "zip", ".", "marked")')
 "$NODE" "$HERE/smoke.cjs" "$T/bean-check.html" "$T/b" "$WORDS"

@@ -57,15 +57,45 @@ func Record(r *core.Record, reading func(id string) *core.Record) string {
 	if of := reading(id); of != nil {
 		out += " of " + of.Type + " " + Value(of)
 	}
-	among = strings.Join(strings.Fields(among), " ")
+	against, among, by, mark := reference(r, among)
+	out += against + ", among " + among
+	if result, ok := r.Context["result"].(map[string]any); ok {
+		if n, ok := result["n"].(float64); ok {
+			out += " (n " + strconv.FormatFloat(n, 'g', -1, 64) + ")"
+		}
+	}
+	// The marks come last, and from bean alone.
+	out += by
+	if mark != "" {
+		out += " (" + mark + ")"
+	}
+	return out
+}
+
+// Mark is what bean says about a comparison beyond what the claim says: a
+// pack that bean has no record of, a claim that misstates its pack, or a
+// comparison that names nothing, which nobody can compute again. It is ""
+// for a comparison with nothing to remark and for any other record.
+func Mark(r *core.Record) string {
+	cohort, _ := r.Context["cohort"].(map[string]any)
+	among, _ := cohort["text"].(string)
+	if _, isNumber := r.Value["n"].(float64); !strings.HasPrefix(r.Type, "comparison.") || among == "" || !isNumber {
+		return ""
+	}
+	_, _, _, mark := reference(r, among)
+	return mark
+}
+
+// reference reads what a comparison was made with: a pack, or files. What
+// a reading was set against, and the cohort in words, are the pack's to
+// say. For a pack that bean has on record they are returned in bean's own
+// words, and a claim that says otherwise is marked. For any other pack the
+// label is the claim's word, so it is returned in quotation marks.
+func reference(r *core.Record, claimed string) (against, among, by, mark string) {
+	among = strings.Join(strings.Fields(claimed), " ")
 	if rs := []rune(among); len(rs) > 160 {
 		among = string(rs[:157]) + "..."
 	}
-	// A comparison names what it was made with: a pack, or files. What a
-	// reading was set against, and the cohort in words, are the pack's to
-	// say. For a pack that bean has on record they are shown in bean's own
-	// words, and a claim that says otherwise is marked. For any other pack
-	// the label is the claim's word, so it is shown in quotation marks.
 	ref, _ := r.Context["reference"].(map[string]any)
 	digest, byPack := ref["pack"].(string)
 	_, byFiles := ref["files"].([]any)
@@ -80,12 +110,12 @@ func Record(r *core.Record, reading func(id string) *core.Record) string {
 		}
 		switch own, has := known.Measures[measure]; {
 		case onRecord && has:
-			out += " against " + own
+			against = " against " + own
 			misstates = misstates || own != label
 		case onRecord:
 			misstates = true
 		case label != "":
-			out += " against " + strconv.Quote(label)
+			against = " against " + strconv.Quote(label)
 		}
 		if own, has := known.Cohorts[cohortID]; onRecord && has {
 			misstates = misstates || own != among
@@ -94,26 +124,17 @@ func Record(r *core.Record, reading func(id string) *core.Record) string {
 			misstates = true
 		}
 	}
-	out += ", among " + among
-	if result, ok := r.Context["result"].(map[string]any); ok {
-		if n, ok := result["n"].(float64); ok {
-			out += " (n " + strconv.FormatFloat(n, 'g', -1, 64) + ")"
-		}
-	}
-	// The marks come last, and from bean alone: a pack that bean has no
-	// record of, a claim that misstates its pack, and a comparison that
-	// names nothing, which nobody can compute again.
 	switch {
 	case onRecord && misstates:
-		out += ", by pack " + digest[:12] + " (the claim MISSTATES this pack)"
+		return against, among, ", by pack " + digest[:12], "the claim MISSTATES this pack"
 	case onRecord:
-		out += ", by pack " + digest[:12]
+		return against, among, ", by pack " + digest[:12], ""
 	case byPack && len(digest) == 64 && !byFiles:
-		out += ", by pack " + digest[:12] + " (NOT on record)"
+		return against, among, ", by pack " + digest[:12], "NOT on record"
 	case !byFiles || byPack:
-		out += " (names NO reference data)"
+		return against, among, "", "names NO reference data"
 	}
-	return out
+	return against, among, "", ""
 }
 
 // Value is a one-line view of value and context.note.

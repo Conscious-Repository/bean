@@ -111,6 +111,10 @@ type Row struct {
 	Text string `json:"text"`
 	By   string `json:"by"` // "" when the person signed it; otherwise who did
 	ID   string `json:"id"`
+	// Mark is what the check itself says about a comparison: its pack is
+	// not on record, the claim misstates its pack, or it names no
+	// reference. Text ends with the same words.
+	Mark string `json:"mark"`
 }
 
 // Result is what a check found.
@@ -132,6 +136,10 @@ type Result struct {
 	Words    string `json:"words"`
 	Key      string `json:"key"`
 	When     string `json:"when"`
+	// Share is the id of the share record. With When it says which share
+	// this is: a person can make many, and a reader may be handed an older
+	// one.
+	Share string `json:"share"`
 	// Head is what the check says before the records: who shared, when, and
 	// the counts.
 	Head []string `json:"head"`
@@ -446,7 +454,7 @@ func Check(in Input) Result {
 	// What it holds, shown only when every check passed.
 	if len(res.Problems) == 0 {
 		res.Note, _ = share.Context["note"].(string)
-		res.Identity, res.Words, res.Key, res.When = person, core.IDWords(person), share.Kid, when
+		res.Identity, res.Words, res.Key, res.When, res.Share = person, core.IDWords(person), share.Kid, when, share.ID
 		res.Files = included
 		res.Carried = carried
 		var rows []*core.Record
@@ -477,7 +485,7 @@ func Check(in Input) Result {
 			default:
 				by = "[signed by another key: " + core.Npub(r.Author) + "]"
 			}
-			res.Rows = append(res.Rows, Row{When: sharedWhen(r), Type: r.Type, Text: view.Record(r, inBundle), By: by, ID: r.ID[7:19]})
+			res.Rows = append(res.Rows, Row{When: sharedWhen(r), Type: r.Type, Text: view.Record(r, inBundle), By: by, ID: r.ID[7:19], Mark: view.Mark(r)})
 			// A comparison with a reference pack names it by SHA-256.
 			if ref, ok := r.Context["reference"].(map[string]any); ok && strings.HasPrefix(r.Type, "comparison.") {
 				digest, _ := ref["pack"].(string)

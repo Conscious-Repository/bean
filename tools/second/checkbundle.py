@@ -52,7 +52,7 @@ WORDS_SHA256 = "2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda
 
 
 def id_words(ident):
-    """The first 66 bits of an identity id as six words of the BIP-39
+    """The first 88 bits of an identity id as eight words of the BIP-39
     English list: the words that the sender reads out. The list is the
     public file core/bip39-english.txt, checked by its SHA-256."""
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "core", "bip39-english.txt")
@@ -67,7 +67,7 @@ def id_words(ident):
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", ident):
         return ""
     bits = bin(int(ident[7:], 16))[2:].zfill(256)
-    return " ".join(words[int(bits[11 * i:11 * i + 11], 2)] for i in range(6))
+    return " ".join(words[int(bits[11 * i:11 * i + 11], 2)] for i in range(8))
 
 
 def safe(s):

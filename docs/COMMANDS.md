@@ -43,7 +43,7 @@ Write the 24 words on paper. `bean` shows them only once. They are the only way 
 
 ### `whoami`
 
-Prints your identity id and your signing key. It prints your identity words: the first 66 bits of the id as six words that you can read out. They are not a secret, and a reader's check of a bundle shows them. It also prints the npub of a Nostr key, and the agent key of this machine if there is one. On an agent-only copy it prints `key none (agent-only copy)`.
+Prints your identity id and your signing key. It prints your identity words: the first 88 bits of the id as eight words that you can read out. They are not a secret, and a reader's check of a bundle shows them. It also prints the npub of a Nostr key, and the agent key of this machine if there is one. On an agent-only copy it prints `key none (agent-only copy)`.
 
 ## Write
 
