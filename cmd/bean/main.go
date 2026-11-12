@@ -58,6 +58,14 @@ Share
                                 Check a bundle or a sealed package someone
                                 sent you. -unpack writes a package that
                                 passes into a folder, with its files.
+  reply -to <what you received> -out <new file> <id> <note> [<id> <note>]...
+                                Sign notes about records that someone shared
+                                with you, and seal them for that person.
+  accept [-label <name>] [-yes] <reply>
+                                Check a reply to a share of yours, see who
+                                signed it, and take its notes into your log.
+  unpair <name>                 Take your word back from the keys that you
+                                paired under a name: a peer, or an agent.
 
 AI and agents
   mcp [-write] [-blobs] [-label <name>]
@@ -106,6 +114,9 @@ var syntax = map[string]string{
 	"verify":        "verify",
 	"share":         "share -out <new folder or file> [-seal] [-files] [-note <text>] [-yes] <id>... | -type <type> [-since <time>] [-until <time>]",
 	"check-bundle":  "check-bundle [-unpack <new folder>] <folder, zip file or sealed package>",
+	"reply":         "reply -to <what you received> -out <new file> <id> <note> [<id> <note>]...",
+	"accept":        "accept [-label <name>] [-yes] <reply>",
+	"unpair":        "unpair <name>",
 	"compare":       "compare -sex male|female -age <from>-<to> [-where <DATASET>.<VARIABLE>=<value>|<from>-<to>]... [-unknown-files] [-save] <id>... | -type <type>\n       bean [-dir <folder>] compare -pack <file> [-cohort <cohort> [-unknown-pack] [-save] <id>... | -type <type>]",
 	"mcp":           "mcp [-write] [-blobs] [-label <name>]",
 	"agent":         "agent init [-label <name>] [-identity <id>] | agent pair <npub> [-label <name>]",
@@ -313,6 +324,12 @@ func main() {
 		cmdShare(s, rest)
 	case "check-bundle":
 		cmdCheckBundle(rest)
+	case "reply":
+		cmdReply(s, rest)
+	case "accept":
+		cmdAccept(s, rest)
+	case "unpair":
+		cmdUnpair(s, rest)
 	case "show":
 		cmdShow(s, rest)
 	case "add":
@@ -529,6 +546,7 @@ var needsLog = map[string]bool{
 	"whoami": true, "add": true, "append": true, "blob": true, "ls": true, "show": true,
 	"verify": true, "mcp": true, "import": true, "export": true, "rotate": true,
 	"purge": true, "gc": true, "migrate": true, "compare": true, "share": true,
+	"reply": true, "accept": true, "unpair": true,
 }
 
 // hasLog reports whether the folder holds a log: an identity, or synced

@@ -91,6 +91,18 @@ if python3 -c 'import cryptography' 2>/dev/null; then
   python3 -I "$ROOT/tools/second/checkbundle.py" "$WORK/opened" | tail -1
 fi
 
+say "7. The reader signs a note about one record, and you take it into your log"
+# The reader has a log of their own: a second throwaway identity.
+mkdir -p "$WORK/reader-log"
+bean -dir "$WORK/reader-log" init >/dev/null 2>&1
+ABOUT=$(bean ls -type lab.cholesterol-total | awk '{print $NF}' | head -1)
+echo "$WORDS" | bean -dir "$WORK/reader-log" reply -to "$WORK/for-a-reader.bean" -out "$WORK/reply.bean" "$ABOUT" "Received. Can you send the report as well?" >"$WORK/reply.txt" 2>/dev/null
+REPLYWORDS=$(sed -n 's/^  //p' "$WORK/reply.txt" | head -1)
+# You type the reply's words, compare the identity words with the ones the
+# reader tells you, and give the reader a name. Here that is piped in.
+echo "$REPLYWORDS" | bean accept -yes -label reader "$WORK/reply.bean" 2>/dev/null | sed "s|$WORK/||; s/ [0-9a-f]\{12\})/)/; s/sha256:[0-9a-f]*/sha256:.../"
+bean ls -type note | sed 's/  *[0-9a-f]\{12\}$//'
+
 # The numbers must be the ones this example was written with. Ids differ
 # from run to run, so they are cut off, and the rows sorted. Rows with no
 # number are left out.

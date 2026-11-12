@@ -160,7 +160,7 @@ func (s *Store) AgentInit(identity, label string) (string, string, error) {
 	if _, err := s.ReadLocal(); err != nil {
 		return pub, "", nil // agent-only: the person pairs it on their own machine
 	}
-	pairID, err := s.pairWith(l, pub, label)
+	pairID, err := s.pairWith(l, pub, label, "")
 	return pub, pairID, err
 }
 
@@ -201,10 +201,125 @@ func (s *Store) Pair(key, label string) (string, error) {
 	if len(live) > 0 {
 		return live[0].id, nil
 	}
-	return s.pairWith(l, key, label)
+	return s.pairWith(l, key, label, "")
 }
 
-func (s *Store) pairWith(l *Loaded, key, label string) (string, error) {
+// PairPeer writes an agent.pair claim for the key of another person: a
+// peer whose signed notes the person takes into their log (docs/SHARE.md,
+// "A signed reply"). The claim says that it is a peer and names the
+// identity that the key spoke for when the person accepted it. That is the
+// person's word: the log does not hold the peer's identity records. The
+// rules for a label are those of Pair, and a label is required: a note
+// must show under a name.
+func (s *Store) PairPeer(key, label, identity string) (string, error) {
+	unlock, err := s.lock()
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
+	if _, err := ParseKey(key); err != nil {
+		return "", err
+	}
+	if label == "" || !IsID(identity) {
+		return "", errors.New("a peer is paired under a name, with the identity that its key spoke for")
+	}
+	l, err := s.load(false)
+	if err != nil {
+		return "", err
+	}
+	live := livePairings(l.agentPairings(key))
+	if other := otherLabels(live, label); other != "" {
+		return "", fmt.Errorf("this key is already paired as %s; bean does not rename it, because every record it wrote would then show as %q", other, label)
+	}
+	if len(live) > 0 {
+		return live[0].id, nil
+	}
+	return s.pairWith(l, key, label, identity)
+}
+
+// Unpair withdraws the person's word for keys: every key that is paired
+// under the name, or the one key given. Each pairing in force gets a
+// correction that says unpaired, so every copy and every reader obeys it.
+// The records that the key signed stay, and show as an unpaired key's. It
+// returns the keys that it unpaired.
+func (s *Store) Unpair(nameOrKey string) ([]string, error) {
+	unlock, err := s.lock()
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+	l, err := s.load(false)
+	if err != nil {
+		return nil, err
+	}
+	w, err := s.writerFor(l, false)
+	if err != nil {
+		return nil, err
+	}
+	var lines []string
+	var keys []string
+	claims := l.pairClaims()
+	for _, key := range sortedKeys(claims) {
+		for _, p := range livePairings(claims[key]) {
+			if key != nameOrKey && shownLabel(p.label) != nameOrKey {
+				continue
+			}
+			value := map[string]any{}
+			for k, v := range l.Report.Records[p.id].Value {
+				value[k] = v
+			}
+			value["status"] = "unpaired"
+			lines = append(lines, string(Canonical(map[string]any{
+				"type":   "agent.pair",
+				"value":  value,
+				"times":  map[string]any{"observed": nil},
+				"source": map[string]any{"system": "self", "adapter": Adapter, "ref": nil},
+				"refs":   []any{map[string]any{"rel": "supersedes", "id": p.id}},
+			})))
+			if !slices.Contains(keys, key) {
+				keys = append(keys, key)
+			}
+		}
+	}
+	if len(lines) == 0 {
+		return nil, nil
+	}
+	if _, err := s.appendWith(l, w, strings.NewReader(strings.Join(lines, "\n")+"\n")); err != nil {
+		return nil, err
+	}
+	return keys, nil
+}
+
+// Unpaired reports a key that the person paired once and unpaired since,
+// with no pairing in force.
+func (l *Loaded) Unpaired(key string) bool {
+	ps := l.agentPairings(key)
+	return len(ps) > 0 && len(livePairings(ps)) == 0
+}
+
+// PeerLabel returns the name under which the person paired a key of this
+// identity as a peer, or "" when they paired none. A peer who changed
+// their key keeps their name.
+func (l *Loaded) PeerLabel(identity string) string {
+	if l.ID == "" || !IsID(identity) {
+		return ""
+	}
+	for _, id := range sortedKeys(l.Report.Records) {
+		r := l.Report.Records[id]
+		if r.Type != "agent.pair" || r.Author != l.ID || r.Subject != l.ID || !l.Current(id) {
+			continue
+		}
+		role, _ := r.Value["role"].(string)
+		of, _ := r.Value["identity"].(string)
+		st, _ := r.Value["status"].(string)
+		if label, _ := r.Value["label"].(string); role == "peer" && of == identity && st != "unpaired" && label != "" {
+			return label
+		}
+	}
+	return ""
+}
+
+func (s *Store) pairWith(l *Loaded, key, label, peerOf string) (string, error) {
 	w, err := s.writerFor(l, false)
 	if err != nil {
 		return "", err
@@ -212,6 +327,9 @@ func (s *Store) pairWith(l *Loaded, key, label string) (string, error) {
 	value := map[string]any{"key": key}
 	if label != "" {
 		value["label"] = label
+	}
+	if peerOf != "" {
+		value["role"], value["identity"] = "peer", peerOf
 	}
 	obj := map[string]any{
 		"type":   "agent.pair",

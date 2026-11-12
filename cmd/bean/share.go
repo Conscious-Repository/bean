@@ -22,6 +22,7 @@ import (
 	"github.com/Conscious-Repository/bean/internal/bundle"
 	"github.com/Conscious-Repository/bean/internal/nhanes"
 	"github.com/Conscious-Repository/bean/internal/pack"
+	"github.com/Conscious-Repository/bean/internal/reply"
 )
 
 // bean share writes chosen records, and with -files the files they keep,
@@ -587,6 +588,10 @@ func cmdCheckBundle(args []string) {
 		fmt.Println(safe(line))
 	}
 	if !ok {
+		// A reply is not a bundle, and its reader has another command.
+		if reply.Check(in).OK {
+			fmt.Println("This is a reply to a share, not a bundle: the person it is for reads it with bean accept.")
+		}
 		os.Exit(1)
 	}
 	if *unpack != "" {

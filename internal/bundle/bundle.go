@@ -140,6 +140,10 @@ type Result struct {
 	// this is: a person can make many, and a reader may be handed an older
 	// one.
 	Share string `json:"share"`
+	// Listed are the ids of the shared records, in full, set when every
+	// check passed. A reply names the record that each of its notes is
+	// about.
+	Listed []string `json:"-"`
 	// Head is what the check says before the records: who shared, when, and
 	// the counts.
 	Head []string `json:"head"`
@@ -450,7 +454,7 @@ func Check(in Input) Result {
 		res.Head = append(res.Head, "note: "+n)
 	}
 	for _, key := range slices.Sorted(maps.Keys(paired)) {
-		res.Head = append(res.Head, fmt.Sprintf("paired by the person: %s, key %s", paired[key], core.Npub(key)))
+		res.Head = append(res.Head, fmt.Sprintf("paired by the person: %s, key %s", paired[key], keyName(key)))
 	}
 	for _, name := range in.Ignored {
 		// bean writes a README.txt for a reader with no checker. It is not
@@ -466,6 +470,7 @@ func Check(in Input) Result {
 	if len(res.Problems) == 0 {
 		res.Note, _ = share.Context["note"].(string)
 		res.Identity, res.Words, res.Key, res.When, res.Share = person, core.IDWords(person), share.Kid, when, share.ID
+		res.Listed = slices.Sorted(maps.Keys(listed))
 		res.Files = included
 		res.Carried = carried
 		var rows []*core.Record
@@ -494,7 +499,7 @@ func Check(in Input) Result {
 			case paired[r.Author] != "":
 				by = "[" + paired[r.Author] + "]"
 			default:
-				by = "[signed by another key: " + core.Npub(r.Author) + "]"
+				by = "[signed by another key: " + keyName(r.Author) + "]"
 			}
 			res.Rows = append(res.Rows, Row{When: sharedWhen(r), Type: r.Type, Text: view.Record(r, inBundle), By: by, ID: r.ID[7:19], Mark: view.Mark(r, inBundle)})
 			// A comparison with a reference pack names it by SHA-256.
@@ -535,6 +540,15 @@ func Check(in Input) Result {
 	}
 	res.Tail = append(res.Tail, Caveats...)
 	return done()
+}
+
+// keyName is how a key is shown: as an npub when it is a Nostr key, and as
+// the tagged key when it is not. A peer's key need not be a Nostr key.
+func keyName(key string) string {
+	if npub := core.Npub(key); npub != "" {
+		return npub
+	}
+	return key
 }
 
 // sharedWhen is a record's observed time as the record states it, with its

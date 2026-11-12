@@ -185,6 +185,30 @@ Checks a bundle, shows what it holds when it passes, and changes nothing in it. 
 
 A reader with no terminal runs the same check in a browser. `make page` builds `bean-check.html`, one file that reads a bundle's folder or a zip file of it and sends nothing ([SHARE.md](SHARE.md)).
 
+### `reply -to <what you received> -out <new file> <id> <note> [<id> <note>]...`
+
+Signs notes about records that someone shared with you, and seals them for that person. [SHARE.md](SHARE.md) ("A signed reply") says what a reply holds and what it shows.
+
+- `-to` is a sealed package, or a bundle's folder or zip file. It must pass `check-bundle`. For a sealed package bean asks for its six words on standard input.
+- Each `<id>` names a record of that share: its id from the check, or the first 6 or more hex digits. The id of the share record names the share itself. Each `<note>` is a text of 1 to 4000 bytes.
+- It needs your own log and key: a note is signed with your key, about the other person.
+- It writes one new file, sealed, and prints the six words that open it and your identity words. Your log gets a `reply` record: to whom, to which share, how many notes. The notes are in the file only.
+
+### `accept [-label <name>] [-yes] <reply>`
+
+Checks a reply to a share of yours and takes its notes into your log. It asks for the six words. Then it shows the share, the eight identity words of whoever signed, and each note with the record that it is about. Then it asks.
+
+- `-label` is the name under which this person's notes show. The first reply of a key needs it. A key keeps its name: another `-label` for it is refused.
+- `-yes` skips the question, for scripts. Without a terminal and without `-yes` nothing is taken.
+- It takes notes about records of that share and nothing else. A reply that holds anything more is refused whole, and so is a reply for another person or of a key that you unpaired.
+- It adds the notes and one `agent.pair` record of yours that says the key is a peer's, with the name. A peer who changed their key keeps the name, and the key that they retired is unpaired.
+
+Exit 1 when nothing was taken.
+
+### `unpair <name>`
+
+Takes your word back from every key that you paired under a name, a peer's or an agent's. It prints each key. The records that those keys signed stay, and show as an unpaired key's. A later reply of such a key is refused. Exit 1 when no key has that name.
+
 ## AI and agents
 
 ### `mcp [-write] [-blobs] [-label <name>]`

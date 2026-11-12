@@ -13,6 +13,7 @@ import (
 	"syscall/js"
 
 	"github.com/Conscious-Repository/bean/internal/bundle"
+	"github.com/Conscious-Repository/bean/internal/reply"
 	"github.com/Conscious-Repository/bean/internal/view"
 )
 
@@ -51,6 +52,11 @@ func file(_ js.Value, args []js.Value) (out any) {
 // checked runs the check, and keeps the files of a bundle that passed.
 func checked(in bundle.Input) bundle.Result {
 	res := bundle.Check(in)
+	// A reply is not a share. Its reader is the person that it is for,
+	// who has bean: this page says what it is and shows nothing of it.
+	if !res.OK && reply.Check(in).OK {
+		return bundle.Check(bundle.Input{Fatal: []string{"this is a reply to a share, not a share. The person that it is for reads it with bean accept"}})
+	}
 	carried = map[string]func() ([]byte, error){}
 	if res.OK {
 		for _, f := range in.Files {
