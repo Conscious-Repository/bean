@@ -164,7 +164,7 @@ func compareReadings(s *core.Store, typ string, pos []string) ([]*core.Record, *
 			}
 		}
 		if len(readings) == 0 {
-			fail(fmt.Errorf("no current reading of type %s", typ))
+			fail(fmt.Errorf("no current reading of type %s. Add one first, for example: bean add lab.cholesterol-total 187 -unit mg/dL. bean ls shows what the log holds", typ))
 		}
 	}
 	for _, id := range pos {
@@ -498,7 +498,10 @@ func printComparisons(w io.Writer, rows []comparison, head, known string, all bo
 	for _, line := range strings.Split(head, "\n") {
 		fmt.Fprintln(w, safe(line))
 	}
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	// The table is shown only when it has a row.
+	var table bytes.Buffer
+	shown := 0
+	tw := tabwriter.NewWriter(&table, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "READING\tVALUE\tPERCENTILE\tLOWER\tSAME\tMIDDLE HALF\tMEDIAN\tN\tNOTE\tID")
 	var caveats, help, unmapped, against []string
 	once := func(list *[]string, text string) {
@@ -517,6 +520,7 @@ func printComparisons(w io.Writer, rows []comparison, head, known string, all bo
 			if c.result.N > 0 {
 				n = strconv.Itoa(c.result.N)
 			}
+			shown++
 			fmt.Fprintf(tw, "%s\t%s\t-\t-\t-\t-\t-\t%s\tnot comparable: %s\t%s\n", r.Type, value, n, safe(c.refused), r.ID[7:19])
 			for _, text := range c.help {
 				once(&help, text)
@@ -533,8 +537,9 @@ func printComparisons(w io.Writer, rows []comparison, head, known string, all bo
 				}
 			}
 			if slices.Contains(c.caveats, pack.CaveatNotOnRecord) {
-				note = append(note, "pack not on record")
+				note = append(note, "pack NOT on record")
 			}
+			shown++
 			fmt.Fprintf(tw, "%s\t%s\t%s\t%s%%\t%s%%\t%s to %s\t%s\t%d\t%s\t%s\n", r.Type, value,
 				nhanes.Num(res.Percentile), nhanes.Num(res.Below), nhanes.Num(res.Equal), nhanes.Num(res.P25), nhanes.Num(res.P75), nhanes.Num(res.P50), res.N, strings.Join(note, ", "), r.ID[7:19])
 			for _, text := range c.caveats {
@@ -544,6 +549,9 @@ func printComparisons(w io.Writer, rows []comparison, head, known string, all bo
 		}
 	}
 	tw.Flush()
+	if shown > 0 {
+		w.Write(table.Bytes())
+	}
 	// Which measure a reading is set against is the pack's claim, so it is
 	// shown.
 	if len(against) > 0 {

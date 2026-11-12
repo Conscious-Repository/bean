@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -137,6 +138,14 @@ func TestRealPack(t *testing.T) {
 		if known.Measures[id] != m.Label {
 			t.Errorf("measure %s: bean holds the label %q, the pack has %q", id, known.Measures[id], m.Label)
 		}
+	}
+	for id, m := range p.Measures {
+		if !reflect.DeepEqual(known.Same[id], m.Same) {
+			t.Errorf("measure %s: bean holds the types %v, the pack has %v", id, known.Same[id], m.Same)
+		}
+	}
+	if len(known.Same) != len(p.Measures) {
+		t.Errorf("bean holds the types of %d measures, the pack has %d", len(known.Same), len(p.Measures))
 	}
 	for id, c := range p.Cohorts {
 		if known.Cohorts[id] != c.Text {

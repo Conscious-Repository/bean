@@ -34,19 +34,25 @@ A comparison says where a value lies among the values of a cohort in the source'
 ## Try it
 
 ```
-bean-pack-nhanes -out nhanes.pack DEMO_J.xpt TCHOL_J.xpt HDL_J.xpt GHB_J.xpt CBC_J.xpt BMX_J.xpt
+cd ~/nhanes                                                            # the folder of the downloads, not bean's
+bean-pack-nhanes -out nhanes.pack *.xpt                                # build the pack
 bean compare -pack nhanes.pack                                         # what the pack holds
 bean compare -pack nhanes.pack -cohort male-30-39 -type 'lab.*'        # compare
 bean compare -pack nhanes.pack -cohort male-30-39 -type weight -save   # compare, and keep the result
-python3 tools/pack/check.py nhanes.pack                                # the check, without bean
-python3 tools/pack/rebuild_nhanes.py nhanes.pack *.xpt                 # build the same bytes again, without bean
-make pack                                                              # both, on packs good and wrong
+```
+
+Then, in the folder of bean's code:
+
+```
+python3 tools/pack/check.py ~/nhanes/nhanes.pack                              # the check, without bean
+python3 tools/pack/rebuild_nhanes.py ~/nhanes/nhanes.pack ~/nhanes/*.xpt      # build the same bytes again, without bean
+make pack                                                                     # both, on packs good and wrong
 ```
 
 [COMPARE.md](COMPARE.md) says where the NHANES files are: its loop downloads these six, and one more that a pack does not use. `bean-pack-nhanes` reads the files that you give it and goes nowhere.
 
 - **`-out` names a new file.** The builder writes over nothing.
-- **A pack holds the tests whose files you give.** `DEMO_J` is always needed. A file that a pack holds nothing of is named and left out, so `*.xpt` works. With the six files above, the pack is the one on record, and bean says so.
+- **A pack holds the tests whose files you give.** `DEMO_J` is always needed. A file that a pack holds nothing of is named and left out, so `*.xpt` works. With these six files, `DEMO_J`, `TCHOL_J`, `HDL_J`, `GHB_J`, `CBC_J` and `BMX_J`, the pack is the one on record, and bean says so.
 - **A file that is not the one on record is refused.** It may be a download that was cut short. `-unknown-files` builds from it, and the pack then says so in its caveats. Such a pack is not the pack on record: `bean compare` takes it only with `-unknown-pack`.
 - **Keep the pack file.** Your log names a pack by its SHA-256 and does not hold it. A reader of a comparison that you share needs the same pack to compute it again.
 - **Use the type names and units that the pack lists.** `bean compare -pack nhanes.pack` shows them: a reading in another unit gets no number.
@@ -174,9 +180,11 @@ bean has one pack on record: the NHANES pack, by its SHA-256. For any other pack
 
 - `bean compare -pack` shows a warning, and compares only with `-unknown-pack`. Each result then has the caveat above, in the output and in the saved claim.
 - `bean check-bundle` and the check page mark the row: `by pack 7f3fda515b16 (NOT on record)`. They show what the reading was set against in quotation marks: it is the claim's word. They show the title only as what the sender calls it.
-- `tools/compare/reproduce.py` computes the claim again, prints `NOT ON RECORD`, and fails. A reader who trusts the pack's publisher names the SHA-256: `-accept-pack <SHA-256>`.
+- `tools/compare/reproduce.py` computes the claim again, prints `NOT on record`, and fails. A reader who trusts the pack's publisher names the SHA-256: `-accept-pack <SHA-256>`.
 
-For the pack on record, bean holds each measure's label and each cohort in words. A row shows those, whatever the claim says. A claim that says otherwise is marked: `(the claim MISSTATES this pack)`.
+For the pack on record, bean holds each measure's label, the types and units that it takes, and each cohort in words. A row shows those, whatever the claim says. A claim that says otherwise is marked `(the claim MISSTATES this pack)`. So is one that sets a reading against a measure that does not take it.
+
+Three more marks. `(names NO reference data)`: the comparison names no pack and no files. `(names BOTH a pack and files)`: a comparison is made with one. `(is NOT about a reading)`: it is about one of bean's own records, such as another comparison.
 
 **What a check of a bundle does not do.** It does not compute a comparison again: it has the claim and not the pack. So a claim with false numbers that names the pack on record reads like a true one there. `reproduce.py` with the pack is what finds it.
 

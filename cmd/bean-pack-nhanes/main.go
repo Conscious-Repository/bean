@@ -98,7 +98,7 @@ func build(out string, unknown bool, paths []string) error {
 	}
 	f, err := os.OpenFile(out, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
-		return fmt.Errorf("%s: a pack is written to a new file: %w", out, err)
+		return fmt.Errorf("%s: a pack is written to a new file, and never over one. Name another file, or remove this one first: %w", out, err)
 	}
 	if _, err := f.Write(data); err != nil {
 		f.Close()

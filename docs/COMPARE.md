@@ -10,9 +10,10 @@ There are two ways to compare, and both give the same numbers. This document is 
 
 [NHANES](https://wwwn.cdc.gov/nchs/nhanes/) is a survey by the US National Center for Health Statistics (CDC). About 9,000 people of all ages are interviewed, examined and have blood drawn. The files are public, one row per person, joined by the number `SEQN`. bean reads the 2017-2018 cycle: file names ending in `_J`.
 
-Download the files you need from CDC and keep each one. bean never goes online: you fetch, bean keeps.
+Download the files you need from CDC and keep each one. bean never goes online: you fetch, bean keeps. Use a folder of its own, not the folder of bean's code: files there change what `make page` builds.
 
 ```
+mkdir ~/nhanes && cd ~/nhanes
 for f in DEMO_J TCHOL_J HDL_J GHB_J CBC_J BMX_J DR1TOT_J; do
   curl -fLO https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/$f.xpt && bean import -yes nhanes $f.xpt
 done
@@ -159,7 +160,7 @@ python3 tools/compare/reproduce.py <a bundle> DEMO_J.xpt TCHOL_J.xpt
 python3 tools/compare/reproduce.py records.jsonl DEMO_J.xpt TCHOL_J.xpt
 ```
 
-A comparison that was made with a reference pack needs the pack and no other file: `python3 tools/compare/reproduce.py <a bundle> nhanes.pack`. The tool finds the pack by its SHA-256, whatever its file is called.
+A comparison that was made with a reference pack needs the pack and no other file: `python3 tools/compare/reproduce.py <a bundle> nhanes.pack`. The tool finds the pack by its SHA-256, whatever its file is called. A log with comparisons of both kinds needs both: `python3 tools/compare/reproduce.py <a bundle or an export> ~/nhanes/*.xpt ~/nhanes/nhanes.pack`.
 
 A folder is read whole, so a `bean export` or a bundle shared with `-files` is enough by itself. Without the files in the folder, give them: the ones named in each claim, fetched from CDC. `records.jsonl` is the output of `bean ls -json`. A file that is missing gives `CANNOT CHECK` and its name, not a result that differs.
 

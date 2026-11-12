@@ -134,7 +134,7 @@ And you should know:
 
 ## Check a shared comparison
 
-A comparison shared with `-files` can be computed again from the bundle alone. Without `-files` it needs the bundle and the files: fetched from CDC, or your own kept copies in a `bean export`.
+A comparison with the survey's files, shared with `-files`, can be computed again from the bundle alone. Without `-files` it needs the bundle and the files: fetched from CDC, or your own kept copies in a `bean export`.
 
 ```
 python3 tools/compare/reproduce.py with-files

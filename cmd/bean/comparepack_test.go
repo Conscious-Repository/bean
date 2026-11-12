@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/Conscious-Repository/bean/internal/nhanes"
 	"github.com/Conscious-Repository/bean/internal/pack"
@@ -77,11 +78,11 @@ func TestComparePack(t *testing.T) {
 		t.Fatalf("%d\n%s\n%s", code, out, errs)
 	}
 	byFiles, _, _ := run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", ids[0])
-	got, want := packRow(out, ids[0]), strings.Replace(packRow(byFiles, ids[0]), "small cohort, file not on record ", "small cohort, pack not on record ", 1)
+	got, want := packRow(out, ids[0]), strings.Replace(packRow(byFiles, ids[0]), "small cohort, file not on record ", "small cohort, pack NOT on record ", 1)
 	if got == "" || got != want {
 		t.Errorf("with the pack:  %s\nwith the files: %s", got, want)
 	}
-	for _, want := range []string{"SHA-256 " + digest, "male, age 30-39", "WARNING: bean has NO record of this pack", "pack not on record", "nobody has checked its tables", "lab.cholesterol-total in mg/dL against Total Cholesterol (mg/dL)", "this copy of TCHOL_J is not the file on record", "you chose the cohort", "Not saved"} {
+	for _, want := range []string{"SHA-256 " + digest, "male, age 30-39", "WARNING: bean has NO record of this pack", "pack NOT on record", "nobody has checked its tables", "lab.cholesterol-total in mg/dL against Total Cholesterol (mg/dL)", "this copy of TCHOL_J is not the file on record", "you chose the cohort", "Not saved"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("no %q in\n%s", want, out)
 		}
@@ -300,8 +301,11 @@ func TestRowOfAPackOnRecord(t *testing.T) {
 		"another cohort in words":               {claim(onRecord+`"label":"Total Cholesterol (mg/dL)"`, "everyone, by pack "+digest[:12]), own + digest[:12] + " (the claim MISSTATES this pack)"},
 		"a measure that the pack does not have": {claim(`"pack":"`+digest+`","measure":"LBXLDL","cohort":"male-30-39","label":"LDL (mg/dL)"`, "male, age 30-39"), "193 mg/dL, among male, age 30-39 (n 339), by pack " + digest[:12] + " (the claim MISSTATES this pack)"},
 		"a cohort that the pack does not have":  {claim(`"pack":"`+digest+`","measure":"LBXTC","cohort":"male-35-44","label":"Total Cholesterol (mg/dL)"`, "male, age 35-44"), "(the claim MISSTATES this pack)"},
-		"a pack and files":                      {claim(onRecord+`"label":"Total Cholesterol (mg/dL)","files":[]`, "male, age 30-39"), "(the claim MISSTATES this pack)"},
-		"a pack not on record and files":        {claim(`"pack":"`+strings.Repeat("a", 64)+`","measure":"LBXTC","cohort":"male-30-39","label":"x","files":[]`, "male, age 30-39"), "(names NO reference data)"},
+		"a pack and files":                      {claim(onRecord+`"label":"Total Cholesterol (mg/dL)","files":[]`, "male, age 30-39"), "(names BOTH a pack and files)"},
+		"a pack not on record and files":        {claim(`"pack":"`+strings.Repeat("a", 64)+`","measure":"LBXTC","cohort":"male-30-39","label":"x","files":[]`, "male, age 30-39"), "(names BOTH a pack and files)"},
+		"files that name nothing":               {claim(`"files":[]`, "male, age 30-39"), "(names NO reference data)"},
+		"files that are not files":              {claim(`"files":[1]`, "male, age 30-39"), "(names NO reference data)"},
+		"a pack of 64 bytes that are no hex":    {claim(`"pack":"a`+strings.Repeat("é", 31)+`b","measure":"LBXTC","cohort":"male-30-39","label":"x"`, "male, age 30-39"), "193 mg/dL, among male, age 30-39 (n 339) (names NO reference data)"},
 		"a pack that is no SHA-256":             {claim(`"pack":"10555d","measure":"LBXTC","cohort":"male-30-39","label":"x"`, "male, age 30-39"), "(names NO reference data)"},
 	} {
 		d := t.TempDir()
@@ -311,8 +315,33 @@ func TestRowOfAPackOnRecord(t *testing.T) {
 		if out, errs, code := run(t, d, tc.claim+"\n", "append"); code != 0 {
 			t.Fatalf("%s: append: %d\n%s\n%s", name, code, out, errs)
 		}
-		if ls, _, _ := run(t, d, "", "ls", "-type", "comparison.percentile"); !strings.Contains(ls+"    ", tc.want) || strings.Count(ls, "by pack") > 1 {
+		if ls, _, _ := run(t, d, "", "ls", "-type", "comparison.percentile"); !strings.Contains(ls+"    ", tc.want) || strings.Count(ls, "by pack") > 1 || !utf8.ValidString(ls) {
 			t.Errorf("%s: no %q in\n%s", name, tc.want, ls)
 		}
+	}
+	// A reading of a type that the measure does not take, and a record that
+	// is no reading at all: the pack on record says which types it takes.
+	weight, _, _ := run(t, dir, "", "add", "weight", "81.2", "-unit", "kg", "-at", "2026-11-01")
+	weight = strings.TrimSpace(weight)
+	about := func(reading string) string {
+		return strings.ReplaceAll(claim(onRecord+`"label":"Total Cholesterol (mg/dL)"`, "male, age 30-39"), ids[0], reading)
+	}
+	if out, errs, code := run(t, dir, about(weight)+"\n", "append"); code != 0 {
+		t.Fatalf("append: %d\n%s\n%s", code, out, errs)
+	}
+	ls, _, _ := run(t, dir, "", "ls", "-type", "comparison.percentile")
+	if !strings.Contains(ls, "of weight 81.2 kg against Total Cholesterol (mg/dL), among male, age 30-39 (n 339), by pack "+digest[:12]+" (the claim MISSTATES this pack)") {
+		t.Errorf("a weight set against cholesterol:\n%s", ls)
+	}
+	first, _, _ := run(t, dir, "", "ls", "-json", "-type", "comparison.percentile")
+	var c map[string]any
+	if err := json.Unmarshal([]byte(strings.SplitN(first, "\n", 2)[0]), &c); err != nil {
+		t.Fatal(err)
+	}
+	if out, errs, code := run(t, dir, about(c["id"].(string))+"\n", "append"); code != 0 {
+		t.Fatalf("append: %d\n%s\n%s", code, out, errs)
+	}
+	if ls, _, _ := run(t, dir, "", "ls", "-type", "comparison.percentile"); !strings.Contains(ls, "of comparison.percentile ") || !strings.Contains(ls, "(is NOT about a reading)") {
+		t.Errorf("a comparison of a comparison:\n%s", ls)
 	}
 }

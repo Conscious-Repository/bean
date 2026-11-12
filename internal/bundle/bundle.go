@@ -182,6 +182,11 @@ func (res Result) Lines() []string {
 	for _, p := range res.Problems {
 		lines = append(lines, "problem: "+p)
 	}
+	// A package that did not open was not checked: that is not a bundle
+	// that failed.
+	if res.Locked {
+		return append(lines, "the package did not open: nothing was checked")
+	}
 	if !res.OK {
 		return append(lines, fmt.Sprintf("bundle FAILED: %d problems", len(res.Problems)))
 	}
@@ -448,6 +453,12 @@ func Check(in Input) Result {
 		res.Head = append(res.Head, fmt.Sprintf("paired by the person: %s, key %s", paired[key], core.Npub(key)))
 	}
 	for _, name := range in.Ignored {
+		// bean writes a README.txt for a reader with no checker. It is not
+		// a record, so it is named, and it is no fault.
+		if name == "README.txt" {
+			res.Head = append(res.Head, "a note for a reader with no checker, not signed and not read: "+name)
+			continue
+		}
 		res.Head = append(res.Head, "not part of the bundle, and not read: "+name)
 	}
 	res.Ignored = in.Ignored
@@ -485,7 +496,7 @@ func Check(in Input) Result {
 			default:
 				by = "[signed by another key: " + core.Npub(r.Author) + "]"
 			}
-			res.Rows = append(res.Rows, Row{When: sharedWhen(r), Type: r.Type, Text: view.Record(r, inBundle), By: by, ID: r.ID[7:19], Mark: view.Mark(r)})
+			res.Rows = append(res.Rows, Row{When: sharedWhen(r), Type: r.Type, Text: view.Record(r, inBundle), By: by, ID: r.ID[7:19], Mark: view.Mark(r, inBundle)})
 			// A comparison with a reference pack names it by SHA-256.
 			if ref, ok := r.Context["reference"].(map[string]any); ok && strings.HasPrefix(r.Type, "comparison.") {
 				digest, _ := ref["pack"].(string)
@@ -496,7 +507,7 @@ func Check(in Input) Result {
 				if !pack.IsKnown(digest) {
 					line += fmt.Sprintf(". The sender calls it %q. Whoever built it chose its tables, its caveats and what each reading is set against", title)
 				}
-				if len(digest) == 64 && !slices.Contains(packs, line) {
+				if pack.IsDigest(digest) && !slices.Contains(packs, line) {
 					packs = append(packs, line)
 				}
 			}

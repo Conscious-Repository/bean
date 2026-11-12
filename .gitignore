@@ -13,3 +13,9 @@ __pycache__/
 
 # Built by make dist.
 /dist/
+
+# Downloads and packs that a person made here by mistake: they belong in a
+# folder of their own, and would change what make page builds.
+/*.xpt
+/*.XPT
+/*.pack

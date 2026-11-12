@@ -21,6 +21,7 @@ import (
 	"github.com/Conscious-Repository/bean/core"
 	"github.com/Conscious-Repository/bean/internal/bundle"
 	"github.com/Conscious-Repository/bean/internal/nhanes"
+	"github.com/Conscious-Repository/bean/internal/pack"
 )
 
 // bean share writes chosen records, and with -files the files they keep,
@@ -279,6 +280,18 @@ func cmdShare(s *core.Store, args []string) {
 	// The public files are said once, with what their absence means.
 	if publicHome > 0 {
 		leftOut = append(leftOut, fmt.Sprintf("  not shared: the %d public files that the reference.file records keep. Add -files to share them: without them a reader needs the files from their publisher to compute a comparison again.", publicHome))
+	}
+	// A comparison with a reference pack names the pack and does not hold
+	// it: the reader needs that file to compute the comparison again.
+	var packs []string
+	for _, id := range slices.Sorted(maps.Keys(chosen)) {
+		ref, _ := chosen[id].Context["reference"].(map[string]any)
+		if digest, _ := ref["pack"].(string); pack.IsDigest(digest) && strings.HasPrefix(chosen[id].Type, "comparison.") && !slices.Contains(packs, digest) {
+			packs = append(packs, digest)
+		}
+	}
+	for _, digest := range packs {
+		leftOut = append(leftOut, fmt.Sprintf("  not shared: the reference pack %s. A comparison names it, and a reader needs that file to compute the comparison again: send it too, or say where it is.", digest))
 	}
 	if *files && travels == 0 {
 		leftOut = append(leftOut, "  -files: no record that you named keeps a file, so no file goes")
@@ -580,7 +593,11 @@ func cmdCheckBundle(args []string) {
 		if err := unpackBundle(in, *unpack); err != nil {
 			fail(err)
 		}
-		fmt.Printf("unpacked into %s: its files are in %s\n", *unpack, filepath.Join(*unpack, "files"))
+		if len(in.Files) > 0 {
+			fmt.Printf("unpacked into %s: its files are in %s\n", *unpack, filepath.Join(*unpack, "files"))
+		} else {
+			fmt.Printf("unpacked into %s: it carries no file\n", *unpack)
+		}
 	}
 }
 

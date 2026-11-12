@@ -42,7 +42,7 @@ It needs Go and `curl`, and downloads about 7 MB from CDC. With Python and `pip 
 
 | You need | For | Install on macOS |
 |---|---|---|
-| Go 1.24 or later | Building `bean` | `brew install go` |
+| Go 1.24 or later | Building `bean`. On the first build, Go downloads the toolchain that `go.mod` names (go1.27.3). | `brew install go` |
 | `pdftotext` | Lab report PDFs only | `brew install poppler` |
 | `make` | `make page`, the page that checks a bundle in a browser | It comes with Xcode's command line tools |
 | Python 3 | Optional: the checks that use no bean (`tools/second`, `tools/compare`) | `brew install python`, then `pip install -r tools/requirements.txt` |
@@ -107,7 +107,7 @@ bean add food "2 eggs, sourdough, coffee" -note breakfast
 bean add drink.water 0.5 -unit L
 bean add supplement "magnesium glycinate" -note "400 mg"
 bean add exercise.run 5 -unit km -at "2026-10-28 07:15"
-bean add note "drank 1 L of water, gone by 5 pm" -about 1b59a1
+bean add note "drank 1 L of water, gone by 5 pm" -about 1b59a1   # 1b59a1: the start of an id that bean printed for you
 bean add food "toast" -photo breakfast.jpg
 ```
 
@@ -180,12 +180,16 @@ The CSV needs a header row and a `value` column. A `time` column (RFC 3339) and 
 `bean compare` shows where a reading lies among people you describe, in public survey data (NHANES, from the US CDC). You say who: sex, age, and if you like ethnicity, BMI, or what they ate that day. It runs on your machine, on files you downloaded and keep.
 
 ```
+mkdir ~/nhanes && cd ~/nhanes        # a folder of its own, not the bean folder
 for f in DEMO_J TCHOL_J HDL_J GHB_J CBC_J BMX_J; do
   curl -fLO https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/$f.xpt && bean import -yes nhanes $f.xpt
 done
+bean add lab.cholesterol-total 187 -unit mg/dL      # a reading, if you imported no lab report
 bean compare -sex male -age 30-39 -type 'lab.*'
 bean compare -sex male -age 30-39 -where DEMO_J.RIDRETH3=3 -where BMX_J.BMXBMI=20-27 -type 'lab.*'
 ```
+
+Type the name and the unit as COMPARE.md lists them: `mg/dl` is not `mg/dL`, and gets no number.
 
 ```
 Compared with NHANES 2017-2018: male, age 30-39.
@@ -198,7 +202,7 @@ lab.cholesterol-total  187 mg/dL  46          44.2%  3.5%  164 to 213   188     
 - `-save` keeps a result as a signed record that names each file by its SHA-256, the cohort and the method. Anyone can compute it again without bean: `tools/compare/reproduce.py` does, in Python.
 - Twelve blood tests today: total and HDL cholesterol, hemoglobin A1c and the blood count. Each test needs its own file, and a rule on BMI needs `BMX_J`: the loop above fetches all six, about 7 MB. [COMPARE.md](docs/COMPARE.md) lists the type names and units to use when you type a reading by hand.
 
-- **A reference pack is the general form.** A pack is one small file of public reference data, with a table for each measure and each cohort on its menu. `bean-pack-nhanes -out nhanes.pack *.xpt` builds one from the files you downloaded, with weight beside the blood tests. `bean compare -pack nhanes.pack -cohort male-30-39 -type 'lab.*'` compares with it. Keep the pack file: your log names it by its SHA-256 and does not hold it. The table comes to your value, so no host learns the value or the cohort. Any source that someone builds into a pack works the same way.
+- **A reference pack is the general form.** A pack is one small file of public reference data, with a table for each measure and each cohort on its menu. `bean-pack-nhanes -out nhanes.pack *.xpt`, in the folder of the downloads, builds one from them, with weight beside the blood tests. A measure is one quantity that the source measured, such as total cholesterol. `bean compare -pack nhanes.pack -cohort male-30-39 -type 'lab.*'` compares with it. Keep the pack file: your log names it by its SHA-256 and does not hold it. The table comes to your value, so no host learns the value or the cohort. Any source that someone builds into a pack works the same way.
 
 [docs/COMPARE.md](docs/COMPARE.md) has the files to download, the rules, the limits and the method. [docs/REFERENCE.md](docs/REFERENCE.md) has the pack format, who hosts what, and how anyone checks a pack.
 

@@ -3,6 +3,10 @@ name: Release
 # A tag that starts with v publishes the check page with its SHA-256. The
 # page is built here, from the tagged commit, so the releaser's own machine
 # is not trusted for it. Anyone can build the same bytes: make page.
+#
+# The tag must be on main, where CI has passed. The release is marked as a
+# pre-release: the record format is at version 0 and the pack and device
+# formats are drafts. A second run for the same tag replaces the files.
 on:
   push:
     tags: ['v*']
@@ -16,6 +20,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: The tag is on main
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "the tag $GITHUB_REF_NAME is not on main: nothing is published"; exit 1; }
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -24,4 +34,9 @@ jobs:
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/bean-check.html dist/SHA256SUMS --title "$GITHUB_REF_NAME" --notes-file dist/NOTES.md
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/bean-check.html dist/SHA256SUMS --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/bean-check.html dist/SHA256SUMS --prerelease --title "$GITHUB_REF_NAME" --notes-file dist/NOTES.md
+          fi

@@ -54,10 +54,11 @@ func Record(r *core.Record, reading func(id string) *core.Record) string {
 	}
 	out := "percentile " + strconv.FormatFloat(p, 'g', -1, 64)
 	id, _ := r.Context["reading"].(string)
-	if of := reading(id); of != nil {
+	of := reading(id)
+	if of != nil {
 		out += " of " + of.Type + " " + Value(of)
 	}
-	against, among, by, mark := reference(r, among)
+	against, among, by, mark := reference(r, among, of)
 	out += against + ", among " + among
 	if result, ok := r.Context["result"].(map[string]any); ok {
 		if n, ok := result["n"].(float64); ok {
@@ -72,36 +73,69 @@ func Record(r *core.Record, reading func(id string) *core.Record) string {
 	return out
 }
 
-// Mark is what bean says about a comparison beyond what the claim says: a
-// pack that bean has no record of, a claim that misstates its pack, or a
-// comparison that names nothing, which nobody can compute again. It is ""
-// for a comparison with nothing to remark and for any other record.
-func Mark(r *core.Record) string {
+// Mark is what bean says about a comparison beyond what the claim says. It
+// is "" for a comparison with nothing to remark and for any other record.
+// The marks, by what comes first:
+//
+//   - "is NOT about a reading": the record it is about is one of bean's
+//     own, such as another comparison;
+//   - "names NO reference data": it names no pack and no files, or names
+//     them in a form that is neither, so nobody can compute it again;
+//   - "names BOTH a pack and files": a comparison is made with one;
+//   - "the claim MISSTATES this pack": the pack is on record, and the claim
+//     gives another label or cohort, names a measure or a cohort that the
+//     pack does not have, or sets a reading against a measure that does
+//     not take its type and unit;
+//   - "NOT on record": bean has no record of the pack.
+func Mark(r *core.Record, reading func(id string) *core.Record) string {
 	cohort, _ := r.Context["cohort"].(map[string]any)
 	among, _ := cohort["text"].(string)
 	if _, isNumber := r.Value["n"].(float64); !strings.HasPrefix(r.Type, "comparison.") || among == "" || !isNumber {
 		return ""
 	}
-	_, _, _, mark := reference(r, among)
+	id, _ := r.Context["reading"].(string)
+	_, _, _, mark := reference(r, among, reading(id))
 	return mark
+}
+
+// namesFiles reports a list of files as a comparison with files names
+// them: one or more, each a data set and a SHA-256.
+func namesFiles(v any) bool {
+	list, ok := v.([]any)
+	if !ok || len(list) == 0 {
+		return false
+	}
+	for _, x := range list {
+		f, _ := x.(map[string]any)
+		dataset, _ := f["dataset"].(string)
+		digest, _ := f["sha256"].(string)
+		if dataset == "" || !pack.IsDigest(digest) {
+			return false
+		}
+	}
+	return true
 }
 
 // reference reads what a comparison was made with: a pack, or files. What
 // a reading was set against, and the cohort in words, are the pack's to
 // say. For a pack that bean has on record they are returned in bean's own
 // words, and a claim that says otherwise is marked. For any other pack the
-// label is the claim's word, so it is returned in quotation marks.
-func reference(r *core.Record, claimed string) (against, among, by, mark string) {
+// label is the claim's word, so it is returned in quotation marks. of is
+// the reading, when the caller may show it.
+func reference(r *core.Record, claimed string, of *core.Record) (against, among, by, mark string) {
 	among = strings.Join(strings.Fields(claimed), " ")
 	if rs := []rune(among); len(rs) > 160 {
 		among = string(rs[:157]) + "..."
 	}
 	ref, _ := r.Context["reference"].(map[string]any)
-	digest, byPack := ref["pack"].(string)
-	_, byFiles := ref["files"].([]any)
+	digest, _ := ref["pack"].(string)
+	_, statesPack := ref["pack"]
+	_, statesFiles := ref["files"]
+	byPack, byFiles := pack.IsDigest(digest), namesFiles(ref["files"])
 	known, onRecord := pack.Known[digest]
-	misstates := byPack && byFiles
+	misstates := false
 	if byPack {
+		by = ", by pack " + digest[:12]
 		measure, _ := ref["measure"].(string)
 		label, _ := ref["label"].(string)
 		cohortID, _ := ref["cohort"].(string)
@@ -111,7 +145,11 @@ func reference(r *core.Record, claimed string) (against, among, by, mark string)
 		switch own, has := known.Measures[measure]; {
 		case onRecord && has:
 			against = " against " + own
-			misstates = misstates || own != label
+			misstates = own != label
+			if of != nil {
+				unit, _ := of.Value["unit"].(string)
+				misstates = misstates || !known.Takes(measure, of.Type, unit)
+			}
 		case onRecord:
 			misstates = true
 		case label != "":
@@ -125,16 +163,18 @@ func reference(r *core.Record, claimed string) (against, among, by, mark string)
 		}
 	}
 	switch {
+	case of != nil && pack.OwnType(of.Type):
+		mark = "is NOT about a reading"
+	case statesPack && statesFiles:
+		mark = "names BOTH a pack and files"
+	case !byPack && !byFiles:
+		mark = "names NO reference data"
 	case onRecord && misstates:
-		return against, among, ", by pack " + digest[:12], "the claim MISSTATES this pack"
-	case onRecord:
-		return against, among, ", by pack " + digest[:12], ""
-	case byPack && len(digest) == 64 && !byFiles:
-		return against, among, ", by pack " + digest[:12], "NOT on record"
-	case !byFiles || byPack:
-		return against, among, "", "names NO reference data"
+		mark = "the claim MISSTATES this pack"
+	case byPack && !onRecord:
+		mark = "NOT on record"
 	}
-	return against, among, "", ""
+	return against, among, by, mark
 }
 
 // Value is a one-line view of value and context.note.
