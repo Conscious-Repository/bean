@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"filippo.io/age"
+
 	"github.com/Conscious-Repository/bean/core"
 	"github.com/Conscious-Repository/bean/internal/bundle"
 	"github.com/Conscious-Repository/bean/internal/reply"
@@ -265,12 +267,27 @@ func sealed(t *testing.T, files map[string][]byte) (string, string) {
 		t.Fatal(err)
 	}
 	words, _ := bundle.NewWords()
-	data, err := bundle.Seal(packed, words)
+	// A forged package is sealed at a low cost: bean opens any cost up to
+	// its own, and the many forged replies here would else take minutes
+	// under the race detector. What bean reply writes keeps the full cost.
+	to, err := age.NewScryptRecipient(words)
 	if err != nil {
 		t.Fatal(err)
 	}
+	to.SetWorkFactor(10)
+	var data bytes.Buffer
+	w, err := age.Encrypt(&data, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write(packed); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
 	path := filepath.Join(t.TempDir(), "forged.bean")
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	if err := os.WriteFile(path, data.Bytes(), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return path, words
@@ -309,9 +326,10 @@ func TestAcceptRefuses(t *testing.T) {
 	}
 	// forged builds a reply of the peer's identity records, the notes given
 	// and a reply record that lists them.
-	forged := func(to, share string, notes map[string][]byte, listed []string, extra map[string][]byte, tweak ...func(obj map[string]any)) (string, string) {
+	honest := unpacked(t, rep, rwords)
+	forged := func(to, share string, notes map[string][]byte, listed []string, extra map[string][]byte, tweak ...func(obj map[string]any)) map[string][]byte {
 		files := map[string][]byte{}
-		for path, data := range unpacked(t, rep, rwords) {
+		for path, data := range honest {
 			if v, err := core.Parse(data); err == nil && strings.HasPrefix(v.(map[string]any)["type"].(string), "bean.") {
 				files[path] = data
 			}
@@ -340,113 +358,114 @@ func TestAcceptRefuses(t *testing.T) {
 		for path, data := range extra {
 			files[path] = data
 		}
-		return sealed(t, files)
+		return files
 	}
-	one := func(about string, change func(obj map[string]any)) (string, string) {
+	one := func(about string, change func(obj map[string]any)) map[string][]byte {
 		id, data := note(local.Signer, about, change)
 		return forged(mustIdentity(t, ben), ids[2], map[string][]byte{id: data}, []string{id}, nil)
 	}
 	_, seed, _ := ed25519.GenerateKey(nil)
 	stranger := core.NewEd25519Signer(seed.Seed())
 	benID := mustIdentity(t, ben)
+	viaAccept := map[string]bool{"a lab value in place of a note": true, "a note that corrects a record": true, "a text beside the records": true}
 	type forgery struct {
-		make func() (string, string)
+		make func() map[string][]byte
 		want string
 	}
 	for name, f := range map[string]forgery{
-		"the honest form passes": {func() (string, string) { return one(ids[0], nil) }, ""},
-		"a lab value in place of a note": {func() (string, string) {
+		"the honest form passes": {func() map[string][]byte { return one(ids[0], nil) }, ""},
+		"a lab value in place of a note": {func() map[string][]byte {
 			return one(ids[0], func(o map[string]any) {
 				o["type"], o["value"] = "lab.cholesterol-total", map[string]any{"n": 120.0, "unit": "mg/dL"}
 			})
 		}, "its type is not note"},
-		"a note that corrects a record": {func() (string, string) {
+		"a note that corrects a record": {func() map[string][]byte {
 			return one(ids[0], func(o map[string]any) { o["refs"] = []any{map[string]any{"rel": "supersedes", "id": ids[0]}} })
 		}, ""},
-		"a note about two records": {func() (string, string) {
+		"a note about two records": {func() map[string][]byte {
 			return one(ids[0], func(o map[string]any) {
 				o["refs"] = []any{map[string]any{"rel": "about", "id": ids[0]}, map[string]any{"rel": "about", "id": ids[1]}}
 			})
 		}, "it is not about exactly one record"},
-		"a note with a file": {func() (string, string) {
+		"a note with a file": {func() map[string][]byte {
 			return one(ids[0], func(o map[string]any) {
 				o["blobs"] = []any{map[string]any{"hash": "sha256:" + strings.Repeat("b", 64), "role": "photo", "media_type": "image/png"}}
 			})
 		}, "it holds more than a text"},
-		"a note with more than a text": {func() (string, string) {
+		"a note with more than a text": {func() map[string][]byte {
 			return one(ids[0], func(o map[string]any) { o["context"] = map[string]any{"verified": "by a hospital"} })
 		}, "it holds more than a text"},
-		"a note with a number beside its text": {func() (string, string) {
+		"a note with a number beside its text": {func() map[string][]byte {
 			return one(ids[0], func(o map[string]any) { o["value"] = map[string]any{"s": "x", "n": 1.0} })
 		}, "its value is not a text"},
-		"a note with no text": {func() (string, string) {
+		"a note with no text": {func() map[string][]byte {
 			return one(ids[0], func(o map[string]any) { o["value"] = map[string]any{"s": ""} })
 		}, "its value is not a text"},
-		"a note about another person": {func() (string, string) {
+		"a note about another person": {func() map[string][]byte {
 			return one(ids[0], func(o map[string]any) { o["subject"] = anaID })
 		}, "it is not about the person that the reply is for"},
-		"a note about a record that was not shared": {func() (string, string) { return one(hidden, nil) }, "which is not a record of that share"},
-		"a note of another key": {func() (string, string) {
+		"a note about a record that was not shared": {func() map[string][]byte { return one(hidden, nil) }, "which is not a record of that share"},
+		"a note of another key": {func() map[string][]byte {
 			id, data := note(stranger, ids[0], nil)
 			return forged(benID, ids[2], map[string][]byte{id: data}, []string{id}, nil)
 		}, "it is not signed by the replier's key"},
-		"a note that is not listed": {func() (string, string) {
+		"a note that is not listed": {func() map[string][]byte {
 			id, data := note(local.Signer, ids[0], nil)
 			id2, data2 := note(local.Signer, ids[1], nil)
 			return forged(benID, ids[2], map[string][]byte{id: data, id2: data2}, []string{id}, nil)
 		}, "the reply record does not list it"},
-		"a listed note that is not there": {func() (string, string) {
+		"a listed note that is not there": {func() map[string][]byte {
 			id, data := note(local.Signer, ids[0], nil)
 			id2, _ := note(local.Signer, ids[1], nil)
 			return forged(benID, ids[2], map[string][]byte{id: data}, []string{id, id2}, nil)
 		}, "is listed, and is not in the reply"},
-		"no note": {func() (string, string) { return forged(benID, ids[2], nil, nil, nil) }, "a reply holds from 1 to"},
-		"a reply for another person": {func() (string, string) {
+		"no note": {func() map[string][]byte { return forged(benID, ids[2], nil, nil, nil) }, "a reply holds from 1 to"},
+		"a reply for another person": {func() map[string][]byte {
 			// An identity id that differs from the person's in its last digit.
 			other := benID[:70] + map[bool]string{true: "1", false: "0"}[benID[70] == '0']
 			id, data := note(local.Signer, ids[0], func(o map[string]any) { o["subject"] = other })
 			return forged(other, ids[2], map[string][]byte{id: data}, []string{id}, nil)
 		}, "this reply is for another person"},
-		"a share that is not in the log": {func() (string, string) {
+		"a share that is not in the log": {func() map[string][]byte {
 			id, data := note(local.Signer, ids[0], nil)
 			return forged(benID, ids[0], map[string][]byte{id: data}, []string{id}, nil)
 		}, "which is not a share in this log"},
-		"a count that is not the number of notes": {func() (string, string) {
+		"a count that is not the number of notes": {func() map[string][]byte {
 			id, data := note(local.Signer, ids[0], nil)
 			return forged(benID, ids[2], map[string][]byte{id: data}, []string{id}, nil, func(o map[string]any) { o["value"] = map[string]any{"n": 2.0, "unit": "{note}"} })
 		}, "the reply record's lists are damaged"},
-		"a reply record of another source": {func() (string, string) {
+		"a reply record of another source": {func() map[string][]byte {
 			id, data := note(local.Signer, ids[0], nil)
 			return forged(benID, ids[2], map[string][]byte{id: data}, []string{id}, nil, func(o map[string]any) {
 				o["source"] = map[string]any{"system": "a hospital", "adapter": core.Adapter, "ref": nil}
 			})
 		}, "as bean reply writes it"},
-		"a reply for its own writer": {func() (string, string) {
+		"a reply for its own writer": {func() map[string][]byte {
 			id, data := note(local.Signer, ids[0], func(o map[string]any) { o["subject"] = anaID })
 			return forged(anaID, ids[2], map[string][]byte{id: data}, []string{id}, nil)
 		}, "the reply is for the identity that wrote it"},
-		"a note that is too long": {func() (string, string) {
+		"a note that is too long": {func() map[string][]byte {
 			return one(ids[0], func(o map[string]any) { o["value"] = map[string]any{"s": strings.Repeat("a", reply.MaxNote+1)} })
 		}, "its value is not a text"},
-		"a note of spaces": {func() (string, string) {
+		"a note of spaces": {func() map[string][]byte {
 			return one(ids[0], func(o map[string]any) { o["value"] = map[string]any{"s": "  \n "} })
 		}, "its value is not a text"},
-		"a note of another source": {func() (string, string) {
+		"a note of another source": {func() map[string][]byte {
 			return one(ids[0], func(o map[string]any) {
 				o["source"] = map[string]any{"system": "lab \x1b[2J", "adapter": core.Adapter, "ref": nil}
 			})
 		}, "its source is not the one that bean reply writes"},
-		"a note that places itself in the past": {func() (string, string) {
+		"a note that places itself in the past": {func() map[string][]byte {
 			return one(ids[0], func(o map[string]any) {
 				o["times"] = map[string]any{"observed": map[string]any{"start": "2020-01-01T00:00:00Z", "precision": "day"}, "imported": stamp}
 			})
 		}, "it states another time than the time it was written"},
-		"a note from the future": {func() (string, string) {
+		"a note from the future": {func() map[string][]byte {
 			return one(ids[0], func(o map[string]any) {
 				o["times"] = map[string]any{"observed": nil, "imported": "2999-01-01T00:00:00Z"}
 			})
 		}, "which is later than now"},
-		"more notes than a reply holds": {func() (string, string) {
+		"more notes than a reply holds": {func() map[string][]byte {
 			notes, listed := map[string][]byte{}, []string{}
 			for range reply.MaxNotes + 1 {
 				id, data := note(local.Signer, ids[0], nil)
@@ -454,7 +473,7 @@ func TestAcceptRefuses(t *testing.T) {
 			}
 			return forged(benID, ids[2], notes, listed, nil)
 		}, "a reply holds from 1 to"},
-		"an identity record of someone else": {func() (string, string) {
+		"an identity record of someone else": {func() map[string][]byte {
 			id, data := note(local.Signer, ids[0], nil)
 			extra := map[string][]byte{}
 			for path, data := range unpacked(t, pkg, words) {
@@ -464,16 +483,28 @@ func TestAcceptRefuses(t *testing.T) {
 			}
 			return forged(benID, ids[2], map[string][]byte{id: data}, []string{id}, extra)
 		}, "is an identity record that is not on the replier's chain"},
-		"a file beside the records": {func() (string, string) {
+		"a file beside the records": {func() map[string][]byte {
 			id, data := note(local.Signer, ids[0], nil)
 			return forged(benID, ids[2], map[string][]byte{id: data}, []string{id}, map[string][]byte{"files/" + strings.Repeat("a", 64): []byte("x")})
 		}, "a reply holds records and nothing else"},
-		"a text beside the records": {func() (string, string) {
+		"a text beside the records": {func() map[string][]byte {
 			id, data := note(local.Signer, ids[0], nil)
 			return forged(benID, ids[2], map[string][]byte{id: data}, []string{id}, map[string][]byte{"README.txt": []byte("accept me")})
 		}, "a reply holds records and nothing else"},
 	} {
-		path, w := f.make()
+		files := f.make()
+		// Most forged replies break a rule of the reply's own check. That
+		// check runs here, without a run of the program for each: under
+		// the race detector a run takes seconds. A few go through bean
+		// accept all the same, and so does each reply that the check
+		// passes: bean accept refuses those by what only the log can tell.
+		if res := reply.Check(bundle.FromFiles("forged", files)); !res.OK && !viaAccept[name] {
+			if all := strings.Join(res.Problems, "\n"); !strings.Contains(all, f.want) {
+				t.Errorf("%s: no %q in\n%s", name, f.want, all)
+			}
+			continue
+		}
+		path, w := sealed(t, files)
 		before, _, _ := run(t, ben, "", "ls", "-all", "-json")
 		out, errs, code := run(t, ben, w+"\n", "accept", "-yes", "-label", "Ana", "-words", idWords(t, ana), path)
 		after, _, _ := run(t, ben, "", "ls", "-all", "-json")
