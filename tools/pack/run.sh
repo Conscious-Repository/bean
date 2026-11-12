@@ -22,11 +22,11 @@ unset BEAN_DIR
 rc=0
 say() { echo "FAIL: $*"; rc=1; }
 
-SYN=("$DATA/DEMO_J.XPT" "$DATA/TCHOL_J.XPT" "$DATA/HDL_J.XPT")
+SYN=("$DATA/DEMO_J.XPT" "$DATA/TCHOL_J.XPT" "$DATA/HDL_J.XPT" "$DATA/BMX_J.XPT")
 bean-pack-nhanes -unknown-files -out "$T/syn.pack" "${SYN[@]}" >"$T/build.txt" || { echo "the pack was not built"; exit 1; }
 DIGEST=$(sed -n 's/^sha256 //p' "$T/build.txt")
 # The same files, in another order, give the same bytes.
-bean-pack-nhanes -unknown-files -out "$T/again.pack" "${SYN[2]}" "${SYN[0]}" "${SYN[1]}" >/dev/null
+bean-pack-nhanes -unknown-files -out "$T/again.pack" "${SYN[3]}" "${SYN[2]}" "${SYN[0]}" "${SYN[1]}" "$DATA/DR1TOT_J.XPT" >/dev/null
 cmp -s "$T/syn.pack" "$T/again.pack" || say "two builds from the same files differ"
 # A pack is written to a new file, and never from a file not on record
 # without being told.
@@ -35,11 +35,16 @@ bean-pack-nhanes -out "$T/strict.pack" "${SYN[@]}" >/dev/null 2>&1 && say "a pac
 
 "$PY" -I "$HERE/check.py" "$T/syn.pack" >"$T/py.txt" 2>&1 || say "check.py refuses the pack: $(cat "$T/py.txt")"
 grep -qx "sha256 $DIGEST" "$T/py.txt" || say "check.py gives another SHA-256 than the builder"
-"$PY" -I "$HERE/rebuild_nhanes.py" "$T/syn.pack" "${SYN[@]}" >"$T/re.txt" 2>&1 || say "rebuild_nhanes.py: $(tail -1 "$T/re.txt")"
+"$PY" -I "$HERE/rebuild_nhanes.py" "$T/syn.pack" "${SYN[@]}" "$DATA/DR1TOT_J.XPT" >"$T/re.txt" 2>&1 || say "rebuild_nhanes.py: $(tail -1 "$T/re.txt")"
+grep -q '"BMXWT"' "$T/syn.pack" || say "the pack of the synthetic files has no body measure"
+# A file that the builder uses and the pack does not name: the pack was
+# built from fewer files than are given.
+bean-pack-nhanes -unknown-files -out "$T/fewer.pack" "${SYN[0]}" "${SYN[1]}" >/dev/null
+"$PY" -I "$HERE/rebuild_nhanes.py" "$T/fewer.pack" "${SYN[@]}" >/dev/null 2>&1 && say "rebuild_nhanes.py passes a pack that was built from fewer files than it is given"
 # The rebuild covers every member: a pack with true tables and one other
 # thing changed is not the pack that the files give.
 i=0
-for change in 's/, not a reference range//' 's/"type":"lab.hdl-cholesterol"/"type":"lab.ldl-cholesterol"/' 's/adults by sex/people by sex/' 's/"version":"1"/"version":"2"/' 's/"text":"male, age 30-39"/"text":"male, age 30-40"/' 's/"n":\([0-9]*\)/"n":1\1/'; do
+for change in 's/, not a reference range//' 's/"type":"lab.hdl-cholesterol"/"type":"lab.ldl-cholesterol"/' 's/"type":"apple-health.body-mass","unit":"kg"/"type":"apple-health.body-mass","unit":"lb"/' 's/adults by sex/people by sex/' 's/"version":"1"/"version":"2"/' 's/"text":"male, age 30-39"/"text":"male, age 30-40"/' 's/"n":\([0-9]*\)/"n":1\1/'; do
   i=$((i + 1))
   sed "$change" "$T/syn.pack" >"$T/lie$i.pack"
   cmp -s "$T/syn.pack" "$T/lie$i.pack" && { say "the change $change changes nothing"; continue; }
@@ -73,6 +78,7 @@ b() { bean -dir "$T/log" "$@"; }
 mkdir "$T/log"; b init >/dev/null 2>&1 || { echo "init failed"; exit 1; }
 for v in 127 150 187 193 200.5 250 400; do b add lab.cholesterol-total $v -unit mg/dL -at 2026-11-01 >/dev/null; done
 for v in 29 44 52 60 72; do b add lab.hdl-cholesterol $v -unit mg/dL -at 2026-11-01 >/dev/null; done
+for v in 55.5 70 81.2 104; do b add weight $v -unit kg -at 2026-11-01 >/dev/null; done
 b agent init -label assistant >/dev/null 2>&1
 b add -agent lab.cholesterol-total 181 -unit mg/dL -at 2026-11-01 >/dev/null || { echo "agent add failed"; exit 1; }
 saved=0
@@ -81,8 +87,11 @@ saved=0
 b compare -pack "$T/syn.pack" -cohort male-30-39 -type 'lab.*' >"$T/cmp.txt" 2>&1 && say "bean compares with a pack that it has no record of, without -unknown-pack"
 grep -q "pass -unknown-pack" "$T/cmp.txt" || say "bean does not say how to use a pack that it has no record of"
 for cohort in $(b compare -pack "$T/syn.pack" | sed -n 's/^  \([a-z]*-[0-9]*-[a-z0-9]*\): .*/\1/p'); do
-  b compare -pack "$T/syn.pack" -unknown-pack -cohort "$cohort" -type 'lab.*' -save >"$T/cmp.txt" 2>&1 && saved=$((saved + $(grep -c '^saved ' "$T/cmp.txt")))
+  for type in 'lab.*' weight; do
+    b compare -pack "$T/syn.pack" -unknown-pack -cohort "$cohort" -type "$type" -save >"$T/cmp.txt" 2>&1 && saved=$((saved + $(grep -c '^saved ' "$T/cmp.txt")))
+  done
 done
+b ls -json -type comparison.percentile | grep -q '"measure":"BMXWT"' || say "bean saved no comparison of a weight"
 [ "$saved" -ge 50 ] || say "bean saved only $saved comparisons with the pack"
 b ls -json >"$T/records.jsonl"
 "$PY" -I "$ROOT/tools/compare/reproduce.py" -accept-pack "$DIGEST" "$T/records.jsonl" "$T/syn.pack" >"$T/rp.txt" 2>&1 || say "reproduce.py does not get what bean saved: $(tail -2 "$T/rp.txt")"
@@ -108,6 +117,43 @@ for change in 's/"percentile":\([0-9.]*\)/"percentile":99.9/' 's/"text":"male, a
   "$PY" -I "$ROOT/tools/compare/reproduce.py" -accept-pack "$DIGEST" "$T/changed.jsonl" "$T/syn.pack" >/dev/null 2>&1 && say "reproduce.py passes a changed claim: $change"
 done
 
+# A claim that is signed and whose numbers compute, but that is not one the
+# method makes with this pack, must be refused. Each is written with bean
+# append, so its id and its signature are good.
+forged=0
+forge() {
+  forged=$((forged + 1))
+  "$PY" -I - "$T/records.jsonl" "$2" >"$T/forged.jsonl" <<'PYEOF'
+import json, sys
+records = [json.loads(l) for l in open(sys.argv[1])]
+r = next(x for x in records if x["type"] == "comparison.percentile" and x["context"]["reference"]["measure"] == "LBXTC")
+other = next(x for x in records if x["type"] == "weight")
+c = r["context"]
+exec(sys.argv[2])
+print(json.dumps({"type": r["type"], "value": r["value"], "times": {"observed": r["times"]["observed"]},
+                  "refs": r["refs"], "source": dict(r["source"], ref=None), "context": c}))
+PYEOF
+  mkdir "$T/flog$forged"; cp -R "$T/log/." "$T/flog$forged/"
+  bean -dir "$T/flog$forged" append <"$T/forged.jsonl" >/dev/null 2>&1 || { say "forge $1: the claim was not appended"; return; }
+  bean -dir "$T/flog$forged" ls -all -json >"$T/forged-log.jsonl"
+  [ "$(grep -c . "$T/forged-log.jsonl")" = $(($(b ls -all -json | grep -c .) + 1)) ] || { say "forge $1: the forged claim was not added"; return; }
+  "$PY" -I "$ROOT/tools/compare/reproduce.py" -accept-pack "$DIGEST" "$T/forged-log.jsonl" "$T/syn.pack" >"$T/fo.txt" 2>&1 && say "reproduce.py passes a forged claim: $1"
+  [ "$(grep -c '^DIFFERS' "$T/fo.txt")" = 1 ] || say "forge $1: reproduce.py does not refuse exactly the forged claim: $(grep -c '^DIFFERS' "$T/fo.txt") refused"
+}
+forge "a second record it is about" 'r["refs"].append({"rel": "about", "id": other["id"]})'
+forge "a reading of a type that the measure does not take" 'c["reading"] = other["id"]; r["refs"] = [{"rel": "about", "id": other["id"]}]'
+forge "another title" 'c["reference"]["title"] = "NHANES 2017-2018 (reference range)"'
+forge "another source" 'c["reference"]["source"] = "a clinical reference"'
+forge "another label" 'c["reference"]["label"] = "LDL Cholesterol (mg/dL)"'
+forge "another unit" 'c["reference"]["unit"] = "mmol/L"'
+forge "another cohort" 'c["reference"]["cohort"] = "female-30-39"'
+forge "a member more" 'c["note"] = "clinically validated"'
+forge "a caveat more" 'c["caveats"].append("clinically validated")'
+forge "the caveat of a pack not on record taken out" 'c["caveats"] = [x for x in c["caveats"] if not x.startswith("bean has no record")]'
+forge "another n" 'c["result"]["n"] += 1'
+forge "another quartile" 'c["result"]["p75"] = c["result"]["p50"]'
+forge "another value" 'r["value"]["n"] = 99.9'
+
 # Packs with one thing wrong. bean and check.py must both refuse each.
 "$PY" -I - "$T/syn.pack" "$T/wrong" <<'EOF' || { echo "the wrong packs were not made"; exit 1; }
 import copy, json, os, sys
@@ -116,6 +162,7 @@ os.mkdir(out)
 good = json.load(open(src))
 def cell(p): return p["cells"][0]
 def first(d): return d[sorted(d)[0]]
+def many(p): return next(c for c in p["cells"] if len(c["values"]) > 40)  # so that n stays above 30
 cases = {
     "format": lambda p: p.update(bean="pack/1"),
     "member-more": lambda p: p.update(signature="x"),
@@ -154,7 +201,7 @@ cases = {
     "values-none": lambda p: cell(p).update(values=[], weights=[]),
     "n-small": lambda p: cell(p).update(n=29),
     "n-fraction": lambda p: cell(p).update(n=cell(p)["n"] + 0.5),
-    "n-below-values": lambda p: cell(p).update(n=len(cell(p)["values"]) - 1, values=cell(p)["values"]),
+    "n-below-values": lambda p: many(p).update(n=len(many(p)["values"]) - 1),
     "measure-unknown": lambda p: cell(p).update(measure="NOPE"),
     "cohort-unknown": lambda p: cell(p).update(cohort="nobody"),
     "cell-twice": lambda p: p["cells"].append(copy.deepcopy(cell(p))),
@@ -210,10 +257,10 @@ real=""
 if [ -n "${BEAN_NHANES_DIR:-}" ]; then
   REAL=(); for f in DEMO_J TCHOL_J HDL_J GHB_J CBC_J BMX_J; do for e in XPT xpt; do [ -f "$BEAN_NHANES_DIR/$f.$e" ] && REAL+=("$BEAN_NHANES_DIR/$f.$e"); done; done
   bean-pack-nhanes -out "$T/real.pack" "${REAL[@]}" >"$T/real.txt" 2>&1 || say "the pack of CDC's files was not built: $(cat "$T/real.txt")"
-  bean -dir "$T/log" compare -pack "$T/real.pack" 2>&1 | grep -q "the NHANES pack that bean has on record" || say "the pack of CDC's files is not the pack on record"
+  bean -dir "$T/log" compare -pack "$T/real.pack" 2>&1 | grep -q "pack that bean has on record" || say "the pack of CDC's files is not the pack on record"
   "$PY" -I "$HERE/check.py" "$T/real.pack" >/dev/null 2>&1 || say "check.py refuses the pack of CDC's files"
   "$PY" -I "$HERE/rebuild_nhanes.py" "$T/real.pack" "${REAL[@]}" >"$T/re.txt" 2>&1 || say "rebuild_nhanes.py on CDC's files: $(tail -1 "$T/re.txt")"
   real=", and the pack of CDC's files is the one on record"
 fi
-[ "$rc" = 0 ] && echo "pack: check.py reads the pack that bean builds and gives the method's four vectors, rebuild_nhanes.py builds the same pack byte for byte and refuses $i with one other member changed, reproduce.py computes $saved saved comparisons again and fails on a pack that is not on record, and bean and check.py both refuse $wrong packs with one thing wrong$real"
+[ "$rc" = 0 ] && echo "pack: check.py reads the pack that bean builds and gives the method's four vectors, rebuild_nhanes.py builds the same pack byte for byte and refuses $i with one other member changed, reproduce.py computes $saved saved comparisons again, refuses $forged forged claims and fails on a pack that is not on record, and bean and check.py both refuse $wrong packs with one thing wrong$real"
 exit $rc

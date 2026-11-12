@@ -27,21 +27,11 @@ const (
 	PackBuilderVersion = "1"
 )
 
-// KnownPack is the SHA-256 of the pack that BuildPack gives from the six
-// files on record: DEMO_J, TCHOL_J, HDL_J, GHB_J, CBC_J and BMX_J. It is
-// the pack on record. docs/REFERENCE.md states it too, and a test with
-// CDC's files keeps it true.
-const KnownPack = "efbb252a361b1994c67207618a088d492d1b0dafb8ea5ff88f857f97abc69277"
-
-func init() {
-	if _, ok := pack.Known[KnownPack]; !ok {
-		panic("the NHANES pack on record is not among the packs that bean knows")
-	}
-}
-
 // PackMeasure is a variable that a pack holds, beside the lab tests of
-// Analytes: a body measure. Each Same row is a type that bean or one of
-// its importers writes, in the variable's own unit.
+// Analytes: a body measure. Each Same row is a type that bean's vocabulary
+// has or that an importer's test writes, in the variable's own unit. A row
+// with no such reading behind it is not added: standing height is left
+// out until an export shows its unit.
 type PackMeasure struct {
 	Dataset, Variable, Label, Caveat string
 	Same                             []pack.Same
@@ -51,7 +41,6 @@ type PackMeasure struct {
 // they use the examination weight.
 var BodyMeasures = []PackMeasure{
 	{"BMX_J", "BMXWT", "kg", CaveatBody, []pack.Same{{Type: "weight", Unit: "kg"}, {Type: "apple-health.body-mass", Unit: "kg"}}},
-	{"BMX_J", "BMXHT", "cm", CaveatBody, []pack.Same{{Type: "apple-health.height", Unit: "cm"}}},
 }
 
 // PackAges are the age ranges of a pack's menu: ten years each from 20,

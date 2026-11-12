@@ -55,12 +55,18 @@ def dataset(name):
 def load(pack, paths):
     entries = {dataset(f["name"]): f for f in pack["source"]["files"]}
     given = {}
+    usable = {DEMO} | {spec["dataset"] for spec in specs().values()}
     for path in paths:
         d = dataset(path)
         if d in given:
             raise Stop("REFUSED: the data set %s is given twice" % d)
+        # A file that a pack holds nothing of is left out, as the builder
+        # leaves it out: so a folder of downloads can be given whole.
+        if d not in usable:
+            print("not used: %s" % reproduce.safe(path))
+            continue
         if d not in entries:
-            raise Stop("REFUSED: %s is not a file the pack names" % reproduce.safe(path))
+            raise Stop("REFUSED: %s is a file that the builder uses, and the pack does not name it: the pack was not built from these files" % reproduce.safe(path))
         with open(path, "rb") as f:
             digest = hashlib.sha256(f.read()).hexdigest()
         if digest != entries[d]["sha256"]:
@@ -128,7 +134,6 @@ CAVEAT_BODY = "the reading and NHANES were measured with their own instruments a
 # that is the same quantity.
 BODY = [
     ("BMX_J", "BMXWT", [("weight", "kg"), ("apple-health.body-mass", "kg")]),
-    ("BMX_J", "BMXHT", [("apple-health.height", "cm")]),
 ]
 AGES = [(20, 29), (30, 39), (40, 49), (50, 59), (60, 69), (70, 79), (80, 80)]
 

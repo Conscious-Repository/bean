@@ -255,15 +255,9 @@ func (c Cohort) String() string {
 	return out
 }
 
-// Result is where a value lies in a cohort. The percentages are rounded to
-// one decimal; the quartiles are values of the sample.
-type Result struct {
-	N int // people in the cohort with a value and a weight
-	// Below and Equal are the weighted shares of the cohort with a lower
-	// value and with the same value. Percentile is Below plus half of Equal.
-	Percentile, Below, Equal float64
-	P25, P50, P75            float64
-}
+// Result is where a value lies in a cohort: the result of the method, as a
+// reference pack gives it too.
+type Result = pack.Result
 
 // ErrSmall is the error for a cohort of fewer than MinN people. The result
 // then holds the count and no other number.

@@ -113,12 +113,12 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 
 **The need.** A person sets a reading against data that someone else publishes. The value must not leave their machine. The result must be one that anyone can compute again. And the way to do it must not know one survey, one test or one unit.
 
-**Done.** A reference pack ([REFERENCE.md](REFERENCE.md), DECISIONS 281): one file, named by its SHA-256, with a table for each measure and each cohort on its menu. `bean-pack-nhanes` builds one from the NHANES files, with weight and height beside the blood tests. `bean compare -pack` compares with it and saves a claim that names the pack. A Python check reads the format from its document, builds every table again from the files, and computes every claim again.
+**Done.** A reference pack ([REFERENCE.md](REFERENCE.md), DECISIONS 281): one file, named by its SHA-256, with a table for each measure and each cohort on its menu. `bean-pack-nhanes` builds one from the NHANES files, with weight beside the blood tests. `bean compare -pack` compares with it and saves a claim that names the pack. A Python check reads the format from its document, builds every table again from the files, and computes every claim again.
 
 **The plan.**
 
 1. **A second source, from another publisher.** The format is not frozen before a second real source is built into a pack. Each candidate is confirmed first from its publisher's own site: the terms, a stable address, and whether a file changes without notice.
-2. **Publish the NHANES pack** beside the check page, with its SHA-256. Then a person needs one download of 570 kB, not six files.
+2. **Publish the NHANES pack** beside the check page, with its SHA-256. Then a person needs one download of 500 kB, not six files.
 3. **The check page computes a shared comparison again**, when the reader gives it the pack.
 4. **A publisher signs.** A record by the publisher's bean identity names a pack's SHA-256, and travels as a bundle. This is built when a second publisher exists.
 5. **A pointer on relays.** A publisher announces a pack on Nostr relays: title, SHA-256, where it is. The relays hold a pointer and no health record. bean keys can already be Nostr keys.
@@ -180,7 +180,10 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
   - `export` does not decrypt the files of an agent that the person unpaired.
   - A source with a stranger's broken file makes every `sync` from it exit 1.
   - The purge check in `bean import` reads only this copy's `local/purged-refs.jsonl`.
-- From the review of reference packs (DECISIONS 283):
+- From the reviews of reference packs (DECISIONS 283, 284):
+  - The Python check of a bundle, `checkbundle.py`, does not mark a comparison's pack. `reproduce.py` does.
+  - The list of packs on record is in bean's code. A second publisher needs a signature, not a line in that list.
+  - A pull request's build of the check page names the merge commit, which nobody can build again. The build on `main` and on a tag names a real commit.
   - A cell's n is not checked against its weights: with sample weights the two are not tied.
   - Two packs can place one reading differently, and both claims are kept. Each row names its pack.
   - `bean compare -pack <file>` needs a log even to show what a pack holds.

@@ -129,7 +129,7 @@ CAVEAT_UNKNOWN_PACK = "bean has no record of this pack: nobody has checked its t
 # marked: whoever built that pack chose its tables, its caveats and what
 # each reading is set against.
 KNOWN_PACKS = {
-    "efbb252a361b1994c67207618a088d492d1b0dafb8ea5ff88f857f97abc69277": "the NHANES 2017-2018 pack",
+    "10555d6769421d4305cbcd4ff14960d8b966ddd829a50581a9584a60a84d29e2": "the NHANES 2017-2018 pack",
 }
 # The members of a pack claim's context (docs/REFERENCE.md, "The claim").
 PACK_CONTEXT = {"reading", "reference", "cohort", "method", "result", "caveats"}

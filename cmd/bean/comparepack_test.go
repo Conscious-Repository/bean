@@ -3,8 +3,10 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -189,15 +191,87 @@ func TestPythonHoldsThePackTables(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(py), `"`+pack.CaveatUnknown+`"`) {
-		t.Errorf("tools/compare/reproduce.py does not have the caveat %q", pack.CaveatUnknown)
+	if !strings.Contains(string(py), `"`+pack.CaveatNotOnRecord+`"`) {
+		t.Errorf("tools/compare/reproduce.py does not have the caveat %q", pack.CaveatNotOnRecord)
 	}
 	for digest, what := range pack.Known {
 		if !strings.Contains(string(py), `"`+digest+`": "`+what+`"`) {
 			t.Errorf("tools/compare/reproduce.py does not have the pack on record %s", digest)
 		}
 	}
-	if n := strings.Count(string(py), `": "the `); n != len(pack.Known) {
+	if n := len(regexp.MustCompile(`(?m)^    "[0-9a-f]{64}": "`).FindAllString(string(py), -1)); n != len(pack.Known) {
 		t.Errorf("tools/compare/reproduce.py has %d packs on record, bean has %d", n, len(pack.Known))
+	}
+}
+
+// TestThePackOnRecordIsInTheDocument: docs/REFERENCE.md states the SHA-256
+// of each pack that bean has on record, and no other.
+func TestThePackOnRecordIsInTheDocument(t *testing.T) {
+	doc, err := os.ReadFile("../../docs/REFERENCE.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stated := regexp.MustCompile(`(?m)^[0-9a-f]{64}$`).FindAllString(string(doc), -1)
+	if len(stated) != len(pack.Known) {
+		t.Errorf("docs/REFERENCE.md states %d digests of packs, bean has %d on record", len(stated), len(pack.Known))
+	}
+	for _, digest := range stated {
+		if !pack.IsKnown(digest) {
+			t.Errorf("docs/REFERENCE.md states the pack %s, and bean has no record of it", digest)
+		}
+	}
+}
+
+// TestComparePackEdges: a cohort that the pack has no table for, a reading
+// with no unit, a file that never ends, and a claim signed by hand that has
+// the inputs of a saved one and another value.
+func TestComparePackEdges(t *testing.T) {
+	dir, _, ids := compareLog(t, "TCHOL_J", "DEMO_J")
+	path, _ := testPack(t)
+	// The builder leaves out a cell of fewer than 30 people. Find one.
+	menu, _, _ := run(t, dir, "", "compare", "-pack", path)
+	missing := ""
+	for _, line := range strings.Split(menu, "\n") {
+		id, _, isCohort := strings.Cut(strings.TrimSpace(line), ": ")
+		if !isCohort || !strings.Contains(line, ", age ") || missing != "" {
+			continue
+		}
+		if out, _, _ := run(t, dir, "", "compare", "-pack", path, "-unknown-pack", "-cohort", id, ids[0]); strings.Contains(out, "the pack has no table of this measure for this cohort") {
+			missing = id
+		}
+	}
+	if missing == "" {
+		t.Error("no cohort of the synthetic pack lacks a table: the case is not tried")
+	}
+	id, _, _ := run(t, dir, "", "add", "lab.cholesterol-total", "190", "-at", "2026-11-02")
+	if out, _, code := run(t, dir, "", "compare", "-pack", path, "-unknown-pack", "-cohort", "male-30-39", strings.TrimSpace(id)); code == 0 || !strings.Contains(out, "the reading has no unit, and the pack takes this type only in mg/dL") {
+		t.Errorf("a reading with no unit: %d\n%s", code, out)
+	}
+	if _, err := os.Stat("/dev/zero"); err == nil {
+		if out, errs, code := run(t, dir, "", "compare", "-pack", "/dev/zero"); code == 0 || !strings.Contains(out+errs, "a pack is at most 64 MiB") {
+			t.Errorf("a file that never ends: %d\n%s%s", code, out, errs)
+		}
+	}
+	// The same inputs with another value are another claim: neither is
+	// deleted as one that was saved twice.
+	if out, errs, code := run(t, dir, "", "compare", "-pack", path, "-unknown-pack", "-cohort", "male-30-39", "-save", ids[0]); code != 0 {
+		t.Fatalf("-save: %d\n%s\n%s", code, out, errs)
+	}
+	ls, _, _ := run(t, dir, "", "ls", "-json", "-type", "comparison.percentile")
+	var claim map[string]any
+	if err := json.Unmarshal([]byte(strings.SplitN(ls, "\n", 2)[0]), &claim); err != nil {
+		t.Fatal(err)
+	}
+	forged, _ := json.Marshal(map[string]any{
+		"type": claim["type"], "value": map[string]any{"n": 99.9, "unit": "{percentile}"}, "refs": claim["refs"], "context": claim["context"],
+		"times":  map[string]any{"observed": claim["times"].(map[string]any)["observed"]},
+		"source": map[string]any{"system": "by-hand", "adapter": "test@1", "ref": nil},
+	})
+	if out, errs, code := run(t, dir, string(forged)+"\n", "append"); code != 0 {
+		t.Fatalf("append: %d\n%s\n%s", code, out, errs)
+	}
+	run(t, dir, "", "verify")
+	if ls, _, _ := run(t, dir, "", "ls", "-type", "comparison.percentile"); strings.Count(ls, "comparison.percentile") != 2 || !strings.Contains(ls, "percentile 99.9 of") {
+		t.Errorf("a claim with another value was deleted as a duplicate, or the saved one was:\n%s", ls)
 	}
 }

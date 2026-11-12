@@ -60,8 +60,8 @@ func NewWords() (string, error) {
 // with any space between. It refuses what cannot be a package's words, so
 // that a typing mistake is named before any work is done.
 func CleanWords(text string) (string, error) {
-	// A person may write the words with commas, hyphens or full stops
-	// between them, or after the last one.
+	// A person may write the words with commas, hyphens, full stops or
+	// semicolons between them, or after the last one.
 	words := strings.Fields(strings.NewReplacer(",", " ", "-", " ", ".", " ", ";", " ").Replace(strings.ToLower(text)))
 	if len(words) != sealWords {
 		return "", fmt.Errorf("a package opens with %d words, and these are %d", sealWords, len(words))

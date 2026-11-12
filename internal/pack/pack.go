@@ -49,7 +49,7 @@ const (
 // builds from the six NHANES files on record (internal/nhanes). A test
 // with CDC's files keeps it true, and docs/REFERENCE.md states it too.
 var Known = map[string]string{
-	"efbb252a361b1994c67207618a088d492d1b0dafb8ea5ff88f857f97abc69277": "the NHANES 2017-2018 pack",
+	"10555d6769421d4305cbcd4ff14960d8b966ddd829a50581a9584a60a84d29e2": "the NHANES 2017-2018 pack",
 }
 
 // OnRecord says in a few words whether bean knows a pack by its SHA-256.
@@ -63,13 +63,13 @@ func OnRecord(sha256 string) string {
 // IsKnown reports a pack that bean has on record.
 func IsKnown(sha256 string) bool { _, ok := Known[sha256]; return ok }
 
-// CaveatUnknown is the caveat of a comparison with a pack that bean has no
+// CaveatNotOnRecord is the caveat of a comparison with a pack that bean has no
 // record of. Whoever built such a pack chose its tables, its caveats and
 // what each reading is set against, and nothing here has checked them.
-const CaveatUnknown = "bean has no record of this pack: nobody has checked its tables, its caveats, or what it sets a reading against"
+const CaveatNotOnRecord = "bean has no record of this pack: nobody has checked its tables, its caveats, or what it sets a reading against"
 
 // MinNumber and MaxNumber bound each value and each weight. Inside them no
-// sum of the method overflows, and no half of a weight is lost.
+// sum of the method overflows or underflows.
 const (
 	MinNumber = 1e-12
 	MaxNumber = 1e15
@@ -280,7 +280,10 @@ func Read(data []byte) (*Pack, error) {
 		return nil, fmt.Errorf("it is not a pack: %w", err)
 	}
 	r := &reader{}
-	top, _ := v.(map[string]any)
+	top, isObject := v.(map[string]any)
+	if !isObject {
+		return nil, errors.New("it is not a pack: it is not one JSON object")
+	}
 	if format, _ := top["bean"].(string); format != Format {
 		return nil, fmt.Errorf("it is not a pack of version 0: its bean member is not %q", Format)
 	}

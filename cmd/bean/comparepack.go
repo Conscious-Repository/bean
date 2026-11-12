@@ -3,13 +3,13 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"os"
 	"slices"
 	"strings"
 
 	"github.com/Conscious-Repository/bean/core"
-	"github.com/Conscious-Repository/bean/internal/nhanes"
 	"github.com/Conscious-Repository/bean/internal/pack"
 )
 
@@ -18,14 +18,13 @@ import (
 // bean reads it, checks every rule of its format and goes nowhere. Without
 // a cohort it shows the pack's menu.
 func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, unknown bool) {
-	info, err := os.Stat(path)
+	// No more is read than a pack can be: a pipe states no size.
+	f, err := os.Open(path)
 	if err != nil {
 		fail(err)
 	}
-	if info.Size() > pack.MaxBytes {
-		fail(fmt.Errorf("%s is not read: a pack is at most %d MiB", path, pack.MaxBytes>>20))
-	}
-	data, err := os.ReadFile(path)
+	data, err := io.ReadAll(io.LimitReader(f, pack.MaxBytes+1))
+	f.Close()
 	if err != nil {
 		fail(err)
 	}
@@ -70,6 +69,8 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 			c.refused, c.unmapped = "no reference data for this type", true
 		case !isNumber:
 			c.refused = "the reading is not a number"
+		case id == "" && unit == "":
+			c.refused = fmt.Sprintf("the reading has no unit, and the pack takes this type only in %s", strings.Join(units, " or "))
 		case id == "":
 			c.refused = fmt.Sprintf("the reading is in %q, and the pack takes this type only in %s", unit, strings.Join(units, " or "))
 		case cell == nil:
@@ -82,7 +83,7 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 			}
 			c.measure = id
 			c.against = fmt.Sprintf("%s in %s against %s", r.Type, unit, p.Measures[id].Label)
-			c.result = nhanes.Result{N: res.N, Percentile: res.Percentile, Below: res.Below, Equal: res.Equal, P25: res.P25, P50: res.P50, P75: res.P75}
+			c.result = res
 			c.caveats = packCaveats(p, id, cohort, res.N, onRec, c.by != "")
 			claims = append(claims, packRecord(c, p, cohort, co))
 		}
@@ -110,7 +111,7 @@ func packCaveats(p *pack.Pack, measure, cohort string, n int, known, otherSigner
 		out = append(out, fmt.Sprintf(caveatSmall, pack.SmallN))
 	}
 	if !known {
-		out = append(out, pack.CaveatUnknown)
+		out = append(out, pack.CaveatNotOnRecord)
 	}
 	if otherSigner {
 		out = append(out, caveatAuthor)
@@ -150,8 +151,8 @@ func printPack(p *pack.Pack) {
 // onRecord says whether bean knows the pack. A pack is what its SHA-256
 // says, and bean has one on record.
 func onRecord(p *pack.Pack) string {
-	if pack.IsKnown(p.SHA256) {
-		return "This is the NHANES pack that bean has on record."
+	if what, ok := pack.Known[p.SHA256]; ok {
+		return "This is " + what + " that bean has on record."
 	}
 	return "WARNING: bean has NO record of this pack. Whoever built it chose its tables, its caveats and what each reading is set against. Compare its SHA-256 with the one that its publisher states, or build the pack again from the files that it names."
 }

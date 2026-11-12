@@ -131,6 +131,18 @@ func cmdCompare(s *core.Store, args []string) {
 	saveComparisons(s, l, claims, *save, "the public files")
 }
 
+// claimKey is what makes two saved comparisons the same claim: everything
+// that a comparison states. A claim with the same inputs and another
+// value, or about one record more, is another claim: it is not deleted as
+// one that was saved twice, and a check of it shows that it does not
+// compute.
+func claimKey(raw map[string]any) string {
+	times, _ := raw["times"].(map[string]any)
+	return string(core.Canonical(map[string]any{
+		"type": raw["type"], "value": raw["value"], "refs": raw["refs"], "observed": times["observed"], "context": raw["context"],
+	}))
+}
+
 // compareReadings returns the readings to compare: every current reading
 // of a type, or the records named by id.
 func compareReadings(s *core.Store, typ string, pos []string) ([]*core.Record, *core.Loaded) {
@@ -188,13 +200,13 @@ func saveComparisons(s *core.Store, l *core.Loaded, claims []map[string]any, sav
 	have := map[string]bool{}
 	for id, r := range l.Report.Records {
 		if r.Type == compareType && r.Author == l.ID && l.Current(id) {
-			have[string(core.Canonical(r.Raw["context"]))] = true
+			have[claimKey(r.Raw)] = true
 		}
 	}
 	var in bytes.Buffer
 	already := 0
 	for _, rec := range claims {
-		if key := string(core.Canonical(rec["context"])); have[key] {
+		if key := claimKey(rec); have[key] {
 			already++
 			continue
 		} else {
@@ -434,7 +446,7 @@ func sweepComparisons(s *core.Store) {
 		}
 		if staleComparison(l, deleted, r) {
 			stale = append(stale, id)
-		} else if key := string(core.Canonical(r.Raw["context"])); seen[key] {
+		} else if key := claimKey(r.Raw); seen[key] {
 			twice = append(twice, id)
 		} else {
 			seen[key] = true
@@ -520,7 +532,7 @@ func printComparisons(w io.Writer, rows []comparison, head, known string, all bo
 					once(&note, "file not on record")
 				}
 			}
-			if slices.Contains(c.caveats, pack.CaveatUnknown) {
+			if slices.Contains(c.caveats, pack.CaveatNotOnRecord) {
 				note = append(note, "pack not on record")
 			}
 			fmt.Fprintf(tw, "%s\t%s\t%s\t%s%%\t%s%%\t%s to %s\t%s\t%d\t%s\t%s\n", r.Type, value,

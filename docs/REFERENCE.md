@@ -45,6 +45,7 @@ make pack                                                              # both, o
 
 [COMPARE.md](COMPARE.md) says where the NHANES files are: its loop downloads these six, and one more that a pack does not use. `bean-pack-nhanes` reads the files that you give it and goes nowhere.
 
+- **`-out` names a new file.** The builder writes over nothing.
 - **A pack holds the tests whose files you give.** `DEMO_J` is always needed. A file that a pack holds nothing of is named and left out, so `*.xpt` works. With the six files above, the pack is the one on record, and bean says so.
 - **A file that is not the one on record is refused.** It may be a download that was cut short. `-unknown-files` builds from it, and the pack then says so in its caveats. Such a pack is not the pack on record: `bean compare` takes it only with `-unknown-pack`.
 - **Keep the pack file.** Your log names a pack by its SHA-256 and does not hold it. A reader of a comparison that you share needs the same pack to compute it again.
@@ -100,7 +101,7 @@ An id is 1 to 64 letters, digits, dots, `-` and `_`, and starts with a letter or
 | `measure`, `cohort` | The ids of the measure and the cohort. A pair is there once. |
 | `kind` | `weights`. Version 0 has no other kind. |
 | `n` | The number of people: a whole number from 30 to 2147483647. |
-| `values` | The distinct values of the cohort, in rising order. Each is a number from 1e-12 to 1e15. |
+| `values` | The distinct values of the cohort, in rising order: one or more. Each is a number from 1e-12 to 1e15. |
 | `weights` | One number from 1e-12 to 1e15 for each value: the weight that the value carries. |
 
 A weight is the sum of the sample weights of the people with that value. For a source with no sample weights, it is the count of those people.
@@ -207,17 +208,17 @@ A pack is public data, and a file. It needs no account and no server of its own.
 The pack that `bean-pack-nhanes` version 1 builds from the six files on record has this SHA-256. The files are `DEMO_J`, `TCHOL_J`, `HDL_J`, `GHB_J`, `CBC_J` and `BMX_J`.
 
 ```
-efbb252a361b1994c67207618a088d492d1b0dafb8ea5ff88f857f97abc69277
+10555d6769421d4305cbcd4ff14960d8b966ddd829a50581a9584a60a84d29e2
 ```
 
 `bean compare -pack` says whether a pack is this one. The digests of the six files come from one download ([COMPARE.md](COMPARE.md)). The `Reference data` workflow fetches the files from CDC again, from the code host's network, and checks each digest and the pack. That is a second network and not yet a second person.
 
 ## The NHANES pack
 
-- **Measures.** The twelve blood tests of [COMPARE.md](COMPARE.md), and two body measures: weight in kg and standing height in cm. Each is measured in everyone examined.
+- **Measures.** The twelve blood tests of [COMPARE.md](COMPARE.md), and one body measure: weight in kg. Each is measured in everyone examined. Standing height is left out until a real export shows which unit a reading has.
 - **Cohorts.** Each sex, by ten years of age from 20 to 79, and 80 and over: 14 cohorts, such as `female-40-49` and `male-80-over`.
 - **Weights.** The examination weight, `WTMEC2YR`. Each cell is the table of steps 1 to 5 of the method in COMPARE.md.
-- **Size.** About 570 kB, and 250 kB packed.
+- **Size.** About 500 kB, and 215 kB packed.
 - **What it leaves out.** Children, and every cohort by ethnicity, body or food. For those, compare with the files: `bean compare -sex ... -where ...`.
 
 ## Other kinds of reference

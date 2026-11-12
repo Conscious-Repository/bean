@@ -361,12 +361,6 @@ def check_pack(p):
             raise Refused("%s has an n that is not from %d to %d" % (w, MIN_N, MAX_N))
         if n < len(values):
             raise Refused("%s has an n below the number of distinct values" % w)
-        total = 0.0
-        for x in weights:
-            total += float(x)
-        if math.isinf(total):
-            # a total that overflows has no percentile.
-            raise Refused("%s: the weights add up to more than a double holds" % w)
     return p
 
 

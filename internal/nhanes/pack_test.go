@@ -89,7 +89,7 @@ func TestPackGivesWhatTheFilesGive(t *testing.T) {
 				for _, v := range tries {
 					want, err1 := Compare(parsed, a, c, v)
 					got, err2 := cell.Place(v)
-					if err1 != nil || err2 != nil || got != pack.Result(want) {
+					if err1 != nil || err2 != nil || got != want {
 						t.Fatalf("%s in %s at %v: the pack gives %+v (%v), the files give %+v (%v)", a.Variable, id, v, got, err2, want, err1)
 					}
 					checked++
@@ -123,7 +123,7 @@ func TestRealPack(t *testing.T) {
 		t.Errorf("weight in kg is the measure %q", id)
 	}
 	sum := sha256.Sum256(p.Bytes())
-	if got := hex.EncodeToString(sum[:]); got != KnownPack {
-		t.Errorf("the pack of the files on record has SHA-256 %s, and the one on record is %s", got, KnownPack)
+	if got := hex.EncodeToString(sum[:]); !pack.IsKnown(got) {
+		t.Errorf("the pack of the files on record has SHA-256 %s, and bean has no record of it: %v", got, pack.Known)
 	}
 }
