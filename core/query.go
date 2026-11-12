@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -152,6 +153,23 @@ func (l *Loaded) Replies(id string) []*Record {
 		}
 	}
 	return out
+}
+
+// DeletedByPerson reports an id that a tombstone of the person names: a
+// record that they deleted, whether its file is still there or not.
+func (l *Loaded) DeletedByPerson(id string) bool {
+	if l.ID == "" {
+		return false
+	}
+	for _, r := range l.Report.Records {
+		if r.Type != "bean.tombstone" || r.Author != l.ID || r.Subject != l.ID || !(l.Report.Valid[r.ID] || l.Report.Held[r.ID]) {
+			continue
+		}
+		if slices.Contains(r.Targets("purges"), id) {
+			return true
+		}
+	}
+	return false
 }
 
 // Status is a short reader-facing state of one record.

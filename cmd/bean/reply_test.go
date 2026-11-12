@@ -70,6 +70,20 @@ func replyLogs(t *testing.T) (ben, ana, pkg, words string, ids [3]string) {
 	return ben, ana, pkg, words, ids
 }
 
+// idWords are the identity words of a log's person, as bean whoami shows
+// them: what the peer reads out, and what a script gives to bean accept.
+func idWords(t *testing.T, dir string) string {
+	t.Helper()
+	out, _, _ := run(t, dir, "", "whoami")
+	for _, line := range strings.Split(out, "\n") {
+		if w, ok := strings.CutPrefix(line, "identity words "); ok {
+			return w
+		}
+	}
+	t.Fatalf("no identity words in:\n%s", out)
+	return ""
+}
+
 // writeReply runs bean reply as the peer and returns the reply's file and
 // its words.
 func writeReply(t *testing.T, ana, pkg, words string, pairs ...string) (string, string) {
@@ -87,13 +101,7 @@ func writeReply(t *testing.T, ana, pkg, words string, pairs ...string) (string, 
 func TestReplyAndAccept(t *testing.T) {
 	ben, ana, pkg, words, ids := replyLogs(t)
 	rep, rwords := writeReply(t, ana, pkg, words, ids[0][7:15], "Looks fine to me. Ask about ApoB.", ids[2], "Thanks for sending this.")
-	whoami, _, _ := run(t, ana, "", "whoami")
-	var anaWords string
-	for _, line := range strings.Split(whoami, "\n") {
-		if w, ok := strings.CutPrefix(line, "identity words "); ok {
-			anaWords = w
-		}
-	}
+	anaWords := idWords(t, ana)
 	// The peer's log keeps a record that they replied, and no note.
 	if ls, _, _ := run(t, ana, "", "ls"); !strings.Contains(ls, "reply") || strings.Contains(ls, "ApoB") {
 		t.Errorf("the peer's log:\n%s", ls)
@@ -106,18 +114,29 @@ func TestReplyAndAccept(t *testing.T) {
 	if ls, _, _ := run(t, ben, "", "ls", "-type", "note"); ls != "" {
 		t.Errorf("a note was taken without a yes:\n%s", ls)
 	}
-	// With no name, nothing is taken either.
-	if _, errs, code := run(t, ben, rwords+"\n", "accept", "-yes", rep); code == 0 || !strings.Contains(errs, "give -label <name>") {
+	// With no name, nothing is taken either. Nor with -yes and no words, or
+	// with other words than the signer's.
+	if _, errs, code := run(t, ben, rwords+"\n", "accept", "-yes", "-words", anaWords, rep); code == 0 || !strings.Contains(errs, "give -label <name>") {
 		t.Errorf("accept with no label: %d\n%s", code, errs)
 	}
-	out, errs, code = run(t, ben, rwords+"\n", "accept", "-yes", "-label", "Ana", rep)
+	if _, errs, code := run(t, ben, rwords+"\n", "accept", "-yes", "-label", "Ana", rep); code == 0 || !strings.Contains(errs, "it needs -words") {
+		t.Errorf("accept -yes with no words: %d\n%s", code, errs)
+	}
+	if _, errs, code := run(t, ben, rwords+"\n", "accept", "-yes", "-label", "Ana", "-words", idWords(t, ben), rep); code == 0 || !strings.Contains(errs, "are not the words that you gave") {
+		t.Errorf("accept with other words: %d\n%s", code, errs)
+	}
+	if ls, _, _ := run(t, ben, "", "ls", "-all", "-json"); strings.Contains(ls, "agent.pair") {
+		t.Errorf("a refused accept paired a key:\n%s", ls)
+	}
+	out, errs, code = run(t, ben, rwords+"\n", "accept", "-yes", "-label", "Ana", "-words", strings.ToUpper(anaWords), rep)
 	if code != 0 {
 		t.Fatalf("accept: %d\n%s\n%s", code, out, errs)
 	}
 	for _, want := range []string{
 		"A reply to your share " + ids[2][7:19], `Your note on that share: "what do you think?"`, anaWords,
 		"about lab.cholesterol-total 187 mg/dL (" + ids[0][7:19] + ")", "Looks fine to me. Ask about ApoB.", "about your share itself",
-		"it is not medical advice", `took 2 notes of "Ana", already there 0`,
+		"it is not medical advice", `took 2 notes of "Ana", already there 0`, "You have not seen this identity before",
+		"bean cannot tell whether this is still that person's current key", "The reply's id starts ", "Ask the person whether they sent a reply whose id starts so",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("accept: no %q in\n%s", want, out)
@@ -126,7 +145,7 @@ func TestReplyAndAccept(t *testing.T) {
 	// The notes show under the name, the log is whole, and the peer's
 	// identity records and reply record are not in it.
 	ls, _, _ := run(t, ben, "", "ls")
-	if strings.Count(ls, "[Ana]") != 2 || !strings.Contains(ls, "Looks fine to me. Ask about ApoB.") {
+	if strings.Count(ls, "[peer Ana]") != 2 || !strings.Contains(ls, "Looks fine to me. Ask about ApoB.") {
 		t.Errorf("ls:\n%s", ls)
 	}
 	if out, _, code := run(t, ben, "", "verify"); code != 0 || !strings.Contains(out, " 0 invalid, 0 skipped, 0 held") {
@@ -136,19 +155,33 @@ func TestReplyAndAccept(t *testing.T) {
 		t.Errorf("more than the notes went into the log:\n%s", all)
 	}
 	// A second time takes nothing, and needs no name.
-	if out, _, code := run(t, ben, rwords+"\n", "accept", "-yes", rep); code != 0 || !strings.Contains(out, "holds every note of this reply already") {
+	if out, _, code := run(t, ben, rwords+"\n", "accept", "-yes", "-words", anaWords, rep); code != 0 || !strings.Contains(out, "holds every note of this reply already") {
 		t.Errorf("accept again: %d\n%s", code, out)
 	}
 	// A second reply of the same key needs no name, and takes no other.
 	rep2, rwords2 := writeReply(t, ana, pkg, words, ids[1], "Same as last year?")
-	if _, errs, code := run(t, ben, rwords2+"\n", "accept", "-yes", "-label", "Bob", rep2); code == 0 || !strings.Contains(errs, `already paired as "Ana"`) {
+	if _, errs, code := run(t, ben, rwords2+"\n", "accept", "-yes", "-words", anaWords, "-label", "Bob", rep2); code == 0 || !strings.Contains(errs, `already paired as "Ana"`) {
 		t.Errorf("another name for the same key: %d\n%s", code, errs)
 	}
-	if out, errs, code := run(t, ben, rwords2+"\n", "accept", "-yes", rep2); code != 0 || !strings.Contains(out, `You paired this key before, as "Ana"`) || !strings.Contains(out, `took 1 notes of "Ana"`) {
+	if out, errs, code := run(t, ben, rwords2+"\n", "accept", "-yes", "-words", anaWords, rep2); code != 0 || !strings.Contains(out, `You paired this key before, as "Ana"`) || !strings.Contains(out, `took 1 notes of "Ana"`) {
 		t.Errorf("a second reply: %d\n%s\n%s", code, out, errs)
 	}
-	// The person can share a peer's note on: it is a record about them.
-	if out, _, _ := run(t, ben, "", "show", ids[1]); !strings.Contains(out, "Same as last year?") {
+	// A note that the person deleted is not taken again from its reply.
+	deleted := ""
+	all, _, _ := run(t, ben, "", "ls", "-json", "-type", "note")
+	for _, line := range strings.Split(all, "\n") {
+		if strings.Contains(line, "Same as last year?") {
+			deleted = line[strings.Index(line, `"id":"`)+6:][:71]
+		}
+	}
+	if _, errs, code := run(t, ben, "", "purge", deleted); code != 0 {
+		t.Fatalf("purge: %s", errs)
+	}
+	if out, _, code := run(t, ben, rwords2+"\n", "accept", "-yes", "-words", anaWords, rep2); code != 0 || !strings.Contains(out, "you deleted this note") || strings.Contains(out, "took sha256:") {
+		t.Errorf("a deleted note was taken again: %d\n%s", code, out)
+	}
+	// bean show lists the notes about a record.
+	if out, _, _ := run(t, ben, "", "show", ids[0]); !strings.Contains(out, "Looks fine to me. Ask about ApoB.") {
 		t.Errorf("show does not list the note about the record:\n%s", out)
 	}
 }
@@ -378,7 +411,7 @@ func TestAcceptRefuses(t *testing.T) {
 	} {
 		path, w := f.make()
 		before, _, _ := run(t, ben, "", "ls", "-all", "-json")
-		out, errs, code := run(t, ben, w+"\n", "accept", "-yes", "-label", "Ana", path)
+		out, errs, code := run(t, ben, w+"\n", "accept", "-yes", "-label", "Ana", "-words", idWords(t, ana), path)
 		after, _, _ := run(t, ben, "", "ls", "-all", "-json")
 		if name == "the honest form passes" {
 			if code != 0 || !strings.Contains(out, "took 1 notes") {
@@ -395,15 +428,15 @@ func TestAcceptRefuses(t *testing.T) {
 	}
 	// What is not a reply at all: a share, other words, a changed file, and
 	// a reply for someone else.
-	if out, errs, code := run(t, ben, words+"\n", "accept", "-yes", "-label", "Ana", pkg); code == 0 || !strings.Contains(out+errs, "this is a share, not a reply") {
+	if out, errs, code := run(t, ben, words+"\n", "accept", "-yes", "-label", "Ana", "-words", idWords(t, ana), pkg); code == 0 || !strings.Contains(out+errs, "this is a share, not a reply") {
 		t.Errorf("a share given to accept: %d\n%s%s", code, out, errs)
 	}
-	if out, errs, code := run(t, ben, "abandon ability able about above absent\n", "accept", "-yes", "-label", "Ana", rep); code == 0 || !strings.Contains(out+errs, "the reply did not open") {
+	if out, errs, code := run(t, ben, "abandon ability able about above absent\n", "accept", "-yes", "-label", "Ana", "-words", idWords(t, ana), rep); code == 0 || !strings.Contains(out+errs, "the reply did not open") {
 		t.Errorf("other words: %d\n%s%s", code, out, errs)
 	}
 	carol := t.TempDir()
 	run(t, carol, "", "init")
-	if out, errs, code := run(t, carol, rwords+"\n", "accept", "-yes", "-label", "Ana", rep); code == 0 || !strings.Contains(out+errs, "this reply is for another person") {
+	if out, errs, code := run(t, carol, rwords+"\n", "accept", "-yes", "-label", "Ana", "-words", idWords(t, ana), rep); code == 0 || !strings.Contains(out+errs, "this reply is for another person") {
 		t.Errorf("a reply for someone else: %d\n%s%s", code, out, errs)
 	}
 	// A reply is not a bundle, and check-bundle says what it is.
@@ -421,71 +454,105 @@ func mustIdentity(t *testing.T, dir string) string {
 	return id
 }
 
-// TestAcceptAfterAKeyChange: a peer who changed their key keeps their
-// name, because the reply shows the change on their identity's chain.
+// TestAcceptAfterAKeyChange: the person's log keeps how far a peer's chain
+// had got when they saw it. A peer who changed their key keeps their name.
+// A key that the change retired, in a thief's hands, shows the peer's real
+// identity words, and takes nothing once the person has seen the change.
 func TestAcceptAfterAKeyChange(t *testing.T) {
-	ben, ana, pkg, words, ids := replyLogs(t)
-	rep, rwords := writeReply(t, ana, pkg, words, ids[0], "before the change")
-	if out, errs, code := run(t, ben, rwords+"\n", "accept", "-yes", "-label", "Ana", rep); code != 0 {
-		t.Fatalf("accept: %d\n%s\n%s", code, out, errs)
+	ben, _, pkg, words, ids := replyLogs(t)
+	ana := t.TempDir()
+	out, _, _ := run(t, ana, "", "init")
+	seed, anaWords := wordsFrom(out), idWords(t, ana)
+	accept := func(reply, rwords string, more ...string) (string, string, int) {
+		return run(t, ben, rwords+"\n", append(append([]string{"accept", "-yes", "-words", anaWords}, more...), reply)...)
 	}
-	// The peer's 24 words are on the first lines of a new log's init: make
-	// the log again to read them is not possible, so rotate a fresh peer.
-	ana2 := t.TempDir()
-	out, _, _ := run(t, ana2, "", "init")
-	seed := wordsFrom(out)
-	rep2, rwords2 := writeReply(t, ana2, pkg, words, ids[0], "from a second person")
-	if _, errs, code := run(t, ben, rwords2+"\n", "accept", "-yes", "-label", "Ana", rep2); code != 0 {
-		t.Fatalf("a second person may share a name: %d\n%s", code, errs)
+	rep, rwords := writeReply(t, ana, pkg, words, ids[0], "before the change")
+	if out, errs, code := accept(rep, rwords, "-label", "Ana"); code != 0 {
+		t.Fatalf("accept: %d\n%s\n%s", code, out, errs)
 	}
 	// A thief's copy of the peer's log, with the key that the change retires.
 	stolen := t.TempDir()
-	if err := os.CopyFS(stolen, os.DirFS(ana2)); err != nil {
+	if err := os.CopyFS(stolen, os.DirFS(ana)); err != nil {
 		t.Fatal(err)
 	}
-	if _, errs, code := run(t, ana2, seed, "rotate", "-seal-all"); code != 0 {
+	// Before the person knows of any change, the thief's reply passes: the
+	// key is the one that the person paired. The review says so.
+	early, earlyWords := writeReply(t, stolen, pkg, words, ids[0], "from the copy, before the change")
+	if out, _, code := accept(early, earlyWords); code != 0 || !strings.Contains(out, "bean cannot tell whether this is still that person's current key") {
+		t.Errorf("a reply of the paired key: %d\n%s", code, out)
+	}
+	if _, errs, code := run(t, ana, seed, "rotate", "-seal-all"); code != 0 {
 		t.Fatalf("rotate: %s", errs)
 	}
-	rep3, rwords3 := writeReply(t, ana2, pkg, words, ids[1], "after the change")
-	out, errs, code := run(t, ben, rwords3+"\n", "accept", "-yes", rep3)
-	if code != 0 || !strings.Contains(out, `This is a new key of the identity that you paired as "Ana"`) || !strings.Contains(out, `took 1 notes of "Ana"`) {
+	// The peer's new key: the reply shows the change on the chain.
+	rep2, rwords2 := writeReply(t, ana, pkg, words, ids[1], "after the change")
+	out, errs, code := accept(rep2, rwords2)
+	if code != 0 || !strings.Contains(out, `You paired this identity before, as "Ana". This is another key`) || !strings.Contains(out, `took 1 notes of "Ana"`) {
 		t.Errorf("a reply after a key change: %d\n%s\n%s", code, out, errs)
 	}
-	// The identity's own records show that it retired its first key, so
-	// that key speaks under the name no longer. Its note stays.
-	if !strings.Contains(out, `unpaired the key that "Ana" used before`) {
-		t.Errorf("the retired key was not unpaired:\n%s", out)
-	}
-	if ls, _, _ := run(t, ben, "", "ls"); strings.Count(ls, "[Ana]") != 2 || !strings.Contains(ls, "from a second person") {
-		t.Errorf("ls:\n%s", ls)
+	// Another name for the same identity is refused.
+	rep3, rwords3 := writeReply(t, ana, pkg, words, ids[1], "once more")
+	if _, errs, code := accept(rep3, rwords3, "-label", "Anna"); code == 0 || !strings.Contains(errs, `already paired as "Ana"`) {
+		t.Errorf("a second name: %d\n%s", code, errs)
 	}
 	// The thief's key signs a reply with the chain as it was before the
-	// change. Its identity words are the peer's own. It takes nothing.
-	rep4, rwords4 := writeReply(t, stolen, pkg, words, ids[0], "from a stolen key")
-	out, errs, code = run(t, ben, rwords4+"\n", "accept", "-yes", "-label", "Ana", rep4)
-	if code == 0 || !strings.Contains(errs, "you unpaired the key that signed this reply") {
+	// change, and with the peer's real identity words. The person has seen
+	// the change, so it takes nothing: whether or not they paired that key.
+	late, lateWords := writeReply(t, stolen, pkg, words, ids[0], "from a stolen key")
+	out, errs, code = accept(late, lateWords)
+	if code == 0 || !strings.Contains(errs, "as it was before a change of key that you have seen") {
 		t.Errorf("a reply of a retired key: %d\n%s\n%s", code, out, errs)
 	}
-	if ls, _, _ := run(t, ben, "", "ls"); strings.Contains(ls, "from a stolen key") {
-		t.Errorf("a retired key's note was taken:\n%s", ls)
+	if ls, _, _ := run(t, ben, "", "ls"); strings.Contains(ls, "from a stolen key") || strings.Count(ls, "[peer Ana]") != 3 {
+		t.Errorf("ls:\n%s", ls)
+	}
+	if out, _, code := run(t, ben, "", "verify"); code != 0 || !strings.Contains(out, " 0 invalid, 0 skipped, 0 held") {
+		t.Errorf("verify: %d\n%s", code, out)
+	}
+}
+
+// TestNamesAndUnpair: a name belongs to one identity, a stranger's reply
+// changes nothing of another peer's pairing, and the person can take a
+// name back.
+func TestNamesAndUnpair(t *testing.T) {
+	ben, ana, pkg, words, ids := replyLogs(t)
+	rep, rwords := writeReply(t, ana, pkg, words, ids[0], "from Ana")
+	if out, errs, code := run(t, ben, rwords+"\n", "accept", "-yes", "-label", "Ana", "-words", idWords(t, ana), rep); code != 0 {
+		t.Fatalf("accept: %d\n%s\n%s", code, out, errs)
+	}
+	// A second person cannot come in under the first one's name.
+	mallory := t.TempDir()
+	run(t, mallory, "", "init")
+	rep2, rwords2 := writeReply(t, mallory, pkg, words, ids[0], "from someone else")
+	if _, errs, code := run(t, ben, rwords2+"\n", "accept", "-yes", "-label", "Ana", "-words", idWords(t, mallory), rep2); code == 0 || !strings.Contains(errs, `the name "Ana" is taken`) {
+		t.Errorf("one name for two people: %d\n%s", code, errs)
+	}
+	if out, errs, code := run(t, ben, rwords2+"\n", "accept", "-yes", "-label", "Mallory", "-words", idWords(t, mallory), rep2); code != 0 {
+		t.Fatalf("accept under another name: %d\n%s\n%s", code, out, errs)
+	}
+	// It did nothing to the first person's pairing.
+	rep3, rwords3 := writeReply(t, ana, pkg, words, ids[1], "from Ana again")
+	if out, errs, code := run(t, ben, rwords3+"\n", "accept", "-yes", "-words", idWords(t, ana), rep3); code != 0 || !strings.Contains(out, `took 1 notes of "Ana"`) {
+		t.Errorf("the first peer after a stranger's reply: %d\n%s\n%s", code, out, errs)
+	}
+	ls, _, _ := run(t, ben, "", "ls")
+	if strings.Count(ls, "[peer Ana]") != 2 || strings.Count(ls, "[peer Mallory]") != 1 {
+		t.Errorf("ls:\n%s", ls)
 	}
 	// The person takes their word back from a name. A later reply of that
 	// key takes nothing, and the notes that it signed stay, with no name.
-	if out, errs, code := run(t, ben, "", "unpair", "Ana"); code != 0 || strings.Count(out, "unpaired ed25519:") != 2 {
+	if out, errs, code := run(t, ben, "", "unpair", "Ana"); code != 0 || strings.Count(out, "unpaired ed25519:") != 1 {
 		t.Errorf("unpair: %d\n%s\n%s", code, out, errs)
 	}
 	if _, errs, code := run(t, ben, "", "unpair", "Ana"); code == 0 || !strings.Contains(errs, `no key is paired as "Ana"`) {
 		t.Errorf("unpair again: %d\n%s", code, errs)
 	}
-	rep5, rwords5 := writeReply(t, ana2, pkg, words, ids[0], "after the person took their word back")
-	if _, errs, code := run(t, ben, rwords5+"\n", "accept", "-yes", "-label", "Ana", rep5); code == 0 || !strings.Contains(errs, "you unpaired the key that signed this reply") {
+	rep4, rwords4 := writeReply(t, ana, pkg, words, ids[0], "after the person took their word back")
+	if _, errs, code := run(t, ben, rwords4+"\n", "accept", "-yes", "-label", "Ana", "-words", idWords(t, ana), rep4); code == 0 || !strings.Contains(errs, "you unpaired the key that signed this reply") {
 		t.Errorf("a reply of an unpaired key: %d\n%s", code, errs)
 	}
-	if ls, _, _ := run(t, ben, "", "ls"); strings.Contains(ls, "[Ana]") || !strings.Contains(ls, "after the change") {
+	if ls, _, _ := run(t, ben, "", "ls"); strings.Contains(ls, "[peer Ana]") || !strings.Contains(ls, "from Ana again") || !strings.Contains(ls, "[peer Mallory]") {
 		t.Errorf("ls after unpair:\n%s", ls)
-	}
-	if out, _, code := run(t, ben, "", "verify"); code != 0 || !strings.Contains(out, " 0 invalid, 0 skipped, 0 held") {
-		t.Errorf("verify: %d\n%s", code, out)
 	}
 }
 
@@ -496,13 +563,13 @@ func TestAcceptAfterAKeyChange(t *testing.T) {
 func TestAcceptedNotesStay(t *testing.T) {
 	ben, ana, pkg, words, ids := replyLogs(t)
 	rep, rwords := writeReply(t, ana, pkg, words, ids[0], "Looks fine to me.")
-	if out, errs, code := run(t, ben, rwords+"\n", "accept", "-yes", "-label", "Ana", rep); code != 0 {
+	if out, errs, code := run(t, ben, rwords+"\n", "accept", "-yes", "-label", "Ana", "-words", idWords(t, ana), rep); code != 0 {
 		t.Fatalf("accept: %d\n%s\n%s", code, out, errs)
 	}
 	if out, errs, code := run(t, ben, seedOf[ben], "rotate", "-seal-all"); code != 0 {
 		t.Fatalf("rotate: %d\n%s\n%s", code, out, errs)
 	}
-	if ls, _, _ := run(t, ben, "", "ls", "-type", "note"); !strings.Contains(ls, "Looks fine to me.") || !strings.Contains(ls, "[Ana]") {
+	if ls, _, _ := run(t, ben, "", "ls", "-type", "note"); !strings.Contains(ls, "Looks fine to me.") || !strings.Contains(ls, "[peer Ana]") {
 		t.Errorf("after the person's change of key:\n%s", ls)
 	}
 	if out, _, code := run(t, ben, "", "verify"); code != 0 || !strings.Contains(out, " 0 invalid, 0 skipped, 0 held") {
@@ -523,7 +590,7 @@ func TestAcceptedNotesStay(t *testing.T) {
 		t.Fatalf("share: %d\n%s\n%s", code, out, errs)
 	}
 	checked, _, code := run(t, t.TempDir(), "", "check-bundle", dir)
-	if code != 0 || !strings.Contains(checked, "Looks fine to me.  [Ana]") || !strings.Contains(checked, "paired by the person: Ana, key ed25519:") {
+	if code != 0 || !strings.Contains(checked, "[peer Ana]") || !strings.Contains(checked, "paired by the person: peer Ana, key ed25519:") {
 		t.Errorf("the note shared on: %d\n%s", code, checked)
 	}
 }

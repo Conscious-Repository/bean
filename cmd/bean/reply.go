@@ -192,6 +192,8 @@ func cmdReply(s *core.Store, args []string) {
 	fmt.Println("They are a secret between you and the person you reply to. Give them by another way than the file, such as a phone call.")
 	fmt.Println("\nYour identity words, which are not a secret:\n  " + core.IDWords(l.ID))
 	fmt.Println("The person sees these words before they accept your notes. Read yours to them, so that they know the notes are yours.")
+	fmt.Printf("They also see the start of this reply's id, %s: tell them, so that they know which reply this is.\n", replyID[7:19])
+	fmt.Println("The reply holds your identity records. They show your identity id and your key, when you made your log, and when you changed a key.")
 	fmt.Println("bean keeps a record that you replied, and not the notes: keep this file and its words if you want to read them again.")
 	fmt.Println("The person takes your notes into their log with: bean accept " + *out)
 }
@@ -223,10 +225,16 @@ func cmdAccept(s *core.Store, args []string) {
 	fs := flag.NewFlagSet("accept", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	label := fs.String("label", "", "the name under which this person's notes show in your log")
-	yes := fs.Bool("yes", false, "do not ask: for scripts")
+	heard := fs.String("words", "", "the identity words that the person read to you")
+	yes := fs.Bool("yes", false, "do not ask: for scripts, with -words")
 	pos, err := parseInterspersed(fs, args)
 	if err != nil || len(pos) != 1 {
 		usage()
+	}
+	// A script cannot compare words by eye, so it states the words that
+	// the person heard.
+	if *yes && *heard == "" {
+		badArg(errors.New("-yes takes notes without a question, so it needs -words: the eight identity words that the person read to you"))
 	}
 	stdin := bufio.NewReader(os.Stdin)
 	in := readPackage(pos[0], stdin)
@@ -270,27 +278,71 @@ func cmdAccept(s *core.Store, args []string) {
 			shared[id] = true
 		}
 	}
-	if res.Key == l.Local.Signer.Public() {
-		fail(errors.New("this reply is signed by your own key: nothing was taken"))
-	}
-	// A key that the person unpaired speaks under no name again, whatever
-	// its identity records say: a stolen key can show an older chain.
-	if l.Unpaired(res.Key) {
-		fail(errors.New("you unpaired the key that signed this reply: nothing was taken. If the person changed their key, ask them for a reply that their new key signed"))
-	}
-	labels := l.AgentLabels()
-	fmt.Printf("A reply to your share %s, of %s.\n", share.ID[7:19], safe(sharedWhenOf(share)))
-	if n, _ := share.Context["note"].(string); n != "" {
-		fmt.Printf("  Your note on that share: %q\n", safe(n))
-	}
-	fmt.Printf("It was written at %s, and signed by the identity with these words:\n  %s\n", safe(res.When), res.Words)
-	fmt.Println("Ask the person who sent it to read their identity words to you. If the words are not the same, do not accept it.")
-	fmt.Printf("%d notes:\n", len(res.Notes))
-	have := 0
 	for _, n := range res.Notes {
 		if !shared[n.About] {
 			fail(fmt.Errorf("the note %s is about %s, which is not a record of that share: nothing was taken", n.ID[7:19], n.About[7:19]))
 		}
+	}
+	if res.Key == l.Local.Signer.Public() {
+		fail(errors.New("this reply is signed by your own key: nothing was taken"))
+	}
+	// What the person saw of this identity before. A key that they unpaired
+	// speaks under no name again. And a reply must show the identity's chain
+	// at least as far as the person has seen it: a shorter chain is how a
+	// retired key shows itself, and another chain is a fork.
+	if l.Unpaired(res.Key) {
+		fail(errors.New("you unpaired the key that signed this reply: nothing was taken. If the person changed their key, ask them for a reply that their new key signed"))
+	}
+	for _, head := range l.PeerHeads(res.Identity) {
+		if !slices.Contains(res.Chain, head) {
+			fail(errors.New("this reply shows its identity as it was before a change of key that you have seen, or with another history: nothing was taken. The key that signed it was retired, or was never this person's. Ask the person for a reply that their current key signed"))
+		}
+	}
+	// The name: the one this key has, or the one that another key of the
+	// same identity has, or the one given now.
+	labels := l.AgentLabels()
+	known := l.PeerLabel(res.Identity)
+	name, first := *label, false
+	switch {
+	case labels[res.Key] != "":
+		name = strings.TrimPrefix(labels[res.Key], "peer ")
+		if *label != "" && *label != name {
+			fail(fmt.Errorf("this key is already paired as %q: bean does not rename it. Leave -label out", name))
+		}
+	case known != "":
+		if name = known; *label != "" && *label != known {
+			fail(fmt.Errorf("you paired this identity as %q: bean does not give it a second name. Leave -label out", known))
+		}
+	case name == "":
+		fail(errors.New("nothing was taken: give -label <name>, the name under which this person's notes show in your log"))
+	case l.NameTaken(name, res.Identity):
+		fail(fmt.Errorf("the name %q is taken: a key of another person, or an agent, has it. Give another name with -label", name))
+	default:
+		first = true
+	}
+	if *heard != "" && strings.Join(strings.Fields(strings.ToLower(*heard)), " ") != res.Words {
+		fail(errors.New("the identity words of whoever signed this reply are not the words that you gave: nothing was taken"))
+	}
+	fmt.Printf("A reply to your share %s, of %s.\n", share.ID[7:19], safe(sharedWhenOf(share)))
+	if n, _ := share.Context["note"].(string); n != "" {
+		fmt.Printf("  Your note on that share: %q\n", safe(n))
+	}
+	fmt.Printf("The reply's id starts %s. It says that it was written at %s.\n", res.ReplyID[7:19], safe(res.When))
+	fmt.Printf("It is signed by the key %s, which speaks for the identity with these words:\n  %s\n", safe(keyName(res.Key)), res.Words)
+	switch {
+	case labels[res.Key] != "":
+		fmt.Printf("You paired this key before, as %q.\n", safe(name))
+	case known != "":
+		fmt.Printf("You paired this identity before, as %q. This is another key: the reply's identity records show a change of key after the one that you saw.\n", safe(name))
+	default:
+		fmt.Printf("You have not seen this identity before. Its notes will show as %q.\n", safe(name))
+	}
+	fmt.Println("Ask the person whether they sent a reply whose id starts so, and to read their identity words to you. If either is not the same, do not accept it.")
+	fmt.Println("bean cannot tell whether this is still that person's current key: a reply shows the changes of key that were made before it. Someone who holds an older key of theirs shows the same words.")
+	fmt.Println("A note is the word of the person who wrote it. bean does not check what it says, and it is not medical advice.")
+	fmt.Printf("%d notes:\n", len(res.Notes))
+	have, deleted := 0, 0
+	for _, n := range res.Notes {
 		what := "your share itself"
 		if target := l.Report.Records[n.About]; target != nil && n.About != share.ID {
 			what = target.Type + " " + recordText(target, func(id string) *core.Record { return l.Report.Records[id] })
@@ -300,48 +352,38 @@ func cmdAccept(s *core.Store, args []string) {
 		} else if n.About != share.ID {
 			what = "a record that is not in this log now"
 		}
-		fmt.Printf("  about %s (%s):\n    %s\n", safe(what), n.About[7:19], safe(n.Text))
-		if l.Report.Records[n.ID] != nil {
+		state := ""
+		switch {
+		case l.DeletedByPerson(n.ID):
+			deleted++
+			state = " (you deleted this note: it is not taken again)"
+		case l.Report.Records[n.ID] != nil:
 			have++
+			state = " (in your log already)"
 		}
+		fmt.Printf("  about %s (%s)%s:\n    %q\n", safe(what), n.About[7:19], state, safe(n.Text))
 	}
-	fmt.Println("A note is the word of the person who wrote it. bean does not check what it says, and it is not medical advice.")
-	// The name: the one this key has, or the one that another key of the
-	// same identity has, or the one given now.
-	name := labels[res.Key]
-	switch {
-	case name != "" && *label != "" && *label != name:
-		fail(fmt.Errorf("this key is already paired as %q: bean does not rename it. Leave -label out", name))
-	case name != "":
-		fmt.Printf("You paired this key before, as %q.\n", safe(name))
-	default:
-		if name = l.PeerLabel(res.Identity); name != "" && (*label == "" || *label == name) {
-			fmt.Printf("This is a new key of the identity that you paired as %q: its identity records show the change of key.\n", safe(name))
-		} else if name = *label; name == "" {
-			fail(errors.New("nothing was taken: give -label <name>, the name under which this person's notes show in your log"))
-		}
-	}
-	if have == len(res.Notes) {
-		fmt.Println("Your log holds every note of this reply already.")
+	if have+deleted == len(res.Notes) {
+		fmt.Println("Your log holds every note of this reply already, or you deleted it: nothing was taken.")
 		return
 	}
 	if !*yes {
 		if !isTerminal(os.Stdin) || !isTerminal(os.Stderr) {
-			fail(errors.New("nothing was taken: bean accept asks before it writes, and there is no terminal to ask on. Read the list above, then pass -yes"))
+			fail(errors.New("nothing was taken: bean accept asks before it writes, and there is no terminal to ask on. Read the list above, then pass -yes with -words"))
 		}
-		fmt.Fprintf(os.Stderr, "Take these %d notes into your log, as notes of %q? [y/N] ", len(res.Notes), name)
+		fmt.Fprintf(os.Stderr, "Take these %d notes into your log, as notes of %q? [y/N] ", len(res.Notes)-have-deleted, name)
 		line, _ := stdin.ReadString('\n')
 		if a := strings.ToLower(strings.TrimSpace(line)); a != "y" && a != "yes" {
 			fail(errors.New("nothing was taken"))
 		}
 	}
-	pairID, err := s.PairPeer(res.Key, name, res.Identity)
+	pairID, err := s.PairPeer(res.Key, name, res.Identity, res.Chain[len(res.Chain)-1])
 	if err != nil {
 		fail(err)
 	}
 	added := 0
 	for _, n := range res.Notes {
-		if l.Report.Records[n.ID] != nil {
+		if l.Report.Records[n.ID] != nil || l.DeletedByPerson(n.ID) {
 			continue
 		}
 		if err := s.AddFromKey(n.ID, n.Bytes); err != nil {
@@ -351,20 +393,20 @@ func cmdAccept(s *core.Store, args []string) {
 		fmt.Println("took", n.ID)
 	}
 	fmt.Printf("took %d notes of %q, already there %d\n", added, name, have)
-	fmt.Printf("paired %s\n", pairID)
-	// The identity's own records show the keys that it retired. A key of
-	// it that the person paired before speaks under the name no longer.
-	for _, old := range res.Retired {
-		if labels[old] == "" {
-			continue
-		}
-		if keys, err := s.Unpair(old); err != nil {
-			fmt.Fprintf(os.Stderr, "bean: the key that %q retired could not be unpaired: %s\n", name, safe(err.Error()))
-		} else if len(keys) > 0 {
-			fmt.Printf("unpaired the key that %q used before: their identity records show that they changed it. The notes that it signed stay.\n", name)
-		}
+	if first || labels[res.Key] == "" {
+		fmt.Printf("paired %s\n", pairID)
+		fmt.Println("Your log now keeps this person's key and their identity id, in your record of the name. Both travel when you share one of their notes.")
 	}
-	fmt.Println("They show in bean ls with that name, and bean show <id> lists the notes about a record.")
+	fmt.Printf("The notes show in bean ls as [peer %s], and bean show <id> lists the notes about a record. bean unpair %s takes the name back.\n", safe(name), safe(name))
+}
+
+// keyName is how a key is shown: as an npub when it is a Nostr key, and as
+// the tagged key when it is not.
+func keyName(key string) string {
+	if npub := core.Npub(key); npub != "" {
+		return npub
+	}
+	return key
 }
 
 // cmdUnpair is bean unpair: the person withdraws a name from the keys that

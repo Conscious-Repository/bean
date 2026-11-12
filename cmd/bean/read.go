@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Conscious-Repository/bean/core"
+	"github.com/Conscious-Repository/bean/internal/view"
 )
 
 // parseInterspersed lets flags come before or after the positional
@@ -109,7 +110,11 @@ func cmdList(s *core.Store, args []string) {
 		if l.Report.InDoubt(r.ID) {
 			by = strings.TrimSpace(by + " [in doubt]")
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", whenText(r), r.Type, safe(recordText(r, currentRecord(l))), safe(by), r.ID[7:19])
+		text := recordText(r, currentRecord(l))
+		if by != "" {
+			text = view.Said(r, text)
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", whenText(r), r.Type, safe(text), safe(by), r.ID[7:19])
 	}
 	tw.Flush()
 	if warnFrozen(l) {

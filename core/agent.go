@@ -160,7 +160,7 @@ func (s *Store) AgentInit(identity, label string) (string, string, error) {
 	if _, err := s.ReadLocal(); err != nil {
 		return pub, "", nil // agent-only: the person pairs it on their own machine
 	}
-	pairID, err := s.pairWith(l, pub, label, "")
+	pairID, err := s.pairWith(l, pub, label, "", "")
 	return pub, pairID, err
 }
 
@@ -201,7 +201,7 @@ func (s *Store) Pair(key, label string) (string, error) {
 	if len(live) > 0 {
 		return live[0].id, nil
 	}
-	return s.pairWith(l, key, label, "")
+	return s.pairWith(l, key, label, "", "")
 }
 
 // PairPeer writes an agent.pair claim for the key of another person: a
@@ -210,8 +210,14 @@ func (s *Store) Pair(key, label string) (string, error) {
 // identity that the key spoke for when the person accepted it. That is the
 // person's word: the log does not hold the peer's identity records. The
 // rules for a label are those of Pair, and a label is required: a note
-// must show under a name.
-func (s *Store) PairPeer(key, label, identity string) (string, error) {
+// must show under a name. A name belongs to one identity: PairPeer refuses
+// a name that a key of another identity, or an agent, has.
+//
+// head is the id of the last record of the peer's identity chain, as the
+// person saw it. A later reply must show a chain that holds it: an older
+// view of the chain is a retired key's, and another view is a fork
+// (PeerHeads).
+func (s *Store) PairPeer(key, label, identity, head string) (string, error) {
 	unlock, err := s.lock()
 	if err != nil {
 		return "", err
@@ -220,7 +226,7 @@ func (s *Store) PairPeer(key, label, identity string) (string, error) {
 	if _, err := ParseKey(key); err != nil {
 		return "", err
 	}
-	if label == "" || !IsID(identity) {
+	if label == "" || !IsID(identity) || !IsID(head) {
 		return "", errors.New("a peer is paired under a name, with the identity that its key spoke for")
 	}
 	l, err := s.load(false)
@@ -234,7 +240,47 @@ func (s *Store) PairPeer(key, label, identity string) (string, error) {
 	if len(live) > 0 {
 		return live[0].id, nil
 	}
-	return s.pairWith(l, key, label, identity)
+	if l.NameTaken(label, identity) {
+		return "", fmt.Errorf("the name %q is taken: a key of another person, or an agent, has it. Give another name", label)
+	}
+	return s.pairWith(l, key, label, identity, head)
+}
+
+// NameTaken reports whether a pairing in force has the name for a key that
+// is not a peer's key of this identity: an agent's, or another person's.
+func (l *Loaded) NameTaken(label, identity string) bool {
+	for _, ps := range l.pairClaims() {
+		for _, p := range livePairings(ps) {
+			of, _ := l.Report.Records[p.id].Value["identity"].(string)
+			if shownLabel(p.label) == label && (!p.peer || of != identity) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// PeerHeads returns the heads of an identity's chain that the person saw
+// when they paired a key of it as a peer: every one, also of a pairing
+// that they took back. A reply of that identity must show a chain that
+// holds each of them.
+func (l *Loaded) PeerHeads(identity string) []string {
+	var out []string
+	if l.ID == "" || !IsID(identity) {
+		return nil
+	}
+	for _, id := range sortedKeys(l.Report.Records) {
+		r := l.Report.Records[id]
+		if r.Type != "agent.pair" || r.Author != l.ID || r.Subject != l.ID || !l.Current(id) {
+			continue
+		}
+		role, _ := r.Value["role"].(string)
+		of, _ := r.Value["identity"].(string)
+		if head, _ := r.Value["head"].(string); role == "peer" && of == identity && IsID(head) && !slices.Contains(out, head) {
+			out = append(out, head)
+		}
+	}
+	return out
 }
 
 // Unpair withdraws the person's word for keys: every key that is paired
@@ -319,7 +365,7 @@ func (l *Loaded) PeerLabel(identity string) string {
 	return ""
 }
 
-func (s *Store) pairWith(l *Loaded, key, label, peerOf string) (string, error) {
+func (s *Store) pairWith(l *Loaded, key, label, peerOf, head string) (string, error) {
 	w, err := s.writerFor(l, false)
 	if err != nil {
 		return "", err
@@ -329,7 +375,7 @@ func (s *Store) pairWith(l *Loaded, key, label, peerOf string) (string, error) {
 		value["label"] = label
 	}
 	if peerOf != "" {
-		value["role"], value["identity"] = "peer", peerOf
+		value["role"], value["identity"], value["head"] = "peer", peerOf, head
 	}
 	obj := map[string]any{
 		"type":   "agent.pair",
@@ -351,6 +397,7 @@ func (s *Store) pairWith(l *Loaded, key, label, peerOf string) (string, error) {
 type pairing struct {
 	id, label string // label is "" when the claim has none
 	unpaired  bool
+	peer      bool // the key of another person, not of an agent
 }
 
 // pairClaims maps each key to the local person's current agent.pair
@@ -367,7 +414,8 @@ func (l *Loaded) pairClaims() map[string][]pairing {
 		}
 		label, _ := r.Value["label"].(string)
 		st, _ := r.Value["status"].(string)
-		out[r.ValueKey()] = append(out[r.ValueKey()], pairing{id: id, label: label, unpaired: st == "unpaired"})
+		role, _ := r.Value["role"].(string)
+		out[r.ValueKey()] = append(out[r.ValueKey()], pairing{id: id, label: label, unpaired: st == "unpaired", peer: role == "peer"})
 	}
 	for _, ps := range out {
 		slices.SortFunc(ps, func(a, b pairing) int { return strings.Compare(a.id, b.id) })
@@ -421,7 +469,14 @@ func (l *Loaded) AgentLabels() map[string]string {
 	for key, ps := range l.pairClaims() {
 		var names []string
 		for _, p := range livePairings(ps) {
-			if name := shownLabel(p.label); !slices.Contains(names, name) {
+			name := shownLabel(p.label)
+			// A peer is another person. Their records show as a peer's
+			// wherever a name shows, so nobody takes them for an agent's
+			// or for the person's own.
+			if p.peer {
+				name = "peer " + name
+			}
+			if !slices.Contains(names, name) {
 				names = append(names, name)
 			}
 		}

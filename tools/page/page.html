@@ -255,7 +255,7 @@ function show(name, res, packed) {
     if (r.type.startsWith("comparison.")) text = "As claimed, not computed here: " + text;
     // Who signed, when it was not the person. An agent's label is a name
     // that the sender gave it.
-    const by = !r.by ? "the person" : r.by.startsWith("[signed by another key") ? "NOT the person: " + r.by : "NOT the person: an agent that the person paired, which the sender labels " + r.by;
+    const by = !r.by ? "the person" : r.by.startsWith("[signed by another key") ? "NOT the person: " + r.by : "NOT the person: an agent or a peer that the person paired, which the sender labels " + r.by;
     for (const [cls, value] of [["when", r.when], ["type", r.type], ["text", text], ["by", by], ["id", r.id]]) {
       const td = document.createElement("td");
       td.className = cls;

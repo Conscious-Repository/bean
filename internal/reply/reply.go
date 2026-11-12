@@ -53,10 +53,11 @@ type Result struct {
 	// and Key the key that signed: the head of that identity's chain, by
 	// the identity records in the reply.
 	Identity, Words, Key string
-	// Retired are the keys that the identity's chain shows before its
-	// current key: the identity's own records say that they speak for it
-	// no longer.
-	Retired []string
+	// Chain are the ids of the identity's chain in the reply, in order.
+	// The last is its head: the record that names the current key. A
+	// person who saw this identity before holds the head that they saw,
+	// and a reply must show a chain that holds it.
+	Chain []string
 	// To is the identity that the reply is for, and Share the id of the
 	// share record that it answers.
 	To, Share string
@@ -191,10 +192,8 @@ func Check(in bundle.Input) Result {
 		bad("%s is listed, and is not in the reply", id)
 	}
 	res.Identity, res.Words, res.Key, res.To, res.Share, res.ReplyID = who, core.IDWords(who), key, to, share, manifest.ID
-	for _, node := range chain[:len(chain)-1] {
-		if k := node.ValueKey(); k != key && !slices.Contains(res.Retired, k) {
-			res.Retired = append(res.Retired, k)
-		}
+	for _, node := range chain {
+		res.Chain = append(res.Chain, node.ID)
 	}
 	res.When = "-"
 	if obs, ok := manifest.Observed.(map[string]any); ok {

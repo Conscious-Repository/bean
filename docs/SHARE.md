@@ -151,32 +151,38 @@ bean accept -label Ana reply-to-ben.bean
 - `-to` is what they received. It must pass its check, so a sealed package asks for its six words.
 - Then come pairs: a record of the share, and the text of a note about it. Name the record by its id from the check, or by the first 6 or more hex digits. The id of the share record names the share as a whole.
 - bean writes one sealed file and prints six words that open it. The reader sends the file one way and gives you the words another, as you did.
-- bean also prints the reader's identity words. They read them to you.
+- bean also prints the reader's identity words and the start of the reply's id. They tell you both.
 - The reader's log keeps a `reply` record: to whom, to which share, and how many notes. It does not hold the notes. The reader keeps the file and its words to read them again.
+- **What a reply shows of the reader.** It holds their identity records, as a share holds yours. They show the reader's identity id and key, when they made their log, and when they changed a key.
 
-**Your side.** `bean accept` asks for the six words and checks the reply. Then it shows three things:
+**Your side.** `bean accept` asks for the six words and checks the reply. Then it shows:
 
 - the share that it answers, with your note on that share;
-- the eight identity words of whoever signed it;
-- each note, with the record that it is about.
+- the start of the reply's id, and the key that signed it;
+- the eight identity words of the identity that the key speaks for;
+- whether you have seen this identity or this key before;
+- each note in quotation marks, with the record that it is about.
 
-Ask the reader to read their identity words to you. If the words are not the same, do not accept. Then bean asks before it writes. `-yes` skips the question, for scripts. Without a terminal and without `-yes` it takes nothing.
+Ask the reader two things: whether they sent a reply whose id starts so, and to read their identity words. If either is not the same, do not accept. Then bean asks before it writes.
 
-- **`-label` is the name under which this person's notes show.** The first reply of a key needs it. A later reply of that key needs none, and bean does not rename a key.
-- **What goes into your log.** The notes, and one record of your own that pairs the reader's key with the name. The reader's identity records and their reply record stay out.
-- **Where you see them.** `bean ls` shows a note with the name in brackets. `bean show <id>` lists the notes about a record.
-- **A note is a record about you.** It stays through a change of your key, it is in an export, and you can share it on. A reader of that share sees the name and the key.
+- **`-label` is the name under which this person's notes show.** The first reply of an identity needs it. A later reply needs none. A name belongs to one identity: bean does not rename one, and does not give one name to two.
+- **`-yes` is for scripts, and needs `-words`.** A script cannot compare words by eye, so it states the eight words that you heard. bean takes nothing when they are not the signer's. Without a terminal and without `-yes` it takes nothing.
+- **What goes into your log.** The notes, and one record of your own that pairs the reader's key with the name. That record holds the reader's identity id and how far their chain of keys had got. The reader's identity records and their reply record stay out.
+- **Where you see them.** `bean ls` shows a note in quotation marks, with `[peer Ana]`. `bean show <id>` lists the notes about a record.
+- **A note is a record about you.** It stays through a change of your key, it is in an export, and you can share it on. A reader of that share sees `[peer Ana]`, the reader's key, and your record of the name with their identity id.
 
 **What a note is.** It is the reader's key speaking by itself about you: text about one record of that share. It holds no value and no file. It cannot correct a record or delete one. bean refuses a reply that holds anything else, such as a lab value in the place of a note.
 
 **What a reply shows, and what it does not.**
 
 - **A note is the word of the person who wrote it.** bean does not check what it says, and it is not medical advice.
-- **The name is your word.** The reply shows that the key was the current key of an identity, by that identity's records. You compared its eight words by voice. Your log keeps that as your own signed record.
-- **A peer who changes their key keeps their name.** Their next reply holds the change on their identity's chain. bean then unpairs the key that they retired, so that key speaks under the name no longer.
-- **A stolen key can sign a reply until you know of the change.** A reply holds the key changes made before it, not later ones. So a key that was retired can show an older chain. After you accept a reply of the new key, or run `bean unpair`, a reply of the old key takes nothing.
-- **Take your word back with `bean unpair <name>`.** The notes that the key signed stay in your log, and show as an unpaired key's. `bean purge <id>` deletes one: every record in your log is about you, and yours to delete.
-- **What travels.** A reply holds the reader's identity records, as a share holds yours. They show when the reader made their log and changed a key. The reply record names your identity id and the id of your share.
+- **The name is your word.** The reply shows that the key is the last key of an identity, by the identity records that came with it. It does not show that those records are all there are. You compared the eight words and the reply's id by voice: that is the check that the reply is this person's.
+- **bean cannot tell whether a key is still current.** A reply shows the changes of key that were made before it. Someone who holds an older key of the reader shows the same eight words. The reply's id is what such a person cannot match: the reader never sent it.
+- **Your log remembers how far a reader's keys had got.** A later reply must show the same chain of keys, or a longer one. So once you accept a reply of a reader's new key, a reply of their old key takes nothing. Nor does one with another history.
+- **A reader who changes their key keeps their name.** Their next reply shows the change, and bean says that it is another key of an identity that you know.
+- **If a reader's 24 words are stolen, the thief can change the key as the reader can.** Then a reply of the thief shows a longer chain and the same words. Only the reader can tell you, by voice, that the reply is not theirs.
+- **Take your word back with `bean unpair <name>`.** A later reply of that key takes nothing. The notes that it signed stay in your log, and show as an unpaired key's. `bean purge <id>` deletes one: every record in your log is about you, and yours to delete. A note that you deleted is not taken again.
+- **What the reader's own log says.** Their `reply` record names your identity id and the id of your share. It travels if they share that record.
 
 ### The reply, exactly
 
@@ -188,7 +194,9 @@ A reply is a sealed package like a share: record files under `objects/`, packed 
 4. Every other record is an identity record on that person's chain, or a note that the `reply` record lists. Every listed note is there.
 5. A note has the type `note`. Its `author` and its `kid` are the reply's key. Its `subject` is `to`. Its `value` is `{"s": text}`, with a text of 1 to 4000 bytes. It has one ref, `about` one record, and no `context` and no file.
 
-`bean accept` adds what only your log can tell. `to` is your identity. `share` is a share record of yours. Each note is about a record that the share lists, or about the share record. The reply's key is not your own, and is not a key that you unpaired.
+`bean accept` adds what only your log can tell. `to` is your identity. `share` is a share record of yours. Each note is about a record that the share lists, or about the share record. The reply's key is not your own, and is not a key that you unpaired. The chain holds every head of that identity that you recorded before. The name is not one that another identity or an agent has.
+
+Your record of the name is an `agent.pair` record with `value.role` `peer`. Its `value` also has `key`, `label`, `identity`, and `head`: the id of the last record of the reader's chain as the reply showed it.
 
 ## Check a shared comparison
 

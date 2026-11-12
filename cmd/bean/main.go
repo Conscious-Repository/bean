@@ -61,7 +61,7 @@ Share
   reply -to <what you received> -out <new file> <id> <note> [<id> <note>]...
                                 Sign notes about records that someone shared
                                 with you, and seal them for that person.
-  accept [-label <name>] [-yes] <reply>
+  accept [-label <name>] [-words "<eight words>"] [-yes] <reply>
                                 Check a reply to a share of yours, see who
                                 signed it, and take its notes into your log.
   unpair <name>                 Take your word back from the keys that you
@@ -115,7 +115,7 @@ var syntax = map[string]string{
 	"share":         "share -out <new folder or file> [-seal] [-files] [-note <text>] [-yes] <id>... | -type <type> [-since <time>] [-until <time>]",
 	"check-bundle":  "check-bundle [-unpack <new folder>] <folder, zip file or sealed package>",
 	"reply":         "reply -to <what you received> -out <new file> <id> <note> [<id> <note>]...",
-	"accept":        "accept [-label <name>] [-yes] <reply>",
+	"accept":        "accept [-label <name>] [-words \"<eight words>\"] [-yes] <reply>",
 	"unpair":        "unpair <name>",
 	"compare":       "compare -sex male|female -age <from>-<to> [-where <DATASET>.<VARIABLE>=<value>|<from>-<to>]... [-unknown-files] [-save] <id>... | -type <type>\n       bean [-dir <folder>] compare -pack <file> [-cohort <cohort> [-unknown-pack] [-save] <id>... | -type <type>]",
 	"mcp":           "mcp [-write] [-blobs] [-label <name>]",

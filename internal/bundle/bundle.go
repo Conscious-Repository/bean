@@ -336,6 +336,11 @@ func Check(in Input) Result {
 			if label == "" {
 				label = "agent"
 			}
+			// A peer is another person, and their records show as a
+			// peer's: nobody takes them for an agent's.
+			if role, _ := r.Value["role"].(string); role == "peer" {
+				label = "peer " + label
+			}
 			switch has := paired[r.ValueKey()]; {
 			case has == "":
 				paired[r.ValueKey()] = label
@@ -445,7 +450,7 @@ func Check(in Input) Result {
 		fmt.Sprintf("signed by identity %s, with key %s, at %s", person, share.Kid, when),
 		fmt.Sprintf("identity words: %s", core.IDWords(person)),
 		fmt.Sprintf("records: %d listed; files: %d included, %d named and not included", len(listed), included, named),
-		fmt.Sprintf("signed: %d by the person, %d by an agent the person paired, %d by another key", byPerson, byAgent, byOther),
+		fmt.Sprintf("signed: %d by the person, %d by an agent or a peer the person paired, %d by another key", byPerson, byAgent, byOther),
 		fmt.Sprintf("corrections: %d of the listed records replace an earlier record, which is not in the bundle", corrections),
 	)
 	// The person's note is shown only with a bundle that passed: on a
@@ -501,7 +506,11 @@ func Check(in Input) Result {
 			default:
 				by = "[signed by another key: " + keyName(r.Author) + "]"
 			}
-			res.Rows = append(res.Rows, Row{When: sharedWhen(r), Type: r.Type, Text: view.Record(r, inBundle), By: by, ID: r.ID[7:19], Mark: view.Mark(r, inBundle)})
+			text := view.Record(r, inBundle)
+			if by != "" {
+				text = view.Said(r, text)
+			}
+			res.Rows = append(res.Rows, Row{When: sharedWhen(r), Type: r.Type, Text: text, By: by, ID: r.ID[7:19], Mark: view.Mark(r, inBundle)})
 			// A comparison with a reference pack names it by SHA-256.
 			if ref, ok := r.Context["reference"].(map[string]any); ok && strings.HasPrefix(r.Type, "comparison.") {
 				digest, _ := ref["pack"].(string)

@@ -134,6 +134,8 @@ func (s *Store) AddFromKey(id string, data []byte) error {
 		return errors.New("another person's key corrects and deletes nothing")
 	case len(r.Blobs) > 0:
 		return errors.New("another person's record keeps no file")
+	case l.DeletedByPerson(id):
+		return errors.New("the person deleted this record: it is not taken again")
 	}
 	if err := l.canWriteRecord(r); err != nil {
 		return err

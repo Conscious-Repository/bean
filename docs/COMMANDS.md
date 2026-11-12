@@ -194,14 +194,16 @@ Signs notes about records that someone shared with you, and seals them for that 
 - It needs your own log and key: a note is signed with your key, about the other person.
 - It writes one new file, sealed, and prints the six words that open it and your identity words. Your log gets a `reply` record: to whom, to which share, how many notes. The notes are in the file only.
 
-### `accept [-label <name>] [-yes] <reply>`
+### `accept [-label <name>] [-words "<eight words>"] [-yes] <reply>`
 
 Checks a reply to a share of yours and takes its notes into your log. It asks for the six words. Then it shows the share, the eight identity words of whoever signed, and each note with the record that it is about. Then it asks.
 
-- `-label` is the name under which this person's notes show. The first reply of a key needs it. A key keeps its name: another `-label` for it is refused.
-- `-yes` skips the question, for scripts. Without a terminal and without `-yes` nothing is taken.
-- It takes notes about records of that share and nothing else. A reply that holds anything more is refused whole, and so is a reply for another person or of a key that you unpaired.
-- It adds the notes and one `agent.pair` record of yours that says the key is a peer's, with the name. A peer who changed their key keeps the name, and the key that they retired is unpaired.
+- `-label` is the name under which this person's notes show. The first reply of an identity needs it. An identity keeps its name, and a name belongs to one identity.
+- `-words` are the identity words that the person read to you. When they are not the signer's, nothing is taken.
+- `-yes` skips the question, for scripts, and needs `-words`. Without a terminal and without `-yes` nothing is taken.
+- It takes notes about records of that share and nothing else. A reply that holds anything more is refused whole. So is a reply for another person, or of a key that you unpaired.
+- It refuses a reply that shows its identity's chain of keys shorter than you have seen it, or with another history. That is how a retired key shows itself.
+- It adds the notes and one `agent.pair` record of yours that says the key is a peer's, with the name. A note that you deleted is not taken again.
 
 Exit 1 when nothing was taken.
 

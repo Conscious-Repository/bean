@@ -98,9 +98,11 @@ bean -dir "$WORK/reader-log" init >/dev/null 2>&1
 ABOUT=$(bean ls -type lab.cholesterol-total | awk '{print $NF}' | head -1)
 echo "$WORDS" | bean -dir "$WORK/reader-log" reply -to "$WORK/for-a-reader.bean" -out "$WORK/reply.bean" "$ABOUT" "Received. Can you send the report as well?" >"$WORK/reply.txt" 2>/dev/null
 REPLYWORDS=$(sed -n 's/^  //p' "$WORK/reply.txt" | head -1)
-# You type the reply's words, compare the identity words with the ones the
-# reader tells you, and give the reader a name. Here that is piped in.
-echo "$REPLYWORDS" | bean accept -yes -label reader "$WORK/reply.bean" 2>/dev/null | sed "s|$WORK/||; s/ [0-9a-f]\{12\})/)/; s/sha256:[0-9a-f]*/sha256:.../"
+READERWORDS=$(sed -n 's/^  //p' "$WORK/reply.txt" | sed -n 2p)
+# You type the reply's words, hear the reader's identity words from them,
+# and give the reader a name. Here the words are piped in and passed.
+echo "$REPLYWORDS" | bean accept -yes -label reader -words "$READERWORDS" "$WORK/reply.bean" 2>/dev/null |
+  sed "s|$WORK/||; s/ [0-9a-f]\{12\})/)/; s/sha256:[0-9a-f]*/sha256:.../; s/id starts [0-9a-f]\{12\}/id starts .../; s/key [a-z0-9]*:[0-9a-f]*/key .../"
 bean ls -type note | sed 's/  *[0-9a-f]\{12\}$//'
 
 # The numbers must be the ones this example was written with. Ids differ
