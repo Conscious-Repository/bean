@@ -164,7 +164,7 @@ func compareReadings(s *core.Store, typ string, pos []string) ([]*core.Record, *
 			}
 		}
 		if len(readings) == 0 {
-			fail(fmt.Errorf("no current reading of type %s. Add one first, for example: bean add lab.cholesterol-total 187 -unit mg/dL. bean ls shows what the log holds", typ))
+			fail(fmt.Errorf("no current reading of type %s. Add one first with bean add <type> <value> -unit <unit>, for example: bean add lab.cholesterol-total 187 -unit mg/dL. bean ls shows what the log holds", typ))
 		}
 	}
 	for _, id := range pos {
