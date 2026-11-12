@@ -213,6 +213,10 @@ func TestRefuses(t *testing.T) {
 			t.Errorf("%s: read as a pack", name)
 		}
 	}
+	// The largest n that a cell may state is read.
+	if _, err := Read(change(func(top map[string]any) { cell(top, 0)["n"] = float64(MaxN) })); err != nil {
+		t.Errorf("an n of %d: %v", MaxN, err)
+	}
 	// The unchanged pack passes: the changes above are what is refused.
 	if _, err := Read(change(func(map[string]any) {})); err != nil {
 		t.Errorf("the unchanged pack: %v", err)

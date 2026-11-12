@@ -79,6 +79,9 @@ mkdir "$T/log"; b init >/dev/null 2>&1 || { echo "init failed"; exit 1; }
 for v in 127 150 187 193 200.5 250 400; do b add lab.cholesterol-total $v -unit mg/dL -at 2026-11-01 >/dev/null; done
 for v in 29 44 52 60 72; do b add lab.hdl-cholesterol $v -unit mg/dL -at 2026-11-01 >/dev/null; done
 for v in 55.5 70 81.2 104; do b add weight $v -unit kg -at 2026-11-01 >/dev/null; done
+# A reading of a type that the pack does not take, with the value, the unit
+# and the time of one that it does: a forged claim about it computes.
+b add lab.ldl-cholesterol 187 -unit mg/dL -at 2026-11-01 >/dev/null
 b agent init -label assistant >/dev/null 2>&1
 b add -agent lab.cholesterol-total 181 -unit mg/dL -at 2026-11-01 >/dev/null || { echo "agent add failed"; exit 1; }
 saved=0
@@ -126,8 +129,11 @@ forge() {
   "$PY" -I - "$T/records.jsonl" "$2" >"$T/forged.jsonl" <<'PYEOF'
 import json, sys
 records = [json.loads(l) for l in open(sys.argv[1])]
-r = next(x for x in records if x["type"] == "comparison.percentile" and x["context"]["reference"]["measure"] == "LBXTC")
+person = lambda x: x["author"] == x["subject"]
+tc = next(x for x in records if x["type"] == "lab.cholesterol-total" and x["value"]["n"] == 187 and person(x))
+r = next(x for x in records if x["type"] == "comparison.percentile" and x["context"]["reading"] == tc["id"])
 other = next(x for x in records if x["type"] == "weight")
+ldl = next(x for x in records if x["type"] == "lab.ldl-cholesterol")
 c = r["context"]
 exec(sys.argv[2])
 print(json.dumps({"type": r["type"], "value": r["value"], "times": {"observed": r["times"]["observed"]},
@@ -142,6 +148,7 @@ PYEOF
 }
 forge "a second record it is about" 'r["refs"].append({"rel": "about", "id": other["id"]})'
 forge "a reading of a type that the measure does not take" 'c["reading"] = other["id"]; r["refs"] = [{"rel": "about", "id": other["id"]}]'
+forge "a reading of another type with the same value and unit" 'c["reading"] = ldl["id"]; r["refs"] = [{"rel": "about", "id": ldl["id"]}]'
 forge "another title" 'c["reference"]["title"] = "NHANES 2017-2018 (reference range)"'
 forge "another source" 'c["reference"]["source"] = "a clinical reference"'
 forge "another label" 'c["reference"]["label"] = "LDL Cholesterol (mg/dL)"'
