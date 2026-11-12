@@ -171,7 +171,7 @@ Ask the reader two things: whether they sent a reply whose id starts so, and to 
 - **Where you see them.** `bean ls` shows a note in quotation marks, with `[peer Ana]`. `bean show <id>` lists the notes about a record.
 - **A note is a record about you.** It stays through a change of your key, it is in an export, and you can share it on. A reader of that share sees `[peer Ana]`, the reader's key, and your record of the name with their identity id.
 
-**What a note is.** It is the reader's key speaking by itself about you: text about one record of that share. It holds no value and no file. It cannot correct a record or delete one. A record of a reader's key opens no file of yours, as a paired agent's does. bean refuses a reply that holds anything else, such as a lab value in the place of a note.
+**What a note is.** It is the reader's key speaking by itself about you: text about one record of that share. It holds no value and no file. It cannot correct a record or delete one. A record of a reader's key opens no file of yours, as a paired agent's does: not in a share, and not in an export. A reply that one of your own agent keys signed takes nothing. bean refuses a reply that holds anything else, such as a lab value in the place of a note.
 
 **What a reply shows, and what it does not.**
 

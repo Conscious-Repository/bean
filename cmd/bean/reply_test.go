@@ -691,3 +691,93 @@ func TestAcceptedNotesStay(t *testing.T) {
 		t.Errorf("the note shared on: %d\n%s", code, checked)
 	}
 }
+
+// TestPeerRecordOpensNoFile: a record that a peer's key signed can name a
+// file of the log, also one whose record the person deleted. No way out of
+// the log sends that file: not a share with -files, and not an export.
+func TestPeerRecordOpensNoFile(t *testing.T) {
+	ben, ana, pkg, words, ids := replyLogs(t)
+	out, errs, code := run(t, ben, "", "add", "symptom", "rash", "-photo", writePNG(t))
+	if code != 0 {
+		t.Fatalf("add: %s", errs)
+	}
+	photoID := strings.TrimSpace(out)
+	rep, rwords := writeReply(t, ana, pkg, words, ids[0], "Looks fine to me.")
+	if out, errs, code := run(t, ben, rwords+"\n", "accept", "-yes", "-label", "Ana", "-words", idWords(t, ana), rep); code != 0 {
+		t.Fatalf("accept: %d\n%s\n%s", code, out, errs)
+	}
+	bs := core.Open(ben)
+	l, err := bs.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash := l.Report.Records[photoID].Blobs[0].Hash
+	local, err := core.Open(ana).ReadLocal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Ana knows the id of the file, and her record reaches Ben's folder.
+	planted, data, err := core.SignRecord(map[string]any{
+		"v": 0.0, "nonce": core.NewNonce(), "type": "meal", "subject": mustIdentity(t, ben), "author": local.Signer.Public(), "kid": local.Signer.Public(),
+		"value": map[string]any{"s": "lunch"}, "times": map[string]any{"observed": nil, "imported": "2026-11-12T10:00:00Z"},
+		"source": map[string]any{"system": "x", "adapter": core.Adapter, "ref": nil},
+		"blobs":  []any{map[string]any{"hash": hash, "role": "photo", "media_type": "image/png"}},
+	}, local.Signer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(ben, filepath.FromSlash(core.PathOf(planted)))
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out, errs, code := run(t, ben, "", "purge", photoID); code != 0 {
+		t.Fatalf("purge: %d\n%s\n%s", code, out, errs)
+	}
+	for name, args := range map[string][]string{
+		"a bundle":       {"share", "-yes", "-files", "-out", filepath.Join(t.TempDir(), "d"), planted},
+		"a sealed share": {"share", "-yes", "-files", "-seal", "-out", filepath.Join(t.TempDir(), "d.bean"), planted},
+	} {
+		out, errs, code := run(t, ben, "", args...)
+		if code == 0 || !strings.Contains(errs, "such a record opens no file") {
+			t.Errorf("%s sent a file for a peer's record: %d\n%s\n%s", name, code, out, errs)
+		}
+		if _, err := os.Stat(args[len(args)-2]); err == nil {
+			t.Errorf("%s: something was written", name)
+		}
+	}
+	export := filepath.Join(t.TempDir(), "export")
+	if out, errs, code := run(t, ben, "", "export", export); code != 0 {
+		t.Fatalf("export: %d\n%s\n%s", code, out, errs)
+	}
+	if _, err := os.Stat(filepath.Join(export, "blobs", hash[7:])); err == nil {
+		t.Errorf("the export holds the deleted photo")
+	}
+	// Without -files the record itself still travels: it is a claim.
+	if out, errs, code := run(t, ben, "", "share", "-yes", "-out", filepath.Join(t.TempDir(), "plain"), planted); code != 0 {
+		t.Errorf("share without -files: %d\n%s\n%s", code, out, errs)
+	}
+}
+
+// TestAcceptRefusesTheLogsOwnAgent: a key that the person paired as their
+// own agent is not another person's. A reply that it signed takes nothing.
+func TestAcceptRefusesTheLogsOwnAgent(t *testing.T) {
+	ben, ana, pkg, words, ids := replyLogs(t)
+	local, err := core.Open(ana).ReadLocal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, errs, code := run(t, ben, "", "agent", "pair", local.Signer.Public(), "-label", "phone"); code != 0 {
+		t.Fatalf("agent pair: %d\n%s\n%s", code, out, errs)
+	}
+	rep, rwords := writeReply(t, ana, pkg, words, ids[0], "Looks fine to me.")
+	out, errs, code := run(t, ben, rwords+"\n", "accept", "-yes", "-words", idWords(t, ana), rep)
+	if code == 0 || !strings.Contains(errs, `paired as your agent "phone"`) {
+		t.Errorf("a reply of the log's own agent key: %d\n%s\n%s", code, out, errs)
+	}
+	if ls, _, _ := run(t, ben, "", "ls", "-type", "note"); strings.Contains(ls, "Looks fine") {
+		t.Errorf("the note was taken:\n%s", ls)
+	}
+}

@@ -969,18 +969,12 @@ func pastHeadHalt(u *Report, union map[string][]byte, proven map[string]bool, id
 	return verifyFiles(overlay(union, u.HeadHalt[id], nil), proven)
 }
 
-// fileLabels is AgentLabels, plus, for a too-new identity, the agents that
+// fileLabels is FileLabels, plus, for a too-new identity, the agents that
 // its records this build cannot judge pair. Such a pairing counts only when
 // the gate trusts its key, and when no other such record of the person
 // supersedes it (DECISIONS 217).
 func (l *Loaded) fileLabels() map[string]string {
-	out := l.AgentLabels()
-	// A peer is not an agent: a peer's record unlocks no file.
-	for key := range out {
-		if l.IsPeer(key) {
-			delete(out, key)
-		}
-	}
+	out := l.FileLabels()
 	if !l.IsTooNew() {
 		return out
 	}
@@ -1000,10 +994,20 @@ func (l *Loaded) fileLabels() map[string]string {
 			pairs = append(pairs, r)
 		}
 	}
+	// A peer among them unlocks nothing, also when the key has an agent's
+	// pairing too: the same rule as FileLabels.
+	peer := map[string]bool{}
+	for _, r := range pairs {
+		st, _ := r.Value["status"].(string)
+		role, _ := r.Value["role"].(string)
+		if !superseded[r.ID] && st != "unpaired" && role == "peer" {
+			peer[r.ValueKey()] = true
+		}
+	}
 	for _, r := range pairs {
 		label, _ := r.Value["label"].(string)
 		st, _ := r.Value["status"].(string)
-		if superseded[r.ID] || st == "unpaired" || out[r.ValueKey()] != "" {
+		if superseded[r.ID] || st == "unpaired" || out[r.ValueKey()] != "" || peer[r.ValueKey()] {
 			continue
 		}
 		out[r.ValueKey()] = shownLabel(label)

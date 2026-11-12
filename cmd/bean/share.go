@@ -217,9 +217,16 @@ func cmdShare(s *core.Store, args []string) {
 	var kept []sharedFile
 	distinct := map[string]bool{}
 	seen := map[string]bool{}
+	// Only a record of the person or of a paired agent opens a file, as in
+	// an export. Anyone can write a record that names a file of the log,
+	// also a file whose record the person deleted.
+	opens := l.FileLabels()
 	for _, r := range shared {
 		public := r.Type == nhanes.FileType && r.Author == l.ID
 		travels := *files && (named[r.ID] || public)
+		if travels && len(r.Blobs) > 0 && r.Author != l.ID && opens[r.Author] == "" {
+			fail(fmt.Errorf("%s names a file, and it is not your record or a paired agent's: such a record opens no file, so nothing was shared. Share it without -files, or delete it: bean purge %s", r.ID[7:19], r.ID[7:19]))
+		}
 		for _, b := range r.Blobs {
 			if seen[b.Hash+" "+r.ID] {
 				continue // a record may name one file twice

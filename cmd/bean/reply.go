@@ -302,6 +302,11 @@ func cmdAccept(s *core.Store, args []string) {
 			fail(errors.New("this reply shows its identity as it was before a change of key that you have seen, or with another history: nothing was taken. The key that signed it was retired, or was never this person's. Ask the person for a reply that their current key signed"))
 		}
 	}
+	// A key that the person paired as an agent of their own is not another
+	// person's key. Its notes would show under the agent's name.
+	if agent := l.FileLabels()[res.Key]; agent != "" {
+		fail(fmt.Errorf("the key that signed this reply is paired as your agent %q: nothing was taken. A reply is from another person", agent))
+	}
 	// The name: the one this key has, or the one that another key of the
 	// same identity has, or the one given now.
 	labels := l.AgentLabels()

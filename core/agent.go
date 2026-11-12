@@ -464,11 +464,23 @@ func shownLabel(label string) string {
 // agent.pair claim to its label ("agent" when it has none). A key the
 // person paired twice under different names, for example on two of their
 // machines, shows both names, in id order, never one picked at random.
-func (l *Loaded) AgentLabels() map[string]string {
+func (l *Loaded) AgentLabels() map[string]string { return l.pairLabels(true) }
+
+// FileLabels is AgentLabels without the peers: the keys whose records may
+// name a file of the person. A peer is another person, and a peer's record
+// names no file, so it unlocks none (DECISIONS 293). A key that is paired
+// both as an agent and as a peer counts as a peer.
+func (l *Loaded) FileLabels() map[string]string { return l.pairLabels(false) }
+
+func (l *Loaded) pairLabels(peers bool) map[string]string {
 	out := map[string]string{}
 	for key, ps := range l.pairClaims() {
 		var names []string
-		for _, p := range livePairings(ps) {
+		live := livePairings(ps)
+		if !peers && slices.ContainsFunc(live, func(p pairing) bool { return p.peer }) {
+			continue
+		}
+		for _, p := range live {
 			name := shownLabel(p.label)
 			// A peer is another person. Their records show as a peer's
 			// wherever a name shows, so nobody takes them for an agent's
@@ -485,17 +497,6 @@ func (l *Loaded) AgentLabels() map[string]string {
 		}
 	}
 	return out
-}
-
-// IsPeer returns whether key is paired as a peer: another person's key.
-// A peer's record names no file, so it unlocks none (DECISIONS 293).
-func (l *Loaded) IsPeer(key string) bool {
-	for _, p := range livePairings(l.agentPairings(key)) {
-		if p.peer {
-			return true
-		}
-	}
-	return false
 }
 
 // AppendAsAgent is Append signed by the local agent key, with the agent's

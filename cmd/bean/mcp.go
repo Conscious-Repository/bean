@@ -763,9 +763,9 @@ func toolReadBlob(s *core.Store, f core.Filter, id string, max int) (any, error)
 	// Only a current record of the person or a paired agent unlocks a blob. A
 	// stranger can name any blob, also one the person deleted.
 	mediaType, named := "", false
-	labels := l.AgentLabels()
+	labels := l.FileLabels()
 	for rid, r := range l.Report.Records {
-		if !l.Current(rid) || !inScope(r, f) || (r.Author != l.ID && (labels[r.Author] == "" || l.IsPeer(r.Author))) {
+		if !l.Current(rid) || !inScope(r, f) || (r.Author != l.ID && labels[r.Author] == "") {
 			continue
 		}
 		for _, b := range r.Blobs {
