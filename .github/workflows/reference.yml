@@ -1,0 +1,53 @@
+name: Reference data
+
+# The digests that bean has on record for the NHANES files, and for the
+# pack built from them, came from one download. This job fetches the files
+# from CDC again, from another network, and checks every digest, every
+# number of the method and the pack. It runs apart from CI: it needs CDC's
+# server, and a commit must not wait for it.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 5 * * 1'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'internal/nhanes/**'
+      - 'internal/pack/**'
+      - 'internal/xpt/**'
+      - 'cmd/bean-pack-nhanes/**'
+      - 'tools/pack/**'
+      - 'tools/compare/**'
+      - '.github/workflows/reference.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  cdc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install verifier dependencies
+        run: python -m pip install -r tools/requirements.txt
+      - name: Fetch the files from CDC
+        run: |
+          mkdir -p "$RUNNER_TEMP/nhanes"
+          for f in DEMO_J TCHOL_J HDL_J GHB_J CBC_J BMX_J DR1TOT_J; do
+            curl -fL --retry 3 --retry-delay 5 -o "$RUNNER_TEMP/nhanes/$f.XPT" "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/$f.xpt"
+          done
+          { echo "Files as CDC served them to this runner, SHA-256:"; echo '```'; (cd "$RUNNER_TEMP/nhanes" && sha256sum *.XPT); echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Check the digests on record, the method and the pack
+        env:
+          BEAN_NHANES_DIR: ${{ runner.temp }}/nhanes
+        run: |
+          go test ./internal/nhanes ./internal/xpt -run 'Real|NHANES' -v
+          make compare pack
