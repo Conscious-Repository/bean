@@ -123,7 +123,24 @@ func TestRealPack(t *testing.T) {
 		t.Errorf("weight in kg is the measure %q", id)
 	}
 	sum := sha256.Sum256(p.Bytes())
-	if got := hex.EncodeToString(sum[:]); !pack.IsKnown(got) {
-		t.Errorf("the pack of the files on record has SHA-256 %s, and bean has no record of it: %v", got, pack.Known)
+	got := hex.EncodeToString(sum[:])
+	known, ok := pack.Known[got]
+	if !ok {
+		t.Fatalf("the pack of the files on record has SHA-256 %s, and bean has no record of it", got)
+	}
+	// What bean holds of the pack on record is what the pack says: each
+	// label and each cohort, and no other.
+	if len(known.Measures) != len(p.Measures) || len(known.Cohorts) != len(p.Cohorts) {
+		t.Errorf("bean holds %d measures and %d cohorts of the pack, which has %d and %d", len(known.Measures), len(known.Cohorts), len(p.Measures), len(p.Cohorts))
+	}
+	for id, m := range p.Measures {
+		if known.Measures[id] != m.Label {
+			t.Errorf("measure %s: bean holds the label %q, the pack has %q", id, known.Measures[id], m.Label)
+		}
+	}
+	for id, c := range p.Cohorts {
+		if known.Cohorts[id] != c.Text {
+			t.Errorf("cohort %s: bean holds %q, the pack has %q", id, known.Cohorts[id], c.Text)
+		}
 	}
 }

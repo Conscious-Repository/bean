@@ -173,8 +173,12 @@ A pack is well formed or not, and a check can tell. Whether its tables are true 
 bean has one pack on record: the NHANES pack, by its SHA-256. For any other pack:
 
 - `bean compare -pack` shows a warning, and compares only with `-unknown-pack`. Each result then has the caveat above, in the output and in the saved claim.
-- `bean check-bundle` and the check page mark the row: `by pack 7f3fda515b16 (NOT on record)`. They show what the reading was set against, from the claim. They show the title only as what the sender calls it.
+- `bean check-bundle` and the check page mark the row: `by pack 7f3fda515b16 (NOT on record)`. They show what the reading was set against in quotation marks: it is the claim's word. They show the title only as what the sender calls it.
 - `tools/compare/reproduce.py` computes the claim again, prints `NOT ON RECORD`, and fails. A reader who trusts the pack's publisher names the SHA-256: `-accept-pack <SHA-256>`.
+
+For the pack on record, bean holds each measure's label and each cohort in words. A row shows those, whatever the claim says. A claim that says otherwise is marked: `(the claim MISSTATES this pack)`.
+
+**What a check of a bundle does not do.** It does not compute a comparison again: it has the claim and not the pack. So a claim with false numbers that names the pack on record reads like a true one there. `reproduce.py` with the pack is what finds it.
 
 One list in bean's code is not how many publishers will be known. A publisher's signature is the next step ([ROADMAP.md](ROADMAP.md)).
 

@@ -151,8 +151,8 @@ func printPack(p *pack.Pack) {
 // onRecord says whether bean knows the pack. A pack is what its SHA-256
 // says, and bean has one on record.
 func onRecord(p *pack.Pack) string {
-	if what, ok := pack.Known[p.SHA256]; ok {
-		return "This is " + what + " that bean has on record."
+	if k, ok := pack.Known[p.SHA256]; ok {
+		return "This is " + k.What + " that bean has on record."
 	}
 	return "WARNING: bean has NO record of this pack. Whoever built it chose its tables, its caveats and what each reading is set against. Compare its SHA-256 with the one that its publisher states, or build the pack again from the files that it names."
 }

@@ -111,7 +111,7 @@ func TestComparePack(t *testing.T) {
 		t.Fatalf("share: %d\n%s\n%s", code, out, errs)
 	}
 	checked, _, code := run(t, t.TempDir(), "", "check-bundle", bundle)
-	for _, want := range []string{"bundle ok", "among male, age 30-39 (n ", " against Total Cholesterol (mg/dL), among male", ", by pack " + digest[:12] + " (NOT on record)", "get the pack with that SHA-256", digest + `: bean has NO record of this pack. The sender calls it "NHANES 2017-2018: adults by sex and ten years of age".`, "nobody has checked its tables"} {
+	for _, want := range []string{"bundle ok", "among male, age 30-39 (n ", ` against "Total Cholesterol (mg/dL)", among male`, ", by pack " + digest[:12] + " (NOT on record)", "get the pack with that SHA-256", digest + `: bean has NO record of this pack. The sender calls it "NHANES 2017-2018: adults by sex and ten years of age".`, "nobody has checked its tables"} {
 		if code != 0 || !strings.Contains(checked, want) {
 			t.Errorf("check-bundle: %d, no %q in\n%s", code, want, checked)
 		}
@@ -194,8 +194,8 @@ func TestPythonHoldsThePackTables(t *testing.T) {
 	if !strings.Contains(string(py), `"`+pack.CaveatNotOnRecord+`"`) {
 		t.Errorf("tools/compare/reproduce.py does not have the caveat %q", pack.CaveatNotOnRecord)
 	}
-	for digest, what := range pack.Known {
-		if !strings.Contains(string(py), `"`+digest+`": "`+what+`"`) {
+	for digest, k := range pack.Known {
+		if !strings.Contains(string(py), `"`+digest+`": "`+k.What+`"`) {
 			t.Errorf("tools/compare/reproduce.py does not have the pack on record %s", digest)
 		}
 	}
@@ -273,5 +273,44 @@ func TestComparePackEdges(t *testing.T) {
 	run(t, dir, "", "verify")
 	if ls, _, _ := run(t, dir, "", "ls", "-type", "comparison.percentile"); strings.Count(ls, "comparison.percentile") != 2 || !strings.Contains(ls, "percentile 99.9 of") {
 		t.Errorf("a claim with another value was deleted as a duplicate, or the saved one was:\n%s", ls)
+	}
+}
+
+// TestRowOfAPackOnRecord: for a pack that bean has on record, a row shows
+// the pack's own label and cohort, whatever the claim says, and marks a
+// claim that says otherwise. The claims are signed by hand: no pack file
+// is needed to show a row.
+func TestRowOfAPackOnRecord(t *testing.T) {
+	dir, _, ids := compareLog(t, "TCHOL_J", "DEMO_J")
+	var digest string
+	for d := range pack.Known {
+		digest = d
+	}
+	claim := func(reference, cohortText string) string {
+		return `{"type":"comparison.percentile","source":{"system":"by-hand","adapter":"test@1","ref":null},"times":{"observed":{"start":"2026-11-01T00:00:00Z","precision":"day"}},"value":{"n":46,"unit":"{percentile}"},"refs":[{"rel":"about","id":"` + ids[0] + `"}],"context":{"reading":"` + ids[0] + `","cohort":{"text":"` + cohortText + `"},"result":{"n":339},"reference":{` + reference + `}}}`
+	}
+	onRecord := `"pack":"` + digest + `","measure":"LBXTC","cohort":"male-30-39",`
+	const own = "percentile 46 of lab.cholesterol-total 193 mg/dL against Total Cholesterol (mg/dL), among male, age 30-39 (n 339), by pack "
+	for name, tc := range map[string]struct{ claim, want string }{
+		"what the pack says":                    {claim(onRecord+`"label":"Total Cholesterol (mg/dL)"`, "male, age 30-39"), own + digest[:12] + "    "},
+		"another label":                         {claim(onRecord+`"label":"Hemoglobin A1c, fasting (%) (on record)"`, "male, age 30-39"), own + digest[:12] + " (the claim MISSTATES this pack)"},
+		"a label that imitates a mark":          {claim(onRecord+`"label":"Total Cholesterol (mg/dL), by pack `+digest[:12]+`"`, "male, age 30-39"), own + digest[:12] + " (the claim MISSTATES this pack)"},
+		"another cohort in words":               {claim(onRecord+`"label":"Total Cholesterol (mg/dL)"`, "everyone, by pack "+digest[:12]), own + digest[:12] + " (the claim MISSTATES this pack)"},
+		"a measure that the pack does not have": {claim(`"pack":"`+digest+`","measure":"LBXLDL","cohort":"male-30-39","label":"LDL (mg/dL)"`, "male, age 30-39"), "193 mg/dL, among male, age 30-39 (n 339), by pack " + digest[:12] + " (the claim MISSTATES this pack)"},
+		"a cohort that the pack does not have":  {claim(`"pack":"`+digest+`","measure":"LBXTC","cohort":"male-35-44","label":"Total Cholesterol (mg/dL)"`, "male, age 35-44"), "(the claim MISSTATES this pack)"},
+		"a pack and files":                      {claim(onRecord+`"label":"Total Cholesterol (mg/dL)","files":[]`, "male, age 30-39"), "(the claim MISSTATES this pack)"},
+		"a pack not on record and files":        {claim(`"pack":"`+strings.Repeat("a", 64)+`","measure":"LBXTC","cohort":"male-30-39","label":"x","files":[]`, "male, age 30-39"), "(names NO reference data)"},
+		"a pack that is no SHA-256":             {claim(`"pack":"10555d","measure":"LBXTC","cohort":"male-30-39","label":"x"`, "male, age 30-39"), "(names NO reference data)"},
+	} {
+		d := t.TempDir()
+		if err := os.CopyFS(d, os.DirFS(dir)); err != nil {
+			t.Fatal(err)
+		}
+		if out, errs, code := run(t, d, tc.claim+"\n", "append"); code != 0 {
+			t.Fatalf("%s: append: %d\n%s\n%s", name, code, out, errs)
+		}
+		if ls, _, _ := run(t, d, "", "ls", "-type", "comparison.percentile"); !strings.Contains(ls+"    ", tc.want) || strings.Count(ls, "by pack") > 1 {
+			t.Errorf("%s: no %q in\n%s", name, tc.want, ls)
+		}
 	}
 }

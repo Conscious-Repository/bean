@@ -43,7 +43,8 @@ func Blob(r *core.Record) string {
 // 30-39 (n 339)". reading returns the comparison's reading when the caller
 // may show it: a current record, never one that was corrected or deleted.
 // The cohort is the claim's own text, so it is cut to a length that cannot
-// draw a second row.
+// draw a second row. A comparison with a reference pack also says what the
+// reading was set against, and by which pack.
 func Record(r *core.Record, reading func(id string) *core.Record) string {
 	cohort, _ := r.Context["cohort"].(map[string]any)
 	among, _ := cohort["text"].(string)
@@ -56,19 +57,42 @@ func Record(r *core.Record, reading func(id string) *core.Record) string {
 	if of := reading(id); of != nil {
 		out += " of " + of.Type + " " + Value(of)
 	}
-	// With a pack, what the reading was set against is the pack's claim,
-	// so it is shown.
-	ref, _ := r.Context["reference"].(map[string]any)
-	digest, byPack := ref["pack"].(string)
-	if label, _ := ref["label"].(string); byPack && label != "" {
-		if rs := []rune(label); len(rs) > 80 {
-			label = string(rs[:77]) + "..."
-		}
-		out += " against " + label
-	}
 	among = strings.Join(strings.Fields(among), " ")
 	if rs := []rune(among); len(rs) > 160 {
 		among = string(rs[:157]) + "..."
+	}
+	// A comparison names what it was made with: a pack, or files. What a
+	// reading was set against, and the cohort in words, are the pack's to
+	// say. For a pack that bean has on record they are shown in bean's own
+	// words, and a claim that says otherwise is marked. For any other pack
+	// the label is the claim's word, so it is shown in quotation marks.
+	ref, _ := r.Context["reference"].(map[string]any)
+	digest, byPack := ref["pack"].(string)
+	_, byFiles := ref["files"].([]any)
+	known, onRecord := pack.Known[digest]
+	misstates := byPack && byFiles
+	if byPack {
+		measure, _ := ref["measure"].(string)
+		label, _ := ref["label"].(string)
+		cohortID, _ := ref["cohort"].(string)
+		if rs := []rune(label); len(rs) > 80 {
+			label = string(rs[:77]) + "..."
+		}
+		switch own, has := known.Measures[measure]; {
+		case onRecord && has:
+			out += " against " + own
+			misstates = misstates || own != label
+		case onRecord:
+			misstates = true
+		case label != "":
+			out += " against " + strconv.Quote(label)
+		}
+		if own, has := known.Cohorts[cohortID]; onRecord && has {
+			misstates = misstates || own != among
+			among = own
+		} else if onRecord {
+			misstates = true
+		}
 	}
 	out += ", among " + among
 	if result, ok := r.Context["result"].(map[string]any); ok {
@@ -76,16 +100,17 @@ func Record(r *core.Record, reading func(id string) *core.Record) string {
 			out += " (n " + strconv.FormatFloat(n, 'g', -1, 64) + ")"
 		}
 	}
-	// A comparison names what it was made with: a pack, or files. A pack
-	// that bean has no record of is marked in the row itself, and so is a
-	// comparison that names nothing: nobody can compute that one again.
-	_, byFiles := ref["files"].([]any)
+	// The marks come last, and from bean alone: a pack that bean has no
+	// record of, a claim that misstates its pack, and a comparison that
+	// names nothing, which nobody can compute again.
 	switch {
-	case byPack && len(digest) == 64 && pack.IsKnown(digest):
+	case onRecord && misstates:
+		out += ", by pack " + digest[:12] + " (the claim MISSTATES this pack)"
+	case onRecord:
 		out += ", by pack " + digest[:12]
-	case byPack && len(digest) == 64:
+	case byPack && len(digest) == 64 && !byFiles:
 		out += ", by pack " + digest[:12] + " (NOT on record)"
-	case !byFiles:
+	case !byFiles || byPack:
 		out += " (names NO reference data)"
 	}
 	return out

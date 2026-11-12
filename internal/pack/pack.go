@@ -44,30 +44,6 @@ const (
 	SmallN = 100
 )
 
-// Known are the packs that bean has on record, by SHA-256, each with what
-// it is. Today that is one: the pack that bean-pack-nhanes version 1
-// builds from the six NHANES files on record (internal/nhanes). A test
-// with CDC's files keeps it true, and docs/REFERENCE.md states it too.
-var Known = map[string]string{
-	"10555d6769421d4305cbcd4ff14960d8b966ddd829a50581a9584a60a84d29e2": "the NHANES 2017-2018 pack",
-}
-
-// OnRecord says in a few words whether bean knows a pack by its SHA-256.
-func OnRecord(sha256 string) string {
-	if what, ok := Known[sha256]; ok {
-		return "this is " + what + " that bean has on record"
-	}
-	return "bean has NO record of this pack"
-}
-
-// IsKnown reports a pack that bean has on record.
-func IsKnown(sha256 string) bool { _, ok := Known[sha256]; return ok }
-
-// CaveatNotOnRecord is the caveat of a comparison with a pack that bean has no
-// record of. Whoever built such a pack chose its tables, its caveats and
-// what each reading is set against, and nothing here has checked them.
-const CaveatNotOnRecord = "bean has no record of this pack: nobody has checked its tables, its caveats, or what it sets a reading against"
-
 // MinNumber and MaxNumber bound each value and each weight. Inside them no
 // sum of the method overflows or underflows.
 const (

@@ -112,7 +112,7 @@ func build(out string, unknown bool, paths []string) error {
 	fmt.Printf("%s: %d measures, %d cohorts, %d cells, %d bytes\n", out, len(back.Measures), len(back.Cohorts), len(back.Cells), len(data))
 	fmt.Printf("sha256 %s\n", back.SHA256)
 	if _, ok := pack.Known[back.SHA256]; ok {
-		fmt.Println("This is the NHANES pack that bean has on record.")
+		fmt.Println("This is the pack that bean has on record.")
 	}
 	if len(skipped) > 0 {
 		fmt.Printf("not used: %s. A pack is built from %s and the files of these tests: %s\n", strings.Join(skipped, ", "), nhanes.Demo, strings.Join(tests(), ", "))

@@ -181,6 +181,7 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
   - A source with a stranger's broken file makes every `sync` from it exit 1.
   - The purge check in `bean import` reads only this copy's `local/purged-refs.jsonl`.
 - From the reviews of reference packs (DECISIONS 283, 284):
+  - A check of a bundle does not compute a comparison again. A claim with false numbers that names the pack on record reads like a true one there. `reproduce.py` with the pack finds it (path 4, step 3).
   - The Python check of a bundle, `checkbundle.py`, does not mark a comparison's pack. `reproduce.py` does.
   - The list of packs on record is in bean's code. A second publisher needs a signature, not a line in that list.
   - A pull request's build of the check page names the merge commit, which nobody can build again. The build on `main` and on a tag names a real commit.
