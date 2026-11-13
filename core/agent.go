@@ -523,13 +523,14 @@ func ShownLabel(label string) string {
 
 func shownLabel(label string) string { return ShownLabel(label) }
 
-// AgentLabels maps each key that the subject paired with a current
+// PairedLabels maps each key that the subject paired with a current
 // agent.pair claim to its label ("agent" when it has none). A key the
 // person paired twice under different names, for example on two of their
 // machines, shows both names, in id order, never one picked at random.
-func (l *Loaded) AgentLabels() map[string]string { return l.pairLabels(true) }
+// The name of a peer, another person, has the word peer before it.
+func (l *Loaded) PairedLabels() map[string]string { return l.pairLabels(true) }
 
-// FileLabels is AgentLabels without the peers: the keys whose records may
+// FileLabels is PairedLabels without the peers: the keys whose records may
 // name a file of the person. A peer is another person, and a peer's record
 // names no file, so it unlocks none (DECISIONS 293). A key that is paired
 // both as an agent and as a peer counts as a peer.

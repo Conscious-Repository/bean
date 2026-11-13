@@ -110,7 +110,7 @@ func cmdCompare(s *core.Store, args []string) {
 	}
 	readings, l := compareReadings(s, *typ, pos)
 	files := map[string]*refFile{}
-	labels := l.AgentLabels()
+	labels := l.PairedLabels()
 	var rows []comparison
 	for _, r := range readings {
 		c := compareOne(s, l, files, *unknown, r, cohort)

@@ -55,7 +55,7 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 		fail(fmt.Errorf("bean has no record of this pack (SHA-256 %s). Whoever built it chose its tables, its caveats and what each reading is set against. Compare its SHA-256 with the one that its publisher states, or build the pack again from the files that it names. To use it as it is, pass -unknown-pack: each result then says so", p.SHA256))
 	}
 	readings, l := compareReadings(s, typ, pos)
-	labels := l.AgentLabels()
+	labels := l.PairedLabels()
 	var rows []comparison
 	var claims []map[string]any
 	for _, r := range readings {

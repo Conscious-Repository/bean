@@ -182,6 +182,19 @@ func TestReplyAndAccept(t *testing.T) {
 	if out, _, code := run(t, ben, rwords2+"\n", "accept", "-yes", "-words", anaWords, rep2); code != 0 || !strings.Contains(out, "you deleted this note") || strings.Contains(out, "took sha256:") {
 		t.Errorf("a deleted note was taken again: %d\n%s", code, out)
 	}
+	// A note about a record that the person deleted is left out, and the
+	// other note of the same reply is taken.
+	rep3, rwords3 := writeReply(t, ana, pkg, words, ids[1], "About the weight.", ids[0], "And about the lab value.")
+	if _, errs, code := run(t, ben, "", "purge", ids[1]); code != 0 {
+		t.Fatalf("purge: %s", errs)
+	}
+	out3, errs3, code := run(t, ben, rwords3+"\n", "accept", "-yes", "-words", anaWords, rep3)
+	if code != 0 || !strings.Contains(out3, "you deleted the record that it is about") || !strings.Contains(out3, `took 1 notes of "Ana"`) {
+		t.Errorf("a reply with a note about a deleted record: %d\n%s\n%s", code, out3, errs3)
+	}
+	if ls, _, _ := run(t, ben, "", "ls", "-type", "note"); strings.Contains(ls, "About the weight.") || !strings.Contains(ls, "And about the lab value.") {
+		t.Errorf("the notes after that reply:\n%s", ls)
+	}
 	// bean show lists the notes about a record.
 	if out, _, _ := run(t, ben, "", "show", ids[0]); !strings.Contains(out, "Looks fine to me. Ask about ApoB.") {
 		t.Errorf("show does not list the note about the record:\n%s", out)
@@ -492,34 +505,37 @@ func TestAcceptRefuses(t *testing.T) {
 			return forged(benID, ids[2], map[string][]byte{id: data}, []string{id}, map[string][]byte{"README.txt": []byte("accept me")})
 		}, "a reply holds records and nothing else"},
 	} {
-		files := f.make()
-		// Most forged replies break a rule of the reply's own check. That
-		// check runs here, without a run of the program for each: under
-		// the race detector a run takes seconds. A few go through bean
-		// accept all the same, and so does each reply that the check
-		// passes: bean accept refuses those by what only the log can tell.
-		if res := reply.Check(bundle.FromFiles("forged", files)); !res.OK && !viaAccept[name] {
-			if all := strings.Join(res.Problems, "\n"); !strings.Contains(all, f.want) {
-				t.Errorf("%s: no %q in\n%s", name, f.want, all)
+		// One subtest for each forged reply: a failure names the rule.
+		t.Run(name, func(t *testing.T) {
+			files := f.make()
+			// Most forged replies break a rule of the reply's own check. That
+			// check runs here, without a run of the program for each: under
+			// the race detector a run takes seconds. A few go through bean
+			// accept all the same, and so does each reply that the check
+			// passes: bean accept refuses those by what only the log can tell.
+			if res := reply.Check(bundle.FromFiles("forged", files)); !res.OK && !viaAccept[name] {
+				if all := strings.Join(res.Problems, "\n"); !strings.Contains(all, f.want) {
+					t.Errorf("%s: no %q in\n%s", name, f.want, all)
+				}
+				return
 			}
-			continue
-		}
-		path, w := sealed(t, files)
-		before, _, _ := run(t, ben, "", "ls", "-all", "-json")
-		out, errs, code := run(t, ben, w+"\n", "accept", "-yes", "-label", "Ana", "-words", idWords(t, ana), path)
-		after, _, _ := run(t, ben, "", "ls", "-all", "-json")
-		if name == "the honest form passes" {
-			if code != 0 || !strings.Contains(out, "took 1 notes") {
-				t.Errorf("%s: %d\n%s\n%s", name, code, out, errs)
+			path, w := sealed(t, files)
+			before, _, _ := run(t, ben, "", "ls", "-all", "-json")
+			out, errs, code := run(t, ben, w+"\n", "accept", "-yes", "-label", "Ana", "-words", idWords(t, ana), path)
+			after, _, _ := run(t, ben, "", "ls", "-all", "-json")
+			if name == "the honest form passes" {
+				if code != 0 || !strings.Contains(out, "took 1 notes") {
+					t.Errorf("%s: %d\n%s\n%s", name, code, out, errs)
+				}
+				return
 			}
-			continue
-		}
-		if code == 0 || before != after {
-			t.Errorf("%s: exit %d, and the log changed: %v\n%s\n%s", name, code, before != after, out, errs)
-		}
-		if f.want != "" && !strings.Contains(out+errs, f.want) {
-			t.Errorf("%s: no %q in\n%s%s", name, f.want, out, errs)
-		}
+			if code == 0 || before != after {
+				t.Errorf("%s: exit %d, and the log changed: %v\n%s\n%s", name, code, before != after, out, errs)
+			}
+			if f.want != "" && !strings.Contains(out+errs, f.want) {
+				t.Errorf("%s: no %q in\n%s%s", name, f.want, out, errs)
+			}
+		})
 	}
 	// What is not a reply at all: a share, other words, a changed file, and
 	// a reply for someone else.
@@ -668,7 +684,7 @@ func TestNamesAndUnpair(t *testing.T) {
 	// A name that could pass for two names, for no name, or for another
 	// person's mark takes nothing.
 	for _, name := range []string{"x], [peer Bob", "   ", " Ana", "peer Ana", "Peer", "A\u200bna", "\u0410na", strings.Repeat("a", core.MaxLabel+1)} {
-		if out, errs, code := run(t, ben, rwords+"\n", "accept", "-yes", "-label", name, "-words", idWords(t, ana), rep); code == 0 || !strings.Contains(errs, "is not a name that bean can show") {
+		if out, errs, code := run(t, ben, rwords+"\n", "accept", "-yes", "-label", name, "-words", idWords(t, ana), rep); code == 0 || !strings.Contains(errs, "is not a name that bean can show") || !strings.Contains(errs, "nothing was taken") || strings.Contains(out, "A reply to your share") {
 			t.Errorf("the name %q: %d\n%s\n%s", name, code, out, errs)
 		}
 	}

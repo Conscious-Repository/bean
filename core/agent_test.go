@@ -42,8 +42,8 @@ func TestAgentOnPersonsMachine(t *testing.T) {
 	if l.Report.Records[mine].Author != ident {
 		t.Error("person's entry signed by the agent")
 	}
-	if l.AgentLabels()[pub] != "claude" {
-		t.Errorf("labels %v", l.AgentLabels())
+	if l.PairedLabels()[pub] != "claude" {
+		t.Errorf("labels %v", l.PairedLabels())
 	}
 	if r := l.Replies(meal); len(r) != 1 || r[0].ID != est {
 		t.Errorf("estimate not a reply of the meal")
@@ -132,15 +132,15 @@ func TestAgentOnlyReplica(t *testing.T) {
 	if !l.Current(id) || l.Report.Records[id].Author != pub {
 		t.Fatal("cloud entry missing on the person's machine")
 	}
-	if _, ok := l.AgentLabels()[pub]; ok {
+	if _, ok := l.PairedLabels()[pub]; ok {
 		t.Error("labelled before pairing")
 	}
 	if _, err := a.Pair(pub, "cloud"); err != nil {
 		t.Fatal(err)
 	}
 	l = verifyOK(t, a)
-	if l.AgentLabels()[pub] != "cloud" {
-		t.Errorf("labels %v", l.AgentLabels())
+	if l.PairedLabels()[pub] != "cloud" {
+		t.Errorf("labels %v", l.PairedLabels())
 	}
 	// Agent init on a folder with no log yet tells you to sync first.
 	if _, _, err := newStore(t).AgentInit("", ""); err == nil || !strings.Contains(err.Error(), "sync the log first") {
@@ -169,7 +169,7 @@ func TestAgentOnlyReplicaIgnoresForeignPairLabels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := l.AgentLabels()[pub]; ok {
-		t.Fatalf("foreign identity supplied an agent label: %v", l.AgentLabels())
+	if _, ok := l.PairedLabels()[pub]; ok {
+		t.Fatalf("foreign identity supplied an agent label: %v", l.PairedLabels())
 	}
 }

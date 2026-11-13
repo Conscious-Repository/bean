@@ -284,7 +284,7 @@ func cmdShare(s *core.Store, args []string) {
 	// question is asked. Without a terminal and without -yes nothing is
 	// written: an assistant that runs this through a tool cannot disclose
 	// for the person.
-	labels := l.AgentLabels()
+	labels := l.PairedLabels()
 	// What stays home is said with or without the review.
 	publicHome, travels := 0, 0
 	for _, sf := range kept {

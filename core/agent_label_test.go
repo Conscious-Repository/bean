@@ -30,7 +30,7 @@ func TestAgentLabelIsRefusedNotRenamed(t *testing.T) {
 		}
 	}
 	l := verifyOK(t, s)
-	if got := l.AgentLabels()[pub]; got != "claude" {
+	if got := l.PairedLabels()[pub]; got != "claude" {
 		t.Errorf("label %q", got)
 	}
 	n := 0
@@ -58,7 +58,7 @@ func TestAgentUnpairedIsNotRepairedByInit(t *testing.T) {
 	if len(res.IDs) != 1 {
 		t.Fatalf("unpair: %+v", res)
 	}
-	if _, ok := verifyOK(t, s).AgentLabels()[pub]; ok {
+	if _, ok := verifyOK(t, s).PairedLabels()[pub]; ok {
 		t.Fatal("unpaired key still labelled")
 	}
 	if _, _, err := s.AgentInit("", "claude"); err == nil || !strings.Contains(err.Error(), "unpaired") {
@@ -72,8 +72,8 @@ func TestAgentUnpairedIsNotRepairedByInit(t *testing.T) {
 	if r := l.Report.Records[id]; r == nil || r.Type != "agent.pair" || r.Author != ident || r.Value["status"] != nil {
 		t.Errorf("new pair claim %+v", r)
 	}
-	if l.AgentLabels()[pub] != "claude" {
-		t.Errorf("labels %v", l.AgentLabels())
+	if l.PairedLabels()[pub] != "claude" {
+		t.Errorf("labels %v", l.PairedLabels())
 	}
 }
 
@@ -122,7 +122,7 @@ func TestAgentLabelsTwoNamesAreBothShown(t *testing.T) {
 		want = "desktop, laptop"
 	}
 	for range 20 {
-		if got := verifyOK(t, s).AgentLabels()[pub]; got != want {
+		if got := verifyOK(t, s).PairedLabels()[pub]; got != want {
 			t.Fatalf("labels %q, want %q", got, want)
 		}
 	}
@@ -132,7 +132,7 @@ func TestAgentLabelsTwoNamesAreBothShown(t *testing.T) {
 			t.Errorf("pair with its name %q: %v", name, err)
 		}
 	}
-	if got := verifyOK(t, s).AgentLabels()[pub]; got != want {
+	if got := verifyOK(t, s).PairedLabels()[pub]; got != want {
 		t.Errorf("pairing again changed the labels: %q", got)
 	}
 	if _, err := s.Pair(pub, "phone"); err == nil || !strings.Contains(err.Error(), `"laptop" and "desktop"`) && !strings.Contains(err.Error(), `"desktop" and "laptop"`) {

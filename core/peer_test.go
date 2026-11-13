@@ -144,7 +144,7 @@ func TestPeerNames(t *testing.T) {
 	if heads := l.PeerHeads(ana); len(heads) != 2 || heads[0] == heads[1] {
 		t.Errorf("PeerHeads(ana) = %v", heads)
 	}
-	if labels := l.AgentLabels(); labels[k1] != "peer Ana" || labels[k3] != "helper" {
+	if labels := l.PairedLabels(); labels[k1] != "peer Ana" || labels[k3] != "helper" {
 		t.Errorf("labels: %v", labels)
 	}
 	// The name taken back: both keys, no label for the identity, and the
@@ -163,8 +163,20 @@ func TestPeerNames(t *testing.T) {
 	if heads := l.PeerHeads(ana); len(heads) != 2 {
 		t.Errorf("PeerHeads(ana) after the name was taken back = %v", heads)
 	}
-	if labels := l.AgentLabels(); labels[k1] != "" || labels[k3] != "helper" {
+	if labels := l.PairedLabels(); labels[k1] != "" || labels[k3] != "helper" {
 		t.Errorf("labels after the name was taken back: %v", labels)
+	}
+	// A key that the person unpaired is not paired again, under any name.
+	if _, err := s.PairPeer(k1, "Ana", ana, head1); err == nil || !strings.Contains(err.Error(), "you unpaired this key") {
+		t.Errorf("an unpaired key paired again: %v", err)
+	}
+	// The one writer of a pairing refuses a name that bean cannot show,
+	// for a peer and for an agent.
+	if _, err := s.PairPeer(key(), "x], [peer Bob", bob, head1); err == nil || !strings.Contains(err.Error(), "is not a name that bean can show") {
+		t.Errorf("a peer under a name of two: %v", err)
+	}
+	if _, err := s.Pair(key(), "peer Ana"); err == nil || !strings.Contains(err.Error(), "is not a name that bean can show") {
+		t.Errorf("an agent that reads as a peer: %v", err)
 	}
 }
 
@@ -304,7 +316,7 @@ func TestCheckLabel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := l.AgentLabels()[k]; got != `"peer Ana"` {
+	if got := l.PairedLabels()[k]; got != `"peer Ana"` {
 		t.Errorf("an agent labelled peer Ana shows as %s", got)
 	}
 }

@@ -457,7 +457,7 @@ func Check(in Input) Result {
 		res.Head = append(res.Head, "note: "+n)
 	}
 	for _, key := range slices.Sorted(maps.Keys(paired)) {
-		res.Head = append(res.Head, fmt.Sprintf("paired by the person: %s, key %s", paired[key], keyName(key)))
+		res.Head = append(res.Head, fmt.Sprintf("paired by the person: %s, key %s", paired[key], KeyName(key)))
 	}
 	for _, name := range in.Ignored {
 		// bean writes a README.txt for a reader with no checker. It is not
@@ -502,7 +502,7 @@ func Check(in Input) Result {
 			case paired[r.Author] != "":
 				by = "[" + paired[r.Author] + "]"
 			default:
-				by = "[signed by another key: " + keyName(r.Author) + "]"
+				by = "[signed by another key: " + KeyName(r.Author) + "]"
 			}
 			// The reader takes the mark at the end of a row from bean. No
 			// text of a record passes for it, whoever signed the record.
@@ -551,9 +551,9 @@ func Check(in Input) Result {
 	return done()
 }
 
-// keyName is how a key is shown: as an npub when it is a Nostr key, and as
+// KeyName is how a key is shown: as an npub when it is a Nostr key, and as
 // the tagged key when it is not. A peer's key need not be a Nostr key.
-func keyName(key string) string {
+func KeyName(key string) string {
 	if npub := core.Npub(key); npub != "" {
 		return npub
 	}

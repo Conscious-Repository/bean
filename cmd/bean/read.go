@@ -103,7 +103,7 @@ func cmdList(s *core.Store, args []string) {
 		return
 	}
 	me, _ := s.Identity()
-	labels := l.AgentLabels()
+	labels := l.PairedLabels()
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	for _, r := range recs {
 		by := byText(r, me, labels)
@@ -170,7 +170,7 @@ func cmdShow(s *core.Store, args []string) {
 	for _, b := range r.Blobs {
 		fmt.Printf("blob %s %s %s\n", b.Hash, safe(b.Role), safe(b.MediaType))
 	}
-	labels := l.AgentLabels()
+	labels := l.PairedLabels()
 	for _, x := range l.Replies(r.ID) {
 		rel := ""
 		for _, ref := range x.Refs {
