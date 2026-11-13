@@ -33,7 +33,7 @@ bean-import-<name> -blob <id> [flags] <private copy of file>
 - Its other flags are its own. bean passes them through, except `-yes` and `-corrections`, which are bean's.
 - The file is a private copy. `TMPDIR` is a private folder that bean removes afterwards.
 - No network, no keys, no log. The importer never signs and never reads the log.
-- Readings about you, and nothing else. bean signs the importer's output with your key, so `bean import` holds each line to this. A line is of no type that only you or bean write: none that starts with `bean.`, and not `agent.pair`, `share` or `reply`. It names no `subject` but you. It has no `refs`: it deletes no record, and corrects none by id. A line that breaks this stops the import. An importer runs as you on your machine, so run only one that you trust. This rule limits a mistake, and what a script passes with `-yes`.
+- Readings about you, and nothing else. bean signs the importer's output with your key, so `bean import` holds each line to this. A line is of no type that only you or bean write: none that starts with `bean.`, and not `agent.pair`, `share` or `reply`. It names no `subject` but you. It has no `refs` and no `source.supersedes_ref`: it deletes no record, and corrects none by id or by ref. A changed value of a reading that you have is held back, and you pass it with `-corrections`. A line that breaks this stops the import. An importer runs as you on your machine, so run only one that you trust. This rule limits a mistake, and what a script passes with `-yes`.
 
 It writes JSON lines to stdout ([SPEC.md](../SPEC.md) 9.2, partial records), then exits 0.
 

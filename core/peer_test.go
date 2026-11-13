@@ -380,6 +380,9 @@ func TestPairingsOfTwoCopies(t *testing.T) {
 	if names := l.PeerNames(); names[k2] != "Bo" || names[k3] != "bo" || names[k1] != "" {
 		t.Errorf("PeerNames: %v", names)
 	}
+	if shown := l.PeerShown(); shown[k2] != "Bo #bbbbbb" || shown[k3] != "bo #cccccc" || shown[k1] != "" {
+		t.Errorf("PeerShown: %v", shown)
+	}
 }
 
 // TestOnlyThePersonPairs: a pairing that an agent's key signs has no

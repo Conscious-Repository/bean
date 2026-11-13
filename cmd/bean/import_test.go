@@ -728,6 +728,9 @@ func TestImporterWritesOnlyReadings(t *testing.T) {
 		"about someone else":    {reading(2, `,"subject":"`+stranger+`"`), "about nobody else"},
 		"a correction by id":    {reading(3, `,"refs":[{"rel":"supersedes","id":"`+mine+`"}]`), "names no other record"},
 		"a note about a record": {reading(4, `,"refs":[{"rel":"about","id":"`+mine+`"}]`), "names no other record"},
+		// The good line before it wrote the reading r1. This one names r1
+		// as the reading that it replaces.
+		"a correction by ref": {`{"type":"weight","value":{"n":99,"unit":"kg"},"times":{"observed":null},"source":{"system":"evil","adapter":"t@1","ref_input":["bean/v0/ref","id","evil","r1",0],"supersedes_ref":["bean/v0/ref","id","evil","r1",0]}}`, "carries no source.supersedes_ref"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			bin := t.TempDir()
@@ -743,7 +746,7 @@ func TestImporterWritesOnlyReadings(t *testing.T) {
 			if strings.Contains(all, `"bean.tombstone"`) || strings.Contains(all, `"agent.pair"`) || strings.Contains(all, `"share"`) || strings.Contains(all, stranger) || strings.Contains(all, `"supersedes"`) {
 				t.Errorf("the log holds what the importer may not write:\n%s", all)
 			}
-			if ls, _, _ := run(t, dir, "", "ls", "-type", "weight"); !strings.Contains(ls, "81 kg") {
+			if ls, _, _ := run(t, dir, "", "ls", "-type", "weight"); !strings.Contains(ls, "81 kg") || strings.Contains(ls, "99 kg") {
 				t.Errorf("the person's record is gone:\n%s", ls)
 			}
 		})

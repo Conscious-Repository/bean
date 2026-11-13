@@ -480,7 +480,7 @@ type namer func(id string) string
 
 // self is the local identity: an agent-only replica has no l.Local.
 func names(l *core.Loaded, self string) namer {
-	labels, agents, peers := l.PairedLabels(), l.FileLabels(), l.PeerNames()
+	labels, agents, peers := l.PairedLabels(), l.FileLabels(), l.PeerShown()
 	return func(id string) string {
 		if id == self {
 			return "self"

@@ -81,7 +81,7 @@ func (s *Store) appendFrom(in io.Reader, agent, corrections, importer bool) (App
 // about the person (docs/IMPORTERS.md). bean signs its output with the
 // person's key. So its record is of no type that only the person or bean
 // writes, is about nobody else, and names no other record: it deletes
-// nothing, corrects nothing by id, and pairs no key.
+// nothing, corrects nothing by id or by ref, and pairs no key.
 func importable(obj map[string]any, identity string) error {
 	typ, _ := obj["type"].(string)
 	if IsCoreType(typ) || typ == "agent.pair" || typ == "share" || typ == "reply" {
@@ -93,6 +93,14 @@ func importable(obj map[string]any, identity string) error {
 	if refs, has := obj["refs"]; has {
 		if list, ok := refs.([]any); !ok || len(list) > 0 {
 			return errors.New("an importer's record names no other record: it deletes and corrects nothing by id")
+		}
+	}
+	// Nor by ref. A changed value of the same reading is a correction that
+	// the person passes with -corrections, after they saw it. A line that
+	// names the reading it replaces would pass without that.
+	if src, _ := obj["source"].(map[string]any); src != nil {
+		if _, has := src["supersedes_ref"]; has {
+			return errors.New("an importer's record carries no source.supersedes_ref: a changed reading is a correction that you pass with -corrections")
 		}
 	}
 	return nil

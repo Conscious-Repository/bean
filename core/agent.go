@@ -569,13 +569,28 @@ func (l *Loaded) PeerNames() map[string]string {
 	return out
 }
 
-func (l *Loaded) pairLabels(peers bool) map[string]string {
-	out := map[string]string{}
+// PeerShown is PeerNames as a listing shows each name: one that two people
+// hold has the start of that person's identity id after it.
+func (l *Loaded) PeerShown() map[string]string {
 	claims := l.pairClaims()
-	// One name belongs to one person, and bean checks that when a name is
-	// given. Two copies of a log can each give the name to another person
-	// before they come together. Then each shows with the start of its
-	// identity id, after a sign that no name can hold.
+	shown := peerShower(claims)
+	out := map[string]string{}
+	for key, ps := range claims {
+		for _, p := range livePairings(ps) {
+			if p.peer && out[key] == "" {
+				out[key] = shown(p)
+			}
+		}
+	}
+	return out
+}
+
+// peerShower returns how a peer's pairing shows its name. One name belongs
+// to one person, and bean checks that when a name is given. Two copies of
+// a log can each give the name to another person before they come
+// together. Then each shows with the start of its identity id, after a
+// sign that no name can hold.
+func peerShower(claims map[string][]pairing) func(pairing) string {
 	owners := map[string]map[string]bool{}
 	for _, ps := range claims {
 		for _, p := range livePairings(ps) {
@@ -587,6 +602,19 @@ func (l *Loaded) pairLabels(peers bool) map[string]string {
 			}
 		}
 	}
+	return func(p pairing) string {
+		name := ShownLabel(p.label)
+		if len(owners[strings.ToLower(name)]) > 1 && IsID(p.of) {
+			name += " #" + p.of[7:13]
+		}
+		return name
+	}
+}
+
+func (l *Loaded) pairLabels(peers bool) map[string]string {
+	out := map[string]string{}
+	claims := l.pairClaims()
+	shown := peerShower(claims)
 	for key, ps := range claims {
 		var names []string
 		live := livePairings(ps)
@@ -599,10 +627,7 @@ func (l *Loaded) pairLabels(peers bool) map[string]string {
 			// wherever a name shows, so nobody takes them for an agent's
 			// or for the person's own.
 			if p.peer {
-				if len(owners[strings.ToLower(name)]) > 1 && IsID(p.of) {
-					name += " #" + p.of[7:13]
-				}
-				name = "peer " + name
+				name = "peer " + shown(p)
 			}
 			if !slices.Contains(names, name) {
 				names = append(names, name)
