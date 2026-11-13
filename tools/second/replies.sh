@@ -83,5 +83,12 @@ bean -dir "$T/twin" rotate -seal-all <"$A.words" >/dev/null 2>"$T/err" || die "r
 copy "$T/r3"; for f in $(grep -l '"type":"bean\.' "$T/twin"/objects/*/*.json); do into "$f"; done
 both "a reply of an identity that changed its key twice from one place" "$T/d" bad
 
-[ "$rc" = 0 ] && echo "replies: bean and checkreply.py agree on $n replies, good and damaged, and bean accept takes the one that both pass"
+# Replies that Python wrote and signed, with keys of its own. Each wrong one
+# breaks one rule and nothing else, so a rule that one of the two checks
+# lost shows as a difference here.
+"$PY" -I "$HERE/forgereply.py" "$T/py" >"$T/cases.txt" 2>"$T/err" || die "forgereply.py failed"
+[ "$(wc -l <"$T/cases.txt")" -ge 30 ] || { echo "DIFFER: forgereply.py wrote too few cases"; rc=1; }
+while read -r name want; do both "$name" "$T/py/$name" "$want"; done <"$T/cases.txt"
+
+[ "$rc" = 0 ] && echo "replies: bean and checkreply.py agree on $n replies: good ones, damaged ones, and ones that Python signed to break one rule each. bean accept takes the one that both pass"
 exit $rc

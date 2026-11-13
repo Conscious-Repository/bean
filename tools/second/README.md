@@ -15,6 +15,6 @@ prints the lines of `bean verify` (SPEC.md 12.1) and exits with the same code. I
 
 `unseal.py <package> <new folder>` opens a sealed package with its six words, from the age format's specification. `checkbundle.py <folder>` checks a share bundle by the five rules of `docs/SHARE.md`, without bean. `bundles.sh` (or `make bundles`) checks that it and `bean check-bundle` agree on bundles good and damaged.
 
-`checkreply.py <folder>` checks a reply by the six rules of `docs/SHARE.md`, without bean. `replies.sh` (also in `make bundles`) checks that it and bean agree on replies good and damaged, and that `bean accept` takes the reply that both pass.
+`checkreply.py <folder>` checks a reply by the six rules of `docs/SHARE.md`, without bean. `replies.sh` (also in `make bundles`) checks that it and bean agree on replies good and damaged, and that `bean accept` takes the reply that both pass. `forgereply.py` writes replies that Python signed with keys of its own: each wrong one breaks one rule of the text and nothing else. `writer.py` is the independent writer that `craft.py` and `forgereply.py` share.
 
 Each place where the spec did not say what to do is marked `GUESS(n)` in `beanverify.py`. A disagreement or a guess is a spec defect; DECISIONS 134 lists the ones that were fixed.
