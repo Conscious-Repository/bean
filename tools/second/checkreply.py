@@ -35,6 +35,9 @@ import checkbundle  # noqa: E402
 IDENTITY = ("bean.genesis", "bean.succession", "bean.seal")
 SYSTEM = "bean-reply"
 MAX_NOTE, MAX_NOTES = 4000, 200
+# Unicode's White_Space property. Python's str.strip() also takes U+001C to
+# U+001F for white space, which the property does not.
+WHITE = set(range(0x09, 0x0E)) | {0x20, 0x85, 0xA0, 0x1680, 0x2028, 0x2029, 0x202F, 0x205F, 0x3000} | set(range(0x2000, 0x200B))
 
 
 def minute(text):
@@ -81,7 +84,7 @@ def note_fault(r, key, to):
         return "it is not about the person that the reply is for"
     if len(refs) != 1 or refs[0].get("rel") != "about":
         return "it is not about exactly one record"
-    if not isinstance(text, str) or set(value) != {"s"} or not 1 <= len(text.encode("utf-8")) <= MAX_NOTE or not text.strip():
+    if not isinstance(text, str) or set(value) != {"s"} or not 1 <= len(text.encode("utf-8")) <= MAX_NOTE or all(ord(c) in WHITE for c in text):
         return "its value is not a text of 1 to %d bytes" % MAX_NOTE
     if r.get("blobs") or r.get("context"):
         return "it holds more than a text"
@@ -99,10 +102,15 @@ def check(folder):
     if not checkbundle.real_dir(os.path.join(folder, "objects")):
         return ["%s is not a reply: it has no objects folder" % folder], None
     # Rule 1: nothing beside the records. A name that starts with a dot is
-    # not read, as in a bundle.
+    # not read, as in a bundle. A folder named files with nothing in it is
+    # a bundle's place for files, left empty: it holds no file.
     for name in sorted(os.listdir(folder)):
-        if name != "objects" and not name.startswith("."):
-            problems.append("a reply holds records and nothing else: %s" % checkbundle.safe(name))
+        if name == "objects" or name.startswith("."):
+            continue
+        full = os.path.join(folder, name)
+        if name == "files" and checkbundle.real_dir(full) and not [n for n in os.listdir(full) if not n.startswith(".")]:
+            continue
+        problems.append("a reply holds records and nothing else: %s" % checkbundle.safe(name))
     files = checkbundle.read_records(folder, problems)
     lines, _, info = beanverify.verify(files, {})
     records = info["records"]

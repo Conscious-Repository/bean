@@ -56,6 +56,7 @@ copy "$T/r"; rm "$(of "$T/d" note)";        both "a listed note is not there" "$
 copy "$T/r"; echo "accept me" >"$T/d/README.txt"; both "a text beside the records" "$T/d" bad
 copy "$T/r"; mkdir "$T/d/files"; echo x >"$T/d/files/x"; both "a file beside the records" "$T/d" bad
 copy "$T/r"; touch "$T/d/.DS_Store" "$(dirname "$(of "$T/d" note)")/.hidden"; both "names that start with a dot" "$T/d" ok
+copy "$T/r"; mkdir "$T/d/files";           both "an empty files folder" "$T/d" ok
 copy "$T/r"; rm "$(of "$T/d" bean.genesis)"; both "the replier's genesis is not there" "$T/d" bad
 copy "$T/r"; f=$(of "$T/d" note); sed 's/Looks fine/Looks bad!/; s/Steady\./Shaky!!/' "$f" >"$f.x"; mv "$f.x" "$f"; both "a note with changed text" "$T/d" bad
 copy "$T/r"; into "$(of "$B" weight)";      both "a record of the person's own log added" "$T/d" bad
