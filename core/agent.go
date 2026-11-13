@@ -642,4 +642,6 @@ func (l *Loaded) pairLabels(peers bool) map[string]string {
 
 // AppendAsAgent is Append signed by the local agent key, with the agent's
 // key as the author and the local identity as the default subject.
-func (s *Store) AppendAsAgent(in io.Reader) (AppendResult, error) { return s.appendAs(in, true, false) }
+func (s *Store) AppendAsAgent(in io.Reader) (AppendResult, error) {
+	return s.appendAs(in, byAgent, false)
+}

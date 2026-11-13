@@ -38,12 +38,12 @@ var forbiddenPartial = []string{"v", "nonce", "author", "kid", "id", "sig"}
 // Append reads JSONL partial records (SPEC.md 9.2), completes, dedupes,
 // signs and writes them (12.3 bean append). On the first error it stops;
 // records before it stay written.
-func (s *Store) Append(in io.Reader) (AppendResult, error) { return s.appendAs(in, false, false) }
+func (s *Store) Append(in io.Reader) (AppendResult, error) { return s.appendAs(in, byPerson, false) }
 
 // AppendCorrections is Append for a person who checked the changed readings
 // that Append reported: each new value supersedes the current record.
 func (s *Store) AppendCorrections(in io.Reader) (AppendResult, error) {
-	return s.appendAs(in, false, true)
+	return s.appendAs(in, byPerson, true)
 }
 
 // AppendImported is Append for the output of an importer that bean itself
@@ -51,14 +51,20 @@ func (s *Store) AppendCorrections(in io.Reader) (AppendResult, error) {
 // what an importer may write (importable): a reading about the person, and
 // nothing with power over another record.
 func (s *Store) AppendImported(in io.Reader, corrections bool) (AppendResult, error) {
-	return s.appendFrom(in, false, corrections, true)
+	return s.appendAs(in, byImporter, corrections)
 }
 
-func (s *Store) appendAs(in io.Reader, agent, corrections bool) (AppendResult, error) {
-	return s.appendFrom(in, agent, corrections, false)
-}
+// origin is where the lines of an append come from. The person's key signs
+// all but an agent's.
+type origin int
 
-func (s *Store) appendFrom(in io.Reader, agent, corrections, importer bool) (AppendResult, error) {
+const (
+	byPerson   origin = iota // the person wrote or piped the lines
+	byAgent                  // this machine's agent key signs them
+	byImporter               // an importer that bean itself ran wrote them
+)
+
+func (s *Store) appendAs(in io.Reader, from origin, corrections bool) (AppendResult, error) {
 	unlock, err := s.lock()
 	if err != nil {
 		return AppendResult{}, err
@@ -68,42 +74,12 @@ func (s *Store) appendFrom(in io.Reader, agent, corrections, importer bool) (App
 	if err != nil {
 		return AppendResult{}, err
 	}
-	w, err := s.writerFor(l, agent)
+	w, err := s.writerFor(l, from == byAgent)
 	if err != nil {
 		return AppendResult{}, err
 	}
-	w.corrections, w.importer = corrections, importer
+	w.corrections, w.importer = corrections, from == byImporter
 	return s.appendWith(l, w, in)
-}
-
-// importable reports why a partial record is not one that an importer may
-// write, or nil. An importer reads a provider's file and writes readings
-// about the person (docs/IMPORTERS.md). bean signs its output with the
-// person's key. So its record is of no type that only the person or bean
-// writes, is about nobody else, and names no other record: it deletes
-// nothing, corrects nothing by id or by ref, and pairs no key.
-func importable(obj map[string]any, identity string) error {
-	typ, _ := obj["type"].(string)
-	if IsCoreType(typ) || typ == "agent.pair" || typ == "share" || typ == "reply" {
-		return fmt.Errorf("an importer writes readings, not a record of type %q", typ)
-	}
-	if subject, has := obj["subject"]; has && subject != identity {
-		return errors.New("an importer writes about the person of this log, and about nobody else")
-	}
-	if refs, has := obj["refs"]; has {
-		if list, ok := refs.([]any); !ok || len(list) > 0 {
-			return errors.New("an importer's record names no other record: it deletes and corrects nothing by id")
-		}
-	}
-	// Nor by ref. A changed value of the same reading is a correction that
-	// the person passes with -corrections, after they saw it. A line that
-	// names the reading it replaces would pass without that.
-	if src, _ := obj["source"].(map[string]any); src != nil {
-		if _, has := src["supersedes_ref"]; has {
-			return errors.New("an importer's record carries no source.supersedes_ref: a changed reading is a correction that you pass with -corrections")
-		}
-	}
-	return nil
 }
 
 // writerFor is the person (agent false) or this machine's agent key.

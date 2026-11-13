@@ -1,6 +1,9 @@
 package core
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 // CheckPartial reports whether Append would refuse a partial record line
 // (SPEC.md 9.2) on its checks of the record itself, and writes nothing. It
@@ -17,8 +20,38 @@ func (s *Store) CheckPartial(line []byte) error {
 // CheckImported is CheckPartial for a line of an importer that bean ran:
 // it also holds the line to what an importer may write (AppendImported).
 func (s *Store) CheckImported(line []byte) error {
-	_, _, err := s.signPartial(line, true)
+	_, _, err := s.signPartial(line, byImporter)
 	return err
+}
+
+// importable reports why a partial record is not one that an importer may
+// write, or nil. An importer reads a provider's file and writes readings
+// about the person (docs/IMPORTERS.md). bean signs its output with the
+// person's key. So its record is of no type that only the person or bean
+// writes, is about nobody else, and names no other record: it deletes
+// nothing, corrects nothing by id or by ref, and pairs no key.
+func importable(obj map[string]any, identity string) error {
+	typ, _ := obj["type"].(string)
+	if IsCoreType(typ) || typ == "agent.pair" || typ == "share" || typ == "reply" {
+		return fmt.Errorf("an importer writes readings, not a record of type %q", typ)
+	}
+	if subject, has := obj["subject"]; has && subject != identity {
+		return errors.New("an importer writes about the person of this log, and about nobody else")
+	}
+	if refs, has := obj["refs"]; has {
+		if list, ok := refs.([]any); !ok || len(list) > 0 {
+			return errors.New("an importer's record names no other record: it deletes and corrects nothing by id")
+		}
+	}
+	// Nor by ref. A changed value of the same reading is a correction that
+	// the person passes with -corrections, after they saw it. A line that
+	// names the reading it replaces would pass without that.
+	if src, _ := obj["source"].(map[string]any); src != nil {
+		if _, has := src["supersedes_ref"]; has {
+			return errors.New("an importer's record carries no source.supersedes_ref: a changed reading is a correction that you pass with -corrections")
+		}
+	}
+	return nil
 }
 
 // SignPartial completes and signs one partial record line with the person's
@@ -28,10 +61,10 @@ func (s *Store) CheckImported(line []byte) error {
 // first, and into the log only once the bundle is written and checked, so a
 // failure leaves no record of a disclosure that did not happen.
 func (s *Store) SignPartial(line []byte) (string, []byte, error) {
-	return s.signPartial(line, false)
+	return s.signPartial(line, byPerson)
 }
 
-func (s *Store) signPartial(line []byte, importer bool) (string, []byte, error) {
+func (s *Store) signPartial(line []byte, from origin) (string, []byte, error) {
 	unlock, err := s.lock()
 	if err != nil {
 		return "", nil, err
@@ -48,7 +81,7 @@ func (s *Store) signPartial(line []byte, importer bool) (string, []byte, error) 
 	if err := l.canWrite(w); err != nil {
 		return "", nil, err
 	}
-	w.importer = importer
+	w.importer = from == byImporter
 	var key []byte
 	if w.secret != nil {
 		key = DedupeKey(w.secret)
