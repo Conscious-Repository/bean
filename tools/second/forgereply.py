@@ -83,6 +83,7 @@ case("py-after-a-key-change", "ok", rotate=True)
 case("py-reply-of-another-source", "bad", reply=lambda w, old: {"source": {"system": "a hospital", "adapter": "craft@1", "ref": None}})
 case("py-reply-about-someone-else", "bad", reply=lambda w, old: {"subject": TO})
 case("py-reply-by-the-older-key", "bad", rotate=True, change=lambda i, w: {}, reply=lambda w, old: {"signer": old})
+case("py-two-key-changes-from-one-place", "bad", rotate=True, before=lambda w: w.rotate([], parent=w.id, gen=0))
 # Rule 3: its lists.
 case("py-for-its-own-writer", "bad", reply=lambda w, old: {"context": {"to": w.id}}, change=lambda i, w: {"subject": w.id})
 case("py-count-is-wrong", "bad", reply=lambda w, old: {"value": {"n": 2}})
@@ -107,6 +108,7 @@ case("py-text-4001-bytes-of-two", "bad", change=lambda i, w: {"value": {"s": "é
 case("py-text-of-spaces", "bad", change=lambda i, w: {"value": {"s": " \t\n "}})
 case("py-text-of-no-break-spaces", "bad", change=lambda i, w: {"value": {"s": "  "}})
 case("py-text-empty", "bad", change=lambda i, w: {"value": {"s": ""}})
+case("py-text-a-number", "bad", change=lambda i, w: {"value": {"s": 5}})
 case("py-value-with-more", "bad", change=lambda i, w: {"value": {"s": "a note", "n": 1}})
 case("py-note-with-context", "bad", change=lambda i, w: {"context": {"verified": "by a hospital"}})
 # Rule 6: a note's source and time.
