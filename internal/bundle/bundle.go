@@ -333,9 +333,7 @@ func Check(in Input) Result {
 	for _, id := range slices.Sorted(maps.Keys(proof)) {
 		if r := rp.Records[id]; r != nil && IsPairing(r, person) && rp.Valid[id] {
 			label, _ := r.Value["label"].(string)
-			if label == "" {
-				label = "agent"
-			}
+			label = core.ShownLabel(label) // a label that could pass for another name shows quoted
 			// A peer is another person, and their records show as a
 			// peer's: nobody takes them for an agent's.
 			if role, _ := r.Value["role"].(string); role == "peer" {
@@ -459,7 +457,7 @@ func Check(in Input) Result {
 		res.Head = append(res.Head, "note: "+n)
 	}
 	for _, key := range slices.Sorted(maps.Keys(paired)) {
-		res.Head = append(res.Head, fmt.Sprintf("paired by the person: %s, key %s", paired[key], keyName(key)))
+		res.Head = append(res.Head, fmt.Sprintf("paired by the person: %s, key %s", paired[key], KeyName(key)))
 	}
 	for _, name := range in.Ignored {
 		// bean writes a README.txt for a reader with no checker. It is not
@@ -504,11 +502,15 @@ func Check(in Input) Result {
 			case paired[r.Author] != "":
 				by = "[" + paired[r.Author] + "]"
 			default:
-				by = "[signed by another key: " + keyName(r.Author) + "]"
+				by = "[signed by another key: " + KeyName(r.Author) + "]"
 			}
-			text := view.Record(r, inBundle)
-			if by != "" {
-				text = view.Said(r, text)
+			// The reader takes the mark at the end of a row from bean. No
+			// text of a record passes for it, whoever signed the record.
+			// Quoted once: for a square bracket, or as another key's words.
+			shown := view.Record(r, inBundle)
+			text := view.Unmarked(shown)
+			if by != "" && text == shown {
+				text = view.Said(r, shown)
 			}
 			res.Rows = append(res.Rows, Row{When: When(r), Type: r.Type, Text: text, By: by, ID: r.ID[7:19], Mark: view.Mark(r, inBundle)})
 			// A comparison with a reference pack names it by SHA-256.
@@ -551,9 +553,9 @@ func Check(in Input) Result {
 	return done()
 }
 
-// keyName is how a key is shown: as an npub when it is a Nostr key, and as
+// KeyName is how a key is shown: as an npub when it is a Nostr key, and as
 // the tagged key when it is not. A peer's key need not be a Nostr key.
-func keyName(key string) string {
+func KeyName(key string) string {
 	if npub := core.Npub(key); npub != "" {
 		return npub
 	}

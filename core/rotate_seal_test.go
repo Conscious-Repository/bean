@@ -49,8 +49,8 @@ func TestTwoRotationsKeepEverything(t *testing.T) {
 			t.Errorf("%s: %q", r[:16], l.Report.Errors[r])
 		}
 	}
-	if len(l.AgentLabels()) != 1 || len(l.Report.Chains[id]) != 3 {
-		t.Errorf("labels %v chain %d", l.AgentLabels(), len(l.Report.Chains[id]))
+	if len(l.PairedLabels()) != 1 || len(l.Report.Chains[id]) != 3 {
+		t.Errorf("labels %v chain %d", l.PairedLabels(), len(l.Report.Chains[id]))
 	}
 	// Restore on a fresh folder from the synced files keeps all of it.
 	n := newStore(t)

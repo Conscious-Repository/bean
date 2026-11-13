@@ -186,13 +186,13 @@ func Check(in bundle.Input) Result {
 				delete(listed, id)
 			}
 		case listed[id]:
+			delete(listed, id) // it is there, whatever it is
 			text, problem := note(r, key, to)
 			if problem != "" {
 				bad("%s is listed as a note, and %s", id, problem)
 				continue
 			}
 			res.Notes = append(res.Notes, Note{ID: id, About: r.Targets("about")[0], Text: text, Written: r.Imported, Bytes: r.Bytes})
-			delete(listed, id)
 		default:
 			bad("%s is in the reply, and the reply record does not list it", id)
 		}

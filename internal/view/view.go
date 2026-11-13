@@ -229,6 +229,19 @@ func Said(r *core.Record, text string) string {
 	return text
 }
 
+// Unmarked is a record's text for a row of a bundle check, which ends in
+// a mark of the tool: who signed, in square brackets. A unit, a flag or a
+// note can hold a square bracket too. Such a text is shown in quotation
+// marks, so that no part of it passes for that mark. A listing of the
+// person's own log does not use it: there a record of the log itself,
+// such as a seal, shows its value as it is written.
+func Unmarked(text string) string {
+	if strings.ContainsAny(text, "[]") {
+		return strconv.Quote(text)
+	}
+	return text
+}
+
 // Value is a one-line view of value and context.note.
 func Value(r *core.Record) string {
 	v := r.Value

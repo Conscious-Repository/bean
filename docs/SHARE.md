@@ -44,7 +44,7 @@ Your log's share record says `"seal": "passphrase"`. It does not hold the words.
 
 ## What goes in
 
-- **The records you name**, by id or by `-type` (with `-since` and `-until`). Only current records about you: not a corrected one and not a deleted one. A record that another identity signed does not go either, since a bundle carries only your identity records.
+- **The records you name**, by id or by `-type` (with `-since` and `-until`). Only current records about you: not a corrected one and not a deleted one. A record that another identity signed does not go either, since a bundle carries only your identity records. A type picks your own records and your agents' only. A record that another key signed, such as a peer's note, goes when you name it by its id.
 - **What they are about, one step.** A record is read with the record it is about, so that one comes along. Examples are the reading of a comparison, the meal of an estimate, and the entry a note comments on. A comparison also brings the record of each reference file it used, without the file. What that one is about in turn stays home unless you name it. The review marks each record that comes along, and says which it could not bring and why.
 - **Nothing else of yours.** Not the rest of the log, not a lab report unless you name it. A reading names its report by a hash, and the report stays home.
 - **A file only when you name its record.** A record that keeps a file (a lab report, a photo) is shared without the file. With `-files`, the file of a record you named by its id goes in whole, as plaintext. For a lab report that is the report as you imported it, with your name and birth date. A file never goes because its record came along with another, or was picked by type. The one exception is a public reference file you kept, such as an NHANES file: with `-files` it goes with the comparison that used it.
@@ -165,7 +165,7 @@ bean accept -label Ana reply-to-ben.bean
 
 Ask the reader two things: whether they sent a reply whose id starts so, and to read their identity words. If either is not the same, do not accept. Then bean asks before it writes.
 
-- **`-label` is the name under which this person's notes show.** The first reply of an identity needs it. A later reply needs none. A name belongs to one identity: bean does not rename one, and does not give one name to two.
+- **`-label` is the name under which this person's notes show.** The first reply of an identity needs it. A later reply needs none. A name belongs to one identity: bean does not rename one, and does not give one name to two. A name has 1 to 64 characters: the letters a to z, digits, single spaces, and `. ' _ - @`. It does not start with the word `peer`, and no agent has it. Capital letters make no second name: `ana` is `Ana`. So one name cannot read as two, or as another person's.
 - **`-yes` is for scripts, and needs `-words`.** A script cannot compare words by eye, so it states the eight words that you heard. bean takes nothing when they are not the signer's. Without a terminal and without `-yes` it takes nothing.
 - **What goes into your log.** The notes, and one record of your own that pairs the reader's key with the name. That record holds the reader's identity id and how far their chain of keys had got. The reader's identity records and their reply record stay out.
 - **Where you see them.** `bean ls` shows a note in quotation marks, with `[peer Ana]`. `bean show <id>` lists the notes about a record.
@@ -188,14 +188,16 @@ Ask the reader two things: whether they sent a reply whose id starts so, and to 
 
 A reply is a sealed package like a share: record files under `objects/`, packed and encrypted with six words. A check passes when all of these hold.
 
-1. It holds records and nothing else: no file, and nothing beside the records. A name that starts with a dot is not read, as in a bundle. Every record file passes the checks of a log, of this format and no newer. One warning is expected: a note is about a person whose identity records are not in the reply.
+1. It holds records and nothing else: no file under `files/`, and no other name beside `objects`. A name that starts with a dot is not read, as in a bundle. Every record file passes the checks of a log, of this format and no newer. One warning is expected: a note is about a person whose identity records are not in the reply.
 2. It holds exactly one record of type `reply`, with `source.system` `bean-reply`. A person signed it about themselves, with the last key of their identity's chain. That key is the reply's key. The chain is whole and not frozen.
 3. The `reply` record's `context` has `to`, the identity id that the reply is for: not the replier's own. It has `share`, the id of the share record. It has `notes`, the ids of the notes, each once: from 1 to 200. `value.n` is their count.
 4. Every other record is an identity record on that person's chain, or a note that the `reply` record lists. Every listed note is there.
-5. A note has the type `note`. Its `author` and its `kid` are the reply's key. Its `subject` is `to`. Its `value` is `{"s": text}`: a text of 1 to 4000 bytes in UTF-8 that is not only spaces. It has one ref, `about` one record, and no `context` and no file.
-6. A note's `source.system` is `bean-reply`, and its `source.ref` is null. It states one time, the time it was written: `times.observed` is null, or lies in the minute of `times.imported`.
+5. A note has the type `note`. Its `author` and its `kid` are the reply's key. Its `subject` is `to`. Its `value` is `{"s": text}`: a text of 1 to 4000 bytes in UTF-8. At least one character of it is not white space, by Unicode's `White_Space` property. It has one ref, `about` one record, and no `context` and no file.
+6. A note's `source.system` is `bean-reply`, and its `source.ref` is null. It states one time, the time it was written. Its `times.observed` is null, or has a `start` in the minute of `times.imported` and no `end`.
 
 `bean accept` adds what only your log can tell. `to` is your identity. `share` is a share record of yours. Each note is about a record that the share lists, or about the share record. The reply is one sealed file of at most 64 MiB. No note says that it was written later than a day from now. The reply's key is not a key that you unpaired. A note about a record that you deleted is left out, and so is a note that you deleted. The chain holds every head of that identity that you recorded before. The name is not one that another identity or an agent has.
+
+`bean reply` and `tools/second/checkreply.py` both implement these six rules, and share no code. The Python tool reads the folder that `tools/second/unseal.py` opens a reply into. `bean check-bundle` on a reply says that it is one, when it passes the six rules.
 
 Your record of the name is an `agent.pair` record with `value.role` `peer`. Its `value` also has `key`, `label`, `identity`, and `head`: the id of the last record of the reader's chain as the reply showed it.
 

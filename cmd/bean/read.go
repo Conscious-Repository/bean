@@ -103,7 +103,7 @@ func cmdList(s *core.Store, args []string) {
 		return
 	}
 	me, _ := s.Identity()
-	labels := l.AgentLabels()
+	labels := l.PairedLabels()
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	for _, r := range recs {
 		by := byText(r, me, labels)
@@ -170,7 +170,7 @@ func cmdShow(s *core.Store, args []string) {
 	for _, b := range r.Blobs {
 		fmt.Printf("blob %s %s %s\n", b.Hash, safe(b.Role), safe(b.MediaType))
 	}
-	labels := l.AgentLabels()
+	labels := l.PairedLabels()
 	for _, x := range l.Replies(r.ID) {
 		rel := ""
 		for _, ref := range x.Refs {
@@ -262,6 +262,10 @@ func byText(r *core.Record, me string, labels map[string]string) string {
 // Anything that does not sniff as an image is refused, so a photo flag
 // cannot pull an arbitrary file into the log.
 func readImage(path string) ([]byte, string, error) {
+	// A pipe would hold the open for as long as nobody writes to it.
+	if info, err := os.Stat(path); err == nil && !info.Mode().IsRegular() {
+		return nil, "", errors.New("not a regular file: " + path)
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, "", err

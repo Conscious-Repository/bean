@@ -93,6 +93,7 @@ pack:
 # This needs node, to run the page's check without a browser.
 bundles:
 	PY=$(PY) bash tools/second/bundles.sh
+	PY=$(PY) bash tools/second/replies.sh
 
 # What a device hands over (docs/DEVICE.md): the Go check and the Python
 # check, which share no code, must agree on folders that Go and Python

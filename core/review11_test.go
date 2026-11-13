@@ -18,7 +18,7 @@ func TestReview11TwoLabelsRefuseTheirOwnName(t *testing.T) {
 	// The second machine paired the same key as "desktop" before the copies met.
 	appendLines(t, s, `{"type":"agent.pair","value":{"key":"`+pub+`","label":"desktop"},"times":{"observed":null},"source":{"system":"self","adapter":"t@1","ref":null}}`)
 	l := verifyOK(t, s)
-	t.Logf("labels: %q", l.AgentLabels()[pub])
+	t.Logf("labels: %q", l.PairedLabels()[pub])
 	_, _, err = s.AgentInit("", "laptop")
 	t.Logf("agent init -label laptop: %v", err)
 	if err != nil {

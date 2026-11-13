@@ -4,7 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 // init refuses inside a git work tree unless -force.
@@ -31,6 +33,21 @@ func TestReadImageNotRegular(t *testing.T) {
 	}
 	if _, _, err := readImage(t.TempDir()); err == nil {
 		t.Error("a directory passed")
+	}
+	// A pipe that nobody writes to must not hold the read.
+	pipe := filepath.Join(t.TempDir(), "pipe")
+	if err := syscall.Mkfifo(pipe, 0o600); err != nil {
+		t.Skip(err)
+	}
+	done := make(chan error, 1)
+	go func() { _, _, err := readImage(pipe); done <- err }()
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "not a regular file") {
+			t.Errorf("a pipe: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Error("a pipe held the read")
 	}
 }
 

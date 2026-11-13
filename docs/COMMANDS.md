@@ -198,7 +198,7 @@ Signs notes about records that someone shared with you, and seals them for that 
 
 Checks a reply to a share of yours and takes its notes into your log. It asks for the six words. Then it shows the share, the eight identity words of whoever signed, and each note with the record that it is about. Then it asks.
 
-- `-label` is the name under which this person's notes show. The first reply of an identity needs it. An identity keeps its name, and a name belongs to one identity.
+- `-label` is the name under which this person's notes show. The first reply of an identity needs it. An identity keeps its name, and a name belongs to one identity. A name has 1 to 64 characters: the letters a to z, digits, single spaces, and `. ' _ - @`. It does not start with the word `peer`. The label of an agent follows the same rule, and is not the name of a peer.
 - `-words` are the identity words that the person read to you. When they are not the signer's, nothing is taken.
 - `-yes` skips the question, for scripts, and needs `-words`. Without a terminal and without `-yes` nothing is taken.
 - It takes notes about records of that share and nothing else. A reply that holds anything more is refused whole. So is a reply for another person, or of a key that you unpaired.

@@ -114,6 +114,14 @@ func TestPeerNames(t *testing.T) {
 	if _, err := s.PairPeer(k1, "Ana", ana, head1); err != nil {
 		t.Fatal(err)
 	}
+	// A name that differs only in its capital letters is the same name:
+	// no second person takes it, and no agent.
+	if _, err := s.PairPeer(key(), "ana", bob, head1); err == nil || !strings.Contains(err.Error(), "is taken") {
+		t.Errorf("a second person as ana: %v", err)
+	}
+	if _, err := s.Pair(key(), "ANA"); err == nil || !strings.Contains(err.Error(), "is the name of a peer") {
+		t.Errorf("an agent as ANA: %v", err)
+	}
 	// The same key keeps its name, and a second key of the identity takes it.
 	if _, err := s.PairPeer(k1, "Anna", ana, head1); err == nil || !strings.Contains(err.Error(), "already paired") {
 		t.Errorf("another name for a key: %v", err)
@@ -144,7 +152,7 @@ func TestPeerNames(t *testing.T) {
 	if heads := l.PeerHeads(ana); len(heads) != 2 || heads[0] == heads[1] {
 		t.Errorf("PeerHeads(ana) = %v", heads)
 	}
-	if labels := l.AgentLabels(); labels[k1] != "peer Ana" || labels[k3] != "helper" {
+	if labels := l.PairedLabels(); labels[k1] != "peer Ana" || labels[k3] != "helper" {
 		t.Errorf("labels: %v", labels)
 	}
 	// The name taken back: both keys, no label for the identity, and the
@@ -163,8 +171,50 @@ func TestPeerNames(t *testing.T) {
 	if heads := l.PeerHeads(ana); len(heads) != 2 {
 		t.Errorf("PeerHeads(ana) after the name was taken back = %v", heads)
 	}
-	if labels := l.AgentLabels(); labels[k1] != "" || labels[k3] != "helper" {
+	if labels := l.PairedLabels(); labels[k1] != "" || labels[k3] != "helper" {
 		t.Errorf("labels after the name was taken back: %v", labels)
+	}
+	// A key that the person unpaired is not paired again, under any name.
+	if _, err := s.PairPeer(k1, "Ana", ana, head1); err == nil || !strings.Contains(err.Error(), "you unpaired this key") {
+		t.Errorf("an unpaired key paired again: %v", err)
+	}
+	// The one writer of a pairing refuses a name that bean cannot show,
+	// for a peer and for an agent.
+	if _, err := s.PairPeer(key(), "x], [peer Bob", bob, head1); err == nil || !strings.Contains(err.Error(), "is not a name that bean can show") {
+		t.Errorf("a peer under a name of two: %v", err)
+	}
+	if _, err := s.Pair(key(), "peer Ana"); err == nil || !strings.Contains(err.Error(), "is not a name that bean can show") {
+		t.Errorf("an agent that reads as a peer: %v", err)
+	}
+}
+
+// TestKeyPairedBothWays: two of the person's machines can pair one key as
+// an agent and as a peer. It is then the person's agent for a reply, which
+// takes nothing, and a peer for files, which it does not open.
+func TestKeyPairedBothWays(t *testing.T) {
+	s, _ := initStore(t)
+	k := reKey(t).Public()
+	l, err := s.load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pairWith(l, k, "phone", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pairWith(l, k, "Ana", "sha256:"+strings.Repeat("a", 64), "sha256:"+strings.Repeat("1", 64)); err != nil {
+		t.Fatal(err)
+	}
+	if l, err = s.Load(); err != nil {
+		t.Fatal(err)
+	}
+	if got := l.PairedAsAgent(k); got != "phone" {
+		t.Errorf("PairedAsAgent: %q, want phone", got)
+	}
+	if got := l.FileLabels()[k]; got != "" {
+		t.Errorf("the key opens files as %q", got)
+	}
+	if got := l.PairedAsAgent(reKey(t).Public()); got != "" {
+		t.Errorf("a key that is not paired is an agent %q", got)
 	}
 }
 
@@ -237,5 +287,44 @@ func TestPeerUnlocksNoFile(t *testing.T) {
 		if _, rerr := os.ReadFile(filepath.Join(dir, "blobs", hash[7:])); (rerr == nil) != tc.unlocks {
 			t.Errorf("%s: the record unlocks the file: %v, want %v", tc.name, rerr == nil, tc.unlocks)
 		}
+	}
+}
+
+// TestCheckLabel: a name of a paired key cannot fake a second name, hide a
+// character, or read as the mark of another person. A label that breaks
+// the rule and is in a record all the same shows quoted.
+func TestCheckLabel(t *testing.T) {
+	for _, good := range []string{"Ana", "Dr. O'Neil", "claude-code", "phone_2", "agent@bens-laptop.local", "a", strings.Repeat("a", MaxLabel)} {
+		if err := CheckLabel(good); err != nil {
+			t.Errorf("%q: %v", good, err)
+		}
+		if ShownLabel(good) != good {
+			t.Errorf("%q shows as %s", good, ShownLabel(good))
+		}
+	}
+	for _, bad := range []string{"", " ", " Ana", "Ana ", "A  na", "x], [peer Bob", "a,b", "peer", "Peer Ana", "peer Ana", "A\u200bna", "\u0410na", "Jos\u00e9", "a\nb", "a\x1b[2J", strings.Repeat("a", MaxLabel+1)} {
+		if err := CheckLabel(bad); err == nil {
+			t.Errorf("%q passed", bad)
+		}
+		if bad != "" && (ShownLabel(bad) == bad || !strings.HasPrefix(ShownLabel(bad), `"`)) {
+			t.Errorf("%q shows as %s", bad, ShownLabel(bad))
+		}
+	}
+	if ShownLabel("") != "agent" {
+		t.Errorf("no label shows as %q", ShownLabel(""))
+	}
+	// A record of an older bean, or one written by hand, can hold such a
+	// label. It shows quoted wherever a name shows.
+	s, _ := initStore(t)
+	k := reKey(t).Public()
+	if _, err := s.Append(strings.NewReader(`{"type":"agent.pair","value":{"key":"` + k + `","label":"peer Ana"},"times":{"observed":null},"source":{"system":"self","adapter":"t@1","ref":null}}` + "\n")); err != nil {
+		t.Fatal(err)
+	}
+	l, err := s.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := l.PairedLabels()[k]; got != `"peer Ana"` {
+		t.Errorf("an agent labelled peer Ana shows as %s", got)
 	}
 }

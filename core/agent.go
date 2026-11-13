@@ -102,6 +102,11 @@ func (s *Store) ReadAgent() (*Agent, error) {
 // when identity is "". When this replica holds the person's signing key,
 // it also writes the agent.pair claim and returns its id.
 func (s *Store) AgentInit(identity, label string) (string, string, error) {
+	if label != "" {
+		if err := CheckLabel(label); err != nil {
+			return "", "", err // before a key is made
+		}
+	}
 	unlock, err := s.lock()
 	if err != nil {
 		return "", "", err
@@ -152,7 +157,7 @@ func (s *Store) AgentInit(identity, label string) (string, string, error) {
 		return "", "", fmt.Errorf("you unpaired the agent key of this machine; bean does not trust it again by itself. To trust it again, run on your own machine: bean agent pair %s", Npub(pub))
 	}
 	if other := otherLabels(live, label); other != "" {
-		return "", "", fmt.Errorf("the agent key of this machine is paired as %s. Every assistant on this machine signs with that one key, so bean will not show its records as %q. Use -label %s, or no -label", other, label, strconv.Quote(shownLabel(live[0].label)))
+		return "", "", fmt.Errorf("the agent key of this machine is paired as %s. Every assistant on this machine signs with that one key, so bean will not show its records as %q. Use -label %s, or no -label", other, label, strconv.Quote(ShownLabel(live[0].label)))
 	}
 	if len(live) > 0 {
 		return pub, live[0].id, nil
@@ -233,6 +238,9 @@ func (s *Store) PairPeer(key, label, identity, head string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if l.Unpaired(key) {
+		return "", errors.New("you unpaired this key: it is not paired again")
+	}
 	live := livePairings(l.agentPairings(key))
 	if other := otherLabels(live, label); other != "" {
 		return "", fmt.Errorf("this key is already paired as %s; bean does not rename it, because every record it wrote would then show as %q", other, label)
@@ -252,7 +260,7 @@ func (l *Loaded) NameTaken(label, identity string) bool {
 	for _, ps := range l.pairClaims() {
 		for _, p := range livePairings(ps) {
 			of, _ := l.Report.Records[p.id].Value["identity"].(string)
-			if shownLabel(p.label) == label && (!p.peer || of != identity) {
+			if strings.EqualFold(ShownLabel(p.label), label) && (!p.peer || of != identity) {
 				return true
 			}
 		}
@@ -307,7 +315,7 @@ func (s *Store) Unpair(nameOrKey string) ([]string, error) {
 	claims := l.pairClaims()
 	for _, key := range sortedKeys(claims) {
 		for _, p := range livePairings(claims[key]) {
-			if key != nameOrKey && shownLabel(p.label) != nameOrKey {
+			if key != nameOrKey && ShownLabel(p.label) != nameOrKey {
 				continue
 			}
 			value := map[string]any{}
@@ -366,6 +374,22 @@ func (l *Loaded) PeerLabel(identity string) string {
 }
 
 func (s *Store) pairWith(l *Loaded, key, label, peerOf, head string) (string, error) {
+	if label != "" {
+		if err := CheckLabel(label); err != nil {
+			return "", err
+		}
+	}
+	// An agent does not take the name of a peer: its records would show
+	// beside that person's under one name. PairPeer checks the other way.
+	if peerOf == "" {
+		for _, ps := range l.pairClaims() {
+			for _, p := range livePairings(ps) {
+				if p.peer && label != "" && strings.EqualFold(p.label, label) {
+					return "", fmt.Errorf("the name %q is the name of a peer: give the agent another one", label)
+				}
+			}
+		}
+	}
 	w, err := s.writerFor(l, false)
 	if err != nil {
 		return "", err
@@ -447,30 +471,81 @@ func otherLabels(live []pairing, label string) string {
 		if p.label == label {
 			return ""
 		}
-		names = append(names, strconv.Quote(shownLabel(p.label)))
+		names = append(names, strconv.Quote(ShownLabel(p.label)))
 	}
 	return strings.Join(names, " and ")
 }
 
-// shownLabel is how readers name a paired key.
-func shownLabel(label string) string {
-	if label == "" {
+// MaxLabel is the most bytes that the name of a paired key may have.
+const MaxLabel = 64
+
+// CheckLabel reports why label cannot be the name of a paired key, or nil.
+// A name shows in every listing, between brackets and beside other names,
+// and it tells one signer from another. So it holds only what cannot fake
+// a second name or look like another: the letters a to z in both cases,
+// digits, single spaces, and . ' _ - @. It does not start with the word
+// peer, which bean writes before the name of another person.
+func CheckLabel(label string) error {
+	bad := func(why string) error {
+		return fmt.Errorf("%s is not a name that bean can show: %s", strconv.QuoteToASCII(label), why)
+	}
+	switch {
+	case label == "" || len(label) > MaxLabel:
+		return bad(fmt.Sprintf("a name has 1 to %d characters", MaxLabel))
+	case strings.TrimSpace(label) != label || strings.Contains(label, "  "):
+		return bad("a name has no space at its start or end, and no two spaces together")
+	}
+	for i := 0; i < len(label); i++ {
+		c := label[i]
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || strings.IndexByte(" .'_-@", c) >= 0) {
+			return bad("a name holds the letters a to z, digits, spaces and . ' _ - @ only")
+		}
+	}
+	if lower := strings.ToLower(label); lower == "peer" || strings.HasPrefix(lower, "peer ") {
+		return bad("a name does not start with the word peer, which bean writes before the name of another person")
+	}
+	return nil
+}
+
+// ShownLabel is how readers name a paired key: its label, or "agent" when
+// it has none. A label that breaks the rule of CheckLabel can still be in
+// a record, of an older bean or written by hand. It shows in quotation
+// marks with every other character escaped, so it cannot pass for a name.
+func ShownLabel(label string) string {
+	switch {
+	case label == "":
 		return "agent"
+	case CheckLabel(label) != nil:
+		return strconv.QuoteToASCII(label)
 	}
 	return label
 }
 
-// AgentLabels maps each key that the subject paired with a current
+// PairedLabels maps each key that the subject paired with a current
 // agent.pair claim to its label ("agent" when it has none). A key the
 // person paired twice under different names, for example on two of their
 // machines, shows both names, in id order, never one picked at random.
-func (l *Loaded) AgentLabels() map[string]string { return l.pairLabels(true) }
+// The name of a peer, another person, has the word peer before it.
+func (l *Loaded) PairedLabels() map[string]string { return l.pairLabels(true) }
 
-// FileLabels is AgentLabels without the peers: the keys whose records may
+// FileLabels is PairedLabels without the peers: the keys whose records may
 // name a file of the person. A peer is another person, and a peer's record
 // names no file, so it unlocks none (DECISIONS 293). A key that is paired
 // both as an agent and as a peer counts as a peer.
 func (l *Loaded) FileLabels() map[string]string { return l.pairLabels(false) }
+
+// PairedAsAgent returns the name under which a pairing in force makes key
+// an agent of the person, or "" when there is none. A key that is also
+// paired as a peer still counts: two of the person's machines can pair one
+// key in the two ways.
+func (l *Loaded) PairedAsAgent(key string) string {
+	for _, p := range livePairings(l.agentPairings(key)) {
+		if !p.peer {
+			return ShownLabel(p.label)
+		}
+	}
+	return ""
+}
 
 func (l *Loaded) pairLabels(peers bool) map[string]string {
 	out := map[string]string{}
@@ -481,7 +556,7 @@ func (l *Loaded) pairLabels(peers bool) map[string]string {
 			continue
 		}
 		for _, p := range live {
-			name := shownLabel(p.label)
+			name := ShownLabel(p.label)
 			// A peer is another person. Their records show as a peer's
 			// wherever a name shows, so nobody takes them for an agent's
 			// or for the person's own.
