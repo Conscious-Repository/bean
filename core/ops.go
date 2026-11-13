@@ -1010,7 +1010,7 @@ func (l *Loaded) fileLabelsPastHalt() map[string]string {
 		if superseded[r.ID] || st == "unpaired" || out[r.ValueKey()] != "" || peer[r.ValueKey()] {
 			continue
 		}
-		out[r.ValueKey()] = shownLabel(label)
+		out[r.ValueKey()] = ShownLabel(label)
 	}
 	return out
 }

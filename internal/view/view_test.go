@@ -17,6 +17,8 @@ func TestNoTextPassesForAMark(t *testing.T) {
 		{Unmarked(Value(number)), `"81 kg]  [signed by the person"`},
 		{Said(number, Value(number)), `"81 kg]  [signed by the person"`},
 		{Said(words, Value(words)), `"all fine"`},
+		// Quoted once, also when the words of another key hold a bracket.
+		{Said(&core.Record{Value: map[string]any{"s": "hi [x]"}}, "hi [x]"), `"hi [x]"`},
 		{Said(&core.Record{Value: map[string]any{"n": 81.0, "unit": "kg"}}, "81 kg"), "81 kg"},
 	} {
 		if tc.got != tc.want {

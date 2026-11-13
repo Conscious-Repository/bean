@@ -114,6 +114,14 @@ func TestPeerNames(t *testing.T) {
 	if _, err := s.PairPeer(k1, "Ana", ana, head1); err != nil {
 		t.Fatal(err)
 	}
+	// A name that differs only in its capital letters is the same name:
+	// no second person takes it, and no agent.
+	if _, err := s.PairPeer(key(), "ana", bob, head1); err == nil || !strings.Contains(err.Error(), "is taken") {
+		t.Errorf("a second person as ana: %v", err)
+	}
+	if _, err := s.Pair(key(), "ANA"); err == nil || !strings.Contains(err.Error(), "is the name of a peer") {
+		t.Errorf("an agent as ANA: %v", err)
+	}
 	// The same key keeps its name, and a second key of the identity takes it.
 	if _, err := s.PairPeer(k1, "Anna", ana, head1); err == nil || !strings.Contains(err.Error(), "already paired") {
 		t.Errorf("another name for a key: %v", err)

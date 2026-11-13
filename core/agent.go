@@ -157,7 +157,7 @@ func (s *Store) AgentInit(identity, label string) (string, string, error) {
 		return "", "", fmt.Errorf("you unpaired the agent key of this machine; bean does not trust it again by itself. To trust it again, run on your own machine: bean agent pair %s", Npub(pub))
 	}
 	if other := otherLabels(live, label); other != "" {
-		return "", "", fmt.Errorf("the agent key of this machine is paired as %s. Every assistant on this machine signs with that one key, so bean will not show its records as %q. Use -label %s, or no -label", other, label, strconv.Quote(shownLabel(live[0].label)))
+		return "", "", fmt.Errorf("the agent key of this machine is paired as %s. Every assistant on this machine signs with that one key, so bean will not show its records as %q. Use -label %s, or no -label", other, label, strconv.Quote(ShownLabel(live[0].label)))
 	}
 	if len(live) > 0 {
 		return pub, live[0].id, nil
@@ -260,7 +260,7 @@ func (l *Loaded) NameTaken(label, identity string) bool {
 	for _, ps := range l.pairClaims() {
 		for _, p := range livePairings(ps) {
 			of, _ := l.Report.Records[p.id].Value["identity"].(string)
-			if shownLabel(p.label) == label && (!p.peer || of != identity) {
+			if strings.EqualFold(ShownLabel(p.label), label) && (!p.peer || of != identity) {
 				return true
 			}
 		}
@@ -315,7 +315,7 @@ func (s *Store) Unpair(nameOrKey string) ([]string, error) {
 	claims := l.pairClaims()
 	for _, key := range sortedKeys(claims) {
 		for _, p := range livePairings(claims[key]) {
-			if key != nameOrKey && shownLabel(p.label) != nameOrKey {
+			if key != nameOrKey && ShownLabel(p.label) != nameOrKey {
 				continue
 			}
 			value := map[string]any{}
@@ -384,7 +384,7 @@ func (s *Store) pairWith(l *Loaded, key, label, peerOf, head string) (string, er
 	if peerOf == "" {
 		for _, ps := range l.pairClaims() {
 			for _, p := range livePairings(ps) {
-				if p.peer && label != "" && p.label == label {
+				if p.peer && label != "" && strings.EqualFold(p.label, label) {
 					return "", fmt.Errorf("the name %q is the name of a peer: give the agent another one", label)
 				}
 			}
@@ -471,7 +471,7 @@ func otherLabels(live []pairing, label string) string {
 		if p.label == label {
 			return ""
 		}
-		names = append(names, strconv.Quote(shownLabel(p.label)))
+		names = append(names, strconv.Quote(ShownLabel(p.label)))
 	}
 	return strings.Join(names, " and ")
 }
@@ -521,8 +521,6 @@ func ShownLabel(label string) string {
 	return label
 }
 
-func shownLabel(label string) string { return ShownLabel(label) }
-
 // PairedLabels maps each key that the subject paired with a current
 // agent.pair claim to its label ("agent" when it has none). A key the
 // person paired twice under different names, for example on two of their
@@ -543,7 +541,7 @@ func (l *Loaded) FileLabels() map[string]string { return l.pairLabels(false) }
 func (l *Loaded) PairedAsAgent(key string) string {
 	for _, p := range livePairings(l.agentPairings(key)) {
 		if !p.peer {
-			return shownLabel(p.label)
+			return ShownLabel(p.label)
 		}
 	}
 	return ""
@@ -558,7 +556,7 @@ func (l *Loaded) pairLabels(peers bool) map[string]string {
 			continue
 		}
 		for _, p := range live {
-			name := shownLabel(p.label)
+			name := ShownLabel(p.label)
 			// A peer is another person. Their records show as a peer's
 			// wherever a name shows, so nobody takes them for an agent's
 			// or for the person's own.

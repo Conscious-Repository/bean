@@ -506,9 +506,11 @@ func Check(in Input) Result {
 			}
 			// The reader takes the mark at the end of a row from bean. No
 			// text of a record passes for it, whoever signed the record.
-			text := view.Unmarked(view.Record(r, inBundle))
+			text := view.Record(r, inBundle)
 			if by != "" {
 				text = view.Said(r, text)
+			} else {
+				text = view.Unmarked(text)
 			}
 			res.Rows = append(res.Rows, Row{When: When(r), Type: r.Type, Text: text, By: by, ID: r.ID[7:19], Mark: view.Mark(r, inBundle)})
 			// A comparison with a reference pack names it by SHA-256.
