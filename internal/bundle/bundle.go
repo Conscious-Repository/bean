@@ -333,9 +333,7 @@ func Check(in Input) Result {
 	for _, id := range slices.Sorted(maps.Keys(proof)) {
 		if r := rp.Records[id]; r != nil && IsPairing(r, person) && rp.Valid[id] {
 			label, _ := r.Value["label"].(string)
-			if label == "" {
-				label = "agent"
-			}
+			label = core.ShownLabel(label) // a label that could pass for another name shows quoted
 			// A peer is another person, and their records show as a
 			// peer's: nobody takes them for an agent's.
 			if role, _ := r.Value["role"].(string); role == "peer" {
@@ -506,7 +504,9 @@ func Check(in Input) Result {
 			default:
 				by = "[signed by another key: " + keyName(r.Author) + "]"
 			}
-			text := view.Record(r, inBundle)
+			// The reader takes the mark at the end of a row from bean. No
+			// text of a record passes for it, whoever signed the record.
+			text := view.Unmarked(view.Record(r, inBundle))
 			if by != "" {
 				text = view.Said(r, text)
 			}

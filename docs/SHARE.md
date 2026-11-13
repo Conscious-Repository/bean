@@ -44,7 +44,7 @@ Your log's share record says `"seal": "passphrase"`. It does not hold the words.
 
 ## What goes in
 
-- **The records you name**, by id or by `-type` (with `-since` and `-until`). Only current records about you: not a corrected one and not a deleted one. A record that another identity signed does not go either, since a bundle carries only your identity records.
+- **The records you name**, by id or by `-type` (with `-since` and `-until`). Only current records about you: not a corrected one and not a deleted one. A record that another identity signed does not go either, since a bundle carries only your identity records. A type picks your own records and your agents' only. A record that another key signed, such as a peer's note, goes when you name it by its id.
 - **What they are about, one step.** A record is read with the record it is about, so that one comes along. Examples are the reading of a comparison, the meal of an estimate, and the entry a note comments on. A comparison also brings the record of each reference file it used, without the file. What that one is about in turn stays home unless you name it. The review marks each record that comes along, and says which it could not bring and why.
 - **Nothing else of yours.** Not the rest of the log, not a lab report unless you name it. A reading names its report by a hash, and the report stays home.
 - **A file only when you name its record.** A record that keeps a file (a lab report, a photo) is shared without the file. With `-files`, the file of a record you named by its id goes in whole, as plaintext. For a lab report that is the report as you imported it, with your name and birth date. A file never goes because its record came along with another, or was picked by type. The one exception is a public reference file you kept, such as an NHANES file: with `-files` it goes with the comparison that used it.
@@ -165,7 +165,7 @@ bean accept -label Ana reply-to-ben.bean
 
 Ask the reader two things: whether they sent a reply whose id starts so, and to read their identity words. If either is not the same, do not accept. Then bean asks before it writes.
 
-- **`-label` is the name under which this person's notes show.** The first reply of an identity needs it. A later reply needs none. A name belongs to one identity: bean does not rename one, and does not give one name to two.
+- **`-label` is the name under which this person's notes show.** The first reply of an identity needs it. A later reply needs none. A name belongs to one identity: bean does not rename one, and does not give one name to two. A name has 1 to 64 characters: the letters a to z, digits, single spaces, and `. ' _ - @`. It does not start with the word `peer`, and no agent has it. So one name cannot read as two, or as another person's.
 - **`-yes` is for scripts, and needs `-words`.** A script cannot compare words by eye, so it states the eight words that you heard. bean takes nothing when they are not the signer's. Without a terminal and without `-yes` it takes nothing.
 - **What goes into your log.** The notes, and one record of your own that pairs the reader's key with the name. That record holds the reader's identity id and how far their chain of keys had got. The reader's identity records and their reply record stay out.
 - **Where you see them.** `bean ls` shows a note in quotation marks, with `[peer Ana]`. `bean show <id>` lists the notes about a record.

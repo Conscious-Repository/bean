@@ -226,6 +226,17 @@ func Said(r *core.Record, text string) string {
 	if s, ok := r.Value["s"].(string); ok && s != "" {
 		return strconv.Quote(text)
 	}
+	return Unmarked(text)
+}
+
+// Unmarked is a record's text for a row that ends in a mark of the tool:
+// who signed, in square brackets. A unit, a flag or a note can hold a
+// square bracket too. Such a text is shown in quotation marks, so that no
+// part of it passes for that mark.
+func Unmarked(text string) string {
+	if strings.ContainsAny(text, "[]") {
+		return strconv.Quote(text)
+	}
 	return text
 }
 

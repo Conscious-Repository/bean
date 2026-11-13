@@ -154,19 +154,29 @@ func cmdShare(s *core.Store, args []string) {
 	// A type picks readings, never a record that keeps a file: 'lab.*' must
 	// not sweep up the lab report itself, with the person's name in it. Such
 	// a record is shared when it is named by its id.
-	keepsFile := 0
+	// Nor does a type pick a record that someone else signed: a peer's
+	// note, or a record of a key that the person never paired, which a sync
+	// tool can put into the folder. The person's own record of the share
+	// vouches for the list, so such a record goes when they name it.
+	keepsFile, byOthers := 0, 0
+	mine := l.FileLabels() // the person's agents
 	if *typ != "" {
 		for _, r := range recs {
 			switch {
 			case notShareable(l, deleted, r) != "":
 			case len(r.Blobs) > 0:
 				keepsFile++
+			case r.Author != l.ID && mine[r.Author] == "":
+				byOthers++
 			default:
 				chosen[r.ID] = r
 			}
 		}
+		if byOthers > 0 {
+			fmt.Fprintf(os.Stderr, "%d records of type %s that someone else signed stay home: share such a record by its id\n", byOthers, *typ)
+		}
 		if len(chosen) == 0 {
-			fail(fmt.Errorf("no current record of type %s in that time (a record that keeps a file is shared by its id, not by type)", *typ))
+			fail(fmt.Errorf("no current record of type %s in that time (a record that keeps a file, or that someone else signed, is shared by its id, not by type)", *typ))
 		}
 	}
 	for _, id := range pos {
@@ -222,7 +232,7 @@ func cmdShare(s *core.Store, args []string) {
 	// also a file whose record the person deleted. In a log with records of
 	// a newer bean this list is empty: an agent's file then stays home
 	// here, and an export still carries it.
-	opens := l.FileLabels()
+	opens := mine
 	for _, r := range shared {
 		public := r.Type == nhanes.FileType && r.Author == l.ID
 		travels := *files && (named[r.ID] || public)

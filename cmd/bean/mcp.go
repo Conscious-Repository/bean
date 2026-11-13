@@ -275,7 +275,11 @@ func cmdMCP(s *core.Store, args []string) {
 		// without -label an existing key keeps its name.
 		lbl := *label
 		if _, err := s.ReadAgent(); lbl == "" && errors.Is(err, core.ErrNoAgent) {
-			lbl = "agent@" + host
+			// A computer's name can hold what a name may not: then the
+			// key has no label, and shows as "agent".
+			if lbl = "agent@" + host; core.CheckLabel(lbl) != nil {
+				lbl = ""
+			}
 		}
 		if _, _, err := s.AgentInit("", lbl); err != nil {
 			fail(err)
@@ -457,15 +461,16 @@ type namer func(id string) string
 
 // self is the local identity: an agent-only replica has no l.Local.
 func names(l *core.Loaded, self string) namer {
-	labels := l.AgentLabels()
+	labels, agents := l.AgentLabels(), l.FileLabels()
 	return func(id string) string {
 		if id == self {
 			return "self"
 		}
 		if label, ok := labels[id]; ok {
-			// A peer is another person whose key the person paired.
-			if name, isPeer := strings.CutPrefix(label, "peer "); isPeer {
-				return "peer:" + name
+			// A peer is another person whose key the person paired. The
+			// pairing says which, not the text of the label.
+			if agents[id] == "" {
+				return "peer:" + strings.TrimPrefix(label, "peer ")
 			}
 			return "agent:" + label
 		}

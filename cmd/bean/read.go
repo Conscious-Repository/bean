@@ -262,6 +262,10 @@ func byText(r *core.Record, me string, labels map[string]string) string {
 // Anything that does not sniff as an image is refused, so a photo flag
 // cannot pull an arbitrary file into the log.
 func readImage(path string) ([]byte, string, error) {
+	// A pipe would hold the open for as long as nobody writes to it.
+	if info, err := os.Stat(path); err == nil && !info.Mode().IsRegular() {
+		return nil, "", errors.New("not a regular file: " + path)
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, "", err

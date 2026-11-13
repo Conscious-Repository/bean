@@ -269,3 +269,42 @@ func TestPeerUnlocksNoFile(t *testing.T) {
 		}
 	}
 }
+
+// TestCheckLabel: a name of a paired key cannot fake a second name, hide a
+// character, or read as the mark of another person. A label that breaks
+// the rule and is in a record all the same shows quoted.
+func TestCheckLabel(t *testing.T) {
+	for _, good := range []string{"Ana", "Dr. O'Neil", "claude-code", "phone_2", "agent@bens-laptop.local", "a", strings.Repeat("a", MaxLabel)} {
+		if err := CheckLabel(good); err != nil {
+			t.Errorf("%q: %v", good, err)
+		}
+		if ShownLabel(good) != good {
+			t.Errorf("%q shows as %s", good, ShownLabel(good))
+		}
+	}
+	for _, bad := range []string{"", " ", " Ana", "Ana ", "A  na", "x], [peer Bob", "a,b", "peer", "Peer Ana", "peer Ana", "A\u200bna", "\u0410na", "Jos\u00e9", "a\nb", "a\x1b[2J", strings.Repeat("a", MaxLabel+1)} {
+		if err := CheckLabel(bad); err == nil {
+			t.Errorf("%q passed", bad)
+		}
+		if bad != "" && (ShownLabel(bad) == bad || !strings.HasPrefix(ShownLabel(bad), `"`)) {
+			t.Errorf("%q shows as %s", bad, ShownLabel(bad))
+		}
+	}
+	if ShownLabel("") != "agent" {
+		t.Errorf("no label shows as %q", ShownLabel(""))
+	}
+	// A record of an older bean, or one written by hand, can hold such a
+	// label. It shows quoted wherever a name shows.
+	s, _ := initStore(t)
+	k := reKey(t).Public()
+	if _, err := s.Append(strings.NewReader(`{"type":"agent.pair","value":{"key":"` + k + `","label":"peer Ana"},"times":{"observed":null},"source":{"system":"self","adapter":"t@1","ref":null}}` + "\n")); err != nil {
+		t.Fatal(err)
+	}
+	l, err := s.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := l.AgentLabels()[k]; got != `"peer Ana"` {
+		t.Errorf("an agent labelled peer Ana shows as %s", got)
+	}
+}

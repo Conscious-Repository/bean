@@ -304,6 +304,11 @@ func cmdAccept(s *core.Store, args []string) {
 	}
 	// A key that the person paired as an agent of their own is not another
 	// person's key. Its notes would show under the agent's name.
+	if *label != "" {
+		if err := core.CheckLabel(*label); err != nil {
+			fail(fmt.Errorf("%w. Nothing was taken", err))
+		}
+	}
 	if agent := l.PairedAsAgent(res.Key); agent != "" {
 		fail(fmt.Errorf("the key that signed this reply is paired as your agent %q: nothing was taken. A reply is from another person", agent))
 	}
@@ -313,7 +318,7 @@ func cmdAccept(s *core.Store, args []string) {
 	known := l.PeerLabel(res.Identity)
 	name, first := *label, false
 	switch {
-	case labels[res.Key] != "":
+	case labels[res.Key] != "": // a peer's key: an agent's was refused above
 		name = strings.TrimPrefix(labels[res.Key], "peer ")
 		if *label != "" && *label != name {
 			fail(fmt.Errorf("this key is already paired as %q: bean does not rename it. Leave -label out", name))

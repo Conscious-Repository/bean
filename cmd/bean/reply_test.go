@@ -665,8 +665,24 @@ func TestAcceptAfterAKeyChange(t *testing.T) {
 func TestNamesAndUnpair(t *testing.T) {
 	ben, ana, pkg, words, ids := replyLogs(t)
 	rep, rwords := writeReply(t, ana, pkg, words, ids[0], "from Ana")
+	// A name that could pass for two names, for no name, or for another
+	// person's mark takes nothing.
+	for _, name := range []string{"x], [peer Bob", "   ", " Ana", "peer Ana", "Peer", "A\u200bna", "\u0410na", strings.Repeat("a", core.MaxLabel+1)} {
+		if out, errs, code := run(t, ben, rwords+"\n", "accept", "-yes", "-label", name, "-words", idWords(t, ana), rep); code == 0 || !strings.Contains(errs, "is not a name that bean can show") {
+			t.Errorf("the name %q: %d\n%s\n%s", name, code, out, errs)
+		}
+	}
+	if ls, _, _ := run(t, ben, "", "ls", "-type", "note"); strings.Contains(ls, "from Ana") {
+		t.Fatalf("a refused name took a note:\n%s", ls)
+	}
 	if out, errs, code := run(t, ben, rwords+"\n", "accept", "-yes", "-label", "Ana", "-words", idWords(t, ana), rep); code != 0 {
 		t.Fatalf("accept: %d\n%s\n%s", code, out, errs)
+	}
+	// An agent does not take a peer's name, or a name that reads as a peer's.
+	for label, want := range map[string]string{"Ana": "is the name of a peer", "peer Ana": "is not a name that bean can show"} {
+		if out, errs, code := run(t, ben, "", "agent", "init", "-label", label); code == 0 || !strings.Contains(errs, want) {
+			t.Errorf("an agent named %q: %d\n%s\n%s", label, code, out, errs)
+		}
 	}
 	// A second person cannot come in under the first one's name.
 	mallory := t.TempDir()
@@ -731,6 +747,10 @@ func TestAcceptedNotesStay(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(export, "records", noteID[7:]+".json")); err != nil {
 		t.Errorf("the note is not in the export: %v", err)
+	}
+	// A type does not pick a record that someone else signed.
+	if out, errs, code := run(t, ben, "", "share", "-yes", "-out", filepath.Join(t.TempDir(), "bytype"), "-type", "note"); code == 0 || !strings.Contains(errs, "that someone else signed") {
+		t.Errorf("share -type note took a peer's note: %d\n%s\n%s", code, out, errs)
 	}
 	// Shared on, the note shows under the name, and the key is named.
 	dir := filepath.Join(t.TempDir(), "onward")
