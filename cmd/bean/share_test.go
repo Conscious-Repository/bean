@@ -814,3 +814,35 @@ func TestSealedFilesComeOut(t *testing.T) {
 		t.Errorf("-unpack of a folder: %d\n%s", code, errs)
 	}
 }
+
+// TestBundleRowQuotedOnce: in a bundle check a row ends in bean's mark of
+// who signed. A text that holds a square bracket shows in quotation marks,
+// once, whoever signed the record. A listing of the log shows it as it is.
+func TestBundleRowQuotedOnce(t *testing.T) {
+	dir := t.TempDir()
+	if _, errs, code := run(t, dir, "", "init"); code != 0 {
+		t.Fatalf("init: %s", errs)
+	}
+	if _, errs, code := run(t, dir, "", "agent", "init", "-label", "bot"); code != 0 {
+		t.Fatalf("agent init: %s", errs)
+	}
+	own, errs, code := run(t, dir, "", "add", "weight", "81", "-unit", "kg]  [peer Dr Smith")
+	if code != 0 {
+		t.Fatalf("add: %s", errs)
+	}
+	agent, errs, code := run(t, dir, "", "add", "-agent", "weight", "82", "-unit", "kg [x]")
+	if code != 0 {
+		t.Fatalf("add -agent: %s", errs)
+	}
+	out := filepath.Join(t.TempDir(), "b")
+	if o, errs, code := run(t, dir, "", "share", "-yes", "-out", out, strings.TrimSpace(own), strings.TrimSpace(agent)); code != 0 {
+		t.Fatalf("share: %d\n%s\n%s", code, o, errs)
+	}
+	checked, _, code := run(t, t.TempDir(), "", "check-bundle", out)
+	if code != 0 || !strings.Contains(checked, `"81 kg]  [peer Dr Smith"`) || !strings.Contains(checked, `"82 kg [x]"`) || strings.Contains(checked, `\"`) {
+		t.Errorf("check-bundle: %d\n%s", code, checked)
+	}
+	if ls, _, _ := run(t, dir, "", "ls", "-type", "weight"); !strings.Contains(ls, "81 kg]  [peer Dr Smith") || strings.Contains(ls, `"81 kg`) {
+		t.Errorf("ls:\n%s", ls)
+	}
+}

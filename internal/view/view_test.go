@@ -15,10 +15,11 @@ func TestNoTextPassesForAMark(t *testing.T) {
 	for _, tc := range []struct{ got, want string }{
 		{Unmarked("81 kg"), "81 kg"},
 		{Unmarked(Value(number)), `"81 kg]  [signed by the person"`},
-		{Said(number, Value(number)), `"81 kg]  [signed by the person"`},
 		{Said(words, Value(words)), `"all fine"`},
-		// Quoted once, also when the words of another key hold a bracket.
+		// The words of another key are quoted once, with a bracket or without.
 		{Said(&core.Record{Value: map[string]any{"s": "hi [x]"}}, "hi [x]"), `"hi [x]"`},
+		// A listing of the log shows a value of the log itself as it is.
+		{Said(&core.Record{Value: map[string]any{"part": 1.0}}, `{"part":1,"sealed":["sha256:aa"]}`), `{"part":1,"sealed":["sha256:aa"]}`},
 		{Said(&core.Record{Value: map[string]any{"n": 81.0, "unit": "kg"}}, "81 kg"), "81 kg"},
 	} {
 		if tc.got != tc.want {
