@@ -328,3 +328,72 @@ func TestCheckLabel(t *testing.T) {
 		t.Errorf("an agent labelled peer Ana shows as %s", got)
 	}
 }
+
+// TestPairingsOfTwoCopies: two copies of a log can each write a pairing
+// that the other would have refused. When the copies come together, an
+// unpairing holds over a peer's pairing of the same key, and two people
+// under one name show apart.
+func TestPairingsOfTwoCopies(t *testing.T) {
+	a, _ := initStore(t)
+	ana, bob := "sha256:"+strings.Repeat("a", 64), "sha256:"+strings.Repeat("b", 64)
+	head := "sha256:" + strings.Repeat("1", 64)
+	k1, k2 := reKey(t).Public(), reKey(t).Public()
+	// A copy of the log, made before anything was paired.
+	stale := Open(t.TempDir())
+	if err := os.CopyFS(stale.Dir, os.DirFS(a.Dir)); err != nil {
+		t.Fatal(err)
+	}
+	// On the first copy: Ana is paired, and then unpaired.
+	if _, err := a.PairPeer(k1, "Ana", ana, head); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Unpair("Ana"); err != nil {
+		t.Fatal(err)
+	}
+	// On the stale copy: the same key is paired, and another person takes
+	// the name Bo. The first copy gives that name to someone else.
+	if _, err := stale.PairPeer(k1, "Ana", ana, head); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stale.PairPeer(k2, "Bo", bob, head); err != nil {
+		t.Fatal(err)
+	}
+	k3 := reKey(t).Public()
+	carol := "sha256:" + strings.Repeat("c", 64)
+	if _, err := a.PairPeer(k3, "bo", carol, head); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Sync(stale); err != nil {
+		t.Fatal(err)
+	}
+	l, err := a.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	labels := l.PairedLabels()
+	if labels[k1] != "" || !l.Unpaired(k1) {
+		t.Errorf("a peer that was unpaired is paired again by the other copy: %q", labels[k1])
+	}
+	if labels[k2] != "peer Bo #bbbbbb" || labels[k3] != "peer bo #cccccc" {
+		t.Errorf("two people under one name: %q and %q", labels[k2], labels[k3])
+	}
+	if names := l.PeerNames(); names[k2] != "Bo" || names[k3] != "bo" || names[k1] != "" {
+		t.Errorf("PeerNames: %v", names)
+	}
+}
+
+// TestOnlyThePersonPairs: a pairing that an agent's key signs has no
+// effect, so the agent's key does not write one.
+func TestOnlyThePersonPairs(t *testing.T) {
+	s, _ := initStore(t)
+	if _, _, err := s.AgentInit("", "bot"); err != nil {
+		t.Fatal(err)
+	}
+	line := `{"type":"agent.pair","value":{"key":"` + reKey(t).Public() + `","label":"Doctor"},"times":{"observed":null},"source":{"system":"self","adapter":"t@1","ref":null}}` + "\n"
+	if _, err := s.AppendAsAgent(strings.NewReader(line)); err == nil || !strings.Contains(err.Error(), "only the person pairs a key") {
+		t.Errorf("an agent's key wrote a pairing: %v", err)
+	}
+	if _, err := s.Append(strings.NewReader(line)); err != nil {
+		t.Errorf("the person's own pairing: %v", err)
+	}
+}

@@ -71,3 +71,19 @@ func TestVocabularyPersonal(t *testing.T) {
 		}
 	}
 }
+
+// TestVocabularyIsAPlainFile: the text of vocabulary.md goes to the
+// assistant. A link in its place would send another file's text.
+func TestVocabularyIsAPlainFile(t *testing.T) {
+	dir := t.TempDir()
+	secret := filepath.Join(t.TempDir(), "secret.txt")
+	if err := os.WriteFile(secret, []byte("TOPSECRET\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(secret, filepath.Join(dir, "vocabulary.md")); err != nil {
+		t.Skip(err)
+	}
+	if _, text, err := loadVocabulary(dir); err == nil || strings.Contains(text, "TOPSECRET") {
+		t.Errorf("a link was read: %v %q", err, text)
+	}
+}

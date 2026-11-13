@@ -40,7 +40,7 @@ func SignRecord(obj map[string]any, s Signer) (string, []byte, error) {
 	// Canonical would write invalid UTF-8 as U+FFFD and has no form for
 	// NaN or Inf, so the stored record would differ from what the caller
 	// gave. Refuse instead.
-	if err := CheckValue(obj); err != nil {
+	if err := checkValue(obj); err != nil {
 		return "", nil, err
 	}
 	id := RecordID(obj)
@@ -115,9 +115,9 @@ func NewSeal(identity, kid, sid string, part int, sealed []string, adapter, impo
 // IsCoreType reports whether a type is reserved for the core.
 func IsCoreType(t string) bool { return strings.HasPrefix(t, "bean.") }
 
-// CheckValue reports a string that is not valid UTF-8 (ErrBadString) or a
+// checkValue reports a string that is not valid UTF-8 (ErrBadString) or a
 // number that JSON cannot carry exactly (ErrBadNumber) anywhere in v.
-func CheckValue(v any) error {
+func checkValue(v any) error {
 	switch x := v.(type) {
 	case string:
 		if !utf8.ValidString(x) {
@@ -129,7 +129,7 @@ func CheckValue(v any) error {
 		}
 	case []any:
 		for _, e := range x {
-			if err := CheckValue(e); err != nil {
+			if err := checkValue(e); err != nil {
 				return err
 			}
 		}
@@ -138,7 +138,7 @@ func CheckValue(v any) error {
 			if !utf8.ValidString(k) {
 				return ErrBadString
 			}
-			if err := CheckValue(e); err != nil {
+			if err := checkValue(e); err != nil {
 				return err
 			}
 		}

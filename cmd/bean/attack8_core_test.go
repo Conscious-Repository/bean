@@ -18,7 +18,13 @@ func TestAttack8PurgeSaysNothingWhenFileStays(t *testing.T) {
 	}
 	out, errs, code := run(t, dir, "", "purge", rec["id"].(string))
 	t.Logf("purge: exit %d %q %q", code, out, errs)
-	if got, _, code := run(t, dir, "", "blob", "get", bid); code == 0 && !strings.Contains(out+errs, "kept") && !strings.Contains(out+errs, "still") {
+	// The file stays, because the second record names it: the test is about
+	// what purge says then, so it must not pass when the file is gone.
+	got, gerrs, gcode := run(t, dir, "", "blob", "get", bid)
+	if gcode != 0 {
+		t.Fatalf("setup: the file should still be readable: %s", gerrs)
+	}
+	if !strings.Contains(out+errs, "kept") && !strings.Contains(out+errs, "still") {
 		t.Errorf("purge said only %q, and the file is still readable (%d bytes)", strings.TrimSpace(out), len(got))
 	}
 }

@@ -13,8 +13,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"math"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -415,6 +417,23 @@ func callTool(s *core.Store, name string, raw json.RawMessage, opts mcpOpts) (an
 	if err := dec.Decode(&a); err != nil {
 		return nil, fmt.Errorf("bad arguments: %v", err)
 	}
+	// One struct holds the arguments of every tool, so the decoder takes an
+	// argument of another tool. Each tool takes only what its schema lists.
+	var given map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &given); err != nil {
+		return nil, fmt.Errorf("bad arguments: %v", err)
+	}
+	for _, tool := range slices.Concat(mcpTools, blobTools, writeTools) {
+		if tool.Name != name {
+			continue
+		}
+		props, _ := tool.InputSchema["properties"].(map[string]any)
+		for _, arg := range slices.Sorted(maps.Keys(given)) {
+			if _, ok := props[arg]; !ok {
+				return nil, fmt.Errorf("bad arguments: %s takes no %q", name, arg)
+			}
+		}
+	}
 	self, err := s.Identity()
 	if err != nil {
 		return nil, err
@@ -461,7 +480,7 @@ type namer func(id string) string
 
 // self is the local identity: an agent-only replica has no l.Local.
 func names(l *core.Loaded, self string) namer {
-	labels, agents := l.PairedLabels(), l.FileLabels()
+	labels, agents, peers := l.PairedLabels(), l.FileLabels(), l.PeerNames()
 	return func(id string) string {
 		if id == self {
 			return "self"
@@ -469,8 +488,8 @@ func names(l *core.Loaded, self string) namer {
 		if label, ok := labels[id]; ok {
 			// A peer is another person whose key the person paired. The
 			// pairing says which, not the text of the label.
-			if agents[id] == "" {
-				return "peer:" + strings.TrimPrefix(label, "peer ")
+			if peers[id] != "" && agents[id] == "" {
+				return "peer:" + peers[id]
 			}
 			return "agent:" + label
 		}
@@ -747,12 +766,12 @@ func inScope(r *core.Record, f core.Filter) bool {
 	return f.Subject == "" || r.Subject == f.Subject
 }
 
-func toolReadBlob(s *core.Store, f core.Filter, id string, max int) (any, error) {
-	if max <= 0 {
-		max = 100000
+func toolReadBlob(s *core.Store, f core.Filter, id string, most int) (any, error) {
+	if most <= 0 {
+		most = 100000
 	}
-	if max > 1000000 {
-		max = 1000000
+	if most > 1000000 {
+		most = 1000000
 	}
 	l, err := s.Load()
 	if err != nil {
@@ -791,8 +810,8 @@ func toolReadBlob(s *core.Store, f core.Filter, id string, max int) (any, error)
 		out["binary"] = true
 		return out, nil
 	}
-	if len(pt) > max {
-		cut := max
+	if len(pt) > most {
+		cut := most
 		for cut > 0 && !utf8.RuneStart(pt[cut]) {
 			cut--
 		}

@@ -105,6 +105,12 @@ func extends(a, b string) bool {
 // the built-in one, plus dir/vocabulary.md when it exists.
 func loadVocabulary(dir string) (vocab, string, error) {
 	path := filepath.Join(dir, "vocabulary.md")
+	// Its text goes to the assistant. A link there would send another
+	// file's text, and a pipe would hold the read: only a plain file of
+	// the folder is read.
+	if info, err := os.Lstat(path); err == nil && !info.Mode().IsRegular() {
+		return vocab{}, "", errors.New("vocabulary.md in the bean folder is not a plain file: a link or a pipe is not read")
+	}
 	b, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return builtin, vocabulary, nil

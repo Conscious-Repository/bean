@@ -49,7 +49,7 @@ Compare
                                 what the pack holds.
 
 Share
-  share -out <folder> [-seal] [-files] [-note <text>] [-yes] <id>... | -type <type> [-since <time>] [-until <time>]
+  share -out <folder or file> [-seal] [-files] [-note <text>] [-yes] <id>... | -type <type> [-since <time>] [-until <time>]
                                 Write chosen records into a folder that anyone
                                 can check without your log or keys. With -seal:
                                 one file that only its reader can open, with

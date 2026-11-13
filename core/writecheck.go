@@ -51,6 +51,11 @@ func (l *Loaded) canWriteRecord(r *Record) error {
 	if r.IsIdentity() {
 		return errors.New("bad type: identity records are written only by init, rotate and restore")
 	}
+	// Only the person pairs a key. A pairing that an agent's key signed has
+	// no effect, and would only show in a listing as if it were one.
+	if r.Type == "agent.pair" && (r.Author != l.ID || r.Subject != l.ID) {
+		return errors.New("bad type: only the person pairs a key")
+	}
 	// 8.2: nothing about a too-new identity is evaluated, so a record
 	// about it (an agent's, say) would be skipped, not stored.
 	if contains(l.Report.TooNew, r.Subject) {

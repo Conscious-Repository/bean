@@ -14,6 +14,13 @@ func (s *Store) CheckPartial(line []byte) error {
 	return err
 }
 
+// CheckImported is CheckPartial for a line of an importer that bean ran:
+// it also holds the line to what an importer may write (AppendImported).
+func (s *Store) CheckImported(line []byte) error {
+	_, _, err := s.signPartial(line, true)
+	return err
+}
+
 // SignPartial completes and signs one partial record line with the person's
 // key, as Append would, checks it as CheckPartial does, and writes nothing.
 // It returns the record's id and its bytes. AddSigned stores those bytes
@@ -21,6 +28,10 @@ func (s *Store) CheckPartial(line []byte) error {
 // first, and into the log only once the bundle is written and checked, so a
 // failure leaves no record of a disclosure that did not happen.
 func (s *Store) SignPartial(line []byte) (string, []byte, error) {
+	return s.signPartial(line, false)
+}
+
+func (s *Store) signPartial(line []byte, importer bool) (string, []byte, error) {
 	unlock, err := s.lock()
 	if err != nil {
 		return "", nil, err
@@ -37,6 +48,7 @@ func (s *Store) SignPartial(line []byte) (string, []byte, error) {
 	if err := l.canWrite(w); err != nil {
 		return "", nil, err
 	}
+	w.importer = importer
 	var key []byte
 	if w.secret != nil {
 		key = DedupeKey(w.secret)

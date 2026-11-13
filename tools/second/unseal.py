@@ -28,7 +28,7 @@ from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 
 INTRO = b"age-encryption.org/v1\n"
 CHUNK = 64 * 1024
-WORK = 16  # bean seals with this work factor, and opens no other
+WORK = 16  # bean seals with this work factor, and opens none above it
 MAX_OPEN = 1 << 30  # the most that a package may hold once it is open
 
 
@@ -77,7 +77,7 @@ def unseal(data, words):
     args = lines[0].split(" ")
     if len(args) != 4 or args[:2] != ["->", "scrypt"]:
         raise Refused("it is not sealed with words: this is another kind of age file")
-    if not re.fullmatch(r"[1-9][0-9]*", args[3]) or int(args[3]) != WORK:
+    if not re.fullmatch(r"[1-9][0-9]*", args[3]) or int(args[3]) > WORK:
         raise Refused("its header is not one bean writes")
     salt, work = b64(args[2]), int(args[3])
     if len(salt) != 16 or len(lines) != 2:

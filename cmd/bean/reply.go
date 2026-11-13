@@ -416,14 +416,13 @@ func againstLog(l *core.Loaded, now time.Time, res reply.Result, label string) (
 	}
 	// The name: the one this key has, or the one that another key of the
 	// same identity has, or the one given now.
-	labels := l.PairedLabels()
+	paired := l.PeerNames()[res.Key]
 	known := l.PeerLabel(res.Identity)
 	name := label
 	switch {
-	case labels[res.Key] != "": // a peer's key: an agent's was refused above
+	case paired != "":
 		a.seen = "key"
-		name = strings.TrimPrefix(labels[res.Key], "peer ")
-		if label != "" && label != name {
+		if name = paired; label != "" && label != name {
 			return a, fmt.Errorf("this key is already paired as %q: bean does not rename it. Leave -label out", name)
 		}
 	case known != "":
