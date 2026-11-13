@@ -57,7 +57,7 @@ Four things are missing before other people use it. The check page has no public
 - A reply from a reader who has only a browser. The page would make a key for that reader and sign with it, which is step 2 of path 1.
 - A peer's notes in the peer's own log. Today the peer keeps the reply file and its words. Their log holds only a record that they replied.
 - A reply to a reply. Today a note is about a record of a share, and the owner answers with a new share.
-- A check of a reply without bean, in Python, as bundles and packs have.
+- A reply that Python forges and signs, to hold the two checks of a reply to more than damage that needs no key. `tools/second/checkreply.py` and `make bundles` cover the rest.
 - Who runs the place where cards live: nobody (people pass addresses by hand), an open network, or AION?
 
 ## Path 3: a device signs what it captures

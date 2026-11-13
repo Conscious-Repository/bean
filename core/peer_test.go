@@ -168,6 +168,36 @@ func TestPeerNames(t *testing.T) {
 	}
 }
 
+// TestKeyPairedBothWays: two of the person's machines can pair one key as
+// an agent and as a peer. It is then the person's agent for a reply, which
+// takes nothing, and a peer for files, which it does not open.
+func TestKeyPairedBothWays(t *testing.T) {
+	s, _ := initStore(t)
+	k := reKey(t).Public()
+	l, err := s.load(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pairWith(l, k, "phone", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pairWith(l, k, "Ana", "sha256:"+strings.Repeat("a", 64), "sha256:"+strings.Repeat("1", 64)); err != nil {
+		t.Fatal(err)
+	}
+	if l, err = s.Load(); err != nil {
+		t.Fatal(err)
+	}
+	if got := l.PairedAsAgent(k); got != "phone" {
+		t.Errorf("PairedAsAgent: %q, want phone", got)
+	}
+	if got := l.FileLabels()[k]; got != "" {
+		t.Errorf("the key opens files as %q", got)
+	}
+	if got := l.PairedAsAgent(reKey(t).Public()); got != "" {
+		t.Errorf("a key that is not paired is an agent %q", got)
+	}
+}
+
 // TestPeerUnlocksNoFile: a paired agent's record may name a file of the
 // person. A peer's may not: a peer who knows the id of a deleted photo
 // must not bring the photo back into an export. A key that is paired as

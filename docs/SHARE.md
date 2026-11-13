@@ -193,9 +193,11 @@ A reply is a sealed package like a share: record files under `objects/`, packed 
 3. The `reply` record's `context` has `to`, the identity id that the reply is for: not the replier's own. It has `share`, the id of the share record. It has `notes`, the ids of the notes, each once: from 1 to 200. `value.n` is their count.
 4. Every other record is an identity record on that person's chain, or a note that the `reply` record lists. Every listed note is there.
 5. A note has the type `note`. Its `author` and its `kid` are the reply's key. Its `subject` is `to`. Its `value` is `{"s": text}`: a text of 1 to 4000 bytes in UTF-8 that is not only spaces. It has one ref, `about` one record, and no `context` and no file.
-6. A note's `source.system` is `bean-reply`, and its `source.ref` is null. It states one time, the time it was written: `times.observed` is null, or lies in the minute of `times.imported`.
+6. A note's `source.system` is `bean-reply`, and its `source.ref` is null. It states one time, the time it was written. Its `times.observed` is null, or has a `start` in the minute of `times.imported` and no `end`.
 
 `bean accept` adds what only your log can tell. `to` is your identity. `share` is a share record of yours. Each note is about a record that the share lists, or about the share record. The reply is one sealed file of at most 64 MiB. No note says that it was written later than a day from now. The reply's key is not a key that you unpaired. A note about a record that you deleted is left out, and so is a note that you deleted. The chain holds every head of that identity that you recorded before. The name is not one that another identity or an agent has.
+
+`bean reply` and `tools/second/checkreply.py` both implement these six rules, and share no code. The Python tool reads the folder that `tools/second/unseal.py` opens a reply into. `bean check-bundle` on a reply says that it is one, when it passes the six rules.
 
 Your record of the name is an `agent.pair` record with `value.role` `peer`. Its `value` also has `key`, `label`, `identity`, and `head`: the id of the last record of the reader's chain as the reply showed it.
 

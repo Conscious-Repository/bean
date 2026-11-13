@@ -219,7 +219,9 @@ func cmdShare(s *core.Store, args []string) {
 	seen := map[string]bool{}
 	// Only a record of the person or of a paired agent opens a file, as in
 	// an export. Anyone can write a record that names a file of the log,
-	// also a file whose record the person deleted.
+	// also a file whose record the person deleted. In a log with records of
+	// a newer bean this list is empty: an agent's file then stays home
+	// here, and an export still carries it.
 	opens := l.FileLabels()
 	for _, r := range shared {
 		public := r.Type == nhanes.FileType && r.Author == l.ID
@@ -615,7 +617,9 @@ func cmdCheckBundle(args []string) {
 	} else if *unpack != "" {
 		fail(errors.New("-unpack is for a package that is one file: a folder is unpacked already"))
 	} else {
-		lines, ok = checkBundle(path)
+		in = bundle.ReadDir(path)
+		res := bundle.Check(in)
+		lines, ok = res.Lines(), res.OK
 	}
 	for _, line := range lines {
 		fmt.Println(safe(line))

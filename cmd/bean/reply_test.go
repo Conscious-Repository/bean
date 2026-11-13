@@ -548,24 +548,44 @@ func TestAcceptRefuses(t *testing.T) {
 	}
 	// A reply record that an older key signed, with the chain as it is now:
 	// the key that signed is not the identity's current key.
+	twin := filepath.Join(t.TempDir(), "twin") // the same identity, on a second machine
+	if err := os.CopyFS(twin, os.DirFS(ana)); err != nil {
+		t.Fatal(err)
+	}
+	seedOf[twin] = seedOf[ana]
+	// withChain adds the identity records of a log to a reply's files.
+	withChain := func(files map[string][]byte, log string) {
+		filepath.WalkDir(filepath.Join(log, "objects"), func(path string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return nil
+			}
+			data, _ := os.ReadFile(path)
+			if v, perr := core.Parse(data); perr == nil && strings.HasPrefix(v.(map[string]any)["type"].(string), "bean.") {
+				rel, _ := filepath.Rel(log, path)
+				files[filepath.ToSlash(rel)] = data
+			}
+			return nil
+		})
+	}
 	if _, errs, code := run(t, ana, seedOf[ana], "rotate", "-seal-all"); code != 0 {
 		t.Fatalf("rotate: %s", errs)
 	}
 	old := unpacked(t, rep, rwords)
-	filepath.WalkDir(filepath.Join(ana, "objects"), func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return nil
-		}
-		data, _ := os.ReadFile(path)
-		if v, perr := core.Parse(data); perr == nil && strings.HasPrefix(v.(map[string]any)["type"].(string), "bean.") {
-			rel, _ := filepath.Rel(ana, path)
-			old[filepath.ToSlash(rel)] = data
-		}
-		return nil
-	})
+	withChain(old, ana)
 	stale, stalewords := sealed(t, old)
 	if out, errs, code := run(t, ben, stalewords+"\n", "accept", "-yes", "-label", "Ana", "-words", idWords(t, ana), stale); code == 0 || !strings.Contains(out+errs, "not signed by the current key of its identity") {
 		t.Errorf("a reply record of a retired key, with the whole chain: %d\n%s%s", code, out, errs)
+	}
+	// The identity changed its key twice from one place, on two machines:
+	// it is frozen, and a reply that shows both changes takes nothing.
+	if _, errs, code := run(t, twin, seedOf[twin], "rotate", "-seal-all"); code != 0 {
+		t.Fatalf("rotate the twin: %s", errs)
+	}
+	forked := unpacked(t, rep, rwords)
+	withChain(forked, ana)
+	withChain(forked, twin)
+	if res := reply.Check(bundle.FromFiles("forked", forked)); res.OK || !strings.Contains(strings.Join(res.Problems, "\n"), "an identity in the reply is frozen") {
+		t.Errorf("a reply of a frozen identity: ok %v, %v", res.OK, res.Problems)
 	}
 	// A reply is not a bundle, and check-bundle says what it is.
 	if out, errs, code := run(t, t.TempDir(), rwords+"\n", "check-bundle", rep); code == 0 || !strings.Contains(out+errs, "bean accept") {

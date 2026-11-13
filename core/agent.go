@@ -472,6 +472,19 @@ func (l *Loaded) AgentLabels() map[string]string { return l.pairLabels(true) }
 // both as an agent and as a peer counts as a peer.
 func (l *Loaded) FileLabels() map[string]string { return l.pairLabels(false) }
 
+// PairedAsAgent returns the name under which a pairing in force makes key
+// an agent of the person, or "" when there is none. A key that is also
+// paired as a peer still counts: two of the person's machines can pair one
+// key in the two ways.
+func (l *Loaded) PairedAsAgent(key string) string {
+	for _, p := range livePairings(l.agentPairings(key)) {
+		if !p.peer {
+			return shownLabel(p.label)
+		}
+	}
+	return ""
+}
+
 func (l *Loaded) pairLabels(peers bool) map[string]string {
 	out := map[string]string{}
 	for key, ps := range l.pairClaims() {

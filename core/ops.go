@@ -728,7 +728,7 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 	named := map[string]bool{}
 	ofDeleted, ofOwnLive := map[string]bool{}, map[string]bool{}
 	bv := b2.blobView()
-	unlocks := blobUnlocker(b2.ID, bv.Report, bv.fileLabels())
+	unlocks := blobUnlocker(b2.ID, bv.Report, bv.fileLabelsPastHalt())
 	recs := b2.allRecords()
 	gone2 := bv.Report.unjudgedPurged()
 	for p, data := range b2.Files {
@@ -969,11 +969,11 @@ func pastHeadHalt(u *Report, union map[string][]byte, proven map[string]bool, id
 	return verifyFiles(overlay(union, u.HeadHalt[id], nil), proven)
 }
 
-// fileLabels is FileLabels, plus, for a too-new identity, the agents that
+// fileLabelsPastHalt is FileLabels, plus, for a too-new identity, the agents that
 // its records this build cannot judge pair. Such a pairing counts only when
 // the gate trusts its key, and when no other such record of the person
 // supersedes it (DECISIONS 217).
-func (l *Loaded) fileLabels() map[string]string {
+func (l *Loaded) fileLabelsPastHalt() map[string]string {
 	out := l.FileLabels()
 	if !l.IsTooNew() {
 		return out
@@ -1045,7 +1045,7 @@ func (s *Store) ExportAll(dir string) (ExportResult, error) {
 	// A halt by the head key alone can be set aside to judge deletions. Without
 	// that view, a record could be left out on a tombstone that is not valid.
 	view := l.blobView()
-	labels := view.fileLabels()
+	labels := view.fileLabelsPastHalt()
 	unlocks := blobUnlocker(l.ID, view.Report, labels)
 	type wanted struct {
 		mediaType string
@@ -1424,7 +1424,7 @@ func (s *Store) ImportExportAll(dir string) (ImportResult, error) {
 	// stranger's live record does not bring back a purged photo.
 	ul := *l
 	ul.Files, ul.Report = union, u
-	unlocks := blobUnlocker(l.ID, u, ul.fileLabels()) // u is judged past a head-key halt
+	unlocks := blobUnlocker(l.ID, u, ul.fileLabelsPastHalt()) // u is judged past a head-key halt
 	recs := ul.allRecords()
 	ofDeleted, ofOwnLive := map[string]bool{}, map[string]bool{}
 	for p, data := range union {
