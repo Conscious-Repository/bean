@@ -109,7 +109,7 @@ Run the same import again: it shows the readings and asks again, then says `alre
 
 ### If no reading was read
 
-`bean import lab` reads a report only in a layout that it knows, and labs print many. When it cannot read a report for sure, it writes none of the values, and it keeps the file. The report is then in your log, encrypted, under its SHA-256. bean says `no reading was read`, and why, with the words of your report masked. `bean purge <id>` takes the file out again. A file with no line of column names, such as `Test`, `Result` and `Reference Range`, is not kept as a lab report. `bean blob put <file>` keeps a file of any kind.
+`bean import lab` reads a report only in a layout that it knows, and labs print many. When it cannot read a report for sure, it writes none of the values, and it keeps the file. The report is then in your log, encrypted, under its SHA-256. bean says `no reading was read`, and why, with the words of your report masked. `bean purge <id>` takes the file out again. A file with no line of column names, such as `Test`, `Result` and `Reference Range`, is not kept as a lab report. A scan, which holds a picture of the page and no text, is such a file. `bean blob put <file>` keeps a file of any kind.
 
 To say which layouts bean cannot read, send counts and no values. This writes nothing, and prints no value, no name of a test and no word of your report:
 

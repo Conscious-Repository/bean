@@ -35,6 +35,12 @@ func measure(text string, raw []byte) []string {
 		}
 	}
 	out = append(out, fmt.Sprintf("quest marks: trademark line %s, column header %s", trademark, header))
+	// Whether an import keeps the file when it reads none of its values.
+	looks := "no: an import refuses the file"
+	if looksLikeReport(text) {
+		looks = "yes: an import keeps the file"
+	}
+	out = append(out, "looks like a lab report: "+looks)
 	// As an import reads it.
 	if rep, err := readReport(text, raw); err != nil {
 		out = append(out, "as an import reads it: no result, "+masked(err.Error()))
@@ -93,7 +99,9 @@ var (
 )
 
 // masked is a refusal with the report's own text hidden: what it quotes,
-// and a type that it made from a name. Every refusal of this importer puts
+// and a type that it made from a name. The shape of a quote stays, its
+// length up to the cut and its points and signs: "<9.9" says that a value
+// was below a limit, not which. Every refusal of this importer puts
 // what it takes from the report between quotation marks. A long quote is
 // cut: its length could say something too.
 func masked(msg string) string {

@@ -32,6 +32,9 @@ func TestMeasure(t *testing.T) {
 		t.Fatal("setup: the changed report was read")
 	}
 	lines = strings.Join(measure(unknown, []byte(unknown)), "\n")
+	if !strings.Contains(lines, "looks like a lab report: yes") {
+		t.Errorf("the count does not say that the file would be kept:\n%s", lines)
+	}
 	if !strings.Contains(lines, "as an import reads it: no result") || !strings.Contains(lines, "column header found, 1 lines passed over, "+itoa(want)+" results, read to the end") {
 		t.Errorf("a layout with lines that the importer does not know:\n%s", lines)
 	}
@@ -122,6 +125,9 @@ func TestLooksLikeReport(t *testing.T) {
 		"hello, this is my grocery list\nmilk 2\n": false,
 		"": false,
 		"the test went well and the weather was in range": false,
+		// One kind of column name is not a line of column names.
+		"Test          Name          Date          Place\n": false,
+		"Test          Result\n":                            true,
 	} {
 		if got := looksLikeReport(text); got != want {
 			t.Errorf("looksLikeReport = %v, want %v, for %.60q", got, want, text)
