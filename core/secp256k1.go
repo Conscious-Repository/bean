@@ -224,9 +224,9 @@ func Bech32Encode(hrp string, data []byte) string {
 	return b.String()
 }
 
-// Bech32Decode returns the hrp and data of a bech32 string. It accepts
+// bech32Decode returns the hrp and data of a bech32 string. It accepts
 // all-lowercase or all-uppercase input.
-func Bech32Decode(s string) (string, []byte, error) {
+func bech32Decode(s string) (string, []byte, error) {
 	bad := errors.New("bad bech32")
 	if strings.ToLower(s) != s && strings.ToUpper(s) != s {
 		return "", nil, bad
@@ -261,7 +261,7 @@ func ParseNsec(s string) ([]byte, error) {
 	if isLowerHex(strings.ToLower(s), 64) {
 		return hex.DecodeString(strings.ToLower(s))
 	}
-	hrp, data, err := Bech32Decode(s)
+	hrp, data, err := bech32Decode(s)
 	if err != nil || hrp != "nsec" || len(data) != 32 {
 		return nil, errors.New("bad nsec: want nsec1... or 64 hex digits")
 	}
@@ -274,7 +274,7 @@ func KeyFromNpub(s string) (string, error) {
 	if !strings.HasPrefix(strings.ToLower(s), "npub1") {
 		return s, nil
 	}
-	hrp, data, err := Bech32Decode(s)
+	hrp, data, err := bech32Decode(s)
 	if err != nil || hrp != "npub" || len(data) != 32 {
 		return "", errors.New("bad npub")
 	}

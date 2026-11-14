@@ -287,7 +287,7 @@ func runImport(s *core.Store, bin, file string, args []string, o importOpts) (im
 	// Append's own checks of the record (its fields, its size, the key) run
 	// now too. Once the file is stored, a refusal would leave it there with
 	// no record naming it, and gc erases only what a record named.
-	if err := s.CheckPartial(first); err != nil {
+	if err := s.CheckImported(first); err != nil {
 		return res, phaseError("validation", err)
 	}
 	// The person checks what was read before anything is written. Without a
@@ -322,7 +322,7 @@ func runImport(s *core.Store, bin, file string, args []string, o importOpts) (im
 	if stored != bid || err != nil || !bytes.Equal(back, data) {
 		return res, phaseError("storage", errors.New("the stored copy does not read back the same"))
 	}
-	a, err := s.Append(bytes.NewReader(append(first, '\n')))
+	a, err := s.AppendImported(bytes.NewReader(append(first, '\n')), false)
 	if err != nil {
 		return res, phaseError("archive", err)
 	}
@@ -338,11 +338,7 @@ func runImport(s *core.Store, bin, file string, args []string, o importOpts) (im
 	} else {
 		res.lines = append(res.lines, "already kept "+what)
 	}
-	appendFn := s.Append
-	if corrections {
-		appendFn = s.AppendCorrections
-	}
-	r, err := appendFn(rd)
+	r, err := s.AppendImported(rd, corrections)
 	line := fmt.Sprintf("added %d, skipped %d", r.Added, r.Skipped)
 	if r.Corrected > 0 {
 		line += fmt.Sprintf(", %d of them new values for readings you already had", r.Corrected)

@@ -421,7 +421,8 @@ func (s *Store) pairWith(l *Loaded, key, label, peerOf, head string) (string, er
 type pairing struct {
 	id, label string // label is "" when the claim has none
 	unpaired  bool
-	peer      bool // the key of another person, not of an agent
+	peer      bool   // the key of another person, not of an agent
+	of        string // a peer's identity id
 }
 
 // pairClaims maps each key to the local person's current agent.pair
@@ -439,7 +440,8 @@ func (l *Loaded) pairClaims() map[string][]pairing {
 		label, _ := r.Value["label"].(string)
 		st, _ := r.Value["status"].(string)
 		role, _ := r.Value["role"].(string)
-		out[r.ValueKey()] = append(out[r.ValueKey()], pairing{id: id, label: label, unpaired: st == "unpaired", peer: role == "peer"})
+		of, _ := r.Value["identity"].(string)
+		out[r.ValueKey()] = append(out[r.ValueKey()], pairing{id: id, label: label, unpaired: st == "unpaired", peer: role == "peer", of: of})
 	}
 	for _, ps := range out {
 		slices.SortFunc(ps, func(a, b pairing) int { return strings.Compare(a.id, b.id) })
@@ -449,10 +451,15 @@ func (l *Loaded) pairClaims() map[string][]pairing {
 
 func (l *Loaded) agentPairings(key string) []pairing { return l.pairClaims()[key] }
 
+// livePairings are the pairings of one key that are in force. A peer's key
+// that the person unpaired stays unpaired: a pairing of it that another
+// copy of the log wrote, before it saw the unpairing, is not in force when
+// the two copies come together. An agent's key can be paired again.
 func livePairings(ps []pairing) []pairing {
+	unpaired := slices.ContainsFunc(ps, func(p pairing) bool { return p.unpaired })
 	var out []pairing
 	for _, p := range ps {
-		if !p.unpaired {
+		if !p.unpaired && !(p.peer && unpaired) {
 			out = append(out, p)
 		}
 	}
@@ -547,9 +554,68 @@ func (l *Loaded) PairedAsAgent(key string) string {
 	return ""
 }
 
-func (l *Loaded) pairLabels(peers bool) map[string]string {
+// PeerNames maps each key that a pairing in force names as a peer to
+// that name, without the word peer. The role comes from the pairing, not
+// from the text of a label.
+func (l *Loaded) PeerNames() map[string]string {
 	out := map[string]string{}
 	for key, ps := range l.pairClaims() {
+		for _, p := range livePairings(ps) {
+			if p.peer && out[key] == "" {
+				out[key] = ShownLabel(p.label)
+			}
+		}
+	}
+	return out
+}
+
+// PeerShown is PeerNames as a listing shows each name: one that two people
+// hold has the start of that person's identity id after it.
+func (l *Loaded) PeerShown() map[string]string {
+	claims := l.pairClaims()
+	shown := peerShower(claims)
+	out := map[string]string{}
+	for key, ps := range claims {
+		for _, p := range livePairings(ps) {
+			if p.peer && out[key] == "" {
+				out[key] = shown(p)
+			}
+		}
+	}
+	return out
+}
+
+// peerShower returns how a peer's pairing shows its name. One name belongs
+// to one person, and bean checks that when a name is given. Two copies of
+// a log can each give the name to another person before they come
+// together. Then each shows with the start of its identity id, after a
+// sign that no name can hold.
+func peerShower(claims map[string][]pairing) func(pairing) string {
+	owners := map[string]map[string]bool{}
+	for _, ps := range claims {
+		for _, p := range livePairings(ps) {
+			if name := strings.ToLower(ShownLabel(p.label)); p.peer {
+				if owners[name] == nil {
+					owners[name] = map[string]bool{}
+				}
+				owners[name][p.of] = true
+			}
+		}
+	}
+	return func(p pairing) string {
+		name := ShownLabel(p.label)
+		if len(owners[strings.ToLower(name)]) > 1 && IsID(p.of) {
+			name += " #" + p.of[7:13]
+		}
+		return name
+	}
+}
+
+func (l *Loaded) pairLabels(peers bool) map[string]string {
+	out := map[string]string{}
+	claims := l.pairClaims()
+	shown := peerShower(claims)
+	for key, ps := range claims {
 		var names []string
 		live := livePairings(ps)
 		if !peers && slices.ContainsFunc(live, func(p pairing) bool { return p.peer }) {
@@ -561,7 +627,7 @@ func (l *Loaded) pairLabels(peers bool) map[string]string {
 			// wherever a name shows, so nobody takes them for an agent's
 			// or for the person's own.
 			if p.peer {
-				name = "peer " + name
+				name = "peer " + shown(p)
 			}
 			if !slices.Contains(names, name) {
 				names = append(names, name)
@@ -576,4 +642,6 @@ func (l *Loaded) pairLabels(peers bool) map[string]string {
 
 // AppendAsAgent is Append signed by the local agent key, with the agent's
 // key as the author and the local identity as the default subject.
-func (s *Store) AppendAsAgent(in io.Reader) (AppendResult, error) { return s.appendAs(in, true, false) }
+func (s *Store) AppendAsAgent(in io.Reader) (AppendResult, error) {
+	return s.appendAs(in, byAgent, false)
+}

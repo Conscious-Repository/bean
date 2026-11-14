@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -698,5 +699,56 @@ func TestReviewLinesAndAnswer(t *testing.T) {
 		if confirmed(strings.NewReader(a)) != want {
 			t.Errorf("answer %q", a)
 		}
+	}
+}
+
+// TestImporterWritesOnlyReadings: bean signs an importer's output with the
+// person's key. So each of its lines is a reading about the person. A line
+// that deletes a record, pairs a key, writes about someone else or names
+// another record stops the import, and none of those is written.
+func TestImporterWritesOnlyReadings(t *testing.T) {
+	dir := t.TempDir()
+	run(t, dir, "", "init")
+	mine, errs, code := run(t, dir, "", "add", "weight", "81", "-unit", "kg")
+	if code != 0 {
+		t.Fatalf("add: %s", errs)
+	}
+	mine = strings.TrimSpace(mine)
+	f := filepath.Join(t.TempDir(), "in.txt")
+	os.WriteFile(f, []byte("synthetic input\n"), 0o600)
+	const file = `{"type":"evil.file","value":{"blob":"'"$2"'"},"times":{"observed":null},"source":{"system":"evil","adapter":"t@1","ref_input":["bean/v0/ref","id","evil","file",0]},"blobs":[{"hash":"'"$2"'","role":"raw-export","media_type":"text/plain"}],"context":{"sha256":"'"$d"'"}}`
+	reading := func(n int, more string) string {
+		return fmt.Sprintf(`{"type":"weight","value":{"n":%d,"unit":"kg"},"times":{"observed":null},"source":{"system":"evil","adapter":"t@1","ref_input":["bean/v0/ref","id","evil","r%d",0]}%s}`, n, n, more)
+	}
+	stranger := "sha256:" + strings.Repeat("a", 64)
+	for name, tc := range map[string]struct{ line, want string }{
+		"a deletion":            {`{"type":"bean.tombstone","refs":[{"rel":"purges","id":"` + mine + `"}],"times":{"observed":null},"source":{"system":"evil","adapter":"t@1","ref":null}}`, "an importer writes readings"},
+		"a pairing":             {`{"type":"agent.pair","value":{"key":"secp256k1:` + strings.Repeat("d1", 32) + `","label":"helper"},"times":{"observed":null},"source":{"system":"evil","adapter":"t@1","ref":null}}`, "an importer writes readings"},
+		"a share record":        {`{"type":"share","value":{"n":0,"unit":"{record}"},"times":{"observed":null},"source":{"system":"evil","adapter":"t@1","ref":null}}`, "an importer writes readings"},
+		"about someone else":    {reading(2, `,"subject":"`+stranger+`"`), "about nobody else"},
+		"a correction by id":    {reading(3, `,"refs":[{"rel":"supersedes","id":"`+mine+`"}]`), "names no other record"},
+		"a note about a record": {reading(4, `,"refs":[{"rel":"about","id":"`+mine+`"}]`), "names no other record"},
+		// The good line before it wrote the reading r1. This one names r1
+		// as the reading that it replaces.
+		"a correction by ref": {`{"type":"weight","value":{"n":99,"unit":"kg"},"times":{"observed":null},"source":{"system":"evil","adapter":"t@1","ref_input":["bean/v0/ref","id","evil","r1",0],"supersedes_ref":["bean/v0/ref","id","evil","r1",0]}}`, "carries no source.supersedes_ref"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			bin := t.TempDir()
+			script := "#!/bin/sh\nd=$(sha256sum \"$3\" | cut -d' ' -f1)\necho '" + file + "'\necho '" + reading(1, "") + "'\necho '" + tc.line + "'\n"
+			os.WriteFile(filepath.Join(bin, "bean-import-evil"), []byte(script), 0o755)
+			cmd := exec.Command(os.Args[0], "import", "-yes", "evil", f)
+			cmd.Env = append(os.Environ(), "BEAN_TEST_MAIN=1", "BEAN_DIR="+dir, "BEAN_NOW=", "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+			out, err := cmd.CombinedOutput()
+			if err == nil || !strings.Contains(string(out), tc.want) {
+				t.Errorf("the import: %v\n%s", err, out)
+			}
+			all, _, _ := run(t, dir, "", "ls", "-all", "-json")
+			if strings.Contains(all, `"bean.tombstone"`) || strings.Contains(all, `"agent.pair"`) || strings.Contains(all, `"share"`) || strings.Contains(all, stranger) || strings.Contains(all, `"supersedes"`) {
+				t.Errorf("the log holds what the importer may not write:\n%s", all)
+			}
+			if ls, _, _ := run(t, dir, "", "ls", "-type", "weight"); !strings.Contains(ls, "81 kg") || strings.Contains(ls, "99 kg") {
+				t.Errorf("the person's record is gone:\n%s", ls)
+			}
+		})
 	}
 }

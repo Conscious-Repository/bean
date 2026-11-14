@@ -165,6 +165,13 @@ func TestMCPListTypesAndQuery(t *testing.T) {
 	if m, isErr := call(t, s, "query_records", map[string]any{"color": "red"}); !isErr {
 		t.Errorf("unknown argument accepted: %v", m)
 	}
+	// An argument of another tool is not one of this tool.
+	if m, isErr := call(t, s, "stats", map[string]any{"type": "heart.resting", "photo_path": "/etc/passwd"}); !isErr {
+		t.Errorf("stats took an argument of log_entry: %v", m)
+	}
+	if m, isErr := call(t, s, "list_types", map[string]any{"type": "heart.resting"}); !isErr {
+		t.Errorf("list_types took an argument of query_records: %v", m)
+	}
 }
 
 func TestMCPStats(t *testing.T) {
