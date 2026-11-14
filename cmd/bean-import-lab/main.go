@@ -57,11 +57,12 @@ func main() {
 	fs.SetOutput(io.Discard)
 	blob := fs.String("blob", "", "blob id of the PDF, from bean blob put")
 	tz := fs.String("tz", "", "IANA zone of the collection site, for example America/Chicago")
+	count := fs.Bool("count", false, "write no record: say how far each reader gets, in counts, with no value")
 	if err := fs.Parse(os.Args[1:]); err != nil || fs.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: bean-import-lab [-blob <blob id>] [-tz <zone>] <report.pdf | report.txt | report.html>")
+		fmt.Fprintln(os.Stderr, "usage: bean-import-lab [-blob <blob id>] [-tz <zone>] [-count] <report.pdf | report.txt | report.html>")
 		os.Exit(2)
 	}
-	if *blob == "" {
+	if *blob == "" && !*count {
 		fmt.Fprintln(os.Stderr, "bean-import-lab: warning: no -blob: the report is not kept; run bean blob put <report.pdf> first and pass -blob <id>")
 	}
 	text, raw, err := readSource(fs.Arg(0))
@@ -77,6 +78,12 @@ func main() {
 		}
 		os.Exit(1)
 	}
+	if *count {
+		for _, line := range measure(text, raw) {
+			fmt.Println(line)
+		}
+		return
+	}
 	var loc *time.Location
 	if *tz != "" {
 		if loc, err = time.LoadLocation(*tz); err != nil {
@@ -84,13 +91,27 @@ func main() {
 			os.Exit(2)
 		}
 	}
+	if *blob != "" && !regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(*blob) {
+		fmt.Fprintln(os.Stderr, "bean-import-lab: invalid blob reference")
+		os.Exit(2)
+	}
 	rep, err := readReport(text, raw)
 	if err == nil {
 		err = rep.checkZone(loc)
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "bean-import-lab: %s\n", err)
-		os.Exit(1)
+		rec, why := unread(text, raw, *blob, err)
+		if rec != nil {
+			if werr := writeRecords(os.Stdout, []map[string]any{rec}); werr != nil {
+				fmt.Fprintln(os.Stderr, "bean-import-lab: output failed")
+				os.Exit(1)
+			}
+		}
+		fmt.Fprintln(os.Stderr, "bean-import-lab: "+why)
+		if rec == nil {
+			os.Exit(1)
+		}
+		return
 	}
 	digest := ""
 	if *blob != "" {
@@ -105,10 +126,6 @@ func main() {
 		}
 	}
 	if *blob != "" {
-		if !regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(*blob) {
-			fmt.Fprintln(os.Stderr, "bean-import-lab: invalid blob reference")
-			os.Exit(2)
-		}
 		records = append([]map[string]any{archiveFor(rep.system(), raw, *blob)}, records...)
 	}
 	if err := writeRecords(os.Stdout, records); err != nil {
@@ -116,6 +133,92 @@ func main() {
 		os.Exit(1)
 	}
 	fmt.Fprintf(os.Stderr, "bean-import-lab: %d results, %d without a value. Importing the same report again adds nothing; a result whose value changed needs -corrections\n", len(rep.Results), missing)
+}
+
+// unreadSystem is the source.system of a report that was kept and not
+// read: which lab printed it is not known.
+const unreadSystem = "unknown"
+
+// unread says what becomes of a report that could not be read for sure,
+// for the reason err. A report is still the person's report: with -blob
+// its file can be kept, by the record that unread returns, and no result
+// is written. A reading is refused, never the file (docs/IMPORTERS.md,
+// rule 1). Without -blob, and for a file that is no lab report as far as
+// this importer can tell, the record is nil and nothing is written.
+//
+// why is the one line for the person. bean prints it where a script or an
+// assistant may read it, and err can quote a line of the report, so what
+// it quotes is masked: the line number says where to look.
+func unread(text string, raw []byte, blob string, err error) (rec map[string]any, why string) {
+	switch {
+	case blob == "":
+		return nil, err.Error()
+	case !looksLikeReport(text):
+		return nil, "this does not look like a lab report to this importer: it found no line of column names, such as Test, Result and Reference Range, set apart by two spaces or more. A report in another language, or with its column names on two lines, is not known yet. To keep the file all the same: bean blob put <file>"
+	}
+	return archiveFor(unreadSystem, raw, blob), "no result was read: " + masked(err.Error())
+}
+
+// columnWords are the kinds of word that the line of column names of a
+// lab report holds: what was tested, what was found, and what it is set
+// against.
+var columnWords = [][]string{
+	{"test", "tests", "analyte", "component"},
+	{"result", "results", "value", "in range", "out of range"},
+	{"reference", "range", "interval", "units", "flag"},
+}
+
+// looksLikeReport reports whether a file that could not be read is a lab
+// report all the same, as far as its text tells: it has a line of column
+// names, or the marks of a Quest report. A line of column names has cells
+// of a few words each, set apart by two spaces or more, and two of them
+// are of different kinds. A sentence is one cell. It decides only whether
+// the file is kept as a lab report, never a value. So it asks for less
+// than questDetect, which chooses a reader: the trademark line alone will
+// do, for a Quest report whose column names this importer does not know.
+func looksLikeReport(text string) bool {
+	if isBBoxDoc(text) {
+		pages, err := parseBBox(text)
+		return err == nil && questPages(pages)
+	}
+	for _, l := range splitLines(text) {
+		if strings.Join(strings.Fields(l), " ") == questTrademark {
+			return true
+		}
+		found := [3]bool{}
+		for _, cell := range columnGap.Split(strings.TrimSpace(l), -1) {
+			words := strings.Fields(strings.ToLower(cell))
+			if len(words) == 0 || len(words) > 4 {
+				continue
+			}
+			name := " " + strings.Join(words, " ") + " "
+		kind:
+			for k, list := range columnWords {
+				for _, w := range list {
+					if strings.Contains(name, " "+w+" ") {
+						found[k] = true
+						break kind // a cell is of one kind
+					}
+				}
+			}
+		}
+		if n := countTrue(found[:]); n >= 2 {
+			return true
+		}
+	}
+	return false
+}
+
+var columnGap = regexp.MustCompile(` {2,}`)
+
+func countTrue(list []bool) int {
+	n := 0
+	for _, b := range list {
+		if b {
+			n++
+		}
+	}
+	return n
 }
 
 const maxReportBytes = 32 << 20

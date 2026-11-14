@@ -211,7 +211,7 @@ func (r *questReader) pageNo(page int, where string, ws []word) error {
 		return fmt.Errorf("%s: a footer line this importer does not know", where)
 	}
 	if ws[1].text != fmt.Sprint(page) || ws[3].text != fmt.Sprint(len(r.pages)) || r.pageNos[page] {
-		return fmt.Errorf("%s: the footer says PAGE %s OF %s, but this is page %d of %d: a page may be missing", where, ws[1].text, ws[3].text, page, len(r.pages))
+		return fmt.Errorf("%s: the footer says PAGE %q OF %q, but this is page %d of %d: a page may be missing", where, ws[1].text, ws[3].text, page, len(r.pages))
 	}
 	r.pageNos[page] = true
 	return nil
@@ -432,7 +432,7 @@ func (r *questReader) marginLine(page int, where string, ws []word) error {
 		return nil
 	case len(ws) == 2 && ws[0].text == "Endnote" && reEndnote.MatchString(ws[1].text) && r.region != qSites:
 		if r.endnotes[ws[1].text] != nil {
-			return fmt.Errorf("%s: endnote %s is printed twice", where, ws[1].text)
+			return fmt.Errorf("%s: endnote %q is printed twice", where, ws[1].text)
 		}
 		r.region, r.endnote = qEndnote, ws[1].text
 		r.endnotes[r.endnote] = []string{}
@@ -457,7 +457,7 @@ func (r *questReader) site(where string, ws []word) error {
 	}
 	code := ws[0].text
 	if old := r.rep.Labs[code]; old != "" && old != name {
-		return fmt.Errorf("%s: two performing sites with code %s", where, code)
+		return fmt.Errorf("%s: two performing sites with code %q", where, code)
 	}
 	r.rep.Labs[code] = name
 	return nil
@@ -765,7 +765,7 @@ func (r *questReader) check() error {
 			for _, m := range reSeeEndnote.FindAllStringSubmatch(c, -1) {
 				text, ok := r.endnotes[m[1]]
 				if !ok {
-					return fmt.Errorf("%s: a comment cites endnote %s, which the report does not print", res.where, m[1])
+					return fmt.Errorf("%s: a comment cites endnote %q, which the report does not print", res.where, m[1])
 				}
 				if !seen[m[1]] {
 					notes = append(notes, text...)
@@ -865,7 +865,7 @@ func (rep *Report) checkZone(loc *time.Location) error {
 	}
 	_, want := t.Zone()
 	if _, got := t.In(loc).Zone(); got != want {
-		return fmt.Errorf("-tz %s is %s at the collection time, but the report prints %s (%s); leave -tz out for this report", loc, utcOffset(got), rep.zone, utcOffset(want))
+		return fmt.Errorf("-tz %s is %s at the collection time, but the report prints %q (%s); leave -tz out for this report", loc, utcOffset(got), rep.zone, utcOffset(want))
 	}
 	return nil
 }

@@ -513,6 +513,11 @@ type parser struct {
 	note    *string // the panel of a "Please note" row whose text comes next
 	pending *Result // a row with nothing after its name, waiting for its value line
 	ordered bool    // the Ordered Items field wraps onto the margin lines after it
+	// past is for -count alone, never for an import: a line before the
+	// column header that the grammar does not know is passed over and
+	// counted, to learn how far the rows of an unknown layout can be read.
+	past   bool
+	passed int
 }
 
 func parseReport(text string) (*Report, error) {
@@ -657,10 +662,14 @@ func (p *parser) beforeHeader(n int, l string, toks []token) error {
 		return nil
 	case ok && endHeadings[toks[0].text]:
 		p.region, p.ended = afterEnd, toks[0].text
+	case ok && (endsInReading(toks[0].text) || nameHidesValue(toks[0].text) != nil) && p.past:
+		p.passed++
 	case ok && (endsInReading(toks[0].text) || nameHidesValue(toks[0].text) != nil):
 		return fmt.Errorf("line %d before the column header may be a result row at the margin (%q), with no columns to be read by", n, toks[0].text)
 	case ok:
 		p.panel = toks[0].text // the first panel heading comes before the first header
+	case p.past:
+		p.passed++
 	case toks[0].start > 0:
 		return fmt.Errorf("line %d is indented before the column header: a result row there comes before the column header, with no columns to be read by", n)
 	default:
@@ -868,7 +877,7 @@ func (p *parser) afterEnd(n int, l string, toks []token) error {
 		}
 		name := strings.TrimSpace(m[2])
 		if old := p.rep.Labs[m[1]]; old != "" && old != name {
-			return fmt.Errorf("line %d: two performing labs with code %s", n, m[1])
+			return fmt.Errorf("line %d: two performing labs with code %q", n, m[1])
 		}
 		p.rep.Labs[m[1]] = name
 		return nil

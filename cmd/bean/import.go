@@ -305,7 +305,18 @@ func runImport(s *core.Store, bin, file string, args []string, o importOpts) (im
 		if err != nil {
 			return res, phaseError("validation", err)
 		}
-		fmt.Fprintf(os.Stderr, "Save %d readings and keep the file? [y/N] ", n)
+		if n == 0 {
+			// Nothing was read: the importer keeps the file all the same,
+			// and says why it read nothing. The file is the person's to
+			// keep or not.
+			fmt.Println("  no reading was read from this file.")
+			if note != "" {
+				fmt.Println("  " + safe(note))
+			}
+			fmt.Fprint(os.Stderr, "Keep the file all the same, with none of its values in your log? [y/N] ")
+		} else {
+			fmt.Fprintf(os.Stderr, "Save %d readings and keep the file? [y/N] ", n)
+		}
 		if !confirmed(o.review) {
 			return res, phaseError("review", errors.New("not saved"))
 		}
@@ -322,18 +333,26 @@ func runImport(s *core.Store, bin, file string, args []string, o importOpts) (im
 	if stored != bid || err != nil || !bytes.Equal(back, data) {
 		return res, phaseError("storage", errors.New("the stored copy does not read back the same"))
 	}
-	a, err := s.AppendImported(bytes.NewReader(append(first, '\n')), false)
-	if err != nil {
-		return res, phaseError("archive", err)
-	}
+	// A file that a record of the person keeps already is not kept a
+	// second time. The importer may name its lab otherwise than when the
+	// file first came in: a report that was kept unread, and is read now.
+	added := 0
 	rid, err := kept(s, archive.Type, bid, digest)
+	if err != nil {
+		a, aerr := s.AppendImported(bytes.NewReader(append(first, '\n')), false)
+		if aerr != nil {
+			return res, phaseError("archive", aerr)
+		}
+		added = a.Added
+		rid, err = kept(s, archive.Type, bid, digest)
+	}
 	if err != nil {
 		return res, phaseError("retention", err)
 	}
 	// The record id is what bean purge takes to erase the file; the file's
 	// SHA-256 is what shasum gives; the blob id names the encrypted copy.
 	what := fmt.Sprintf("%s %s: file sha256 %s, stored as %s", archive.Type, rid, digest, bid)
-	if a.Added == 1 {
+	if added == 1 {
 		res.lines = append(res.lines, "kept "+what)
 	} else {
 		res.lines = append(res.lines, "already kept "+what)
@@ -347,6 +366,9 @@ func runImport(s *core.Store, bin, file string, args []string, o importOpts) (im
 	res.changed = r.Changed
 	if err != nil {
 		return res, phaseError("readings", err)
+	}
+	if r.Added+r.Skipped+len(r.Changed) == 0 {
+		res.lines = append(res.lines, "no reading was read: the file is kept, and none of its values is in your log. To take it out again: bean purge "+rid[7:19])
 	}
 	if _, err := kept(s, archive.Type, bid, digest); err != nil {
 		return res, phaseError("retention", err)

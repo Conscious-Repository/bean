@@ -85,7 +85,7 @@ func parseBBox(doc string) ([]bpage, error) {
 		case xml.StartElement:
 			name := t.Name.Local
 			if !bboxElements[name] {
-				return nil, fmt.Errorf("the word positions hold a <%s> element, which pdftotext -bbox-layout does not write", name)
+				return nil, fmt.Errorf("the word positions hold a %q element, which pdftotext -bbox-layout does not write", name)
 			}
 			if cur != nil {
 				return nil, errors.New("the word positions hold an element inside a word")

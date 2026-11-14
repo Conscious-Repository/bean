@@ -209,20 +209,65 @@ func recordIDs(jsonl string) []string {
 	return out
 }
 
-// A report the importer refuses writes nothing: no record and no blob.
-func TestCLIImportRefusedWritesNothing(t *testing.T) {
+// A report whose readings the importer cannot read for sure is kept all the
+// same: the file is the person's, and a reading is refused, never the
+// file. None of its values goes into the log. Without a terminal and
+// without -yes nothing is written, as for any import.
+func TestCLIImportKeepsAReportItCannotRead(t *testing.T) {
 	path := importerOnPath(t)
 	dir := t.TempDir()
 	run(t, dir, "", "init")
 	before := countFiles(t, dir)
 	bad := filepath.Join(t.TempDir(), "bad.txt")
 	os.WriteFile(bad, []byte(strings.Replace(labReport("101"), "Sodium", "Glucose", 1)), 0o600)
-	_, errs, code := runPath(t, dir, path, "import", "-yes", "lab", bad)
-	if code != 1 || !strings.Contains(errs, "nothing was written") || !strings.Contains(errs, "map to one type") {
-		t.Errorf("refused: %d %s", code, errs)
+	// No terminal and no -yes: nothing is asked, and nothing is written.
+	if _, errs, code := runPath(t, dir, path, "import", "lab", bad); code != 1 || !strings.Contains(errs, "nothing was written") {
+		t.Errorf("without -yes: %d %s", code, errs)
 	}
 	if after := countFiles(t, dir); after != before {
 		t.Errorf("files %d -> %d", before, after)
+	}
+	out, errs, code := runPath(t, dir, path, "import", "-yes", "lab", bad)
+	if code != 0 || !strings.Contains(out+errs, "kept lab.report") || !strings.Contains(out+errs, "no reading was read") || !strings.Contains(out+errs, "map to one type") {
+		t.Errorf("a report that cannot be read: %d\n%s\n%s", code, out, errs)
+	}
+	// The reason says where, and shows no word of the report: a script or
+	// an assistant may read this output.
+	if strings.Contains(out+errs, "Glucose") || strings.Contains(out+errs, "lab.glucose") || !strings.Contains(out+errs, `"xxxxxxx"`) {
+		t.Errorf("the reason shows a name of the report:\n%s\n%s", out, errs)
+	}
+	ls, _, _ := run(t, dir, "", "ls", "-all", "-json")
+	if strings.Count(ls, `"type":"lab.report"`) != 1 || strings.Contains(ls, `"type":"lab.glucose"`) || strings.Contains(ls, `"type":"lab.sodium"`) {
+		t.Errorf("the log after it:\n%s", ls)
+	}
+	// A report that was not read does not say which lab printed it.
+	if !strings.Contains(ls, `"system":"unknown"`) {
+		t.Errorf("the kept report names a lab:\n%s", ls)
+	}
+	// A file that is no lab report is not kept as one, also with -yes.
+	list := filepath.Join(t.TempDir(), "list.txt")
+	os.WriteFile(list, []byte("hello, this is my grocery list\nmilk 2\n"), 0o600)
+	files := countFiles(t, dir)
+	if out, errs, code := runPath(t, dir, path, "import", "-yes", "lab", list); code != 1 || !strings.Contains(errs, "does not look like a lab report") || !strings.Contains(errs, "bean blob put") {
+		t.Errorf("a grocery list: %d\n%s\n%s", code, out, errs)
+	}
+	if after := countFiles(t, dir); after != files {
+		t.Errorf("a file that is no report changed the log: %d -> %d files", files, after)
+	}
+	// The same file again is kept once.
+	if out, errs, code := runPath(t, dir, path, "import", "-yes", "lab", bad); code != 0 || !strings.Contains(out+errs, "already kept lab.report") {
+		t.Errorf("the same file again: %d\n%s\n%s", code, out, errs)
+	}
+	if ls, _, _ := run(t, dir, "", "ls", "-all", "-json"); strings.Count(ls, `"type":"lab.report"`) != 1 {
+		t.Errorf("the file is kept twice:\n%s", ls)
+	}
+	// The person takes it out again with the id that the import printed.
+	id := out[strings.Index(out, "kept lab.report ")+len("kept lab.report "):][:71]
+	if _, errs, code := run(t, dir, "", "purge", id); code != 0 {
+		t.Fatalf("purge: %s", errs)
+	}
+	if n := countFiles(t, filepath.Join(dir, "blobs")); n != 0 {
+		t.Errorf("the file stays after its record was deleted: %d files", n)
 	}
 	if _, errs, code := runPath(t, dir, path, "import", "-yes", "nosuch", bad); code != 1 || !strings.Contains(errs, "no importer bean-import-nosuch") {
 		t.Errorf("missing importer: %d %s", code, errs)
@@ -750,5 +795,82 @@ func TestImporterWritesOnlyReadings(t *testing.T) {
 				t.Errorf("the person's record is gone:\n%s", ls)
 			}
 		})
+	}
+}
+
+// TestImportKeepsAFileOnce: a file that a record of the person keeps is not
+// kept a second time when an importer names its lab otherwise: a report
+// that was kept unread, and that a later importer reads.
+func TestImportKeepsAFileOnce(t *testing.T) {
+	dir := t.TempDir()
+	run(t, dir, "", "init")
+	f := filepath.Join(t.TempDir(), "in.txt")
+	os.WriteFile(f, []byte("synthetic input\n"), 0o600)
+	file := func(system string) string {
+		return `{"type":"x.file","value":{"blob":"'"$2"'"},"times":{"observed":null},"source":{"system":"` + system + `","adapter":"t@1","ref_input":["bean/v0/ref","id","` + system + `","file",0]},"blobs":[{"hash":"'"$2"'","role":"raw-export","media_type":"text/plain"}],"context":{"sha256":"'"$d"'"}}`
+	}
+	const reading = `{"type":"weight","value":{"n":70,"unit":"kg"},"times":{"observed":null},"source":{"system":"later","adapter":"t@1","ref_input":["bean/v0/ref","id","later","r1",0]}}`
+	importer := func(lines ...string) []string {
+		bin := t.TempDir()
+		script := "#!/bin/sh\nd=$(sha256sum \"$3\" | cut -d' ' -f1)\n"
+		for _, l := range lines {
+			script += "echo '" + l + "'\n"
+		}
+		os.WriteFile(filepath.Join(bin, "bean-import-x"), []byte(script), 0o755)
+		cmd := exec.Command(os.Args[0], "import", "-yes", "x", f)
+		cmd.Env = append(os.Environ(), "BEAN_TEST_MAIN=1", "BEAN_DIR="+dir, "BEAN_NOW=", "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("import: %v\n%s", err, out)
+		}
+		return strings.Split(string(out), "\n")
+	}
+	// First the file alone, under one name of its lab: kept, and unread.
+	first := strings.Join(importer(file("early")), "\n")
+	if !strings.Contains(first, "kept x.file") || !strings.Contains(first, "no reading was read") {
+		t.Fatalf("the first import:\n%s", first)
+	}
+	// Then the same file under another name, with a reading.
+	second := strings.Join(importer(file("later"), reading), "\n")
+	if !strings.Contains(second, "already kept x.file") || !strings.Contains(second, "added 1") || strings.Contains(second, "no reading was read") {
+		t.Errorf("the second import:\n%s", second)
+	}
+	if ls, _, _ := run(t, dir, "", "ls", "-all", "-json"); strings.Count(ls, `"type":"x.file"`) != 1 || strings.Count(ls, `"type":"weight"`) != 1 {
+		t.Errorf("the log holds the file twice, or not the reading:\n%s", ls)
+	}
+}
+
+// A file that was kept unread and then deleted stays deleted, also when a
+// later importer names its lab otherwise: the memory of a deletion goes by
+// the file, not by the lab's name (DECISIONS 306).
+func TestADeletedFileStaysDeletedUnderAnotherLabName(t *testing.T) {
+	dir := t.TempDir()
+	run(t, dir, "", "init")
+	f := filepath.Join(t.TempDir(), "in.txt")
+	os.WriteFile(f, []byte("synthetic input\n"), 0o600)
+	importer := func(system string) (string, error) {
+		bin := t.TempDir()
+		line := `{"type":"x.file","value":{"blob":"'"$2"'"},"times":{"observed":null},"source":{"system":"` + system + `","adapter":"t@1","ref_input":["bean/v0/ref","id","` + system + `","file",0]},"blobs":[{"hash":"'"$2"'","role":"raw-export","media_type":"text/plain"}],"context":{"sha256":"'"$d"'"}}`
+		os.WriteFile(filepath.Join(bin, "bean-import-x"), []byte("#!/bin/sh\nd=$(sha256sum \"$3\" | cut -d' ' -f1)\necho '"+line+"'\n"), 0o755)
+		cmd := exec.Command(os.Args[0], "import", "-yes", "x", f)
+		cmd.Env = append(os.Environ(), "BEAN_TEST_MAIN=1", "BEAN_DIR="+dir, "BEAN_NOW=", "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+	first, err := importer("unknown")
+	id := regexp.MustCompile(`bean purge ([0-9a-f]{12})`).FindStringSubmatch(first)
+	if err != nil || id == nil {
+		t.Fatalf("the first import: %v\n%s", err, first)
+	}
+	if _, errs, code := run(t, dir, "", "purge", id[1]); code != 0 {
+		t.Fatalf("purge: %s", errs)
+	}
+	for _, system := range []string{"unknown", "a lab"} {
+		if out, err := importer(system); err == nil || !strings.Contains(out, "you deleted this file before") {
+			t.Errorf("as %q the deleted file came back: %v\n%s", system, err, out)
+		}
+	}
+	if ls, _, _ := run(t, dir, "", "ls", "-all", "-json"); strings.Contains(ls, `"type":"x.file"`) {
+		t.Errorf("the log holds the deleted file:\n%s", ls)
 	}
 }
