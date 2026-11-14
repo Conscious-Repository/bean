@@ -465,6 +465,15 @@ func TestExportIsWholeOrAbsent(t *testing.T) {
 	if _, err := s.ExportAll(out); err == nil || !strings.Contains(err.Error(), "not empty") {
 		t.Errorf("an export over an export: %v", err)
 	}
+	// A move that was stopped leaves the target part full and the work
+	// folder beside it. The work folder is what the person is told of.
+	if err := os.Mkdir(out+".partial-9", 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ExportAll(out); err == nil || !strings.Contains(err.Error(), "did not finish") {
+		t.Errorf("an export beside a stopped move: %v", err)
+	}
+	os.Remove(out + ".partial-9")
 	// An export never takes the place of a file, also not through a link.
 	file := filepath.Join(parent, "precious.txt")
 	if err := os.WriteFile(file, []byte("keep me"), 0o600); err != nil {

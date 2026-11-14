@@ -39,6 +39,16 @@ func (s *Store) ExportAll(dir string) (ExportResult, error) {
 	if real, err := filepath.EvalSymlinks(dir); err == nil {
 		dir = real // a link to a folder: the export goes where it leads
 	}
+	// A folder that an unfinished export left is named before anything else
+	// is said: it holds plaintext, and the person must know that it is there.
+	// By name, not by pattern: a folder's name can hold the signs of one.
+	parent, base := filepath.Dir(dir), filepath.Base(dir)
+	siblings, _ := os.ReadDir(parent)
+	for _, e := range siblings {
+		if strings.HasPrefix(e.Name(), base+partialSuffix) {
+			return res, fmt.Errorf("an export that did not finish left %s: it holds records in plaintext. Delete it, then export again", filepath.Join(parent, e.Name()))
+		}
+	}
 	exists := false
 	switch info, err := os.Lstat(dir); {
 	case errors.Is(err, os.ErrNotExist):
@@ -51,14 +61,6 @@ func (s *Store) ExportAll(dir string) (ExportResult, error) {
 			return res, errors.New("export dir not empty: " + dir)
 		}
 		exists = true
-	}
-	parent, base := filepath.Dir(dir), filepath.Base(dir)
-	// By name, not by pattern: a folder's name can hold the signs of one.
-	siblings, _ := os.ReadDir(parent)
-	for _, e := range siblings {
-		if strings.HasPrefix(e.Name(), base+partialSuffix) {
-			return res, fmt.Errorf("an export that did not finish left %s: it holds records in plaintext. Delete it, then export again", filepath.Join(parent, e.Name()))
-		}
 	}
 	if err := os.MkdirAll(parent, 0o700); err != nil {
 		return res, err
