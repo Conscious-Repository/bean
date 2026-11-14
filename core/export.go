@@ -53,8 +53,12 @@ func (s *Store) ExportAll(dir string) (ExportResult, error) {
 		exists = true
 	}
 	parent, base := filepath.Dir(dir), filepath.Base(dir)
-	if left, _ := filepath.Glob(filepath.Join(parent, base+partialSuffix+"*")); len(left) > 0 {
-		return res, fmt.Errorf("an export that did not finish left %s: it holds records in plaintext. Delete it, then export again", left[0])
+	// By name, not by pattern: a folder's name can hold the signs of one.
+	siblings, _ := os.ReadDir(parent)
+	for _, e := range siblings {
+		if strings.HasPrefix(e.Name(), base+partialSuffix) {
+			return res, fmt.Errorf("an export that did not finish left %s: it holds records in plaintext. Delete it, then export again", filepath.Join(parent, e.Name()))
+		}
 	}
 	if err := os.MkdirAll(parent, 0o700); err != nil {
 		return res, err

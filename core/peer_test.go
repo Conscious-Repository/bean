@@ -424,7 +424,8 @@ func TestExportIsWholeOrAbsent(t *testing.T) {
 		t.Errorf("a failed export left something: %v", partials())
 	}
 	// A run that an earlier one did not finish.
-	stale := filepath.Join(parent, "out.partial-123")
+	out = filepath.Join(parent, "o[1]*t") // a name with the signs of a pattern
+	stale := out + ".partial-123"
 	if err := os.Mkdir(stale, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -491,5 +492,44 @@ func TestExportIsWholeOrAbsent(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(parent, "slash", "manifest.json")); err != nil || len(partials()) != 0 {
 		t.Errorf("that export is not in place: %v %v", err, partials())
+	}
+}
+
+// TestImportExportBringsBackAnOwnFile: a file that a deleted record names
+// comes back from an export when a live record of the person names it too.
+// Without that record it stays away, which other tests hold.
+func TestImportExportBringsBackAnOwnFile(t *testing.T) {
+	s, _ := initStore(t)
+	photo, err := s.Add("photo", "rash", AddOptions{Photo: []byte("A PHOTO IN TWO RECORDS"), PhotoType: "image/jpeg"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, _ := s.Load()
+	hash := l.Report.Records[photo].Blobs[0].Hash
+	// A second record of the person names the same file.
+	second := `{"type":"note","value":{"s":"the same photo"},"times":{"observed":null},"source":{"system":"self","adapter":"t@1","ref":null},"blobs":[{"hash":"` + hash + `","role":"photo","media_type":"image/jpeg"}]}` + "\n"
+	if _, err := s.Append(strings.NewReader(second)); err != nil {
+		t.Fatal(err)
+	}
+	// A copy that keeps the first record, and loses the file.
+	stale := Open(t.TempDir())
+	if err := os.CopyFS(stale.Dir, os.DirFS(s.Dir)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(stale.path(BlobPathOf(hash))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Purge(photo, ""); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(t.TempDir(), "export")
+	if _, err := s.ExportAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stale.ImportExportAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	if pt, err := stale.GetBlob(hash); err != nil || string(pt) != "A PHOTO IN TWO RECORDS" {
+		t.Errorf("the file that a live record of the person names did not come back: %v", err)
 	}
 }
