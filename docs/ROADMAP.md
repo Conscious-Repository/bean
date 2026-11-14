@@ -118,6 +118,8 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 
 **Done.** A reference pack ([REFERENCE.md](REFERENCE.md), DECISIONS 281): one file, named by its SHA-256, with a table for each measure and each cohort on its menu. `bean-pack-nhanes` builds one from the NHANES files, with weight beside the blood tests. `bean compare -pack` compares with it and saves a claim that names the pack. A Python check reads the format from its document, builds every table again from the files, and computes every claim again.
 
+**Next: more tests in the NHANES pack.** The pack holds twelve blood tests and weight. A person with reports of many years meets `No reference data` for most of their tests. That comes before any choice between sources. A candidate is the survey's file of standard biochemistry, `BIOPRO_J`. It is not yet confirmed from CDC's own pages: each variable, its unit, and who was measured. Each new row needs the type and the unit that a real report gives. `bean compare -type 'lab.*'` names the types with no reference data in one line, with no value. A test of a fasting part of the sample needs another weight, and waits.
+
 **The plan.**
 
 1. **A second source, from another publisher.** The format is not frozen before a second real source is built into a pack. Each candidate is confirmed first from its publisher's own site: the terms, a stable address, and whether a file changes without notice.
@@ -126,6 +128,8 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 4. **A publisher signs.** A record by the publisher's bean identity names a pack's SHA-256, and travels as a bundle. This is built when a second publisher exists.
 5. **A pointer on relays.** A publisher announces a pack on Nostr relays: title, SHA-256, where it is. The relays hold a pointer and no health record. bean keys can already be Nostr keys.
 6. **More kinds of cell**, each when a real source needs it: percentile points, a fitted curve, counts of a category. REFERENCE.md says what each may state.
+
+**The person's own list of packs: scoped, and it waits (DECISIONS 308).** The first user outside the owner asked to choose his sources, and in time to use the sources of his peers. Today any pack works with `-unknown-pack`, so nobody is locked in. A signed record, "I use this pack", is the trace that a peer's vouch will be. It is built when a second pack exists that someone other than the project built, or when a peer asks to send their list. Entry 308 holds the rules for it.
 
 **Who is paid for what.** A host may charge for bytes. A publisher may sell a pack that took work to build. Nobody is paid to compute a comparison: the request would carry the cohort or the value. bean holds no wallet.
 
@@ -165,7 +169,7 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 
 1. Path 1, step 7: a public address for the check page, and the first release, with its Blossom mirrors. Everything a reader does starts there.
 2. Path 2, step 3: two people side by side. Step 2, the signed reply, is done.
-3. Path 4, steps 1 and 2: a second source, and the NHANES pack published.
+3. Path 4: more tests in the NHANES pack. Then steps 1 and 2: a second source, and the NHANES pack published.
 4. Path 3, pairing and import, when a real device or its firmware can produce the folder.
 5. Path 1, step 2: a package sealed to a reader's key.
 6. Path 2, steps 4 and 5, and Path 4, steps 4 and 5, when real peers and a second publisher ask for them.
