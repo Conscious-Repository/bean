@@ -437,24 +437,59 @@ func TestExportIsWholeOrAbsent(t *testing.T) {
 	os.Remove(stale)
 	// A whole run, into a target that is absent and into one that is empty.
 	for _, dir := range []string{out, filepath.Join(parent, "empty")} {
+		var before os.FileInfo
 		if dir != out {
 			if err := os.Mkdir(dir, 0o755); err != nil {
 				t.Fatal(err)
 			}
+			before, _ = os.Stat(dir)
 		}
 		res, err := s.ExportAll(dir)
+		if after, _ := os.Stat(dir); before != nil && !os.SameFile(before, after) {
+			t.Errorf("the empty folder at %s was replaced by another", dir)
+		}
 		if err != nil || !res.Written || res.Records == 0 {
 			t.Fatalf("export to %s: %+v %v", dir, res, err)
 		}
 		if _, err := os.Stat(filepath.Join(dir, "manifest.json")); err != nil || len(partials()) != 0 {
 			t.Errorf("the export at %s is not whole, or left its work folder: %v %v", dir, err, partials())
 		}
-		if info, err := os.Stat(dir); err != nil || info.Mode().Perm() != 0o700 {
+		// A folder that bean made is closed to others. One that was there
+		// stays the folder it was.
+		if info, err := os.Stat(dir); err != nil || (dir == out && info.Mode().Perm() != 0o700) {
 			t.Errorf("the export folder is open to others: %v", info.Mode())
 		}
 	}
 	// A target that holds something is refused, as before.
 	if _, err := s.ExportAll(out); err == nil || !strings.Contains(err.Error(), "not empty") {
 		t.Errorf("an export over an export: %v", err)
+	}
+	// An export never takes the place of a file, also not through a link.
+	file := filepath.Join(parent, "precious.txt")
+	if err := os.WriteFile(file, []byte("keep me"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link, dangling := filepath.Join(parent, "link"), filepath.Join(parent, "dangling")
+	if os.Symlink(file, link) != nil || os.Symlink(filepath.Join(parent, "nowhere"), dangling) != nil {
+		t.Skip("no links here")
+	}
+	for _, target := range []string{file, link, dangling} {
+		if res, err := s.ExportAll(target); err == nil || res.Written {
+			t.Errorf("an export onto %s: %+v %v", filepath.Base(target), res, err)
+		}
+	}
+	if data, err := os.ReadFile(file); err != nil || string(data) != "keep me" {
+		t.Errorf("the file is gone or changed: %q %v", data, err)
+	}
+	if info, err := os.Lstat(dangling); err != nil || info.Mode()&os.ModeSymlink == 0 || len(partials()) != 0 {
+		t.Errorf("the link that leads nowhere was replaced, or a work folder stays: %v %v", err, partials())
+	}
+	// A target written with a slash at its end is the same folder.
+	slash := filepath.Join(parent, "slash") + string(filepath.Separator)
+	if res, err := s.ExportAll(slash); err != nil || !res.Written {
+		t.Fatalf("export to a name with a slash at its end: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(parent, "slash", "manifest.json")); err != nil || len(partials()) != 0 {
+		t.Errorf("that export is not in place: %v %v", err, partials())
 	}
 }

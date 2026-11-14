@@ -30,11 +30,27 @@ func (s *Store) Export(dir string) (records, blobs int, err error) {
 // person to delete.
 func (s *Store) ExportAll(dir string) (ExportResult, error) {
 	res := ExportResult{NotExported: map[string]string{}}
+	// The target is absent, or an empty folder, or a link to one. Anything
+	// else stays as it is: an export never takes the place of a file.
+	dir, err := filepath.Abs(dir)
+	if err != nil {
+		return res, err
+	}
 	if real, err := filepath.EvalSymlinks(dir); err == nil {
 		dir = real // a link to a folder: the export goes where it leads
 	}
-	if entries, err := os.ReadDir(dir); err == nil && len(entries) > 0 {
-		return res, errors.New("export dir not empty: " + dir)
+	exists := false
+	switch info, err := os.Lstat(dir); {
+	case errors.Is(err, os.ErrNotExist):
+	case err != nil:
+		return res, err
+	case !info.IsDir(): // a file, or a link that leads nowhere
+		return res, errors.New("export dir is not a folder: " + dir)
+	default:
+		if entries, err := os.ReadDir(dir); err != nil || len(entries) > 0 {
+			return res, errors.New("export dir not empty: " + dir)
+		}
+		exists = true
 	}
 	parent, base := filepath.Dir(dir), filepath.Base(dir)
 	if left, _ := filepath.Glob(filepath.Join(parent, base+partialSuffix+"*")); len(left) > 0 {
@@ -52,16 +68,44 @@ func (s *Store) ExportAll(dir string) (ExportResult, error) {
 		os.RemoveAll(tmp)
 		return res, err
 	}
-	// dir is absent, or an empty folder that the move replaces.
-	if rerr := os.Remove(dir); rerr != nil && !errors.Is(rerr, os.ErrNotExist) {
-		os.RemoveAll(tmp)
-		return ExportResult{NotExported: map[string]string{}}, rerr
-	}
-	if rerr := os.Rename(tmp, dir); rerr != nil {
+	// Into place. A target that is absent takes the folder whole. An empty
+	// folder that is there stays the folder it is, for a person who stands
+	// in it: what the export holds moves into it, the manifest last, since
+	// the manifest is what says that an export is whole.
+	if rerr := moveExport(tmp, dir, exists); rerr != nil {
 		os.RemoveAll(tmp)
 		return ExportResult{NotExported: map[string]string{}}, rerr
 	}
 	return res, err
+}
+
+// moveExport moves a whole export from the folder it was written in to its
+// place. into says that dir is there, and empty. When a move fails, what
+// was moved is taken out again, so that dir is left as it was.
+func moveExport(tmp, dir string, into bool) error {
+	if !into {
+		return os.Rename(tmp, dir)
+	}
+	entries, err := os.ReadDir(tmp)
+	if err != nil {
+		return err
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.Name() != "manifest.json" {
+			names = append(names, e.Name())
+		}
+	}
+	names = append(names, "manifest.json")
+	for i, name := range names {
+		if err := os.Rename(filepath.Join(tmp, name), filepath.Join(dir, name)); err != nil {
+			for _, moved := range names[:i] {
+				os.RemoveAll(filepath.Join(dir, moved))
+			}
+			return err
+		}
+	}
+	return os.Remove(tmp)
 }
 
 // partialSuffix ends the name of the folder that an export writes into

@@ -172,6 +172,7 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 
 ## Smaller open paths
 
+- **A file that only another key's record names.** `bean purge` keeps a file that another record names, and says so. When that record is a peer's or a stranger's, no export, share or assistant reads the file. Its encrypted copy stays all the same, and `bean sync` copies it. Decide whether such a record should keep a file at all.
 - **More tests and cohort rules.** Each is one row in `internal/nhanes`, from the file's own label and a real report's name.
 - **More importers,** each from a real file, never from memory. A time zone flag for CSV times.
 - **A check of a whole export in Python.**
