@@ -107,7 +107,10 @@ func main() {
 			fmt.Fprintln(os.Stderr, "bean-import-lab: output failed")
 			os.Exit(1)
 		}
-		fmt.Fprintf(os.Stderr, "bean-import-lab: no result was read, and the report is kept: %s\n", err)
+		// The reason can quote a line of the report, and bean prints it
+		// where a script or an assistant may read it. What it quotes is
+		// masked: the line number says where to look.
+		fmt.Fprintf(os.Stderr, "bean-import-lab: no result was read, and the report is kept: %s\n", masked(err.Error()))
 		return
 	}
 	if err != nil {

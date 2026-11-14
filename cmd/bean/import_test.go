@@ -231,6 +231,11 @@ func TestCLIImportKeepsAReportItCannotRead(t *testing.T) {
 	if code != 0 || !strings.Contains(out+errs, "kept lab.report") || !strings.Contains(out+errs, "no reading was read") || !strings.Contains(out+errs, "map to one type") {
 		t.Errorf("a report that cannot be read: %d\n%s\n%s", code, out, errs)
 	}
+	// The reason says where, and shows no word of the report: a script or
+	// an assistant may read this output.
+	if strings.Contains(out+errs, "Glucose") || strings.Contains(out+errs, "lab.glucose") || !strings.Contains(out+errs, `"xxxxxxx"`) {
+		t.Errorf("the reason shows a name of the report:\n%s\n%s", out, errs)
+	}
 	ls, _, _ := run(t, dir, "", "ls", "-all", "-json")
 	if strings.Count(ls, `"type":"lab.report"`) != 1 || strings.Contains(ls, `"type":"lab.glucose"`) || strings.Contains(ls, `"type":"lab.sodium"`) {
 		t.Errorf("the log after it:\n%s", ls)
@@ -776,5 +781,47 @@ func TestImporterWritesOnlyReadings(t *testing.T) {
 				t.Errorf("the person's record is gone:\n%s", ls)
 			}
 		})
+	}
+}
+
+// TestImportKeepsAFileOnce: a file that a record of the person keeps is not
+// kept a second time when an importer names its lab otherwise: a report
+// that was kept unread, and that a later importer reads.
+func TestImportKeepsAFileOnce(t *testing.T) {
+	dir := t.TempDir()
+	run(t, dir, "", "init")
+	f := filepath.Join(t.TempDir(), "in.txt")
+	os.WriteFile(f, []byte("synthetic input\n"), 0o600)
+	file := func(system string) string {
+		return `{"type":"x.file","value":{"blob":"'"$2"'"},"times":{"observed":null},"source":{"system":"` + system + `","adapter":"t@1","ref_input":["bean/v0/ref","id","` + system + `","file",0]},"blobs":[{"hash":"'"$2"'","role":"raw-export","media_type":"text/plain"}],"context":{"sha256":"'"$d"'"}}`
+	}
+	const reading = `{"type":"weight","value":{"n":70,"unit":"kg"},"times":{"observed":null},"source":{"system":"later","adapter":"t@1","ref_input":["bean/v0/ref","id","later","r1",0]}}`
+	importer := func(lines ...string) []string {
+		bin := t.TempDir()
+		script := "#!/bin/sh\nd=$(sha256sum \"$3\" | cut -d' ' -f1)\n"
+		for _, l := range lines {
+			script += "echo '" + l + "'\n"
+		}
+		os.WriteFile(filepath.Join(bin, "bean-import-x"), []byte(script), 0o755)
+		cmd := exec.Command(os.Args[0], "import", "-yes", "x", f)
+		cmd.Env = append(os.Environ(), "BEAN_TEST_MAIN=1", "BEAN_DIR="+dir, "BEAN_NOW=", "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("import: %v\n%s", err, out)
+		}
+		return strings.Split(string(out), "\n")
+	}
+	// First the file alone, under one name of its lab: kept, and unread.
+	first := strings.Join(importer(file("early")), "\n")
+	if !strings.Contains(first, "kept x.file") || !strings.Contains(first, "no reading was read") {
+		t.Fatalf("the first import:\n%s", first)
+	}
+	// Then the same file under another name, with a reading.
+	second := strings.Join(importer(file("later"), reading), "\n")
+	if !strings.Contains(second, "already kept x.file") || !strings.Contains(second, "added 1") || strings.Contains(second, "no reading was read") {
+		t.Errorf("the second import:\n%s", second)
+	}
+	if ls, _, _ := run(t, dir, "", "ls", "-all", "-json"); strings.Count(ls, `"type":"x.file"`) != 1 || strings.Count(ls, `"type":"weight"`) != 1 {
+		t.Errorf("the log holds the file twice, or not the reading:\n%s", ls)
 	}
 }
