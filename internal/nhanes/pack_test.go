@@ -108,13 +108,35 @@ func TestPackGivesWhatTheFilesGive(t *testing.T) {
 	}
 }
 
-// TestRealPack: with CDC's own files, the pack is the one on record.
+// TestRealPack: with CDC's own files, each pack is the one on record. The
+// pack of six files stays on record beside the pack of eight: a comparison
+// that a person saved names it, and more rows in Analytes must not change
+// its bytes.
 func TestRealPack(t *testing.T) {
-	dir := os.Getenv("BEAN_NHANES_DIR")
-	if dir == "" {
+	if os.Getenv("BEAN_NHANES_DIR") == "" {
 		t.Skip("set BEAN_NHANES_DIR to a folder of CDC's files")
 	}
-	files, _ := sources(t, dir, "DEMO_J", "TCHOL_J", "HDL_J", "GHB_J", "CBC_J", "BMX_J")
+	six := []string{"DEMO_J", "TCHOL_J", "HDL_J", "GHB_J", "CBC_J", "BMX_J"}
+	eight := append(append([]string{}, six...), "BIOPRO_J", "FERTIN_J")
+	seen := map[string]bool{}
+	for _, c := range []struct {
+		names    []string
+		measures int
+	}{{six, 13}, {eight, 20}} {
+		digest := realPack(t, c.names, c.measures)
+		seen[digest] = true
+	}
+	if len(seen) != len(pack.Known) {
+		t.Errorf("CDC's files give %d packs, and bean has %d on record", len(seen), len(pack.Known))
+	}
+}
+
+// realPack builds the pack of these files of CDC, holds it against what
+// bean has on record, and returns its SHA-256.
+func realPack(t *testing.T, names []string, measures int) string {
+	t.Helper()
+	dir := os.Getenv("BEAN_NHANES_DIR")
+	files, _ := sources(t, dir, names...)
 	p, err := BuildPack(files)
 	if err != nil {
 		t.Fatal(err)
@@ -123,11 +145,14 @@ func TestRealPack(t *testing.T) {
 	if id, _ := p.MeasureFor("weight", "kg"); id != "BMXWT" || p.Cell("BMXWT", "male-30-39") == nil {
 		t.Errorf("weight in kg is the measure %q", id)
 	}
+	if len(p.Measures) != measures {
+		t.Errorf("the pack of %d files has %d measures, want %d", len(names), len(p.Measures), measures)
+	}
 	sum := sha256.Sum256(p.Bytes())
 	got := hex.EncodeToString(sum[:])
 	known, ok := pack.Known[got]
 	if !ok {
-		t.Fatalf("the pack of the files on record has SHA-256 %s, and bean has no record of it", got)
+		t.Fatalf("the pack of the %d files on record has SHA-256 %s, and bean has no record of it", len(names), got)
 	}
 	// What bean holds of the pack on record is what the pack says: each
 	// label and each cohort, and no other.
@@ -165,6 +190,7 @@ func TestRealPack(t *testing.T) {
 			t.Errorf("cohort %s: bean holds %q, the pack has %q", id, known.Cohorts[id], c.Text)
 		}
 	}
+	return got
 }
 
 // TestRealDigests: with CDC's own files, each file has the SHA-256 that

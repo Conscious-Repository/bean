@@ -205,6 +205,15 @@ func TestPythonHoldsThePackTables(t *testing.T) {
 	if n := len(regexp.MustCompile(`(?m)^    "[0-9a-f]{64}": "`).FindAllString(string(py), -1)); n != len(pack.Known) {
 		t.Errorf("tools/compare/reproduce.py has %d packs on record, bean has %d", n, len(pack.Known))
 	}
+	// The files on record, each with its SHA-256, and no other.
+	for name, digest := range nhanes.Known {
+		if !strings.Contains(string(py), `    "`+name+`": "`+digest+`",`) {
+			t.Errorf("tools/compare/reproduce.py does not have the file on record %s with %s", name, digest)
+		}
+	}
+	if n := len(regexp.MustCompile(`(?m)^    "[A-Z0-9]+_J": "[0-9a-f]{64}",$`).FindAllString(string(py), -1)); n != len(nhanes.Known) {
+		t.Errorf("tools/compare/reproduce.py has %d files on record, bean has %d", n, len(nhanes.Known))
+	}
 }
 
 // TestThePackOnRecordIsInTheDocument: docs/REFERENCE.md states the SHA-256

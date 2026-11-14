@@ -139,7 +139,9 @@ import json, sys
 records = [json.loads(l) for l in open(sys.argv[1])]
 person = lambda x: x["author"] == x["subject"]
 tc = next(x for x in records if x["type"] == "lab.cholesterol-total" and x["value"]["n"] == 187 and person(x))
-r = next(x for x in records if x["type"] == "comparison.percentile" and x["context"]["reading"] == tc["id"])
+# The comparison in one named cohort: the log holds one for each cohort, in
+# the order of their ids, and "another cohort" below must change it.
+r = next(x for x in records if x["type"] == "comparison.percentile" and x["context"]["reading"] == tc["id"] and x["context"]["reference"]["cohort"] == "male-30-39")
 other = next(x for x in records if x["type"] == "weight")
 ldl = next(x for x in records if x["type"] == "lab.ldl-cholesterol")
 c = r["context"]
@@ -270,12 +272,17 @@ bean -dir "$T/log" compare -pack "$T/other.pack" >/dev/null 2>&1 || say "bean re
 
 real=""
 if [ -n "${BEAN_NHANES_DIR:-}" ]; then
-  REAL=(); for f in DEMO_J TCHOL_J HDL_J GHB_J CBC_J BMX_J; do for e in XPT xpt; do [ -f "$BEAN_NHANES_DIR/$f.$e" ] && REAL+=("$BEAN_NHANES_DIR/$f.$e"); done; done
-  bean-pack-nhanes -out "$T/real.pack" "${REAL[@]}" >"$T/real.txt" 2>&1 || say "the pack of CDC's files was not built: $(cat "$T/real.txt")"
-  bean -dir "$T/log" compare -pack "$T/real.pack" 2>&1 | grep -q "pack that bean has on record" || say "the pack of CDC's files is not the pack on record"
-  "$PY" -I "$HERE/check.py" "$T/real.pack" >/dev/null 2>&1 || say "check.py refuses the pack of CDC's files"
-  "$PY" -I "$HERE/rebuild_nhanes.py" "$T/real.pack" "${REAL[@]}" >"$T/re.txt" 2>&1 || say "rebuild_nhanes.py on CDC's files: $(tail -1 "$T/re.txt")"
-  real=", and the pack of CDC's files is the one on record"
+  # Both packs on record: the pack of six files, and the pack of eight.
+  SIX="DEMO_J TCHOL_J HDL_J GHB_J CBC_J BMX_J"
+  for set in "$SIX" "$SIX BIOPRO_J FERTIN_J"; do
+    REAL=(); for f in $set; do for e in XPT xpt; do [ -f "$BEAN_NHANES_DIR/$f.$e" ] && REAL+=("$BEAN_NHANES_DIR/$f.$e"); done; done
+    n=${#REAL[@]}
+    bean-pack-nhanes -out "$T/real-$n.pack" "${REAL[@]}" >"$T/real.txt" 2>&1 || say "the pack of $n files of CDC was not built: $(cat "$T/real.txt")"
+    bean -dir "$T/log" compare -pack "$T/real-$n.pack" 2>&1 | grep -q "that bean has on record" || say "the pack of $n files of CDC is not a pack on record"
+    "$PY" -I "$HERE/check.py" "$T/real-$n.pack" >/dev/null 2>&1 || say "check.py refuses the pack of $n files of CDC"
+    "$PY" -I "$HERE/rebuild_nhanes.py" "$T/real-$n.pack" "${REAL[@]}" >"$T/re.txt" 2>&1 || say "rebuild_nhanes.py on $n files of CDC: $(tail -1 "$T/re.txt")"
+  done
+  real=", and each pack of CDC's files is one on record"
 fi
 [ "$rc" = 0 ] && echo "pack: check.py reads the pack that bean builds and gives the method's four vectors, rebuild_nhanes.py builds the same pack byte for byte and refuses $i with one other member changed, reproduce.py computes $saved saved comparisons again, refuses $forged forged claims and fails on a pack that is not on record, and bean and check.py both refuse $wrong packs with one thing wrong$real"
 exit $rc

@@ -41,7 +41,7 @@ jobs:
       - name: Fetch the files from CDC
         run: |
           mkdir -p "$RUNNER_TEMP/nhanes"
-          for f in DEMO_J TCHOL_J HDL_J GHB_J CBC_J BMX_J DR1TOT_J; do
+          for f in DEMO_J TCHOL_J HDL_J GHB_J CBC_J BMX_J DR1TOT_J BIOPRO_J FERTIN_J; do
             curl -fL --retry 3 --retry-delay 5 -o "$RUNNER_TEMP/nhanes/$f.XPT" "https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/$f.xpt"
           done
           { echo "Files as CDC served them to this runner, SHA-256:"; echo '```'; (cd "$RUNNER_TEMP/nhanes" && sha256sum *.XPT); echo '```'; } >> "$GITHUB_STEP_SUMMARY"

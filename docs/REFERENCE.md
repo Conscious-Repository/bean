@@ -49,10 +49,10 @@ python3 tools/pack/rebuild_nhanes.py ~/nhanes/nhanes.pack ~/nhanes/*.xpt      # 
 make pack                                                                     # both, on packs good and wrong
 ```
 
-[COMPARE.md](COMPARE.md) says where the NHANES files are: its loop downloads these six, and one more that a pack does not use. `bean-pack-nhanes` reads the files that you give it and goes nowhere.
+[COMPARE.md](COMPARE.md) says where the NHANES files are. Its loop downloads the eight files of the larger pack, and one more that a pack does not use. `bean-pack-nhanes` reads the files that you give it and goes nowhere.
 
 - **`-out` names a new file.** The builder writes over nothing.
-- **A pack holds the tests whose files you give.** `DEMO_J` is always needed. A file that a pack holds nothing of is named and left out, so `*.xpt` works. With these six files, `DEMO_J`, `TCHOL_J`, `HDL_J`, `GHB_J`, `CBC_J` and `BMX_J`, the pack is the one on record, and bean says so.
+- **A pack holds the tests whose files you give.** `DEMO_J` is always needed. A file that a pack holds nothing of is named and left out, so `*.xpt` works. Two sets of files give a pack on record, and bean says so. The six files `DEMO_J`, `TCHOL_J`, `HDL_J`, `GHB_J`, `CBC_J` and `BMX_J` give the pack of 13 measures. With `BIOPRO_J` and `FERTIN_J` as well, the eight give the pack of 20 measures.
 - **A file that is not the one on record is refused.** It may be a download that was cut short. `-unknown-files` builds from it, and the pack then says so in its caveats. Such a pack is not the pack on record: `bean compare` takes it only with `-unknown-pack`.
 - **Keep the pack file.** Your log names a pack by its SHA-256 and does not hold it. A reader of a comparison that you share needs the same pack to compute it again.
 - **Use the type names and units that the pack lists.** `bean compare -pack nhanes.pack` shows them: a reading in another unit gets no number.
@@ -176,13 +176,13 @@ A saved comparison gives the reading's value away to anyone with the pack ([COMP
 
 A pack is well formed or not, and a check can tell. Whether its tables are true is another matter. Whoever builds a pack chooses its tables, its caveats and which reading each measure takes. So a made-up pack computes as well as a real one.
 
-bean has one pack on record: the NHANES pack, by its SHA-256. For any other pack:
+bean has two packs on record, each by its SHA-256: the NHANES pack of 13 measures, and the NHANES pack of 20 measures. For any other pack:
 
 - `bean compare -pack` shows a warning, and compares only with `-unknown-pack`. Each result then has the caveat above, in the output and in the saved claim.
 - `bean check-bundle` and the check page mark the row: `by pack 7f3fda515b16 (NOT on record)`. They show what the reading was set against in quotation marks: it is the claim's word. They show the title only as what the sender calls it.
 - `tools/compare/reproduce.py` computes the claim again, prints `NOT on record`, and fails. A reader who trusts the pack's publisher names the SHA-256: `-accept-pack <SHA-256>`.
 
-For the pack on record, bean holds each measure's label, the types and units that it takes, each cohort in words, and the caveats. A row shows the label and the cohort, whatever the claim says. A claim that says otherwise is marked `(the claim MISSTATES this pack)`. So is one that sets a reading against a measure that does not take it, and one that drops a caveat or adds one.
+For a pack on record, bean holds each measure's label, the types and units that it takes, each cohort in words, and the caveats. A row shows the label and the cohort, whatever the claim says. A claim that says otherwise is marked `(the claim MISSTATES this pack)`. So is one that sets a reading against a measure that does not take it, and one that drops a caveat or adds one.
 
 Three more marks. `(names NO reference data)`: the comparison names no pack and no files. `(names BOTH a pack and files)`: a comparison is made with one. `(is NOT about a reading)`: it is about one of bean's own records, such as another comparison.
 
@@ -223,14 +223,22 @@ The pack that `bean-pack-nhanes` version 1 builds from the six files on record h
 10555d6769421d4305cbcd4ff14960d8b966ddd829a50581a9584a60a84d29e2
 ```
 
-`bean compare -pack` says whether a pack is this one. The digests of the six files come from one download ([COMPARE.md](COMPARE.md)). The `Reference data` workflow fetches the files from CDC again, from the code host's network, and checks each digest and the pack. That is a second network and not yet a second person.
+The pack that it builds from those six and `BIOPRO_J` and `FERTIN_J` has this SHA-256.
+
+```
+5cae07db64295d565ffae7c251c17fdb9f043dc0638868557275f8b0b0311efa
+```
+
+The first pack stays on record. A comparison that a person saved names its pack, and must still check. A new row for a file that a pack on record holds would change that pack's bytes. Such a row needs a new version of the builder, and then a new pack on record.
+
+`bean compare -pack` says whether a pack is one of these. The digests of the first six files come from one download ([COMPARE.md](COMPARE.md)). Those of the two new files come from two downloads through one network, five days apart. The `Reference data` workflow fetches the files from CDC again, from the code host's network, and checks each digest and the pack. That is a second network and not yet a second person.
 
 ## The NHANES pack
 
-- **Measures.** The twelve blood tests of [COMPARE.md](COMPARE.md), and one body measure: weight in kg. Each is measured in everyone examined. Standing height is left out until a real export shows which unit a reading has.
+- **Measures.** The pack of 13 measures has the twelve blood tests of the first six files, and one body measure: weight in kg. The pack of 20 measures adds six tests of the biochemistry profile, and ferritin. [COMPARE.md](COMPARE.md) lists each test with its unit. CDC planned each for everyone examined, and about nine in ten adults have a value. Standing height is left out until a real export shows which unit a reading has.
 - **Cohorts.** Each sex, by ten years of age from 20 to 79, and 80 and over: 14 cohorts, such as `female-40-49` and `male-80-over`.
 - **Weights.** The examination weight, `WTMEC2YR`. Each cell is the table of steps 1 to 5 of the method in COMPARE.md.
-- **Size.** About 500 kB, and 215 kB packed.
+- **Size.** About 500 kB for the first pack and 720 kB for the second.
 - **What it leaves out.** Children, and every cohort by ethnicity, body or food. For those, compare with the files: `bean compare -sex ... -where ...`.
 
 ## Other kinds of reference

@@ -5,6 +5,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -215,6 +216,139 @@ func TestRealFiles(t *testing.T) {
 		got, err := Compare(files, tc, c.cohort, 187)
 		if err != nil || got != c.want {
 			t.Errorf("%s: got %+v %v, want %+v", c.cohort, got, err, c.want)
+		}
+	}
+}
+
+// With CDC's files: no test that bean compares has a value that NHANES
+// filled in. NHANES puts a number in place of a value below a detection
+// limit, and marks it in a variable whose label ends in "Comment Code".
+// The method has no rule for such a value (DECISIONS 240), so a row for
+// such a test is refused here.
+func TestRealNoCommentCode(t *testing.T) {
+	dir := os.Getenv("BEAN_NHANES_DIR")
+	if dir == "" {
+		t.Skip("BEAN_NHANES_DIR is not set")
+	}
+	var names []string
+	for _, a := range Analytes {
+		if !slices.Contains(names, a.Dataset) {
+			names = append(names, a.Dataset)
+		}
+	}
+	files := load(t, dir, names...)
+	for _, a := range Analytes {
+		if _, ok := files[a.Dataset].Variable(a.Variable); !ok {
+			t.Errorf("%s has no variable %s", a.Dataset, a.Variable)
+		}
+	}
+	if marked := commentCoded(files, Analytes); len(marked) > 0 {
+		t.Errorf("these tests have a comment code, and the method has no rule for one: %v", marked)
+	}
+	// The check finds the tests that were left out for this reason.
+	left := []Analyte{{Dataset: "BIOPRO_J", Variable: "LBXSATSI"}, {Dataset: "BIOPRO_J", Variable: "LBXSGTSI"}, {Dataset: "BIOPRO_J", Variable: "LBXSTB"}, {Dataset: "BIOPRO_J", Variable: "LBXSCR"}}
+	if marked := commentCoded(files, left); !slices.Equal(marked, []string{"LBXSATSI", "LBXSGTSI", "LBXSTB"}) {
+		t.Errorf("of ALT, GGT, total bilirubin and creatinine, these have a comment code: %v", marked)
+	}
+	// CDC's page of FERTIN_J names a comment code, and the file has none.
+	// So hold the data itself: no ferritin value is at or below the limit
+	// of detection that the page states, 0.5 ng/mL.
+	ferritin, err := files["FERTIN_J"].Column("LBXFER")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range ferritin {
+		if v <= ferritinLimit {
+			t.Fatalf("FERTIN_J has a ferritin value of %v, at or below the limit of detection", v)
+		}
+	}
+}
+
+// ferritinLimit is the lower limit of detection that CDC's page of
+// FERTIN_J states, in ng/mL.
+const ferritinLimit = 0.5
+
+// commentCoded returns the variables of rows whose file has a comment code
+// for them: a variable labelled "<name> Comment Code", where the test's own
+// label holds that name. Letter case does not count.
+func commentCoded(files map[string]*xpt.File, rows []Analyte) []string {
+	var out []string
+	for _, a := range rows {
+		f := files[a.Dataset]
+		v, ok := f.Variable(a.Variable)
+		if !ok {
+			continue
+		}
+		for _, other := range f.Variables {
+			name, isCode := strings.CutSuffix(strings.ToLower(other.Label), " comment code")
+			if isCode && name != "" && strings.Contains(strings.ToLower(v.Label), name) && !slices.Contains(out, a.Variable) {
+				out = append(out, a.Variable)
+			}
+		}
+	}
+	return out
+}
+
+// analyzerDiff is the mean difference between two analyzers on the same
+// blood samples, in percent. It is CDC's own table: the page of BIOPRO_J,
+// "regression equations to compare 2017-2018 and 2015-2016 data", column
+// "% DIFF", read on 2026-11-14. Here are the rows of the tests that a
+// report at hand prints and that no other rule leaves out.
+var analyzerDiff = map[string]float64{
+	"LBXSTP": 0.36, "LBXSUA": 2.37, "LBXSCK": 5.91, "LBXSBU": -3.36, "LBXSKSI": -1.398, "LBXSCR": 3.354,
+	"LBXSIR": 10.01, "LBXSAPSI": 9.74, "LBXSCLSI": -1.44, "LBXSNASI": 0.80, "LBXSCA": -2.12, "LBXSASSI": -18.03,
+}
+
+// maxShift is the rule of DECISIONS 309: a test of BIOPRO_J is compared
+// only when the difference between two analyzers moves a middle value by
+// less than a fifth of the middle half of a cohort. Beyond that, a
+// percentile says more about the analyzer than about the person.
+const maxShift = 0.2
+
+// analyzerShift is that move for one variable: CDC's difference times the
+// median, over the width of the middle half, as the median of the cohorts
+// of a pack's menu.
+func analyzerShift(t *testing.T, files map[string]*xpt.File, variable, unit string) float64 {
+	t.Helper()
+	var shifts []float64
+	for _, sex := range []string{"female", "male"} {
+		for _, ages := range PackAges {
+			r, err := Compare(files, Analyte{Dataset: "BIOPRO_J", Variable: variable, Label: unit}, cohort(t, sex, ages[0], ages[1]), 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			shifts = append(shifts, math.Abs(analyzerDiff[variable])/100*r.P50/(r.P75-r.P25))
+		}
+	}
+	slices.Sort(shifts)
+	return shifts[len(shifts)/2]
+}
+
+// With CDC's files: every test of BIOPRO_J that bean compares is under the
+// rule, and the tests that were left out for it are over.
+func TestRealAnalyzerDifference(t *testing.T) {
+	dir := os.Getenv("BEAN_NHANES_DIR")
+	if dir == "" {
+		t.Skip("BEAN_NHANES_DIR is not set")
+	}
+	files := load(t, dir, "DEMO_J", "BIOPRO_J")
+	seen := map[string]bool{}
+	for _, a := range Analytes {
+		if a.Dataset != "BIOPRO_J" || seen[a.Variable] {
+			continue
+		}
+		seen[a.Variable] = true
+		if _, ok := analyzerDiff[a.Variable]; !ok {
+			t.Errorf("%s: CDC's table of the two analyzers has no row for it here", a.Variable)
+			continue
+		}
+		if s := analyzerShift(t, files, a.Variable, a.Label); s >= maxShift {
+			t.Errorf("%s: two analyzers move a middle value by %.2f of the middle half, and the rule is under %.2f", a.Variable, s, maxShift)
+		}
+	}
+	for variable, unit := range map[string]string{"LBXSASSI": "U/L", "LBXSAPSI": "IU/L", "LBXSCA": "mg/dL", "LBXSCLSI": "mmol/L", "LBXSNASI": "mmol/L", "LBXSIR": "ug/dL"} {
+		if s := analyzerShift(t, files, variable, unit); s < maxShift {
+			t.Errorf("%s was left out for the difference between analyzers, and it is %.2f of the middle half", variable, s)
 		}
 	}
 }

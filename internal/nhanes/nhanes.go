@@ -42,7 +42,8 @@ func InCycle(dataset string) bool {
 }
 
 // Known holds the SHA-256 of each file as one download from wwwn.cdc.gov
-// gave it on 2026-11-09: the files on record. A file with another digest
+// gave it on 2026-11-09: the files on record. BIOPRO_J and FERTIN_J gave
+// the same digest again on 2026-11-14. A file with another digest
 // still imports, but bean compare uses it only when told to: it may be cut
 // short, changed, or a later release. tools/compare/reproduce.py holds the
 // same table, and a test keeps the two equal.
@@ -54,6 +55,8 @@ var Known = map[string]string{
 	"CBC_J":    "00f964098dc91272e415344554cbf1b627ecaeb2eda201518527446a7d81e742",
 	"BMX_J":    "8d675e42d8826ac98714b2c3dd4c5138a5e353fb4424f7eff5e6db4a01ce838a",
 	"DR1TOT_J": "390ae5205acfbcb87e0ca3d9aabd1c801b60657d3f2802ac08d5b3ed93f0af6d",
+	"BIOPRO_J": "5bcd5722c1892883b96a9d7fed0befadabacae313f800fadc0133cd5dd00c4c6",
+	"FERTIN_J": "6bc5775797aafbd627316b6208418275fb8951cd571276e1a64436769afa16d5",
 }
 
 // CohortFile is a data set whose variables a cohort rule may name.
@@ -112,6 +115,21 @@ var Analytes = []Analyte{
 	{"lab.rdw", "%", "CBC_J", "LBXRDW", "%"},
 	{"lab.platelets", "x10E3/uL", "CBC_J", "LBXPLTSI", "1000 cells/uL"},
 	{"lab.platelet-count", "Thousand/uL", "CBC_J", "LBXPLTSI", "1000 cells/uL"},
+	// Six tests of the standard biochemistry profile, and ferritin. A
+	// second lab's name for a test is a second row. DECISIONS 309 says why
+	// each other test of the profile is left out: CDC names another file
+	// for it, its file marks values below a detection limit, or CDC's own
+	// comparison of two analyzers moves a middle value by a fifth or more
+	// of the middle half of a cohort. Tests with CDC's files hold the last
+	// two rules.
+	{"lab.bun", "mg/dL", "BIOPRO_J", "LBXSBU", "mg/dL"},
+	{"lab.urea-nitrogen-bun", "mg/dL", "BIOPRO_J", "LBXSBU", "mg/dL"},
+	{"lab.creatinine", "mg/dL", "BIOPRO_J", "LBXSCR", "mg/dL"},
+	{"lab.potassium", "mmol/L", "BIOPRO_J", "LBXSKSI", "mmol/L"},
+	{"lab.protein-total", "g/dL", "BIOPRO_J", "LBXSTP", "g/dL"},
+	{"lab.uric-acid", "mg/dL", "BIOPRO_J", "LBXSUA", "mg/dL"},
+	{"lab.creatine-kinase-total", "U/L", "BIOPRO_J", "LBXSCK", "IU/L"},
+	{"lab.ferritin", "ng/mL", "FERTIN_J", "LBXFER", "ng/mL"},
 }
 
 // AnalyteFor returns the row for a record type and the unit of a reading.
