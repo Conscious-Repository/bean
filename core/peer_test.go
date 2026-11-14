@@ -400,3 +400,61 @@ func TestOnlyThePersonPairs(t *testing.T) {
 		t.Errorf("the person's own pairing: %v", err)
 	}
 }
+
+// TestExportIsWholeOrAbsent: an export is written into a new folder beside
+// its target and moved there when it is whole. A run that fails leaves
+// neither, and a folder that an unfinished run left is named, not written
+// over.
+func TestExportIsWholeOrAbsent(t *testing.T) {
+	s, _ := initStore(t)
+	if _, err := s.Add("weight", "81.2", AddOptions{Unit: "kg"}); err != nil {
+		t.Fatal(err)
+	}
+	parent := t.TempDir()
+	partials := func() []string {
+		m, _ := filepath.Glob(filepath.Join(parent, "*.partial-*"))
+		return m
+	}
+	// A run that fails: a folder with no log in it has nothing to export.
+	out := filepath.Join(parent, "out")
+	if _, err := Open(t.TempDir()).ExportAll(out); err == nil {
+		t.Fatal("an empty folder was exported")
+	}
+	if _, err := os.Stat(out); err == nil || len(partials()) != 0 {
+		t.Errorf("a failed export left something: %v", partials())
+	}
+	// A run that an earlier one did not finish.
+	stale := filepath.Join(parent, "out.partial-123")
+	if err := os.Mkdir(stale, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ExportAll(out); err == nil || !strings.Contains(err.Error(), "did not finish") || !strings.Contains(err.Error(), stale) {
+		t.Errorf("an export beside an unfinished one: %v", err)
+	}
+	if _, err := os.Stat(out); err == nil {
+		t.Error("the export was written all the same")
+	}
+	os.Remove(stale)
+	// A whole run, into a target that is absent and into one that is empty.
+	for _, dir := range []string{out, filepath.Join(parent, "empty")} {
+		if dir != out {
+			if err := os.Mkdir(dir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+		res, err := s.ExportAll(dir)
+		if err != nil || !res.Written || res.Records == 0 {
+			t.Fatalf("export to %s: %+v %v", dir, res, err)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "manifest.json")); err != nil || len(partials()) != 0 {
+			t.Errorf("the export at %s is not whole, or left its work folder: %v %v", dir, err, partials())
+		}
+		if info, err := os.Stat(dir); err != nil || info.Mode().Perm() != 0o700 {
+			t.Errorf("the export folder is open to others: %v", info.Mode())
+		}
+	}
+	// A target that holds something is refused, as before.
+	if _, err := s.ExportAll(out); err == nil || !strings.Contains(err.Error(), "not empty") {
+		t.Errorf("an export over an export: %v", err)
+	}
+}

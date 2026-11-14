@@ -147,239 +147,9 @@ func cmdShare(s *core.Store, args []string) {
 		warnFrozen(l)
 		os.Exit(4)
 	}
-	deleted := deletedByPerson(l)
-	// What the person chose, and which of it they named one by one.
-	chosen := map[string]*core.Record{}
-	named := map[string]bool{}
-	// A type picks readings, never a record that keeps a file: 'lab.*' must
-	// not sweep up the lab report itself, with the person's name in it. Such
-	// a record is shared when it is named by its id.
-	// Nor does a type pick a record that someone else signed: a peer's
-	// note, or a record of a key that the person never paired, which a sync
-	// tool can put into the folder. The person's own record of the share
-	// vouches for the list, so such a record goes when they name it.
-	keepsFile, byOthers := 0, 0
-	mine := l.FileLabels() // the person's agents
-	if *typ != "" {
-		for _, r := range recs {
-			switch {
-			case notShareable(l, deleted, r) != "":
-			case len(r.Blobs) > 0:
-				keepsFile++
-			case r.Author != l.ID && mine[r.Author] == "":
-				byOthers++
-			default:
-				chosen[r.ID] = r
-			}
-		}
-		if byOthers > 0 {
-			fmt.Fprintf(os.Stderr, "%d records of type %s that someone else signed stay home: share such a record by its id\n", byOthers, *typ)
-		}
-		if len(chosen) == 0 {
-			fail(fmt.Errorf("no current record of type %s in that time (a record that keeps a file, or that someone else signed, is shared by its id, not by type)", *typ))
-		}
-	}
-	for _, id := range pos {
-		r, err := l.Resolve(id)
-		if err != nil {
-			fail(err)
-		}
-		if why := notShareable(l, deleted, r); why != "" {
-			fail(fmt.Errorf("%s cannot be shared: %s", r.ID, why))
-		}
-		chosen[r.ID], named[r.ID] = r, true
-	}
-	// A record is read with the record it is about: a comparison with its
-	// reading, an estimate with its meal. That one comes along, and only
-	// that one: what it is about in turn stays, unless it is chosen too.
-	broughtBy := map[string]string{}
-	var leftOut []string
-	for _, id := range slices.Sorted(maps.Keys(chosen)) {
-		for _, target := range chosen[id].Targets("about") {
-			t := l.Report.Records[target]
-			switch {
-			case chosen[target] != nil:
-			case t == nil:
-				leftOut = append(leftOut, fmt.Sprintf("  not shared: %s, which %s is about: it is not in this log", target[7:19], id[7:19]))
-			case notShareable(l, deleted, t) != "":
-				leftOut = append(leftOut, fmt.Sprintf("  not shared: %s, which %s is about: %s", target[7:19], id[7:19], notShareable(l, deleted, t)))
-			default:
-				broughtBy[target] = id
-			}
-		}
-	}
-	for target := range broughtBy {
-		chosen[target] = l.Report.Records[target]
-	}
-	shared := slices.Collect(maps.Values(chosen))
-	sort.Slice(shared, func(i, j int) bool {
-		wi, wj := core.When(shared[i]), core.When(shared[j])
-		if !wi.Equal(wj) {
-			return wi.Before(wj)
-		}
-		return shared[i].ID < shared[j].ID
-	})
-	// The files those records keep. With -files a file travels only when the
-	// person named its record by id, or when it is a public reference file
-	// that the person kept: never because a record came along, or was picked
-	// by type. A lab report holds a name and a birth date, and a note about
-	// it must not carry it out.
-	var kept []sharedFile
-	distinct := map[string]bool{}
-	seen := map[string]bool{}
-	// Only a record of the person or of a paired agent opens a file, as in
-	// an export. Anyone can write a record that names a file of the log,
-	// also a file whose record the person deleted. In a log with records of
-	// a newer bean this list is empty: an agent's file then stays home
-	// here, and an export still carries it.
-	opens := mine
-	for _, r := range shared {
-		public := r.Type == nhanes.FileType && r.Author == l.ID
-		travels := *files && (named[r.ID] || public)
-		if travels && len(r.Blobs) > 0 && r.Author != l.ID && opens[r.Author] == "" {
-			fail(fmt.Errorf("%s names a file, and it is not your record or a paired agent's: such a record opens no file, so nothing was shared. Share it without -files, or delete it: bean purge %s", r.ID[7:19], r.ID[7:19]))
-		}
-		for _, b := range r.Blobs {
-			if seen[b.Hash+" "+r.ID] {
-				continue // a record may name one file twice
-			}
-			seen[b.Hash+" "+r.ID] = true
-			sf := sharedFile{blob: b.Hash, record: r.ID, mediaType: b.MediaType, recordType: r.Type, public: public}
-			if travels {
-				data, err := s.GetBlob(b.Hash)
-				if err != nil {
-					fail(fmt.Errorf("the file of %s cannot be read: %w", r.ID[7:19], err))
-				}
-				sum := sha256.Sum256(data)
-				sf.digest, sf.data = hex.EncodeToString(sum[:]), data
-				if stated := bundle.StatedDigest(r, b.Hash); stated != "" && stated != sf.digest {
-					fail(fmt.Errorf("the file of %s does not match the SHA-256 in its record", r.ID[7:19]))
-				}
-				distinct[sf.digest] = true
-			}
-			kept = append(kept, sf)
-		}
-	}
-	// The records that show which keys speak for the person, and which
-	// agents the person paired, for the readings an agent signed. The share
-	// record lists them too, so that none can be taken out or put in.
-	authors := map[string]bool{}
-	for _, r := range shared {
-		authors[r.Author] = true
-	}
-	var proof []*core.Record
-	pairings := 0
-	for _, id := range slices.Sorted(maps.Keys(l.Report.Records)) {
-		r := l.Report.Records[id]
-		switch {
-		case !l.Report.Valid[id]:
-		case bundle.OnChain(l.Report, r, l.ID):
-			proof = append(proof, r)
-		case bundle.IsPairing(r, l.ID) && authors[r.ValueKey()] && l.Current(id):
-			proof = append(proof, r)
-			pairings++
-		}
-	}
-	// The person sees what leaves before anything is written, where the
-	// question is asked. Without a terminal and without -yes nothing is
-	// written: an assistant that runs this through a tool cannot disclose
-	// for the person.
-	labels := l.PairedLabels()
-	// What stays home is said with or without the review.
-	publicHome, travels := 0, 0
-	for _, sf := range kept {
-		switch {
-		case sf.data != nil:
-			travels++
-		case sf.public:
-			publicHome++
-		default:
-			leftOut = append(leftOut, fmt.Sprintf("  not shared: the file that %s (%s) keeps. With -files, name that record by its id to share its file.", sf.record[7:19], sf.recordType))
-		}
-	}
-	// The public files are said once, with what their absence means.
-	if publicHome > 0 {
-		leftOut = append(leftOut, fmt.Sprintf("  not shared: the %d public files that the reference.file records keep. Add -files to share them: without them a reader needs the files from their publisher to compute a comparison again.", publicHome))
-	}
-	// A comparison with a reference pack names the pack and does not hold
-	// it: the reader needs that file to compute the comparison again.
-	var packs []string
-	for _, id := range slices.Sorted(maps.Keys(chosen)) {
-		ref, _ := chosen[id].Context["reference"].(map[string]any)
-		if digest, _ := ref["pack"].(string); pack.IsDigest(digest) && strings.HasPrefix(chosen[id].Type, "comparison.") && !slices.Contains(packs, digest) {
-			packs = append(packs, digest)
-		}
-	}
-	for _, digest := range packs {
-		leftOut = append(leftOut, fmt.Sprintf("  not shared: the reference pack %s. A comparison names it, and a reader needs that file to compute the comparison again: send it too, or say where it is.", digest))
-	}
-	if *files && travels == 0 {
-		leftOut = append(leftOut, "  -files: no record that you named keeps a file, so no file goes")
-	}
-	if keepsFile > 0 {
-		leftOut = append(leftOut, fmt.Sprintf("  not shared: %d records of that type that keep a file. Name one by its id to share it.", keepsFile))
-	}
-	if *yes {
-		for _, line := range leftOut {
-			fmt.Fprintln(os.Stderr, strings.TrimSpace(line))
-		}
-	}
-	if !*yes {
-		if !isTerminal(os.Stdin) || !isTerminal(os.Stderr) {
-			fail(errors.New("share needs a terminal: run bean share yourself to see what leaves, or pass -yes to write without review"))
-		}
-		w := os.Stderr
-		fmt.Fprintf(w, "To share, into %s:\n", out)
-		// What the person chose comes first, then what comes along with it.
-		row := func(r *core.Record) string {
-			return fmt.Sprintf("  %s  %s  %s  %s", whenText(r), r.Type, safe(strings.TrimSpace(recordText(r, currentRecord(l))+"  "+byText(r, l.ID, labels))), r.ID[7:19])
-		}
-		for _, r := range shared {
-			if broughtBy[r.ID] == "" {
-				fmt.Fprintln(w, row(r))
-			}
-		}
-		for _, r := range shared {
-			if by := broughtBy[r.ID]; by != "" {
-				fmt.Fprintln(w, row(r)+"  (comes along: "+by[7:19]+" is about it)")
-			}
-		}
-		if *note != "" {
-			fmt.Fprintf(w, "  with your note for the reader: %s\n", safe(*note))
-		}
-		for _, sf := range kept {
-			switch {
-			case sf.data == nil:
-			case sf.public:
-				fmt.Fprintf(w, "  the public file that %s (%s) keeps: %d bytes\n", sf.record[7:19], sf.recordType, len(sf.data))
-			default:
-				fmt.Fprintf(w, "  THE WHOLE FILE that %s (%s) keeps, as you imported it: %s, %d bytes, in plaintext. A lab report holds your name and birth date.\n", sf.record[7:19], sf.recordType, safe(sf.mediaType), len(sf.data))
-			}
-		}
-		for _, line := range leftOut {
-			fmt.Fprintln(w, line)
-		}
-		fmt.Fprintf(w, "  also: your %d identity records and %d pairings, and the share record itself\n", len(proof)-pairings, pairings)
-		fmt.Fprintln(w, "Each record also carries the time when it was entered, your key and the version of bean. Your identity records show when you made your log, when you changed a key, and how many records you had at each change.")
-		if *seal {
-			fmt.Fprintln(w, "A sealed package is a disclosure: it is encrypted on its way, and once its reader has opened it, it cannot be taken back. Each record carries your identity id, so two packages of yours can be linked.")
-		} else {
-			fmt.Fprintln(w, "A bundle is a disclosure: it is not encrypted, and once sent it cannot be taken back. Each record carries your identity id, so two bundles of yours can be linked. With -seal it is one encrypted file.")
-		}
-		fmt.Fprintf(w, "Share %d records? [y/N] ", len(shared))
-		if !confirmed(bufio.NewReader(os.Stdin)) {
-			fail(errors.New("nothing was written: not shared"))
-		}
-		// The log may have changed while the question waited.
-		if l, err = s.Load(); err != nil {
-			fail(err)
-		}
-		for _, r := range shared {
-			if now := l.Report.Records[r.ID]; now == nil || notShareable(l, deleted, now) != "" {
-				fail(fmt.Errorf("nothing was written: %s changed while you decided. Run bean share again", r.ID[7:19]))
-			}
-		}
-	}
+	c := chooseForShare(s, l, recs, pos, *typ, *files)
+	l = reviewShare(s, l, c, out, *files, *seal, *yes, *note)
+	shared, kept, proof, distinct := c.shared, c.kept, c.proof, c.distinct
 	// The share record: the person's signed list of what the bundle holds.
 	var ids, proofIDs, fileList []any
 	for _, r := range shared {
@@ -537,6 +307,273 @@ func cmdShare(s *core.Store, args []string) {
 	}
 	fmt.Println(who)
 	fmt.Println("The bundle is not encrypted: anyone who gets the folder can read it. Share with -seal to write one file that only its reader can open.")
+}
+
+// shareChoice is what a share holds, decided before anything is asked or
+// written.
+type shareChoice struct {
+	deleted   map[string]bool         // ids that the person deleted
+	chosen    map[string]*core.Record // what goes, by id
+	broughtBy map[string]string       // a record that came along -> the one that is about it
+	leftOut   []string                // why a record that another is about stays
+	shared    []*core.Record          // chosen, in the order of a listing
+	kept      []sharedFile            // the files those records keep
+	distinct  map[string]bool         // the files that travel, by SHA-256
+	proof     []*core.Record          // identity records and pairings
+	pairings  int                     // how many of proof are pairings
+	keepsFile int                     // records that a type did not pick: they keep a file
+}
+
+// chooseForShare decides what a share holds: the records that the person
+// named or that a type picks, the record that each is about, the files
+// that travel, and the proof of who signed. It writes nothing. A choice
+// that cannot be shared ends the command.
+func chooseForShare(s *core.Store, l *core.Loaded, recs []*core.Record, pos []string, typ string, files bool) shareChoice {
+	deleted := deletedByPerson(l)
+	// What the person chose, and which of it they named one by one.
+	chosen := map[string]*core.Record{}
+	named := map[string]bool{}
+	// A type picks readings, never a record that keeps a file: 'lab.*' must
+	// not sweep up the lab report itself, with the person's name in it. Such
+	// a record is shared when it is named by its id.
+	// Nor does a type pick a record that someone else signed: a peer's
+	// note, or a record of a key that the person never paired, which a sync
+	// tool can put into the folder. The person's own record of the share
+	// vouches for the list, so such a record goes when they name it.
+	keepsFile, byOthers := 0, 0
+	mine := l.FileLabels() // the person's agents
+	if typ != "" {
+		for _, r := range recs {
+			switch {
+			case notShareable(l, deleted, r) != "":
+			case len(r.Blobs) > 0:
+				keepsFile++
+			case r.Author != l.ID && mine[r.Author] == "":
+				byOthers++
+			default:
+				chosen[r.ID] = r
+			}
+		}
+		if byOthers > 0 {
+			fmt.Fprintf(os.Stderr, "%d records of type %s that someone else signed stay home: share such a record by its id\n", byOthers, typ)
+		}
+		if len(chosen) == 0 {
+			fail(fmt.Errorf("no current record of type %s in that time (a record that keeps a file, or that someone else signed, is shared by its id, not by type)", typ))
+		}
+	}
+	for _, id := range pos {
+		r, err := l.Resolve(id)
+		if err != nil {
+			fail(err)
+		}
+		if why := notShareable(l, deleted, r); why != "" {
+			fail(fmt.Errorf("%s cannot be shared: %s", r.ID, why))
+		}
+		chosen[r.ID], named[r.ID] = r, true
+	}
+	// A record is read with the record it is about: a comparison with its
+	// reading, an estimate with its meal. That one comes along, and only
+	// that one: what it is about in turn stays, unless it is chosen too.
+	broughtBy := map[string]string{}
+	var leftOut []string
+	for _, id := range slices.Sorted(maps.Keys(chosen)) {
+		for _, target := range chosen[id].Targets("about") {
+			t := l.Report.Records[target]
+			switch {
+			case chosen[target] != nil:
+			case t == nil:
+				leftOut = append(leftOut, fmt.Sprintf("  not shared: %s, which %s is about: it is not in this log", target[7:19], id[7:19]))
+			case notShareable(l, deleted, t) != "":
+				leftOut = append(leftOut, fmt.Sprintf("  not shared: %s, which %s is about: %s", target[7:19], id[7:19], notShareable(l, deleted, t)))
+			default:
+				broughtBy[target] = id
+			}
+		}
+	}
+	for target := range broughtBy {
+		chosen[target] = l.Report.Records[target]
+	}
+	shared := slices.Collect(maps.Values(chosen))
+	sort.Slice(shared, func(i, j int) bool {
+		wi, wj := core.When(shared[i]), core.When(shared[j])
+		if !wi.Equal(wj) {
+			return wi.Before(wj)
+		}
+		return shared[i].ID < shared[j].ID
+	})
+	// The files those records keep. With -files a file travels only when the
+	// person named its record by id, or when it is a public reference file
+	// that the person kept: never because a record came along, or was picked
+	// by type. A lab report holds a name and a birth date, and a note about
+	// it must not carry it out.
+	var kept []sharedFile
+	distinct := map[string]bool{}
+	seen := map[string]bool{}
+	// Only a record of the person or of a paired agent opens a file, as in
+	// an export. Anyone can write a record that names a file of the log,
+	// also a file whose record the person deleted. In a log with records of
+	// a newer bean this list is empty: an agent's file then stays home
+	// here, and an export still carries it.
+	opens := mine
+	for _, r := range shared {
+		public := r.Type == nhanes.FileType && r.Author == l.ID
+		travels := files && (named[r.ID] || public)
+		if travels && len(r.Blobs) > 0 && r.Author != l.ID && opens[r.Author] == "" {
+			fail(fmt.Errorf("%s names a file, and it is not your record or a paired agent's: such a record opens no file, so nothing was shared. Share it without -files, or delete it: bean purge %s", r.ID[7:19], r.ID[7:19]))
+		}
+		for _, b := range r.Blobs {
+			if seen[b.Hash+" "+r.ID] {
+				continue // a record may name one file twice
+			}
+			seen[b.Hash+" "+r.ID] = true
+			sf := sharedFile{blob: b.Hash, record: r.ID, mediaType: b.MediaType, recordType: r.Type, public: public}
+			if travels {
+				data, err := s.GetBlob(b.Hash)
+				if err != nil {
+					fail(fmt.Errorf("the file of %s cannot be read: %w", r.ID[7:19], err))
+				}
+				sum := sha256.Sum256(data)
+				sf.digest, sf.data = hex.EncodeToString(sum[:]), data
+				if stated := bundle.StatedDigest(r, b.Hash); stated != "" && stated != sf.digest {
+					fail(fmt.Errorf("the file of %s does not match the SHA-256 in its record", r.ID[7:19]))
+				}
+				distinct[sf.digest] = true
+			}
+			kept = append(kept, sf)
+		}
+	}
+	// The records that show which keys speak for the person, and which
+	// agents the person paired, for the readings an agent signed. The share
+	// record lists them too, so that none can be taken out or put in.
+	authors := map[string]bool{}
+	for _, r := range shared {
+		authors[r.Author] = true
+	}
+	var proof []*core.Record
+	pairings := 0
+	for _, id := range slices.Sorted(maps.Keys(l.Report.Records)) {
+		r := l.Report.Records[id]
+		switch {
+		case !l.Report.Valid[id]:
+		case bundle.OnChain(l.Report, r, l.ID):
+			proof = append(proof, r)
+		case bundle.IsPairing(r, l.ID) && authors[r.ValueKey()] && l.Current(id):
+			proof = append(proof, r)
+			pairings++
+		}
+	}
+	return shareChoice{deleted, chosen, broughtBy, leftOut, shared, kept, distinct, proof, pairings, keepsFile}
+}
+
+// reviewShare says what stays home, shows the person what leaves, and asks.
+// Without a terminal and without -yes it ends the command. It returns the
+// log as it is after the question: it may have changed while the person
+// decided, and then nothing is shared.
+func reviewShare(s *core.Store, l *core.Loaded, c shareChoice, out string, files, seal, yes bool, note string) *core.Loaded {
+	var err error
+	deleted, chosen, broughtBy, leftOut := c.deleted, c.chosen, c.broughtBy, c.leftOut
+	shared, kept, proof, pairings, keepsFile := c.shared, c.kept, c.proof, c.pairings, c.keepsFile
+	// The person sees what leaves before anything is written, where the
+	// question is asked. Without a terminal and without -yes nothing is
+	// written: an assistant that runs this through a tool cannot disclose
+	// for the person.
+	labels := l.PairedLabels()
+	// What stays home is said with or without the review.
+	publicHome, travels := 0, 0
+	for _, sf := range kept {
+		switch {
+		case sf.data != nil:
+			travels++
+		case sf.public:
+			publicHome++
+		default:
+			leftOut = append(leftOut, fmt.Sprintf("  not shared: the file that %s (%s) keeps. With -files, name that record by its id to share its file.", sf.record[7:19], sf.recordType))
+		}
+	}
+	// The public files are said once, with what their absence means.
+	if publicHome > 0 {
+		leftOut = append(leftOut, fmt.Sprintf("  not shared: the %d public files that the reference.file records keep. Add -files to share them: without them a reader needs the files from their publisher to compute a comparison again.", publicHome))
+	}
+	// A comparison with a reference pack names the pack and does not hold
+	// it: the reader needs that file to compute the comparison again.
+	var packs []string
+	for _, id := range slices.Sorted(maps.Keys(chosen)) {
+		ref, _ := chosen[id].Context["reference"].(map[string]any)
+		if digest, _ := ref["pack"].(string); pack.IsDigest(digest) && strings.HasPrefix(chosen[id].Type, "comparison.") && !slices.Contains(packs, digest) {
+			packs = append(packs, digest)
+		}
+	}
+	for _, digest := range packs {
+		leftOut = append(leftOut, fmt.Sprintf("  not shared: the reference pack %s. A comparison names it, and a reader needs that file to compute the comparison again: send it too, or say where it is.", digest))
+	}
+	if files && travels == 0 {
+		leftOut = append(leftOut, "  -files: no record that you named keeps a file, so no file goes")
+	}
+	if keepsFile > 0 {
+		leftOut = append(leftOut, fmt.Sprintf("  not shared: %d records of that type that keep a file. Name one by its id to share it.", keepsFile))
+	}
+	if yes {
+		for _, line := range leftOut {
+			fmt.Fprintln(os.Stderr, strings.TrimSpace(line))
+		}
+	}
+	if !yes {
+		if !isTerminal(os.Stdin) || !isTerminal(os.Stderr) {
+			fail(errors.New("share needs a terminal: run bean share yourself to see what leaves, or pass -yes to write without review"))
+		}
+		w := os.Stderr
+		fmt.Fprintf(w, "To share, into %s:\n", out)
+		// What the person chose comes first, then what comes along with it.
+		row := func(r *core.Record) string {
+			return fmt.Sprintf("  %s  %s  %s  %s", whenText(r), r.Type, safe(strings.TrimSpace(recordText(r, currentRecord(l))+"  "+byText(r, l.ID, labels))), r.ID[7:19])
+		}
+		for _, r := range shared {
+			if broughtBy[r.ID] == "" {
+				fmt.Fprintln(w, row(r))
+			}
+		}
+		for _, r := range shared {
+			if by := broughtBy[r.ID]; by != "" {
+				fmt.Fprintln(w, row(r)+"  (comes along: "+by[7:19]+" is about it)")
+			}
+		}
+		if note != "" {
+			fmt.Fprintf(w, "  with your note for the reader: %s\n", safe(note))
+		}
+		for _, sf := range kept {
+			switch {
+			case sf.data == nil:
+			case sf.public:
+				fmt.Fprintf(w, "  the public file that %s (%s) keeps: %d bytes\n", sf.record[7:19], sf.recordType, len(sf.data))
+			default:
+				fmt.Fprintf(w, "  THE WHOLE FILE that %s (%s) keeps, as you imported it: %s, %d bytes, in plaintext. A lab report holds your name and birth date.\n", sf.record[7:19], sf.recordType, safe(sf.mediaType), len(sf.data))
+			}
+		}
+		for _, line := range leftOut {
+			fmt.Fprintln(w, line)
+		}
+		fmt.Fprintf(w, "  also: your %d identity records and %d pairings, and the share record itself\n", len(proof)-pairings, pairings)
+		fmt.Fprintln(w, "Each record also carries the time when it was entered, your key and the version of bean. Your identity records show when you made your log, when you changed a key, and how many records you had at each change.")
+		if seal {
+			fmt.Fprintln(w, "A sealed package is a disclosure: it is encrypted on its way, and once its reader has opened it, it cannot be taken back. Each record carries your identity id, so two packages of yours can be linked.")
+		} else {
+			fmt.Fprintln(w, "A bundle is a disclosure: it is not encrypted, and once sent it cannot be taken back. Each record carries your identity id, so two bundles of yours can be linked. With -seal it is one encrypted file.")
+		}
+		fmt.Fprintf(w, "Share %d records? [y/N] ", len(shared))
+		if !confirmed(bufio.NewReader(os.Stdin)) {
+			fail(errors.New("nothing was written: not shared"))
+		}
+		// The log may have changed while the question waited.
+		if l, err = s.Load(); err != nil {
+			fail(err)
+		}
+		for _, r := range shared {
+			if now := l.Report.Records[r.ID]; now == nil || notShareable(l, deleted, now) != "" {
+				fail(fmt.Errorf("nothing was written: %s changed while you decided. Run bean share again", r.ID[7:19]))
+			}
+		}
+	}
+	return l
 }
 
 // sealPackage packs files and seals them with new words. It opens the
