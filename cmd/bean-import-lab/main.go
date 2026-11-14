@@ -102,7 +102,7 @@ func main() {
 	if err != nil && *blob != "" && !looksLikeReport(text) {
 		// Not a lab report at all, as far as this importer can tell: a
 		// file of another kind is not kept as one.
-		fmt.Fprintln(os.Stderr, "bean-import-lab: this does not look like a lab report: it has no line of column names, such as Test, Result and Reference Range. To keep a file of another kind: bean blob put <file>")
+		fmt.Fprintln(os.Stderr, "bean-import-lab: this does not look like a lab report to this importer: it found no line of column names, such as Test, Result and Reference Range, set apart by two spaces or more. A report in another language, or with its column names on two lines, is not known yet. To keep the file all the same: bean blob put <file>")
 		os.Exit(1)
 	}
 	if err != nil && *blob != "" {
