@@ -839,3 +839,38 @@ func TestImportKeepsAFileOnce(t *testing.T) {
 		t.Errorf("the log holds the file twice, or not the reading:\n%s", ls)
 	}
 }
+
+// A file that was kept unread and then deleted stays deleted, also when a
+// later importer names its lab otherwise: the memory of a deletion goes by
+// the file, not by the lab's name (DECISIONS 306).
+func TestADeletedFileStaysDeletedUnderAnotherLabName(t *testing.T) {
+	dir := t.TempDir()
+	run(t, dir, "", "init")
+	f := filepath.Join(t.TempDir(), "in.txt")
+	os.WriteFile(f, []byte("synthetic input\n"), 0o600)
+	importer := func(system string) (string, error) {
+		bin := t.TempDir()
+		line := `{"type":"x.file","value":{"blob":"'"$2"'"},"times":{"observed":null},"source":{"system":"` + system + `","adapter":"t@1","ref_input":["bean/v0/ref","id","` + system + `","file",0]},"blobs":[{"hash":"'"$2"'","role":"raw-export","media_type":"text/plain"}],"context":{"sha256":"'"$d"'"}}`
+		os.WriteFile(filepath.Join(bin, "bean-import-x"), []byte("#!/bin/sh\nd=$(sha256sum \"$3\" | cut -d' ' -f1)\necho '"+line+"'\n"), 0o755)
+		cmd := exec.Command(os.Args[0], "import", "-yes", "x", f)
+		cmd.Env = append(os.Environ(), "BEAN_TEST_MAIN=1", "BEAN_DIR="+dir, "BEAN_NOW=", "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+	first, err := importer("unknown")
+	id := regexp.MustCompile(`bean purge ([0-9a-f]{12})`).FindStringSubmatch(first)
+	if err != nil || id == nil {
+		t.Fatalf("the first import: %v\n%s", err, first)
+	}
+	if _, errs, code := run(t, dir, "", "purge", id[1]); code != 0 {
+		t.Fatalf("purge: %s", errs)
+	}
+	for _, system := range []string{"unknown", "a lab"} {
+		if out, err := importer(system); err == nil || !strings.Contains(out, "you deleted this file before") {
+			t.Errorf("as %q the deleted file came back: %v\n%s", system, err, out)
+		}
+	}
+	if ls, _, _ := run(t, dir, "", "ls", "-all", "-json"); strings.Contains(ls, `"type":"x.file"`) {
+		t.Errorf("the log holds the deleted file:\n%s", ls)
+	}
+}

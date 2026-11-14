@@ -109,7 +109,7 @@ Run the same import again: it shows the readings and asks again, then says `alre
 
 ### If no reading was read
 
-`bean import lab` reads a report only in a layout that it knows, and labs print many. When it cannot read a report for sure, it writes none of the values, and it keeps the file. The report is then in your log, encrypted, under its SHA-256. bean says `no reading was read`, and why, with the words of your report masked. `bean purge <id>` takes the file out again. A file with no line of column names, such as `Test`, `Result` and `Reference Range`, is not kept as a lab report. A scan, which holds a picture of the page and no text, is such a file. `bean blob put <file>` keeps a file of any kind.
+`bean import lab` reads a report only in a layout that it knows, and labs print many. When it cannot read a report for sure, it writes none of the values, and it keeps the file. The report is then in your log, encrypted, under its SHA-256. bean says `no reading was read`, and why, with the words of your report masked. `bean purge <id>` takes the file out again, and bean then refuses that same file in a later import. A file with no line of column names, such as `Test`, `Result` and `Reference Range`, is not kept as a lab report. A scan, which holds a picture of the page and no text, is such a file. `bean blob put <file>` keeps a file of any kind.
 
 To say which layouts bean cannot read, send counts and no values. This writes nothing, and prints no value, no name of a test and no word of your report:
 
@@ -117,7 +117,7 @@ To say which layouts bean cannot read, send counts and no values. This writes no
 bean-import-lab -count ~/Downloads/lab-result.pdf
 ```
 
-Its lines say how far each reader got: how many results, and at which line it stopped. What a refusal quotes from your report shows as `x` and `9`. Until bean reads your layout, `bean add` and `bean import csv` take the values that you type or keep in a table.
+Its lines say how far each reader got: how many results, and at which line or place on a page it stopped. What a refusal quotes from your report shows as `x` and `9`, 20 characters at most: its shape, not its words. Until bean reads your layout, `bean add` and `bean import csv` take the values that you type or keep in a table.
 
 A `.txt` from `pdftotext -layout report.pdf report.txt` imports the same way. Apple Health and CSV: see the [README](../README.md#import-your-data).
 
