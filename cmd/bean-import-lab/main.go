@@ -57,11 +57,12 @@ func main() {
 	fs.SetOutput(io.Discard)
 	blob := fs.String("blob", "", "blob id of the PDF, from bean blob put")
 	tz := fs.String("tz", "", "IANA zone of the collection site, for example America/Chicago")
+	count := fs.Bool("count", false, "write no record: say how far each reader gets, in counts, with no value")
 	if err := fs.Parse(os.Args[1:]); err != nil || fs.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "usage: bean-import-lab [-blob <blob id>] [-tz <zone>] <report.pdf | report.txt | report.html>")
+		fmt.Fprintln(os.Stderr, "usage: bean-import-lab [-blob <blob id>] [-tz <zone>] [-count] <report.pdf | report.txt | report.html>")
 		os.Exit(2)
 	}
-	if *blob == "" {
+	if *blob == "" && !*count {
 		fmt.Fprintln(os.Stderr, "bean-import-lab: warning: no -blob: the report is not kept; run bean blob put <report.pdf> first and pass -blob <id>")
 	}
 	text, raw, err := readSource(fs.Arg(0))
@@ -77,6 +78,12 @@ func main() {
 		}
 		os.Exit(1)
 	}
+	if *count {
+		for _, line := range measure(text, raw) {
+			fmt.Println(line)
+		}
+		return
+	}
 	var loc *time.Location
 	if *tz != "" {
 		if loc, err = time.LoadLocation(*tz); err != nil {
@@ -84,9 +91,24 @@ func main() {
 			os.Exit(2)
 		}
 	}
+	if *blob != "" && !regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(*blob) {
+		fmt.Fprintln(os.Stderr, "bean-import-lab: invalid blob reference")
+		os.Exit(2)
+	}
 	rep, err := readReport(text, raw)
 	if err == nil {
 		err = rep.checkZone(loc)
+	}
+	if err != nil && *blob != "" {
+		// A report that cannot be read for sure is still the person's
+		// report. The file is kept, and no result is written: a reading is
+		// refused, never the file (docs/IMPORTERS.md, rule 1).
+		if werr := writeRecords(os.Stdout, []map[string]any{archiveFor(systemOf(text), raw, *blob)}); werr != nil {
+			fmt.Fprintln(os.Stderr, "bean-import-lab: output failed")
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "bean-import-lab: no result was read, and the report is kept: %s\n", err)
+		return
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "bean-import-lab: %s\n", err)
@@ -105,10 +127,6 @@ func main() {
 		}
 	}
 	if *blob != "" {
-		if !regexp.MustCompile(`^sha256:[0-9a-f]{64}$`).MatchString(*blob) {
-			fmt.Fprintln(os.Stderr, "bean-import-lab: invalid blob reference")
-			os.Exit(2)
-		}
 		records = append([]map[string]any{archiveFor(rep.system(), raw, *blob)}, records...)
 	}
 	if err := writeRecords(os.Stdout, records); err != nil {
@@ -116,6 +134,15 @@ func main() {
 		os.Exit(1)
 	}
 	fmt.Fprintf(os.Stderr, "bean-import-lab: %d results, %d without a value. Importing the same report again adds nothing; a result whose value changed needs -corrections\n", len(rep.Results), missing)
+}
+
+// systemOf names the lab of a report that was not read, as well as its
+// text tells: the name that a reader of that lab's layout would give.
+func systemOf(text string) string {
+	if questDetect(text) || isBBoxDoc(text) {
+		return questSystem
+	}
+	return system
 }
 
 const maxReportBytes = 32 << 20

@@ -22,7 +22,7 @@ Give the assistant these rules first:
 >
 > 1. Never ask for my 24 words. Never run `bean init`, `bean rotate` or `bean restore`: I run them myself, in a terminal you cannot read. If I start to type or paste the words to you, stop me. I also run `bean import` myself: it shows my values for me to check. Never pass `-yes` for me.
 > 2. Do not look at my health data. Do not open my lab reports or log files, and do not run `bean ls`, `bean show`, `bean compare`, `bean check-bundle`, `bean export` or `bean blob get` unless I ask. Never run `bean share`: I decide what leaves, at my own terminal. Use exit codes and counts: the `added` line of an import, the `summary` line of `bean verify`.
-> 3. If an import is refused, ask for the shape of the line, as the guide shows, not its contents.
+> 3. If no reading was read, ask for the counts of `bean-import-lab -count`, as the guide shows, not the report or its values.
 > 4. Keep my data on my machine. Do not upload files or paste my records anywhere. Connecting you to my log through MCP is where my records start to reach your provider. Do it only when I say so, read-only first (`bean mcp`, no `-write` or `-blobs`). Ask before `-write` or `-blobs`.
 
 ## 1. Install
@@ -107,15 +107,17 @@ Run the same import again: it shows the readings and asks again, then says `alre
 
 `-yes` saves without the review, for scripts. Without a terminal and without `-yes`, `bean import` writes nothing and shows no value: that is what happens when an AI assistant runs it.
 
-### If the import is refused
+### If no reading was read
 
-Nothing is written. The error names a line, for example `line 42: "x10E3/uL" runs across two columns`: the importer refuses what it cannot read for sure. The error can hold one of your values, so do not paste it publicly. Share the shape of the line instead, with letters and digits masked:
+`bean import lab` reads a report only in a layout that it knows, and labs print many. When it cannot read a report for sure, it writes none of the values, and it keeps the file. The report is then in your log, encrypted, under its SHA-256. bean says `no reading was read`, and why. `bean purge <id>` takes the file out again.
+
+To say which layouts bean cannot read, send counts and no values. This writes nothing, and prints no value, no name of a test and no word of your report:
 
 ```
-pdftotext -layout ~/Downloads/lab-result.pdf - | sed -n '42p' | tr '0-9' '9' | tr 'A-Za-z' 'x'
+bean-import-lab -count ~/Downloads/lab-result.pdf
 ```
 
-Use the line number from the error. The output looks like `      xxx 99        9.99        x99x9/xx        9.99-9.99`: enough to add the shape to the importer.
+Its lines say how far each reader got: how many results, and at which line it stopped. What a refusal quotes from your report shows as `x` and `9`. Until bean reads your layout, `bean add` and `bean import csv` take the values that you type or keep in a table.
 
 A `.txt` from `pdftotext -layout report.pdf report.txt` imports the same way. Apple Health and CSV: see the [README](../README.md#import-your-data).
 
@@ -228,7 +230,8 @@ Saved comparisons, the reference files you kept and the records of your shares a
 | `bean: not initialized`, `no log in ...` | Set `BEAN_DIR` (step 2) or pass `-dir ~/health`. Rebuilding? `bean restore` (step 7), not `bean init`. |
 | `pdftotext not found` | `brew install poppler`, or import a `.txt` from `pdftotext -layout`. |
 | `unknown time zone` | A zone name such as `America/Chicago`, not `CST`. |
-| `the file was not accepted, and nothing was written` | A line the importer could not read for sure. See [If the import is refused](#if-the-import-is-refused). |
+| `the file was not accepted, and nothing was written` | The file is not one that the importer takes at all, or you did not say yes. |
+| `no reading was read` | A line the importer could not read for sure. The file is kept. See [If no reading was read](#if-no-reading-was-read). |
 | `bean: input missing: <id>` | Use the record id from `bean ls` or the `kept` line, not the `stored as` id. |
 | `changed: ... this input says ...` | A newer report changed a value. If it is right, import again with `-corrections`. |
 | `bean: undecided: ...` from `restore` | Expected on the first run. Read the list, then `-seal-all` (step 7). |

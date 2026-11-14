@@ -2,7 +2,9 @@
 
 Reads lab report PDFs in the layouts it knows: the Labcorp patient report
 (`labcorp.go`) and the Quest Diagnostics report (`quest.go`). Each layout
-has a file of its own. Any other report is refused.
+has a file of its own. A report in any other layout is kept, and none of its
+values is read. `bean-import-lab -count <report>` says how far each reader
+gets on a report, in counts, with no value and no word of the report.
 
 Supports the observed layouts, not arbitrary blood-test PDFs or image-only
 scans. PDF input requires `pdftotext` (Poppler). For a Labcorp report,
