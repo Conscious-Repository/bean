@@ -117,21 +117,12 @@ ANALYTES = {
     ("lab.rdw", "%"): ("CBC_J", "LBXRDW"),
     ("lab.platelets", "x10E3/uL"): ("CBC_J", "LBXPLTSI"),
     ("lab.platelet-count", "Thousand/uL"): ("CBC_J", "LBXPLTSI"),
-    ("lab.ast-sgot", "IU/L"): ("BIOPRO_J", "LBXSASSI"),
-    ("lab.ast", "U/L"): ("BIOPRO_J", "LBXSASSI"),
-    ("lab.alkaline-phosphatase", "IU/L"): ("BIOPRO_J", "LBXSAPSI"),
-    ("lab.alkaline-phosphatase", "U/L"): ("BIOPRO_J", "LBXSAPSI"),
     ("lab.bun", "mg/dL"): ("BIOPRO_J", "LBXSBU"),
     ("lab.urea-nitrogen-bun", "mg/dL"): ("BIOPRO_J", "LBXSBU"),
     ("lab.creatinine", "mg/dL"): ("BIOPRO_J", "LBXSCR"),
-    ("lab.sodium", "mmol/L"): ("BIOPRO_J", "LBXSNASI"),
     ("lab.potassium", "mmol/L"): ("BIOPRO_J", "LBXSKSI"),
-    ("lab.chloride", "mmol/L"): ("BIOPRO_J", "LBXSCLSI"),
-    ("lab.calcium", "mg/dL"): ("BIOPRO_J", "LBXSCA"),
     ("lab.protein-total", "g/dL"): ("BIOPRO_J", "LBXSTP"),
     ("lab.uric-acid", "mg/dL"): ("BIOPRO_J", "LBXSUA"),
-    ("lab.iron", "ug/dL"): ("BIOPRO_J", "LBXSIR"),
-    ("lab.iron-total", "mcg/dL"): ("BIOPRO_J", "LBXSIR"),
     ("lab.creatine-kinase-total", "U/L"): ("BIOPRO_J", "LBXSCK"),
     ("lab.ferritin", "ng/mL"): ("FERTIN_J", "LBXFER"),
 }
@@ -146,14 +137,14 @@ CAVEAT_UNKNOWN = "this copy of %s is not the file on record: its SHA-256 differs
 CAVEAT_AUTHOR = "the reading was signed by an agent or another key, not by you"
 CAVEAT_UNKNOWN_PACK = "bean has no record of this pack: nobody has checked its tables, its caveats, or what it sets a reading against"
 
-# The packs on record, by SHA-256: the pack that the builder gives from the
-# six NHANES files on record. bean holds the same table, and a test keeps
-# the two equal. A comparison with any other pack is computed again, and
-# marked: whoever built that pack chose its tables, its caveats and what
-# each reading is set against.
+# The packs on record, by SHA-256: the packs that the builder gives from
+# the six, and from the eight, NHANES files on record. bean holds the same
+# table, and a test keeps the two equal. A comparison with any other pack
+# is computed again, and marked: whoever built that pack chose its tables,
+# its caveats and what each reading is set against.
 KNOWN_PACKS = {
     "10555d6769421d4305cbcd4ff14960d8b966ddd829a50581a9584a60a84d29e2": "the NHANES 2017-2018 pack",
-    "d4b7205b503bc23d0842c176a47a5ce1d211189af4c107bec9dc48605812a4bf": "the NHANES 2017-2018 pack of 26 measures",
+    "5cae07db64295d565ffae7c251c17fdb9f043dc0638868557275f8b0b0311efa": "the NHANES 2017-2018 pack of 20 measures",
 }
 # The members of a pack claim's context (docs/REFERENCE.md, "The claim").
 PACK_CONTEXT = {"reading", "reference", "cohort", "method", "result", "caveats"}

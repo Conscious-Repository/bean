@@ -120,13 +120,14 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 
 **Done.** A reference pack ([REFERENCE.md](REFERENCE.md), DECISIONS 281): one file, named by its SHA-256, with a table for each measure and each cohort on its menu. `bean-pack-nhanes` builds one from the NHANES files, with weight beside the blood tests. `bean compare -pack` compares with it and saves a claim that names the pack. A Python check reads the format from its document, builds every table again from the files, and computes every claim again.
 
-**Done: more tests in the NHANES pack (DECISIONS 309).** A second pack is on record: 26 measures, from eight files. It adds twelve tests of the standard biochemistry profile, and ferritin. The tests are the ones that the two real report layouts print. The first pack stays on record.
+**Done: more tests in the NHANES pack (DECISIONS 309).** A second pack is on record: 20 measures, from eight files. It adds six tests of the standard biochemistry profile, and ferritin. The tests are ones that the two real report layouts print. The first pack stays on record.
 
 **Next for the breadth of tests.** `bean compare -type 'lab.*'` names the types with no reference data in one line, with no value. Each of these needs its own step:
 
 - **A rule for a value below a detection limit.** ALT, GGT, total bilirubin and C-reactive protein wait for it. The rule needs a new member of a pack, so it is a change of the format.
 - **The fasting part of the sample:** glucose, triglycerides, LDL and insulin. They need another weight.
 - **More of the blood count:** the share and the count of each kind of white cell. `CBC_J` is in both packs on record, so these rows need a new version of the builder.
+- **Tests where two analyzers differ too much for a percentile:** sodium, chloride, calcium, AST, alkaline phosphatase and iron. A percentile is the wrong result for them. Another kind of result may fit, such as a range that the source states.
 - **Albumin, globulin and carbon dioxide**, when a source confirms that the lab and NHANES measure one thing ([COMPARE.md](COMPARE.md)).
 - **Hormones, vitamins and thyroid tests** are in other files, some of other survey years. A second cycle is a second set of files and weights.
 

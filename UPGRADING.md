@@ -42,8 +42,8 @@ Do not run `purge` or `gc` on the copies. Only they erase anything.
 
 `bean version` still says 0.6.0 for these builds. Nothing in a log changes.
 
-- `bean compare` compares thirteen more tests: twelve of the biochemistry profile, and ferritin. It needs the files `BIOPRO_J` and `FERTIN_J` in the log ([docs/COMPARE.md](docs/COMPARE.md)). Without them, a reading of such a test now says `not comparable: needs BIOPRO_J`. Before, its type was named under `No reference data`.
-- A second reference pack is on record: 26 measures, from eight files. The first pack stays on record, and a comparison that you saved with it still checks.
+- `bean compare` compares seven more tests: six of the biochemistry profile, and ferritin. It needs the files `BIOPRO_J` and `FERTIN_J` in the log ([docs/COMPARE.md](docs/COMPARE.md)). Without them, a reading of such a test now says `not comparable: needs BIOPRO_J`. Before, its type was named under `No reference data`. The line that lists the types with reference data is longer.
+- A second reference pack is on record: 20 measures, from eight files. The first pack stays on record, and a comparison that you saved with it still checks.
 - `bean import lab` keeps a report that it cannot read, with none of its values, and asks first. Before, it wrote nothing. `bean purge <id>` takes the file out, and bean then refuses that same file.
 
 ### 0.6.0

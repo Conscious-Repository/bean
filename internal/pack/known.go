@@ -91,14 +91,14 @@ func OwnType(typ string) bool { return ownType(typ) }
 // Known are the packs that bean has on record, by SHA-256. Both are built
 // by bean-pack-nhanes version 1 from NHANES files on record
 // (internal/nhanes). The first is the pack of six files: twelve blood
-// tests and weight. The second is the pack of eight files: it adds
-// twelve tests of the standard biochemistry profile, and ferritin. The
+// tests and weight. The second is the pack of eight files: it adds six
+// tests of the standard biochemistry profile, and ferritin. The
 // first stays on record: a comparison that a person saved with it still
 // names it. A test with CDC's files keeps each digest, the labels and the
 // cohorts true, and docs/REFERENCE.md states the digests too.
 var Known = map[string]OnRecordPack{
 	"10555d6769421d4305cbcd4ff14960d8b966ddd829a50581a9584a60a84d29e2": nhanesPack("the NHANES 2017-2018 pack", nhanesSix),
-	"d4b7205b503bc23d0842c176a47a5ce1d211189af4c107bec9dc48605812a4bf": nhanesPack("the NHANES 2017-2018 pack of 26 measures", nhanesSix, nhanesEight),
+	"5cae07db64295d565ffae7c251c17fdb9f043dc0638868557275f8b0b0311efa": nhanesPack("the NHANES 2017-2018 pack of 20 measures", nhanesSix, nhanesAdded),
 }
 
 // nhanesMeasure is what bean holds of one measure of an NHANES pack: its
@@ -125,19 +125,14 @@ var nhanesSix = []nhanesMeasure{
 	{"LBXWBCSI", "White blood cell count (1000 cells/uL)", []Same{{"lab.wbc", "x10E3/uL"}, {"lab.white-blood-cell-count", "Thousand/uL"}}},
 }
 
-// nhanesEight are the measures that the pack of eight files adds.
-var nhanesEight = []nhanesMeasure{
+// nhanesAdded are the measures that the pack of eight files adds to
+// those of the pack of six.
+var nhanesAdded = []nhanesMeasure{
 	{"LBXFER", "Ferritin (ng/mL)", []Same{{"lab.ferritin", "ng/mL"}}},
-	{"LBXSAPSI", "Alkaline Phosphatase (ALP) (IU/L)", []Same{{"lab.alkaline-phosphatase", "IU/L"}, {"lab.alkaline-phosphatase", "U/L"}}},
-	{"LBXSASSI", "Aspartate Aminotransferase (AST) (U/L)", []Same{{"lab.ast-sgot", "IU/L"}, {"lab.ast", "U/L"}}},
 	{"LBXSBU", "Blood Urea Nitrogen (mg/dL)", []Same{{"lab.bun", "mg/dL"}, {"lab.urea-nitrogen-bun", "mg/dL"}}},
-	{"LBXSCA", "Total Calcium (mg/dL)", []Same{{"lab.calcium", "mg/dL"}}},
 	{"LBXSCK", "Creatine Phosphokinase (CPK) (IU/L)", []Same{{"lab.creatine-kinase-total", "U/L"}}},
-	{"LBXSCLSI", "Chloride (mmol/L)", []Same{{"lab.chloride", "mmol/L"}}},
 	{"LBXSCR", "Creatinine, refrigerated serum (mg/dL)", []Same{{"lab.creatinine", "mg/dL"}}},
-	{"LBXSIR", "Iron, refrigerated serum (ug/dL)", []Same{{"lab.iron", "ug/dL"}, {"lab.iron-total", "mcg/dL"}}},
 	{"LBXSKSI", "Potassium (mmol/L)", []Same{{"lab.potassium", "mmol/L"}}},
-	{"LBXSNASI", "Sodium (mmol/L)", []Same{{"lab.sodium", "mmol/L"}}},
 	{"LBXSTP", "Total Protein (g/dL)", []Same{{"lab.protein-total", "g/dL"}}},
 	{"LBXSUA", "Uric acid (mg/dL)", []Same{{"lab.uric-acid", "mg/dL"}}},
 }

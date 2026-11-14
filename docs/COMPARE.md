@@ -30,7 +30,7 @@ bean uses a kept file only when its SHA-256 is the one on record. A download tha
 | `HDL_J` | HDL cholesterol | `lab.hdl-cholesterol` |
 | `GHB_J` | Glycohemoglobin | `lab.hemoglobin-a1c` |
 | `CBC_J` | Complete blood count | `lab.wbc` or `lab.white-blood-cell-count`, `lab.rbc` or `lab.red-blood-cell-count`, `lab.hemoglobin`, `lab.hematocrit`, `lab.mcv`, `lab.mch`, `lab.mchc`, `lab.rdw`, `lab.platelets` or `lab.platelet-count` |
-| `BIOPRO_J` | Standard biochemistry profile | `lab.ast-sgot` or `lab.ast`, `lab.alkaline-phosphatase`, `lab.bun` or `lab.urea-nitrogen-bun`, `lab.creatinine`, `lab.sodium`, `lab.potassium`, `lab.chloride`, `lab.calcium`, `lab.protein-total`, `lab.uric-acid`, `lab.iron` or `lab.iron-total`, `lab.creatine-kinase-total` |
+| `BIOPRO_J` | Standard biochemistry profile | `lab.bun` or `lab.urea-nitrogen-bun`, `lab.creatinine`, `lab.potassium`, `lab.protein-total`, `lab.uric-acid`, `lab.creatine-kinase-total` |
 | `FERTIN_J` | Ferritin | `lab.ferritin` |
 | `BMX_J` | Body measures | A rule on BMI or waist |
 | `DR1TOT_J` | What each person ate on one day, as nutrient totals | A rule on food |
@@ -49,14 +49,10 @@ A reading is compared only under one of these types, in the unit beside it. Type
 | `lab.white-blood-cell-count`, `lab.platelet-count` | `Thousand/uL` |
 | `lab.rbc` | `x10E6/uL` |
 | `lab.red-blood-cell-count` | `Million/uL` |
-| `lab.ast-sgot` | `IU/L` |
-| `lab.ast`, `lab.creatine-kinase-total` | `U/L` |
-| `lab.alkaline-phosphatase` | `IU/L` or `U/L` |
-| `lab.bun`, `lab.urea-nitrogen-bun`, `lab.creatinine`, `lab.calcium`, `lab.uric-acid` | `mg/dL` |
-| `lab.sodium`, `lab.potassium`, `lab.chloride` | `mmol/L` |
+| `lab.bun`, `lab.urea-nitrogen-bun`, `lab.creatinine`, `lab.uric-acid` | `mg/dL` |
+| `lab.potassium` | `mmol/L` |
 | `lab.protein-total` | `g/dL` |
-| `lab.iron` | `ug/dL` |
-| `lab.iron-total` | `mcg/dL` |
+| `lab.creatine-kinase-total` | `U/L` |
 | `lab.ferritin` | `ng/mL` |
 
 A reading you typed and a reading you imported are two readings, even with the same value. Each gets its own row.
@@ -134,9 +130,11 @@ Limits beyond those:
 
 - No interval of uncertainty is computed. The survey's design variables are in `DEMO_J` for it.
 - NHANES fills in a number for a value below a detection limit, and marks it in a comment-code variable. No test here has such a variable, and a test with CDC's files keeps that true. ALT, GGT, total bilirubin and C-reactive protein have one, so they are left out until the method has a rule for it.
-- Every test here is measured in everyone examined of the ages that CDC names for it. Tests that need fasting (glucose, triglycerides, LDL) or that NHANES measured in part of the sample are not here yet: they need other weights. The biochemistry profile also holds a glucose, a cholesterol and a triglyceride value. CDC's page says to use another file for each, so bean does not use them.
+- CDC planned each test here for everyone examined, of the ages that its page names. About nine in ten of those adults have a value. A percentile is among the people with a value, and the weight is not adjusted for the others.
+- Tests that need fasting (glucose, triglycerides, LDL) or that NHANES measured in part of the sample are not here yet: they need other weights. The biochemistry profile also holds a glucose, a cholesterol and a triglyceride value. CDC's page says to use another file for each, so bean does not use them.
 - CDC's page for each file names the ages that were measured. The biochemistry profile is from 12 years. Ferritin is for ages 1 to 5, and from 12 years. A cohort that reaches outside those ages holds only the people who were measured.
-- A lab's name for a test maps to an NHANES variable by a table in the code ([`internal/nhanes`](../internal/nhanes/nhanes.go)). Each row is a claim that the two measure the same thing in the same unit. Today the table has the names and units that the Labcorp and the Quest report print for these tests. `IU/L` and `U/L` are one unit, and so are `mcg` and `ug`. Mean platelet volume is left out on purpose: it differs too much between makes of analyzer. Albumin and globulin wait. NHANES measures albumin with the dye bromcresol purple, and many labs use bromcresol green, which reads higher. bean has not confirmed which dye each lab uses. Carbon dioxide waits too: NHANES calls its variable bicarbonate, and no source at hand says that the two are one.
+- Two analyzers do not give the same number for the same blood. CDC measured the biochemistry profile on two of them, with the same samples, and its page gives the mean difference for each test. For some tests, people lie so close together that this difference moves a percentile far. Sodium differs by 0.8 percent, and that is more than a third of the middle half of a cohort. So a test of the profile is compared only when the difference moves a middle value by less than a fifth of the middle half. Under that rule: total protein, uric acid, creatine kinase, urea nitrogen, potassium and creatinine, from 0.05 to 0.14. Left out: iron (0.21), alkaline phosphatase (0.25), chloride (0.36), sodium (0.37), calcium (0.39) and AST (0.49). A test with CDC's files holds the rule. For the tests of the other files, bean has no such figure from CDC.
+- A lab's name for a test maps to an NHANES variable by a table in the code ([`internal/nhanes`](../internal/nhanes/nhanes.go)). Each row is a claim that the two measure the same thing in the same unit. Today the table has the names and units that the Labcorp and the Quest report print for these tests. `IU/L` and `U/L` are one unit. Mean platelet volume is left out on purpose: it differs too much between makes of analyzer. Albumin and globulin wait. NHANES measures albumin with the dye bromcresol purple, and many labs use bromcresol green, which reads higher. bean has not confirmed which dye each lab uses. Carbon dioxide waits too: NHANES calls its variable bicarbonate, and no source at hand says that the two are one.
 
 ## Save, share, compute again
 

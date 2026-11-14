@@ -139,7 +139,9 @@ import json, sys
 records = [json.loads(l) for l in open(sys.argv[1])]
 person = lambda x: x["author"] == x["subject"]
 tc = next(x for x in records if x["type"] == "lab.cholesterol-total" and x["value"]["n"] == 187 and person(x))
-r = next(x for x in records if x["type"] == "comparison.percentile" and x["context"]["reading"] == tc["id"])
+# The comparison in one named cohort: the log holds one for each cohort, in
+# the order of their ids, and "another cohort" below must change it.
+r = next(x for x in records if x["type"] == "comparison.percentile" and x["context"]["reading"] == tc["id"] and x["context"]["reference"]["cohort"] == "male-30-39")
 other = next(x for x in records if x["type"] == "weight")
 ldl = next(x for x in records if x["type"] == "lab.ldl-cholesterol")
 c = r["context"]

@@ -42,7 +42,8 @@ func InCycle(dataset string) bool {
 }
 
 // Known holds the SHA-256 of each file as one download from wwwn.cdc.gov
-// gave it on 2026-11-09: the files on record. A file with another digest
+// gave it on 2026-11-09: the files on record. BIOPRO_J and FERTIN_J gave
+// the same digest again on 2026-11-14. A file with another digest
 // still imports, but bean compare uses it only when told to: it may be cut
 // short, changed, or a later release. tools/compare/reproduce.py holds the
 // same table, and a test keeps the two equal.
@@ -114,27 +115,19 @@ var Analytes = []Analyte{
 	{"lab.rdw", "%", "CBC_J", "LBXRDW", "%"},
 	{"lab.platelets", "x10E3/uL", "CBC_J", "LBXPLTSI", "1000 cells/uL"},
 	{"lab.platelet-count", "Thousand/uL", "CBC_J", "LBXPLTSI", "1000 cells/uL"},
-	// The standard biochemistry profile, and ferritin. IU/L and U/L are
-	// one unit of enzyme activity, and mcg and ug are one unit of mass:
-	// each lab prints its own spelling. Left out: glucose, cholesterol and
-	// triglycerides of the profile, since CDC names another file for each;
-	// ALT, GGT, total bilirubin and C-reactive protein, whose files mark
-	// values below a detection limit (DECISIONS 240, 309).
-	{"lab.ast-sgot", "IU/L", "BIOPRO_J", "LBXSASSI", "U/L"},
-	{"lab.ast", "U/L", "BIOPRO_J", "LBXSASSI", "U/L"},
-	{"lab.alkaline-phosphatase", "IU/L", "BIOPRO_J", "LBXSAPSI", "IU/L"},
-	{"lab.alkaline-phosphatase", "U/L", "BIOPRO_J", "LBXSAPSI", "IU/L"},
+	// Six tests of the standard biochemistry profile, and ferritin. A
+	// second lab's name for a test is a second row. DECISIONS 309 says why
+	// each other test of the profile is left out: CDC names another file
+	// for it, its file marks values below a detection limit, or CDC's own
+	// comparison of two analyzers moves a middle value by a fifth or more
+	// of the middle half of a cohort. Tests with CDC's files hold the last
+	// two rules.
 	{"lab.bun", "mg/dL", "BIOPRO_J", "LBXSBU", "mg/dL"},
 	{"lab.urea-nitrogen-bun", "mg/dL", "BIOPRO_J", "LBXSBU", "mg/dL"},
 	{"lab.creatinine", "mg/dL", "BIOPRO_J", "LBXSCR", "mg/dL"},
-	{"lab.sodium", "mmol/L", "BIOPRO_J", "LBXSNASI", "mmol/L"},
 	{"lab.potassium", "mmol/L", "BIOPRO_J", "LBXSKSI", "mmol/L"},
-	{"lab.chloride", "mmol/L", "BIOPRO_J", "LBXSCLSI", "mmol/L"},
-	{"lab.calcium", "mg/dL", "BIOPRO_J", "LBXSCA", "mg/dL"},
 	{"lab.protein-total", "g/dL", "BIOPRO_J", "LBXSTP", "g/dL"},
 	{"lab.uric-acid", "mg/dL", "BIOPRO_J", "LBXSUA", "mg/dL"},
-	{"lab.iron", "ug/dL", "BIOPRO_J", "LBXSIR", "ug/dL"},
-	{"lab.iron-total", "mcg/dL", "BIOPRO_J", "LBXSIR", "ug/dL"},
 	{"lab.creatine-kinase-total", "U/L", "BIOPRO_J", "LBXSCK", "IU/L"},
 	{"lab.ferritin", "ng/mL", "FERTIN_J", "LBXFER", "ng/mL"},
 }

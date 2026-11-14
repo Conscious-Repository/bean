@@ -122,7 +122,7 @@ func TestRealPack(t *testing.T) {
 	for _, c := range []struct {
 		names    []string
 		measures int
-	}{{six, 13}, {eight, 26}} {
+	}{{six, 13}, {eight, 20}} {
 		digest := realPack(t, c.names, c.measures)
 		seen[digest] = true
 	}
