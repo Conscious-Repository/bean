@@ -449,3 +449,26 @@ func TestCompareIsNotForTheMCPTool(t *testing.T) {
 		}
 	}
 }
+
+// TestCompareDate: each row starts with when the sample was taken, and the
+// readings of one draw sit together, in order of time, then of type.
+func TestCompareDate(t *testing.T) {
+	dir, _, _ := compareLog(t, "TCHOL_J", "HDL_J", "DEMO_J")
+	if _, errs, code := run(t, dir, "", "add", "lab.hdl-cholesterol", "48", "-unit", "mg/dL", "-at", "2025-05-31 08:00"); code != 0 {
+		t.Fatal(errs)
+	}
+	out, errs, code := run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", "-type", "lab.*")
+	if code != 0 {
+		t.Fatalf("%d\n%s\n%s", code, out, errs)
+	}
+	var got []string
+	for _, line := range strings.Split(out, "\n") {
+		if f := strings.Fields(line); len(f) > 2 && (f[0] == "DATE" || strings.HasPrefix(f[0], "20")) {
+			got = append(got, strings.Join(f[:3], " "))
+		}
+	}
+	want := []string{"DATE READING VALUE", "2025-05-31 08:00 lab.hdl-cholesterol", "2026-11-01 lab.cholesterol-total 193", "2026-11-01 lab.hdl-cholesterol 52"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("rows:\n%s\nwant:\n%s\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"), out)
+	}
+}

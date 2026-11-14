@@ -65,8 +65,8 @@ bean compare -sex female -age 40-49 3fa9c1
 
 ```
 Compared with NHANES 2017-2018: male, age 30-39.
-READING                VALUE      PERCENTILE  LOWER  SAME  MIDDLE HALF  MEDIAN  N    NOTE  ID
-lab.cholesterol-total  187 mg/dL  46          44.2%  3.5%  164 to 213   188     339        fca23ea91778
+DATE              READING                VALUE      PERCENTILE  LOWER  SAME  MIDDLE HALF  MEDIAN  N    NOTE  ID
+2026-11-03 08:53  lab.cholesterol-total  187 mg/dL  46          44.2%  3.5%  164 to 213   188     339        fca23ea91778
 PERCENTILE is the weighted share of the cohort with a lower value, plus half of those with the same value. It says where a value lies in this sample, not whether it is healthy.
 Read each number with these caveats:
   - the lab that measured the reading and NHANES used their own instruments and methods
@@ -75,6 +75,7 @@ Read each number with these caveats:
 Not saved. Pass -save to keep these comparisons as signed records.
 ```
 
+- **DATE**: when the sample was taken, as `bean ls` shows it. A report that gives no time of collection gives the day only. The rows of one draw sit together, by type.
 - **PERCENTILE**: the weighted share of the cohort with a lower value, plus half of those with the same value.
 - **LOWER**, **SAME**: those two shares.
 - **MIDDLE HALF**, **MEDIAN**: the 25th, 75th and 50th percentile of the cohort.
