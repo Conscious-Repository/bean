@@ -107,9 +107,10 @@ echo "$REPLYWORDS" | bean accept -yes -label reader -words "$READERWORDS" "$WORK
 bean ls -type note | sed 's/  *[0-9a-f]\{12\}$//'
 
 # The numbers must be the ones this example was written with. Ids differ
-# from run to run, so they are cut off, and the rows sorted. Rows with no
+# from run to run, so they are cut off, as is the date: a time shows in the
+# zone of the machine. Then the rows are sorted. Rows with no
 # number are left out.
-rows() { grep -h '^lab\.' "$@" | grep -v 'not comparable' | sed 's/  *[0-9a-f]\{12\}$//; s/   */  /g' | sort; }
+rows() { sed -E 's/^(-|[0-9]{4}-[0-9]{2}-[0-9]{2}( [0-9]{2}:[0-9]{2})?)  +//' "$@" | grep '^lab\.' | grep -v 'not comparable' | sed 's/  *[0-9a-f]\{12\}$//; s/   */  /g' | sort; }
 { echo "# men of 30 to 39"; rows "$WORK/compare.txt"; echo "# and a BMI from 20 to 27"; rows "$WORK/compare-bmi.txt"; } >"$WORK/numbers.txt"
 if diff "$WORK/numbers.txt" "$WANT" >"$WORK/diff.txt"; then
   say "Done: every number matches $(basename "$WANT"). The log, the files, the bundle and the package are in $WORK"

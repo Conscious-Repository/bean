@@ -65,6 +65,10 @@ The first release with a tag. Nothing in a log changes.
 - `gc` erases a target whose first tombstone became invalid while another valid tombstone still deletes it. It waits 7 days from that other tombstone's hold.
 - A record of a too-new identity gets no `hidden pending gc` warning.
 
+### Compare by date (2026-11-14)
+
+- The table of `bean compare` starts each row with the date the sample was taken, as `bean ls` shows it. The rows are in order of that date, then of type. A script that read the table by column, or by a line that starts with `lab.`, reads it one column off. Saved comparisons do not change.
+
 ### Compare and share (2026-11-10)
 
 - `sync` refuses a folder that is not a copy of your log. Read a bundle that someone sent with `check-bundle`.

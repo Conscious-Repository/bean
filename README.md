@@ -223,8 +223,8 @@ Type the name and the unit as COMPARE.md lists them: `mg/dl` is not `mg/dL`, and
 
 ```
 Compared with NHANES 2017-2018: male, age 30-39.
-READING                VALUE      PERCENTILE  LOWER  SAME  MIDDLE HALF  MEDIAN  N    NOTE  ID
-lab.cholesterol-total  187 mg/dL  46          44.2%  3.5%  164 to 213   188     339        fca23ea91778
+DATE              READING                VALUE      PERCENTILE  LOWER  SAME  MIDDLE HALF  MEDIAN  N    NOTE  ID
+2026-11-03 08:53  lab.cholesterol-total  187 mg/dL  46          44.2%  3.5%  164 to 213   188     339        fca23ea91778
 ```
 
 - It says where a value lies in a sample, and how many people the sample has. It does not say whether a value is healthy, and it does not advise.
