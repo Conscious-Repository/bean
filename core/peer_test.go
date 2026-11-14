@@ -542,3 +542,33 @@ func TestImportExportBringsBackAnOwnFile(t *testing.T) {
 		t.Errorf("the file that a live record of the person names did not come back: %v", err)
 	}
 }
+
+// TestMoveExportIntoAFolder: an export moves into a folder that is there
+// with its manifest last, since the manifest says that an export is whole.
+// When a move fails, what was moved is taken out again.
+func TestMoveExportIntoAFolder(t *testing.T) {
+	parent := t.TempDir()
+	tmp, dir := filepath.Join(parent, "work"), filepath.Join(parent, "target")
+	for _, d := range []string{filepath.Join(tmp, "blobs"), filepath.Join(tmp, "records"), filepath.Join(dir, "records", "held")} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "manifest.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// The target's own records folder holds something, so the move of
+	// records fails, after blobs has moved.
+	if err := moveExport(tmp, dir, true); err == nil {
+		t.Fatal("a move onto a folder that holds something passed")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "blobs")); err == nil {
+		t.Error("what was moved before the failure stays in the target")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "records", "held")); err != nil {
+		t.Errorf("the target lost what it held: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tmp, "manifest.json")); err != nil {
+		t.Errorf("the manifest moved before the rest: %v", err)
+	}
+}

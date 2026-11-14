@@ -57,7 +57,11 @@ func (s *Store) ExportAll(dir string) (ExportResult, error) {
 	case !info.IsDir(): // a file, or a link that leads nowhere
 		return res, errors.New("export dir is not a folder: " + dir)
 	default:
-		if entries, err := os.ReadDir(dir); err != nil || len(entries) > 0 {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return res, err
+		}
+		if len(entries) > 0 {
 			return res, errors.New("export dir not empty: " + dir)
 		}
 		exists = true
@@ -111,7 +115,8 @@ func moveExport(tmp, dir string, into bool) error {
 			return err
 		}
 	}
-	return os.Remove(tmp)
+	os.Remove(tmp) // empty now: the export is whole whether this goes or not
+	return nil
 }
 
 // partialSuffix ends the name of the folder that an export writes into
