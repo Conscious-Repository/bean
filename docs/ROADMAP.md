@@ -172,8 +172,7 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 
 ## Smaller open paths
 
-- **Code health, from the review of 2026-11-13** (DECISIONS 302). `cmdShare` is one function of 440 lines: split it into choosing, the review text and the write. Sync, export and import-export each walk the record files for the files of live records: make that one helper, so the three cannot drift. `cmd/bean/mcp.go` holds the server and the tools: two files. An export writes its records before its manifest: write into a new folder beside the target and rename it.
-
+- **A file that only another key's record names.** `bean purge` keeps a file that another record names, and says so. When that record is a peer's or a stranger's, no export, share or assistant reads the file. Its encrypted copy stays all the same, and `bean sync` copies it. Decide whether such a record should keep a file at all.
 - **More tests and cohort rules.** Each is one row in `internal/nhanes`, from the file's own label and a real report's name.
 - **More importers,** each from a real file, never from memory. A time zone flag for CSV times.
 - **A check of a whole export in Python.**

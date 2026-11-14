@@ -534,6 +534,45 @@ func (s *Store) purgeLoaded(l *Loaded, id, reason string) (PurgeResult, error) {
 	return res, nil
 }
 
+// blobUse is what the record files of a log say about each file they name:
+// whether a record that is not deleted names it, whether a deleted one
+// does, and whether a live record of the person or of a paired agent does.
+// Sync and import-export both decide by it which files come along. A file
+// that a deleted record names comes only when ofOwnLive: any record can
+// name any id, so a stranger's record does not bring back a deleted photo
+// (DECISIONS 213).
+type blobUse struct{ live, ofDeleted, ofOwnLive map[string]bool }
+
+// mark reads the record files. deleted says whether the record with that
+// id is deleted, and opens whether it is a live record that may open a
+// file. opens may be nil: then no record counts as one.
+func (u *blobUse) mark(files map[string][]byte, deleted, opens func(id string) bool) {
+	if u.live == nil {
+		u.live, u.ofDeleted, u.ofOwnLive = map[string]bool{}, map[string]bool{}, map[string]bool{}
+	}
+	for p, data := range files {
+		m := pathPattern.FindStringSubmatch(p)
+		if m == nil {
+			continue
+		}
+		id := "sha256:" + m[1] + m[2]
+		del := deleted(id)
+		own := !del && opens != nil && opens(id)
+		for _, h := range namedBlobs(data) {
+			if del {
+				u.ofDeleted[h] = true
+				continue
+			}
+			u.live[h] = true
+			u.ofOwnLive[h] = u.ofOwnLive[h] || own
+		}
+	}
+}
+
+// withheld reports a file that a deleted record names and that no live
+// record of the person or of a paired agent names.
+func (u *blobUse) withheld(h string) bool { return u.ofDeleted[h] && !u.ofOwnLive[h] }
+
 // resolveIn is Resolve over records.
 func resolveIn(records map[string]*Record, id string) (*Record, error) {
 	hexPart := strings.TrimPrefix(id, "sha256:")
@@ -748,46 +787,26 @@ func (s *Store) Sync(src *Store) (SyncResult, error) {
 	// A blob that a deleted record names is copied only when a live record of
 	// the person or a paired agent names it: any record can name any id, so a
 	// stranger's record does not bring back a purged photo (DECISIONS 213).
-	named := map[string]bool{}
-	ofDeleted, ofOwnLive := map[string]bool{}, map[string]bool{}
 	bv := b2.blobView()
 	unlocks := blobUnlocker(b2.ID, bv.Report, bv.fileLabelsPastHalt())
 	recs := b2.allRecords()
 	gone2 := bv.Report.unjudgedPurged()
-	for p, data := range b2.Files {
-		m := pathPattern.FindStringSubmatch(p)
-		if m == nil {
-			continue
-		}
-		id := "sha256:" + m[1] + m[2]
-		if _, purged := bv.Report.Purged[id]; purged || bv.Hidden[id] || gone2[id] {
-			for _, h := range namedBlobs(data) {
-				ofDeleted[h] = true
-			}
-			continue
-		}
-		own := recs[id] != nil && unlocks(recs[id])
-		for _, h := range namedBlobs(data) {
+	use := blobUse{}
+	use.mark(b2.Files, func(id string) bool {
+		_, purged := bv.Report.Purged[id]
+		return purged || bv.Hidden[id] || gone2[id]
+	}, func(id string) bool { return recs[id] != nil && unlocks(recs[id]) })
+	// A purged record erased here is still in the source: judge the union,
+	// for its deletions alone.
+	inUnion := blobUse{}
+	inUnion.mark(union, func(id string) bool {
+		_, purged := u.Purged[id]
+		return purged || gone[id] || b.Hidden[id] || (a.Hidden[id] && !undone(id))
+	}, nil)
+	named := map[string]bool{}
+	for h := range use.live {
+		if !(use.ofDeleted[h] || inUnion.ofDeleted[h]) || use.ofOwnLive[h] {
 			named[h] = true
-			ofOwnLive[h] = ofOwnLive[h] || own
-		}
-	}
-	// A purged record erased here is still in the source: judge the union.
-	for p, data := range union {
-		m := pathPattern.FindStringSubmatch(p)
-		if m == nil {
-			continue
-		}
-		id := "sha256:" + m[1] + m[2]
-		if _, purged := u.Purged[id]; purged || gone[id] || b.Hidden[id] || (a.Hidden[id] && !undone(id)) {
-			for _, h := range namedBlobs(data) {
-				ofDeleted[h] = true
-			}
-		}
-	}
-	for h := range ofDeleted {
-		if !ofOwnLive[h] {
-			delete(named, h)
 		}
 	}
 	blobFiles, _, err := listShards(src.Dir, dirBlobs)

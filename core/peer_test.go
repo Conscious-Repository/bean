@@ -400,3 +400,175 @@ func TestOnlyThePersonPairs(t *testing.T) {
 		t.Errorf("the person's own pairing: %v", err)
 	}
 }
+
+// TestExportIsWholeOrAbsent: an export is written into a new folder beside
+// its target and moved there when it is whole. A run that fails leaves
+// neither, and a folder that an unfinished run left is named, not written
+// over.
+func TestExportIsWholeOrAbsent(t *testing.T) {
+	s, _ := initStore(t)
+	if _, err := s.Add("weight", "81.2", AddOptions{Unit: "kg"}); err != nil {
+		t.Fatal(err)
+	}
+	parent := t.TempDir()
+	partials := func() []string {
+		m, _ := filepath.Glob(filepath.Join(parent, "*.partial-*"))
+		return m
+	}
+	// A run that fails: a folder with no log in it has nothing to export.
+	out := filepath.Join(parent, "out")
+	if _, err := Open(t.TempDir()).ExportAll(out); err == nil {
+		t.Fatal("an empty folder was exported")
+	}
+	if _, err := os.Stat(out); err == nil || len(partials()) != 0 {
+		t.Errorf("a failed export left something: %v", partials())
+	}
+	// A run that an earlier one did not finish.
+	out = filepath.Join(parent, "o[1]*t") // a name with the signs of a pattern
+	stale := out + ".partial-123"
+	if err := os.Mkdir(stale, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ExportAll(out); err == nil || !strings.Contains(err.Error(), "did not finish") || !strings.Contains(err.Error(), stale) {
+		t.Errorf("an export beside an unfinished one: %v", err)
+	}
+	if _, err := os.Stat(out); err == nil {
+		t.Error("the export was written all the same")
+	}
+	os.Remove(stale)
+	// A whole run, into a target that is absent and into one that is empty.
+	for _, dir := range []string{out, filepath.Join(parent, "empty")} {
+		var before os.FileInfo
+		if dir != out {
+			if err := os.Mkdir(dir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			before, _ = os.Stat(dir)
+		}
+		res, err := s.ExportAll(dir)
+		if after, _ := os.Stat(dir); before != nil && !os.SameFile(before, after) {
+			t.Errorf("the empty folder at %s was replaced by another", dir)
+		}
+		if err != nil || !res.Written || res.Records == 0 {
+			t.Fatalf("export to %s: %+v %v", dir, res, err)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "manifest.json")); err != nil || len(partials()) != 0 {
+			t.Errorf("the export at %s is not whole, or left its work folder: %v %v", dir, err, partials())
+		}
+		// A folder that bean made is closed to others. One that was there
+		// stays the folder it was.
+		if info, err := os.Stat(dir); err != nil || (dir == out && info.Mode().Perm() != 0o700) {
+			t.Errorf("the export folder is open to others: %v", info.Mode())
+		}
+	}
+	// A target that holds something is refused, as before.
+	if _, err := s.ExportAll(out); err == nil || !strings.Contains(err.Error(), "not empty") {
+		t.Errorf("an export over an export: %v", err)
+	}
+	// A move that was stopped leaves the target part full and the work
+	// folder beside it. The work folder is what the person is told of.
+	if err := os.Mkdir(out+".partial-9", 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ExportAll(out); err == nil || !strings.Contains(err.Error(), "did not finish") {
+		t.Errorf("an export beside a stopped move: %v", err)
+	}
+	os.Remove(out + ".partial-9")
+	// An export never takes the place of a file, also not through a link.
+	file := filepath.Join(parent, "precious.txt")
+	if err := os.WriteFile(file, []byte("keep me"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link, dangling := filepath.Join(parent, "link"), filepath.Join(parent, "dangling")
+	if os.Symlink(file, link) != nil || os.Symlink(filepath.Join(parent, "nowhere"), dangling) != nil {
+		t.Skip("no links here")
+	}
+	for _, target := range []string{file, link, dangling} {
+		if res, err := s.ExportAll(target); err == nil || res.Written {
+			t.Errorf("an export onto %s: %+v %v", filepath.Base(target), res, err)
+		}
+	}
+	if data, err := os.ReadFile(file); err != nil || string(data) != "keep me" {
+		t.Errorf("the file is gone or changed: %q %v", data, err)
+	}
+	if info, err := os.Lstat(dangling); err != nil || info.Mode()&os.ModeSymlink == 0 || len(partials()) != 0 {
+		t.Errorf("the link that leads nowhere was replaced, or a work folder stays: %v %v", err, partials())
+	}
+	// A target written with a slash at its end is the same folder.
+	slash := filepath.Join(parent, "slash") + string(filepath.Separator)
+	if res, err := s.ExportAll(slash); err != nil || !res.Written {
+		t.Fatalf("export to a name with a slash at its end: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(parent, "slash", "manifest.json")); err != nil || len(partials()) != 0 {
+		t.Errorf("that export is not in place: %v %v", err, partials())
+	}
+}
+
+// TestImportExportBringsBackAnOwnFile: a file that a deleted record names
+// comes back from an export when a live record of the person names it too.
+// Without that record it stays away, which other tests hold.
+func TestImportExportBringsBackAnOwnFile(t *testing.T) {
+	s, _ := initStore(t)
+	photo, err := s.Add("photo", "rash", AddOptions{Photo: []byte("A PHOTO IN TWO RECORDS"), PhotoType: "image/jpeg"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, _ := s.Load()
+	hash := l.Report.Records[photo].Blobs[0].Hash
+	// A second record of the person names the same file.
+	second := `{"type":"note","value":{"s":"the same photo"},"times":{"observed":null},"source":{"system":"self","adapter":"t@1","ref":null},"blobs":[{"hash":"` + hash + `","role":"photo","media_type":"image/jpeg"}]}` + "\n"
+	if _, err := s.Append(strings.NewReader(second)); err != nil {
+		t.Fatal(err)
+	}
+	// A copy that keeps the first record, and loses the file.
+	stale := Open(t.TempDir())
+	if err := os.CopyFS(stale.Dir, os.DirFS(s.Dir)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(stale.path(BlobPathOf(hash))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Purge(photo, ""); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(t.TempDir(), "export")
+	if _, err := s.ExportAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stale.ImportExportAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	if pt, err := stale.GetBlob(hash); err != nil || string(pt) != "A PHOTO IN TWO RECORDS" {
+		t.Errorf("the file that a live record of the person names did not come back: %v", err)
+	}
+}
+
+// TestMoveExportIntoAFolder: an export moves into a folder that is there
+// with its manifest last, since the manifest says that an export is whole.
+// When a move fails, what was moved is taken out again.
+func TestMoveExportIntoAFolder(t *testing.T) {
+	parent := t.TempDir()
+	tmp, dir := filepath.Join(parent, "work"), filepath.Join(parent, "target")
+	for _, d := range []string{filepath.Join(tmp, "blobs"), filepath.Join(tmp, "records"), filepath.Join(dir, "records", "held")} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "manifest.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// The target's own records folder holds something, so the move of
+	// records fails, after blobs has moved.
+	if err := moveExport(tmp, dir, true); err == nil {
+		t.Fatal("a move onto a folder that holds something passed")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "blobs")); err == nil {
+		t.Error("what was moved before the failure stays in the target")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "records", "held")); err != nil {
+		t.Errorf("the target lost what it held: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tmp, "manifest.json")); err != nil {
+		t.Errorf("the manifest moved before the rest: %v", err)
+	}
+}

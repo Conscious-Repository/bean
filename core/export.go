@@ -23,12 +23,109 @@ func (s *Store) Export(dir string) (records, blobs int, err error) {
 	return res.Records, res.Blobs, err
 }
 
-// ExportAll is Export with the full result.
+// ExportAll is Export with the full result. It writes the export into a
+// new folder beside dir and moves it to dir when it is whole, so a run that
+// stops part way leaves no half export at dir. A folder that such a run
+// left behind holds plaintext: the next export names it and stops, for the
+// person to delete.
 func (s *Store) ExportAll(dir string) (ExportResult, error) {
 	res := ExportResult{NotExported: map[string]string{}}
-	if entries, err := os.ReadDir(dir); err == nil && len(entries) > 0 {
-		return res, errors.New("export dir not empty: " + dir)
+	// The target is absent, or an empty folder, or a link to one. Anything
+	// else stays as it is: an export never takes the place of a file.
+	dir, err := filepath.Abs(dir)
+	if err != nil {
+		return res, err
 	}
+	if real, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = real // a link to a folder: the export goes where it leads
+	}
+	// A folder that an unfinished export left is named before anything else
+	// is said: it holds plaintext, and the person must know that it is there.
+	// By name, not by pattern: a folder's name can hold the signs of one.
+	parent, base := filepath.Dir(dir), filepath.Base(dir)
+	siblings, _ := os.ReadDir(parent)
+	for _, e := range siblings {
+		if strings.HasPrefix(e.Name(), base+partialSuffix) {
+			return res, fmt.Errorf("an export that did not finish left %s: it holds records in plaintext. Delete it, then export again", filepath.Join(parent, e.Name()))
+		}
+	}
+	exists := false
+	switch info, err := os.Lstat(dir); {
+	case errors.Is(err, os.ErrNotExist):
+	case err != nil:
+		return res, err
+	case !info.IsDir(): // a file, or a link that leads nowhere
+		return res, errors.New("export dir is not a folder: " + dir)
+	default:
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return res, err
+		}
+		if len(entries) > 0 {
+			return res, errors.New("export dir not empty: " + dir)
+		}
+		exists = true
+	}
+	if err := os.MkdirAll(parent, 0o700); err != nil {
+		return res, err
+	}
+	tmp, err := os.MkdirTemp(parent, base+partialSuffix)
+	if err != nil {
+		return res, err
+	}
+	res, err = s.exportInto(tmp)
+	if !res.Written {
+		os.RemoveAll(tmp)
+		return res, err
+	}
+	// Into place. A target that is absent takes the folder whole. An empty
+	// folder that is there stays the folder it is, for a person who stands
+	// in it: what the export holds moves into it, the manifest last, since
+	// the manifest is what says that an export is whole.
+	if rerr := moveExport(tmp, dir, exists); rerr != nil {
+		os.RemoveAll(tmp)
+		return ExportResult{NotExported: map[string]string{}}, rerr
+	}
+	return res, err
+}
+
+// moveExport moves a whole export from the folder it was written in to its
+// place. into says that dir is there, and empty. When a move fails, what
+// was moved is taken out again, so that dir is left as it was.
+func moveExport(tmp, dir string, into bool) error {
+	if !into {
+		return os.Rename(tmp, dir)
+	}
+	entries, err := os.ReadDir(tmp)
+	if err != nil {
+		return err
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.Name() != "manifest.json" {
+			names = append(names, e.Name())
+		}
+	}
+	names = append(names, "manifest.json")
+	for i, name := range names {
+		if err := os.Rename(filepath.Join(tmp, name), filepath.Join(dir, name)); err != nil {
+			for _, moved := range names[:i] {
+				os.RemoveAll(filepath.Join(dir, moved))
+			}
+			return err
+		}
+	}
+	os.Remove(tmp) // empty now: the export is whole whether this goes or not
+	return nil
+}
+
+// partialSuffix ends the name of the folder that an export writes into
+// before it moves it into place.
+const partialSuffix = ".partial-"
+
+// exportInto writes an export into dir, which is new and empty.
+func (s *Store) exportInto(dir string) (ExportResult, error) {
+	res := ExportResult{NotExported: map[string]string{}}
 	unlock, err := s.lock()
 	if err != nil {
 		return res, err
@@ -428,26 +525,11 @@ func (s *Store) ImportExportAll(dir string) (ImportResult, error) {
 	ul.Files, ul.Report = union, u
 	unlocks := blobUnlocker(l.ID, u, ul.fileLabelsPastHalt()) // u is judged past a head-key halt
 	recs := ul.allRecords()
-	ofDeleted, ofOwnLive := map[string]bool{}, map[string]bool{}
-	for p, data := range union {
-		m := pathPattern.FindStringSubmatch(p)
-		if m == nil {
-			continue
-		}
-		id := "sha256:" + m[1] + m[2]
-		del := deleted(id)
-		own := false
-		if r := recs[id]; r != nil && !del {
-			own = unlocks(r)
-		}
-		for _, h := range namedBlobs(data) {
-			ofDeleted[h] = ofDeleted[h] || del
-			ofOwnLive[h] = ofOwnLive[h] || own
-		}
-	}
+	use := blobUse{}
+	use.mark(union, deleted, func(id string) bool { return recs[id] != nil && unlocks(recs[id]) })
 	for _, e := range blobEntries {
 		id := "sha256:" + e.Name()
-		if ofDeleted[id] && !ofOwnLive[id] {
+		if use.withheld(id) {
 			continue // a deleted record names it, and no live record of the person
 		}
 		pt, err := readExportFile(root, "blobs/"+e.Name(), maxImportBlobBytes)
