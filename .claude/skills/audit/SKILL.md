@@ -54,6 +54,11 @@ to report.
   context.
 - A change reaches `main` only after CI passes on the exact head commit,
   and only when the owner asked for the merge.
+- bean is in use: `main` is a release. A log that an earlier build wrote
+  reads the same in a later build, or `UPGRADING.md` says what changes, in
+  the same commit. What a saved record names stays known: a pack on
+  record, a method version, a file digest. An assistant never runs a
+  build on a person's real log.
 
 ## Two kinds of audit
 

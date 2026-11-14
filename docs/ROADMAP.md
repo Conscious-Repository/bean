@@ -2,11 +2,13 @@
 
 This file is the one place for open paths: what bean should do next, in what order, and what is not decided. Work that is done is in the git history, and the reasons are in [DECISIONS.md](DECISIONS.md). Nothing here is final.
 
-## Where bean stands (2026-11-12)
+## Where bean stands (2026-11-14)
 
 A person can keep a log, and import lab reports, Apple Health and CSV files. They can compare a reading with public reference data: with a survey's own files, or with a reference pack. They can share chosen records as one sealed file that opens with six words, and a reader checks it in a browser. A reader who runs bean can answer with signed notes, and the person takes them into their log. Independent second implementations and a real-browser test guard those paths.
 
-Four things are missing before other people use it. The check page has no public address. Two people cannot see their records side by side. A device cannot sign what it captures. Only one public source has been built into a pack. They are the four paths below.
+**bean is in use.** A second person keeps a log with it, and the owner keeps his own. So `main` is a release, whether or not it has a tag (DECISIONS 310). A log that an earlier build wrote must read the same in a later build, or [UPGRADING.md](../UPGRADING.md) says what changes.
+
+Four things are still missing. The check page has no public address. Two people cannot see their records side by side. A device cannot sign what it captures. Only one public source has been built into a pack. They are the four paths below.
 
 ## Path 1: a sealed package for one reader
 
@@ -118,7 +120,15 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 
 **Done.** A reference pack ([REFERENCE.md](REFERENCE.md), DECISIONS 281): one file, named by its SHA-256, with a table for each measure and each cohort on its menu. `bean-pack-nhanes` builds one from the NHANES files, with weight beside the blood tests. `bean compare -pack` compares with it and saves a claim that names the pack. A Python check reads the format from its document, builds every table again from the files, and computes every claim again.
 
-**Next: more tests in the NHANES pack.** The pack holds twelve blood tests and weight. A person with reports of many years meets `No reference data` for most of their tests. That comes before any choice between sources. A candidate is the survey's file of standard biochemistry, `BIOPRO_J`. It is not yet confirmed from CDC's own pages: each variable, its unit, and who was measured. Each new row needs the type and the unit that a real report gives. `bean compare -type 'lab.*'` names the types with no reference data in one line, with no value. A test of a fasting part of the sample needs another weight, and waits.
+**Done: more tests in the NHANES pack (DECISIONS 309).** A second pack is on record: 26 measures, from eight files. It adds twelve tests of the standard biochemistry profile, and ferritin. The tests are the ones that the two real report layouts print. The first pack stays on record.
+
+**Next for the breadth of tests.** `bean compare -type 'lab.*'` names the types with no reference data in one line, with no value. Each of these needs its own step:
+
+- **A rule for a value below a detection limit.** ALT, GGT, total bilirubin and C-reactive protein wait for it. The rule needs a new member of a pack, so it is a change of the format.
+- **The fasting part of the sample:** glucose, triglycerides, LDL and insulin. They need another weight.
+- **More of the blood count:** the share and the count of each kind of white cell. `CBC_J` is in both packs on record, so these rows need a new version of the builder.
+- **Albumin, globulin and carbon dioxide**, when a source confirms that the lab and NHANES measure one thing ([COMPARE.md](COMPARE.md)).
+- **Hormones, vitamins and thyroid tests** are in other files, some of other survey years. A second cycle is a second set of files and weights.
 
 **The plan.**
 
@@ -169,7 +179,7 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 
 1. Path 1, step 7: a public address for the check page, and the first release, with its Blossom mirrors. Everything a reader does starts there.
 2. Path 2, step 3: two people side by side. Step 2, the signed reply, is done.
-3. Path 4: more tests in the NHANES pack. Then steps 1 and 2: a second source, and the NHANES pack published.
+3. Path 4, steps 1 and 2: a second source, and the NHANES pack published. More tests, as people meet types with no reference data.
 4. Path 3, pairing and import, when a real device or its firmware can produce the folder.
 5. Path 1, step 2: a package sealed to a reader's key.
 6. Path 2, steps 4 and 5, and Path 4, steps 4 and 5, when real peers and a second publisher ask for them.

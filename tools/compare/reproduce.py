@@ -95,6 +95,8 @@ KNOWN = {
     "CBC_J": "00f964098dc91272e415344554cbf1b627ecaeb2eda201518527446a7d81e742",
     "BMX_J": "8d675e42d8826ac98714b2c3dd4c5138a5e353fb4424f7eff5e6db4a01ce838a",
     "DR1TOT_J": "390ae5205acfbcb87e0ca3d9aabd1c801b60657d3f2802ac08d5b3ed93f0af6d",
+    "BIOPRO_J": "5bcd5722c1892883b96a9d7fed0befadabacae313f800fadc0133cd5dd00c4c6",
+    "FERTIN_J": "6bc5775797aafbd627316b6208418275fb8951cd571276e1a64436769afa16d5",
 }
 # The tests the method compares: a reading of this type, in this unit, with
 # this variable of this data set (docs/COMPARE.md; internal/nhanes).
@@ -115,6 +117,23 @@ ANALYTES = {
     ("lab.rdw", "%"): ("CBC_J", "LBXRDW"),
     ("lab.platelets", "x10E3/uL"): ("CBC_J", "LBXPLTSI"),
     ("lab.platelet-count", "Thousand/uL"): ("CBC_J", "LBXPLTSI"),
+    ("lab.ast-sgot", "IU/L"): ("BIOPRO_J", "LBXSASSI"),
+    ("lab.ast", "U/L"): ("BIOPRO_J", "LBXSASSI"),
+    ("lab.alkaline-phosphatase", "IU/L"): ("BIOPRO_J", "LBXSAPSI"),
+    ("lab.alkaline-phosphatase", "U/L"): ("BIOPRO_J", "LBXSAPSI"),
+    ("lab.bun", "mg/dL"): ("BIOPRO_J", "LBXSBU"),
+    ("lab.urea-nitrogen-bun", "mg/dL"): ("BIOPRO_J", "LBXSBU"),
+    ("lab.creatinine", "mg/dL"): ("BIOPRO_J", "LBXSCR"),
+    ("lab.sodium", "mmol/L"): ("BIOPRO_J", "LBXSNASI"),
+    ("lab.potassium", "mmol/L"): ("BIOPRO_J", "LBXSKSI"),
+    ("lab.chloride", "mmol/L"): ("BIOPRO_J", "LBXSCLSI"),
+    ("lab.calcium", "mg/dL"): ("BIOPRO_J", "LBXSCA"),
+    ("lab.protein-total", "g/dL"): ("BIOPRO_J", "LBXSTP"),
+    ("lab.uric-acid", "mg/dL"): ("BIOPRO_J", "LBXSUA"),
+    ("lab.iron", "ug/dL"): ("BIOPRO_J", "LBXSIR"),
+    ("lab.iron-total", "mcg/dL"): ("BIOPRO_J", "LBXSIR"),
+    ("lab.creatine-kinase-total", "U/L"): ("BIOPRO_J", "LBXSCK"),
+    ("lab.ferritin", "ng/mL"): ("FERTIN_J", "LBXFER"),
 }
 # The caveats of a comparison, in the order a claim lists them.
 CAVEAT_METHOD = "the lab that measured the reading and NHANES used their own instruments and methods"
@@ -134,6 +153,7 @@ CAVEAT_UNKNOWN_PACK = "bean has no record of this pack: nobody has checked its t
 # each reading is set against.
 KNOWN_PACKS = {
     "10555d6769421d4305cbcd4ff14960d8b966ddd829a50581a9584a60a84d29e2": "the NHANES 2017-2018 pack",
+    "d4b7205b503bc23d0842c176a47a5ce1d211189af4c107bec9dc48605812a4bf": "the NHANES 2017-2018 pack of 26 measures",
 }
 # The members of a pack claim's context (docs/REFERENCE.md, "The claim").
 PACK_CONTEXT = {"reading", "reference", "cohort", "method", "result", "caveats"}

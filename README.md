@@ -181,7 +181,7 @@ The CSV needs a header row and a `value` column. A `time` column (RFC 3339) and 
 
 ```
 mkdir ~/nhanes && cd ~/nhanes        # a folder of its own, not the bean folder
-for f in DEMO_J TCHOL_J HDL_J GHB_J CBC_J BMX_J; do
+for f in DEMO_J TCHOL_J HDL_J GHB_J CBC_J BIOPRO_J FERTIN_J BMX_J; do
   curl -fLO https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/$f.xpt && bean import -yes nhanes $f.xpt
 done
 bean add lab.cholesterol-total 187 -unit mg/dL      # a reading, if you imported no lab report

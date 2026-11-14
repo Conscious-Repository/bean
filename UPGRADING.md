@@ -38,6 +38,14 @@ Do not run `purge` or `gc` on the copies. Only they erase anything.
 
 ## Changes
 
+### After 0.6.0 (2026-11-14)
+
+`bean version` still says 0.6.0 for these builds. Nothing in a log changes.
+
+- `bean compare` compares thirteen more tests: twelve of the biochemistry profile, and ferritin. It needs the files `BIOPRO_J` and `FERTIN_J` in the log ([docs/COMPARE.md](docs/COMPARE.md)). Without them, a reading of such a test now says `not comparable: needs BIOPRO_J`. Before, its type was named under `No reference data`.
+- A second reference pack is on record: 26 measures, from eight files. The first pack stays on record, and a comparison that you saved with it still checks.
+- `bean import lab` keeps a report that it cannot read, with none of its values, and asks first. Before, it wrote nothing. `bean purge <id>` takes the file out, and bean then refuses that same file.
+
 ### 0.6.0
 
 - `purge` no longer writes the import ref of the deleted record into the tombstone. Anyone with your identity secret could test guesses of the deleted reading against it. Only `local/purged-refs.jsonl` keeps the ref. Back that file up. Without it, a new import of the same source data brings the reading back. Tombstones from the build of 2026-10-30 keep `context.purged_ref`. Nothing reads it.

@@ -54,6 +54,8 @@ var Known = map[string]string{
 	"CBC_J":    "00f964098dc91272e415344554cbf1b627ecaeb2eda201518527446a7d81e742",
 	"BMX_J":    "8d675e42d8826ac98714b2c3dd4c5138a5e353fb4424f7eff5e6db4a01ce838a",
 	"DR1TOT_J": "390ae5205acfbcb87e0ca3d9aabd1c801b60657d3f2802ac08d5b3ed93f0af6d",
+	"BIOPRO_J": "5bcd5722c1892883b96a9d7fed0befadabacae313f800fadc0133cd5dd00c4c6",
+	"FERTIN_J": "6bc5775797aafbd627316b6208418275fb8951cd571276e1a64436769afa16d5",
 }
 
 // CohortFile is a data set whose variables a cohort rule may name.
@@ -112,6 +114,29 @@ var Analytes = []Analyte{
 	{"lab.rdw", "%", "CBC_J", "LBXRDW", "%"},
 	{"lab.platelets", "x10E3/uL", "CBC_J", "LBXPLTSI", "1000 cells/uL"},
 	{"lab.platelet-count", "Thousand/uL", "CBC_J", "LBXPLTSI", "1000 cells/uL"},
+	// The standard biochemistry profile, and ferritin. IU/L and U/L are
+	// one unit of enzyme activity, and mcg and ug are one unit of mass:
+	// each lab prints its own spelling. Left out: glucose, cholesterol and
+	// triglycerides of the profile, since CDC names another file for each;
+	// ALT, GGT, total bilirubin and C-reactive protein, whose files mark
+	// values below a detection limit (DECISIONS 240, 309).
+	{"lab.ast-sgot", "IU/L", "BIOPRO_J", "LBXSASSI", "U/L"},
+	{"lab.ast", "U/L", "BIOPRO_J", "LBXSASSI", "U/L"},
+	{"lab.alkaline-phosphatase", "IU/L", "BIOPRO_J", "LBXSAPSI", "IU/L"},
+	{"lab.alkaline-phosphatase", "U/L", "BIOPRO_J", "LBXSAPSI", "IU/L"},
+	{"lab.bun", "mg/dL", "BIOPRO_J", "LBXSBU", "mg/dL"},
+	{"lab.urea-nitrogen-bun", "mg/dL", "BIOPRO_J", "LBXSBU", "mg/dL"},
+	{"lab.creatinine", "mg/dL", "BIOPRO_J", "LBXSCR", "mg/dL"},
+	{"lab.sodium", "mmol/L", "BIOPRO_J", "LBXSNASI", "mmol/L"},
+	{"lab.potassium", "mmol/L", "BIOPRO_J", "LBXSKSI", "mmol/L"},
+	{"lab.chloride", "mmol/L", "BIOPRO_J", "LBXSCLSI", "mmol/L"},
+	{"lab.calcium", "mg/dL", "BIOPRO_J", "LBXSCA", "mg/dL"},
+	{"lab.protein-total", "g/dL", "BIOPRO_J", "LBXSTP", "g/dL"},
+	{"lab.uric-acid", "mg/dL", "BIOPRO_J", "LBXSUA", "mg/dL"},
+	{"lab.iron", "ug/dL", "BIOPRO_J", "LBXSIR", "ug/dL"},
+	{"lab.iron-total", "mcg/dL", "BIOPRO_J", "LBXSIR", "ug/dL"},
+	{"lab.creatine-kinase-total", "U/L", "BIOPRO_J", "LBXSCK", "IU/L"},
+	{"lab.ferritin", "ng/mL", "FERTIN_J", "LBXFER", "ng/mL"},
 }
 
 // AnalyteFor returns the row for a record type and the unit of a reading.

@@ -5,6 +5,8 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -217,6 +219,51 @@ func TestRealFiles(t *testing.T) {
 			t.Errorf("%s: got %+v %v, want %+v", c.cohort, got, err, c.want)
 		}
 	}
+}
+
+// With CDC's files: no test that bean compares has a comment code. NHANES
+// fills in a number for a value below a detection limit, and marks it in a
+// variable whose label ends in "Comment Code". The method has no rule for
+// such a value (DECISIONS 240), so a row for such a test is refused here.
+func TestRealNoCommentCode(t *testing.T) {
+	dir := os.Getenv("BEAN_NHANES_DIR")
+	if dir == "" {
+		t.Skip("BEAN_NHANES_DIR is not set")
+	}
+	var names []string
+	for name := range Known {
+		names = append(names, name)
+	}
+	files := load(t, dir, names...)
+	if marked := commentCoded(files, Analytes); len(marked) > 0 {
+		t.Errorf("these tests have a comment code, and the method has no rule for one: %v", marked)
+	}
+	// The check finds the tests that were left out for this reason.
+	left := []Analyte{{Dataset: "BIOPRO_J", Variable: "LBXSATSI"}, {Dataset: "BIOPRO_J", Variable: "LBXSGTSI"}, {Dataset: "BIOPRO_J", Variable: "LBXSTB"}, {Dataset: "BIOPRO_J", Variable: "LBXSCR"}}
+	if marked := commentCoded(files, left); !reflect.DeepEqual(marked, []string{"LBXSATSI", "LBXSGTSI", "LBXSTB"}) {
+		t.Errorf("of ALT, GGT, total bilirubin and creatinine, these have a comment code: %v", marked)
+	}
+}
+
+// commentCoded returns the variables of rows whose file has a comment code
+// for them: a variable labelled "<name> Comment Code", where the test's own
+// label holds that name.
+func commentCoded(files map[string]*xpt.File, rows []Analyte) []string {
+	var out []string
+	for _, a := range rows {
+		f := files[a.Dataset]
+		v, ok := f.Variable(a.Variable)
+		if !ok {
+			continue
+		}
+		for _, other := range f.Variables {
+			name, isCode := strings.CutSuffix(other.Label, " Comment Code")
+			if isCode && strings.Contains(v.Label, name) && !slices.Contains(out, a.Variable) {
+				out = append(out, a.Variable)
+			}
+		}
+	}
+	return out
 }
 
 // Total cholesterol of 187 mg/dL in three cohorts of NHANES 2017-2018.
