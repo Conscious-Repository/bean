@@ -99,30 +99,19 @@ func main() {
 	if err == nil {
 		err = rep.checkZone(loc)
 	}
-	if err != nil && *blob != "" && !looksLikeReport(text) {
-		// Not a lab report at all, as far as this importer can tell: a
-		// file of another kind is not kept as one.
-		fmt.Fprintln(os.Stderr, "bean-import-lab: this does not look like a lab report to this importer: it found no line of column names, such as Test, Result and Reference Range, set apart by two spaces or more. A report in another language, or with its column names on two lines, is not known yet. To keep the file all the same: bean blob put <file>")
-		os.Exit(1)
-	}
-	if err != nil && *blob != "" {
-		// A report that cannot be read for sure is still the person's
-		// report. Its file can be kept, and no result is written: a reading
-		// is refused, never the file (docs/IMPORTERS.md, rule 1). The lab
-		// is not named: a report that was not read does not say which.
-		if werr := writeRecords(os.Stdout, []map[string]any{archiveFor(unreadSystem, raw, *blob)}); werr != nil {
-			fmt.Fprintln(os.Stderr, "bean-import-lab: output failed")
+	if err != nil {
+		rec, why := unread(text, raw, *blob, err)
+		if rec != nil {
+			if werr := writeRecords(os.Stdout, []map[string]any{rec}); werr != nil {
+				fmt.Fprintln(os.Stderr, "bean-import-lab: output failed")
+				os.Exit(1)
+			}
+		}
+		fmt.Fprintln(os.Stderr, "bean-import-lab: "+why)
+		if rec == nil {
 			os.Exit(1)
 		}
-		// The reason can quote a line of the report, and bean prints it
-		// where a script or an assistant may read it. What it quotes is
-		// masked: the line number says where to look.
-		fmt.Fprintf(os.Stderr, "bean-import-lab: no result was read: %s\n", masked(err.Error()))
 		return
-	}
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "bean-import-lab: %s\n", err)
-		os.Exit(1)
 	}
 	digest := ""
 	if *blob != "" {
@@ -150,6 +139,26 @@ func main() {
 // read: which lab printed it is not known.
 const unreadSystem = "unknown"
 
+// unread says what becomes of a report that could not be read for sure,
+// for the reason err. A report is still the person's report: with -blob
+// its file can be kept, by the record that unread returns, and no result
+// is written. A reading is refused, never the file (docs/IMPORTERS.md,
+// rule 1). Without -blob, and for a file that is no lab report as far as
+// this importer can tell, the record is nil and nothing is written.
+//
+// why is the one line for the person. bean prints it where a script or an
+// assistant may read it, and err can quote a line of the report, so what
+// it quotes is masked: the line number says where to look.
+func unread(text string, raw []byte, blob string, err error) (rec map[string]any, why string) {
+	switch {
+	case blob == "":
+		return nil, err.Error()
+	case !looksLikeReport(text):
+		return nil, "this does not look like a lab report to this importer: it found no line of column names, such as Test, Result and Reference Range, set apart by two spaces or more. A report in another language, or with its column names on two lines, is not known yet. To keep the file all the same: bean blob put <file>"
+	}
+	return archiveFor(unreadSystem, raw, blob), "no result was read: " + masked(err.Error())
+}
+
 // columnWords are the kinds of word that the line of column names of a
 // lab report holds: what was tested, what was found, and what it is set
 // against.
@@ -164,7 +173,9 @@ var columnWords = [][]string{
 // names, or the marks of a Quest report. A line of column names has cells
 // of a few words each, set apart by two spaces or more, and two of them
 // are of different kinds. A sentence is one cell. It decides only whether
-// the file is kept as a lab report, never a value.
+// the file is kept as a lab report, never a value. So it asks for less
+// than questDetect, which chooses a reader: the trademark line alone will
+// do, for a Quest report whose column names this importer does not know.
 func looksLikeReport(text string) bool {
 	if isBBoxDoc(text) {
 		pages, err := parseBBox(text)
@@ -198,7 +209,7 @@ func looksLikeReport(text string) bool {
 	return false
 }
 
-var columnGap = regexp.MustCompile(` {2,}|\t+`)
+var columnGap = regexp.MustCompile(` {2,}`)
 
 func countTrue(list []bool) int {
 	n := 0

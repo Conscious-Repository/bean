@@ -36,9 +36,9 @@ func measure(text string, raw []byte) []string {
 	}
 	out = append(out, fmt.Sprintf("quest marks: trademark line %s, column header %s", trademark, header))
 	// Whether an import keeps the file when it reads none of its values.
-	looks := "no: an import refuses the file"
+	looks := "no: an import that reads none of its values refuses the file"
 	if looksLikeReport(text) {
-		looks = "yes: an import keeps the file"
+		looks = "yes: an import that reads none of its values keeps the file"
 	}
 	out = append(out, "looks like a lab report: "+looks)
 	// As an import reads it.

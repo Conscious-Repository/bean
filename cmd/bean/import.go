@@ -337,14 +337,15 @@ func runImport(s *core.Store, bin, file string, args []string, o importOpts) (im
 	// second time. The importer may name its lab otherwise than when the
 	// file first came in: a report that was kept unread, and is read now.
 	added := 0
-	if _, err := kept(s, archive.Type, bid, digest); err != nil {
-		a, err := s.AppendImported(bytes.NewReader(append(first, '\n')), false)
-		if err != nil {
-			return res, phaseError("archive", err)
+	rid, err := kept(s, archive.Type, bid, digest)
+	if err != nil {
+		a, aerr := s.AppendImported(bytes.NewReader(append(first, '\n')), false)
+		if aerr != nil {
+			return res, phaseError("archive", aerr)
 		}
 		added = a.Added
+		rid, err = kept(s, archive.Type, bid, digest)
 	}
-	rid, err := kept(s, archive.Type, bid, digest)
 	if err != nil {
 		return res, phaseError("retention", err)
 	}
