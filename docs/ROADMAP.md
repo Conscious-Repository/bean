@@ -128,13 +128,14 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 - **The fasting part of the sample:** glucose, triglycerides, LDL and insulin. They need another weight.
 - **More of the blood count:** the share and the count of each kind of white cell. `CBC_J` is in both packs on record, so these rows need a new version of the builder.
 - **Tests where two analyzers differ too much for a percentile:** sodium, chloride, calcium, AST, alkaline phosphatase and iron. A percentile is the wrong result for them. Another kind of result may fit, such as a range that the source states.
+- **A caveat with a size.** Each result says that the instruments differ, and not by how much. For the tests of the biochemistry profile CDC gives a figure, and a measure's caveat could state it.
 - **Albumin, globulin and carbon dioxide**, when a source confirms that the lab and NHANES measure one thing ([COMPARE.md](COMPARE.md)).
 - **Hormones, vitamins and thyroid tests** are in other files, some of other survey years. A second cycle is a second set of files and weights.
 
 **The plan.**
 
 1. **A second source, from another publisher.** The format is not frozen before a second real source is built into a pack. Each candidate is confirmed first from its publisher's own site: the terms, a stable address, and whether a file changes without notice.
-2. **Publish the NHANES pack** beside the check page, with its SHA-256, and mirror it (the section on where the files live). Then a person needs one download of 500 kB, not six files.
+2. **Publish the NHANES pack** beside the check page, with its SHA-256, and mirror it (the section on where the files live). Then a person needs one download of under 1 MB, not eight files.
 3. **The check page computes a shared comparison again**, when the reader gives it the pack.
 4. **A publisher signs.** A record by the publisher's bean identity names a pack's SHA-256, and travels as a bundle. This is built when a second publisher exists.
 5. **A pointer on relays.** A publisher announces a pack on Nostr relays: title, SHA-256, where it is. The relays hold a pointer and no health record. bean keys can already be Nostr keys.

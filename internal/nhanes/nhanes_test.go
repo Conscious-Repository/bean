@@ -5,7 +5,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -248,7 +247,7 @@ func TestRealNoCommentCode(t *testing.T) {
 	}
 	// The check finds the tests that were left out for this reason.
 	left := []Analyte{{Dataset: "BIOPRO_J", Variable: "LBXSATSI"}, {Dataset: "BIOPRO_J", Variable: "LBXSGTSI"}, {Dataset: "BIOPRO_J", Variable: "LBXSTB"}, {Dataset: "BIOPRO_J", Variable: "LBXSCR"}}
-	if marked := commentCoded(files, left); !reflect.DeepEqual(marked, []string{"LBXSATSI", "LBXSGTSI", "LBXSTB"}) {
+	if marked := commentCoded(files, left); !slices.Equal(marked, []string{"LBXSATSI", "LBXSGTSI", "LBXSTB"}) {
 		t.Errorf("of ALT, GGT, total bilirubin and creatinine, these have a comment code: %v", marked)
 	}
 	// CDC's page of FERTIN_J names a comment code, and the file has none.
@@ -291,15 +290,13 @@ func commentCoded(files map[string]*xpt.File, rows []Analyte) []string {
 }
 
 // analyzerDiff is the mean difference between two analyzers on the same
-// blood samples, in percent, for each variable of BIOPRO_J that is measured
-// and not calculated. It is CDC's own table: the page of BIOPRO_J, "regression
-// equations to compare 2017-2018 and 2015-2016 data", read on 2026-11-14.
+// blood samples, in percent. It is CDC's own table: the page of BIOPRO_J,
+// "regression equations to compare 2017-2018 and 2015-2016 data", column
+// "% DIFF", read on 2026-11-14. Here are the rows of the tests that a
+// report at hand prints and that no other rule leaves out.
 var analyzerDiff = map[string]float64{
-	"LBXSAL": -4.42, "LBXSAPSI": 9.74, "LBXSASSI": -18.03, "LBXSATSI": -15.46, "LBXSBU": -3.36,
-	"LBXSC3SI": 1.74, "LBXSCA": -2.12, "LBXSCH": -3.21, "LBXSCK": 5.91, "LBXSCLSI": -1.44,
-	"LBXSCR": 3.354, "LBXSGL": 2.41, "LBXSGTSI": 7.7, "LBXSIR": 10.01, "LBXSKSI": -1.398,
-	"LBXSLDSI": 14.86, "LBXSNASI": 0.80, "LBXSPH": -1.80, "LBXSTB": -3.19, "LBXSTP": 0.36,
-	"LBXSTR": 13.44, "LBXSUA": 2.37,
+	"LBXSTP": 0.36, "LBXSUA": 2.37, "LBXSCK": 5.91, "LBXSBU": -3.36, "LBXSKSI": -1.398, "LBXSCR": 3.354,
+	"LBXSIR": 10.01, "LBXSAPSI": 9.74, "LBXSCLSI": -1.44, "LBXSNASI": 0.80, "LBXSCA": -2.12, "LBXSASSI": -18.03,
 }
 
 // maxShift is the rule of DECISIONS 309: a test of BIOPRO_J is compared
