@@ -401,7 +401,7 @@ func TestBBoxRefuses(t *testing.T) {
 		{page(`<word xMin="10" yMin="10" xMax="40" yMax="18">A</word><word xMin="30" yMin="10" xMax="60" yMax="18">B</word>`), "printed over each other"},
 		{page(`<word xMin="10" yMin="10" xMax="700" yMax="18">A</word>`), "not inside the page"},
 		{page(`<word xMin="10" yMin="10" xMax="40" yMax="18">A&#x200B;</word>`), "invisible"},
-		{page(`<script>x</script>`), "<script> element"},
+		{page(`<script>x</script>`), `"script" element`},
 		{page(`text`), "text outside a word"},
 		{page(`<word xMin="10" yMin="10" xMax="40" yMax="18">A &nbsp;</word>`), "not well-formed"},
 		{`<!DOCTYPE html><html><body><doc></doc></body></html>`, "no page"},

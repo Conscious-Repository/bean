@@ -99,18 +99,25 @@ func main() {
 	if err == nil {
 		err = rep.checkZone(loc)
 	}
+	if err != nil && *blob != "" && !looksLikeReport(text) {
+		// Not a lab report at all, as far as this importer can tell: a
+		// file of another kind is not kept as one.
+		fmt.Fprintln(os.Stderr, "bean-import-lab: this does not look like a lab report: it has no line of column names, such as Test, Result and Reference Range. To keep a file of another kind: bean blob put <file>")
+		os.Exit(1)
+	}
 	if err != nil && *blob != "" {
 		// A report that cannot be read for sure is still the person's
-		// report. The file is kept, and no result is written: a reading is
-		// refused, never the file (docs/IMPORTERS.md, rule 1).
-		if werr := writeRecords(os.Stdout, []map[string]any{archiveFor(systemOf(text), raw, *blob)}); werr != nil {
+		// report. Its file can be kept, and no result is written: a reading
+		// is refused, never the file (docs/IMPORTERS.md, rule 1). The lab
+		// is not named: a report that was not read does not say which.
+		if werr := writeRecords(os.Stdout, []map[string]any{archiveFor(unreadSystem, raw, *blob)}); werr != nil {
 			fmt.Fprintln(os.Stderr, "bean-import-lab: output failed")
 			os.Exit(1)
 		}
 		// The reason can quote a line of the report, and bean prints it
 		// where a script or an assistant may read it. What it quotes is
 		// masked: the line number says where to look.
-		fmt.Fprintf(os.Stderr, "bean-import-lab: no result was read, and the report is kept: %s\n", masked(err.Error()))
+		fmt.Fprintf(os.Stderr, "bean-import-lab: no result was read: %s\n", masked(err.Error()))
 		return
 	}
 	if err != nil {
@@ -139,13 +146,68 @@ func main() {
 	fmt.Fprintf(os.Stderr, "bean-import-lab: %d results, %d without a value. Importing the same report again adds nothing; a result whose value changed needs -corrections\n", len(rep.Results), missing)
 }
 
-// systemOf names the lab of a report that was not read, as well as its
-// text tells: the name that a reader of that lab's layout would give.
-func systemOf(text string) string {
-	if questDetect(text) || isBBoxDoc(text) {
-		return questSystem
+// unreadSystem is the source.system of a report that was kept and not
+// read: which lab printed it is not known.
+const unreadSystem = "unknown"
+
+// columnWords are the kinds of word that the line of column names of a
+// lab report holds: what was tested, what was found, and what it is set
+// against.
+var columnWords = [][]string{
+	{"test", "tests", "analyte", "component"},
+	{"result", "results", "value", "in range", "out of range"},
+	{"reference", "range", "interval", "units", "flag"},
+}
+
+// looksLikeReport reports whether a file that could not be read is a lab
+// report all the same, as far as its text tells: it has a line of column
+// names, or the marks of a Quest report. A line of column names has cells
+// of a few words each, set apart by two spaces or more, and two of them
+// are of different kinds. A sentence is one cell. It decides only whether
+// the file is kept as a lab report, never a value.
+func looksLikeReport(text string) bool {
+	if isBBoxDoc(text) {
+		pages, err := parseBBox(text)
+		return err == nil && questPages(pages)
 	}
-	return system
+	for _, l := range splitLines(text) {
+		if strings.Join(strings.Fields(l), " ") == questTrademark {
+			return true
+		}
+		found := [3]bool{}
+		for _, cell := range columnGap.Split(strings.TrimSpace(l), -1) {
+			words := strings.Fields(strings.ToLower(cell))
+			if len(words) == 0 || len(words) > 4 {
+				continue
+			}
+			name := " " + strings.Join(words, " ") + " "
+		kind:
+			for k, list := range columnWords {
+				for _, w := range list {
+					if strings.Contains(name, " "+w+" ") {
+						found[k] = true
+						break kind // a cell is of one kind
+					}
+				}
+			}
+		}
+		if n := countTrue(found[:]); n >= 2 {
+			return true
+		}
+	}
+	return false
+}
+
+var columnGap = regexp.MustCompile(` {2,}|\t+`)
+
+func countTrue(list []bool) int {
+	n := 0
+	for _, b := range list {
+		if b {
+			n++
+		}
+	}
+	return n
 }
 
 const maxReportBytes = 32 << 20

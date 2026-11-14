@@ -2,6 +2,8 @@ package main
 
 import (
 	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -58,4 +60,71 @@ func itoa(n int) string {
 		s = string(rune('0'+n%10)) + s
 	}
 	return s
+}
+
+// TestRefusalsQuoteTheReport: -count and an unread import show a refusal
+// with what it quotes masked. So every refusal puts what it takes from the
+// report between quotation marks (%q). A format with %s or %v is on this
+// list only when what it prints is the importer's own: a place, a fixed
+// word, an inner refusal, or a type that masked hides.
+func TestRefusalsQuoteTheReport(t *testing.T) {
+	own := map[string]bool{
+		"line %d: unsupported result column header: it must name %s, in that order":              true, // the importer's column names
+		"line %d at the margin may be a row with its value in the name, not a panel heading: %v": true, // an inner refusal
+		"line %d: %v": true, // an inner refusal
+		"%s: %v":      true, // a place, and an inner refusal
+		"%s: a row with no value and no rows under it: a test with no value is refused unless it says %s":   true, // the importer's own words
+		"%s: result %q says %s, and no note follows it":                                                     true, // the importer's own words
+		"two results, %q and %q, map to one type lab.%s":                                                    true, // masked hides lab.<name>
+		"result %q would have the type of the kept report, %s":                                              true, // the fixed type
+		"-tz %s is %s at the collection time, but the report prints %q (%s); leave -tz out for this report": true, // the person's flag, and offsets
+		"page %d, %s: two words are printed over each other, so the line cannot be read for sure":           true, // a place
+	}
+	format := regexp.MustCompile(`Errorf\("((?:[^"\\]|\\.)*)"`)
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range files {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		src, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, m := range format.FindAllStringSubmatch(string(src), -1) {
+			f := m[1]
+			rest := strings.TrimPrefix(f, "%s: ") // where: a page and a place on it
+			if (strings.Contains(rest, "%s") || strings.Contains(rest, "%v")) && !own[f] {
+				t.Errorf("%s: a refusal prints with %%s or %%v what may be the report's text: %q", name, f)
+			}
+		}
+	}
+	// A long quote is cut, and what is left is masked.
+	if got := masked(`a word "` + strings.Repeat("Glucose9", 40) + `" too long`); got != `a word "xxxxxxx9xxxxxxx9xxxx..." too long` {
+		t.Errorf("a long quote: %s", got)
+	}
+}
+
+// TestLooksLikeReport: a file that cannot be read is kept as a lab report
+// only when it has a line of column names, or the marks of a Quest report.
+func TestLooksLikeReport(t *testing.T) {
+	raw, err := os.ReadFile("testdata/real-layout.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for text, want := range map[string]bool{
+		string(raw): true,
+		"   Test Name                In Range    Out Of Range    Reference Range    Lab\n":    true,
+		"TESTS                RESULT      FLAG      UNITS      REFERENCE INTERVAL      LAB\n": true,
+		questTrademark + "\n":                      true,
+		"hello, this is my grocery list\nmilk 2\n": false,
+		"": false,
+		"the test went well and the weather was in range": false,
+	} {
+		if got := looksLikeReport(text); got != want {
+			t.Errorf("looksLikeReport = %v, want %v, for %.60q", got, want, text)
+		}
+	}
 }

@@ -65,7 +65,7 @@ It writes JSON lines to stdout ([SPEC.md](../SPEC.md) 9.2, partial records), the
 
 ## Rules
 
-1. **Refuse a reading that you cannot read for sure, never the file.** A wrong value in a health record is worse than none, so write no reading that you are not sure of. The file is still the person's. With `-blob`, write the first line, which keeps the file, and exit 0 with one line on stderr that says why nothing was read. Without `-blob`, exit non-zero and write nothing.
+1. **Refuse a reading that you cannot read for sure, never the file.** A wrong value in a health record is worse than none, so write no reading that you are not sure of. The file is still the person's. With `-blob`, write the first line, which keeps the file, and exit 0 with one line on stderr that says why nothing was read. That line shows no word of the file: put what you take from the file between quotation marks, and mask it. Without `-blob`, exit non-zero and write nothing. A file that is not of your kind at all is refused: exit non-zero, and write nothing.
 2. **All the readings or none.** Stage your output; never write half of it. A report whose readings cannot all be read for sure gives the first line alone.
 3. **Keep the source's words.** The value as printed (`raw_value`), the test name as printed (`test`), the flag as printed. No interpretation, no unit conversion.
 4. **No identity in readings.** Names, birth dates, patient and account ids stay in the kept file, not in readings.

@@ -240,6 +240,20 @@ func TestCLIImportKeepsAReportItCannotRead(t *testing.T) {
 	if strings.Count(ls, `"type":"lab.report"`) != 1 || strings.Contains(ls, `"type":"lab.glucose"`) || strings.Contains(ls, `"type":"lab.sodium"`) {
 		t.Errorf("the log after it:\n%s", ls)
 	}
+	// A report that was not read does not say which lab printed it.
+	if !strings.Contains(ls, `"system":"unknown"`) {
+		t.Errorf("the kept report names a lab:\n%s", ls)
+	}
+	// A file that is no lab report is not kept as one, also with -yes.
+	list := filepath.Join(t.TempDir(), "list.txt")
+	os.WriteFile(list, []byte("hello, this is my grocery list\nmilk 2\n"), 0o600)
+	files := countFiles(t, dir)
+	if out, errs, code := runPath(t, dir, path, "import", "-yes", "lab", list); code != 1 || !strings.Contains(errs, "does not look like a lab report") || !strings.Contains(errs, "bean blob put") {
+		t.Errorf("a grocery list: %d\n%s\n%s", code, out, errs)
+	}
+	if after := countFiles(t, dir); after != files {
+		t.Errorf("a file that is no report changed the log: %d -> %d files", files, after)
+	}
 	// The same file again is kept once.
 	if out, errs, code := runPath(t, dir, path, "import", "-yes", "lab", bad); code != 0 || !strings.Contains(out+errs, "already kept lab.report") {
 		t.Errorf("the same file again: %d\n%s\n%s", code, out, errs)

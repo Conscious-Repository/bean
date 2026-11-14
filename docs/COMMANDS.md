@@ -323,7 +323,7 @@ Importers read one source format and write records to stdout. [IMPORTERS.md](IMP
 
 ### `bean-import-lab [-blob <id>] [-tz <zone>] <report.pdf | report.txt | report.html>`
 
-Reads a lab report PDF in a layout it knows: the Labcorp patient report (`cmd/bean-import-lab/labcorp.go`) and the Quest Diagnostics report (`quest.go`). A report in any other layout is kept, encrypted, and none of its values is read: bean says `no reading was read`, and why. Needs `pdftotext` (`brew install poppler`), or what it makes: `-layout` text for Labcorp, `-bbox-layout` output for Quest. One record per result: type `lab.<test name>`, value and unit, and the flag, reference interval, panel, lab and comments. Your name, birth date and patient ids are not copied.
+Reads a lab report PDF in a layout it knows: the Labcorp patient report (`cmd/bean-import-lab/labcorp.go`) and the Quest Diagnostics report (`quest.go`). A report in any other layout is kept, encrypted, and none of its values is read: bean says `no reading was read`, and why. A file that does not look like a lab report is refused, and nothing is written. Needs `pdftotext` (`brew install poppler`), or what it makes: `-layout` text for Labcorp, `-bbox-layout` output for Quest. One record per result: type `lab.<test name>`, value and unit, and the flag, reference interval, panel, lab and comments. Your name, birth date and patient ids are not copied.
 
 A Quest report is read by word position (`cmd/bean-import-lab/README.md`, DECISIONS 235): its trademark footer and a `Test Name  In Range  Out Of Range  Reference Range  Lab` header make it Quest. Every line must be a kind it knows, or the report is refused and the error names the page and how far down it is.
 

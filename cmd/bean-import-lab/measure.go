@@ -84,15 +84,23 @@ func measure(text string, raw []byte) []string {
 	return out
 }
 
+// maxMasked is the most characters of a quote that a masked refusal shows.
+const maxMasked = 20
+
 var (
 	quotedText = regexp.MustCompile(`"(?:[^"\\]|\\.)*"`)
 	labType    = regexp.MustCompile(`lab\.[A-Za-z0-9._-]+`)
 )
 
 // masked is a refusal with the report's own text hidden: what it quotes,
-// and a type that it made from a name.
+// and a type that it made from a name. Every refusal of this importer puts
+// what it takes from the report between quotation marks. A long quote is
+// cut: its length could say something too.
 func masked(msg string) string {
 	msg = quotedText.ReplaceAllStringFunc(msg, func(q string) string {
+		if r := []rune(q); len(r) > maxMasked+2 {
+			q = string(r[:maxMasked+1]) + `..."`
+		}
 		return strings.Map(func(r rune) rune {
 			switch {
 			case r >= '0' && r <= '9':

@@ -877,7 +877,7 @@ func (p *parser) afterEnd(n int, l string, toks []token) error {
 		}
 		name := strings.TrimSpace(m[2])
 		if old := p.rep.Labs[m[1]]; old != "" && old != name {
-			return fmt.Errorf("line %d: two performing labs with code %s", n, m[1])
+			return fmt.Errorf("line %d: two performing labs with code %q", n, m[1])
 		}
 		p.rep.Labs[m[1]] = name
 		return nil
