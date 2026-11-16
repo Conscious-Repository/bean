@@ -179,22 +179,25 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 
 ## Order
 
-The owner set the aim on 2026-11-16. A person compares their own data, on their own machine, with public data and with a peer. They can also point a peer to what they hold. Three reviews judged a plan for it, one for each paragon, and changed its order (DECISIONS 313).
+The owner confirmed the long aim on 2026-11-16. A person keeps their own log. They share with people they trust. They compare with reference data from many sources, and they choose which sources count. Anyone can publish a source, and AION is the first of many.
 
-1. **Side by side with a peer** (path 2, step 3). bean shows the readings of a bundle that a peer sent beside the person's own, by type and unit. It computes nothing across the two people. It needs no network and no key, and both people who use bean have a log.
-2. **A check that computes a shared comparison again**, when the reader gives the pack (path 4, step 3). Today a check reads the claim, and does not do the arithmetic. With this, bean also keeps a pack with the log, so that a saved comparison can be computed again when no host has the pack.
-3. **The packs on a host, by SHA-256** (path 4, step 2). It is documents and an upload, and no code in bean. It waits for the owner's word on the terms of the source. Any host that serves a file under its SHA-256 will do, and any person can host a pack for a peer. A signed note that points to a pack is a hint for finding it, and never makes a pack one on record.
-4. **More tests**, chosen by what real logs lack: `bean compare -type 'lab.*'` names the types with no reference data. The fasting part of the sample gives glucose, triglycerides, LDL and insulin. The rule for a value below a detection limit gives ALT, GGT, bilirubin and C-reactive protein.
+Two audits on that day set this order (DECISIONS 313 and 316). Each step ships alone.
+
+1. **The fasting tests, as a new pack:** glucose, triglycerides, LDL and insulin. It is what real logs lack. The builder needs a weight for each test, and the pack says that a person's own reading may not be fasting.
+2. **The packs on a host of AION's own, with a pointer on a relay** (path 4, step 2). It is documents and the work of running a server, and no code in bean. It runs beside step 1.
+3. **Side by side with a peer** (path 2, step 3). bean shows the readings of a bundle that a peer sent beside the person's own. It computes nothing across the two people.
+4. **A person keeps a pack with their log.** A kept pack needs no flag, and each result says plainly why the person uses it. A saved comparison can then be computed again when no host has the pack.
+5. **A check that computes a shared comparison again**, when the reader gives the pack (path 4, step 3). It comes before any word that sounds like trust.
+6. **"This peer keeps this pack":** a signed record of a peer or a publisher, taken in under a name. It is built when a second party exists. That is a peer who runs bean and wants it, or a pack from a builder that is not the project's.
 
 Then, each when its condition holds:
 
-- **A second source, from another publisher.** First as research: one source confirmed from its publisher's own site.
-- **The person's own list of packs, and a peer's vouch** (DECISIONS 308), when a second pack exists that the project did not build. This is what the first user outside the owner asked for.
-- **A publisher's identity.** Before AION signs a first note with a key of its own: how a reader knows the publisher when a key is lost.
+- **A second source, from another publisher.** First as research: one source confirmed from its publisher's own site. Until one exists, the project is still the one that says which source files are right.
+- **The rule for a value below a detection limit:** ALT, GGT, bilirubin and C-reactive protein.
 - **A package by link**, after a package can be sealed to a reader's key (path 1, step 2).
 - Path 3, when a real device can produce the folder.
 
-Not planned: a command in bean that fetches from a network, and a view that ranks or scores two people. A public card of what a person holds is not planned either.
+Not planned: a command in bean that fetches from a network, and a view that ranks or scores two people. bean never runs a program that a pack names. A public card of what a person holds is not planned either.
 
 ## Smaller open paths
 
