@@ -192,7 +192,7 @@ He then said that the infrastructure must be right before new capabilities are a
 1. Mend what is shipped: a share with `-files` carries a kept file as public by its record's type alone.
 2. The documents: recipes with a form to copy, the rules for a builder, the naming rule with vectors, and what "on record" means.
 3. The words for a format that a reader does not know, and for a cell that a pack does not have.
-4. A flag with which a person names the SHA-256 of the pack that they expect.
+4. The builders take a version of their rule, and version 1 still builds both packs on record.
 5. The next pack, in `pack/0`, by version 2 of the builder's rule. It is on record in the release that first builds it.
 6. The fasting tests, after a decision of their own.
 7. Keeping a pack with the log: compare by SHA-256, a share that carries the pack, and a check that computes a shared comparison again.

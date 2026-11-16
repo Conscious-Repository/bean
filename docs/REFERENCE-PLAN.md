@@ -2,11 +2,13 @@
 
 This is for anyone who builds on bean's reference data: a publisher of a pack, or the writer of a tool. [REFERENCE.md](REFERENCE.md) is the format that exists. This document says what changes next, what does not, and why. Nothing in it is built yet.
 
-It is phase 1 of the order in [ROADMAP.md](ROADMAP.md). That phase decides on paper what is in logs and shared files for good once it is used. Five drafts were written, and reviewers who had not seen the work judged each. They sat in five seats: Linus, Satoshi, buildtall, a publisher from outside, and the writer of a second reader. DECISIONS 321 has the account.
+It is phase 1 of the order in [ROADMAP.md](ROADMAP.md). That phase decides on paper what is in logs and shared files for good once it is used. Six drafts were written, and reviewers who had not seen the work judged each, in six laps. They sat in five seats: Linus, Satoshi, buildtall, a publisher from outside, and the writer of a second reader. DECISIONS 321 has the account.
 
 **The main result is a refusal.** A format, a signed claim and a record type are costs that every reader carries for ever. So nothing new is frozen without a real case. Each thing that waits is written down with the case that would start it.
 
 **What this plan does not give.** The first user from outside asked to choose the sources that his results are compared with (DECISIONS 308). This plan gives him more tests, and a way to hold a pack. It does not give him that choice. The section on the list of packs says why, and what would start it.
+
+**One fault in what is shipped was found on the way.** With `-files`, a share can carry a kept file as a public file when it is not one (F8). The mend is first in the order of work. Until then, read the review before a share: it lists each file that will travel.
 
 ## What was measured
 
@@ -14,7 +16,7 @@ The public files of the survey are NHANES 2017-2018. Each fact here was measured
 
 **F1. Zero is a real value, in tests that are coarse.** In the file `CBC_J`, 3802 of 7523 people have a basophil count of 0, and 427 have an eosinophil count of 0. `pack/0` cannot hold a value of 0. The survey records these counts in steps of 0.1, and a cell has about six distinct values. Among all adults, a reading of 0 lies at percentile 23 and a reading of 0.1 at 73. A reading of 0.12, which is finer than the step, lies at 99: that number means nothing. As a share of all white cells, basophils have no zero, and eosinophils have 10 in 7523.
 
-**F2. A detection limit is real, and it touches few people.** The survey marks a value below its limit of detection, and writes a fill value in its place. Among the adults of the pack's menu who have a value:
+**F2. A detection limit is real, and it touches few people.** The survey marks a value below its limit of detection, and writes a fill value in its place. Among the adults of the pack's menu who have a value, with the last column from the whole file:
 
 | Test | Adults marked | Cohorts of 14 with a marked person | Largest share of a cohort's weight | Fill value, and lowest value in the file with no mark |
 |---|---|---|---|---|
@@ -29,7 +31,7 @@ These four tests are on almost every real report, and have no reference data tod
 
 **F4. A recipe works today, with tools that exist.** In an empty folder: a `go.mod` that requires `github.com/Conscious-Repository/bean v0.7.1`, and a `go.sum` with the lines of the build. Then, with `GOFLAGS=-mod=readonly` and `GOTOOLCHAIN=local`: `go build github.com/Conscious-Repository/bean/cmd/bean-pack-nhanes`. The program that came out wrote both packs on record from the survey's files, byte for byte. With one stated line changed, the tool stopped with `SECURITY ERROR`. With one line missing, it stopped too. Go 1.24.7 built it, not the 1.27.3 that the repository names, and the bytes were the same.
 
-**F5. What that build checks, and what it does not.** With stated lines the `go` tool does not ask the public log of Go modules. So the lines are the publisher's word, until a build without them asks the log. Such a build prints nothing when the log agrees, and it writes the same lines when it is told not to ask. So a recipe must set the tool to ask, and must show one run that fails. Two builds of one source gave two binaries that differ: a recipe pins the source, not a binary.
+**F5. What that build checks, and what it does not.** With stated lines the `go` tool does not ask the public log of Go modules. So the lines are the publisher's word, until a build without them asks the log. Such a build prints no word about the log when the log agrees. It writes the same lines when it is told not to ask. So a recipe must set the tool to ask, and must show one run that fails. Two builds of one source gave two binaries that differ: a recipe pins the source, not a binary.
 
 **F6. A second program builds the same bytes.** `tools/pack/rebuild_nhanes.py` is in Python and shares no code with bean. To write the same pack it writes the same `builder.name` and `builder.version`. So those members name a rule, not the program that ran. Both programs have one author.
 
@@ -99,16 +101,16 @@ ALT, GGT, total bilirubin and C-reactive protein wait today because the survey's
 
 | Way | What a person gets | What it costs |
 |---|---|---|
-| **A. The source's own value.** The table holds what the survey's file holds: the fill value for a marked person. The measure's caveat says so, and that caveat is in every signed claim. | All 56 cells. For ALT, GGT and C-reactive protein the fill value lies below every measured value. So each reading at or above the limit gets its exact place. | A number that nobody measured is in the pack, as the source wrote it. A reading below the limit gets a place that can be wrong by up to 0.82 of a point. For bilirubin the fill value, 0.1, is also a measured value. So a reading of exactly 0.1 can be wrong by up to 0.58 of a point. |
+| **A. The source's own value.** The table holds what the survey's file holds: the fill value for a marked person. The measure's caveat says so, and that caveat is in every signed claim. | All 56 cells. For ALT, GGT and C-reactive protein the fill value lies below every measured value. So each reading at or above the limit gets its exact place. | A number that nobody measured is in the pack, as the source wrote it. A reading below the limit gets a place that can be wrong by up to 0.82 of a point. For bilirubin the fill value, 0.1, is also a measured value. So a reading of exactly 0.1 can be wrong by up to 0.29 of a point, and one below 0.1 by up to 0.58. |
 | **B. No table for a cohort with a marked person.** | 48 of the 56 cells, each exact: all for ALT, 13 of 14 for GGT and for bilirubin, 8 of 14 for C-reactive protein. | Eight cohorts get no number for one test, for one or two people each. A pack cannot say why a cell is missing. A cohort that a person narrows can have a table while the whole cohort has none. |
 | **C. The tests wait** for a format that holds a limit. | Nothing, as today. | Four tests that are on almost every report stay without reference data. |
 
 A fourth way was tried and cut: leave the marked people out of the cell. Every reading above the limit then lies too low, and the median of one cohort moved from 2.01 to 2.17.
 
-**Why A.** Three reviews measured it and said so. The table is then what the source's file holds, with nothing left out by the builder's choice. So anyone can check each cell against the public file. Its error is confined to a reading below the limit and, for bilirubin, a reading of exactly 0.1. The error is bounded, and the signed claim itself states it. Way B gives a person in eight cohorts nothing, for one or two people each. The caveat of such a measure names the test, and has the numbers that the builder computes:
+**Why A.** Three reviews measured it and said so. The table is then what the source's file holds, with nothing left out by the builder's choice. So anyone can check each cell against the public file. Its error is confined to a reading below the limit and, for bilirubin, a reading of exactly 0.1. The error is bounded, and the signed claim itself states it. Way B gives a person in eight cohorts nothing, for one or two people each. The caveat of such a measure names the test:
 
 ```
-C-reactive protein: NHANES could not measure a value below 0.15 mg/L, and writes 0.11 for such a person. Nobody measured that value. Such people are at most 0.82% of a cohort's weight. A result for a reading below 0.15 is not exact.
+C-reactive protein: NHANES could not measure a value below 0.15 mg/L, and writes 0.11 for such a person. Nobody measured that value. Such people are under 1% of a cohort's weight. A result for a reading below 0.15 is not exact.
 ```
 
 **What way A is not.** For a reading below the limit it puts a bounded estimate in the place of a refusal. A person cannot switch that off. They see the caveat with the result, and it is in the claim that they sign.
@@ -117,11 +119,11 @@ C-reactive protein: NHANES could not measure a value below 0.15 mg/L, and writes
 
 1. The limit is the source's word, from its own document. The builder's table states it and where it is from. A test holds that no value without a mark lies below it. The source's page is not pinned by a digest, and the documents say so.
 2. The caveat says "below" the limit when the fill value lies below every value without a mark. When the fill value is also a measured value, as for bilirubin, it says "at or below" that value.
-3. The share in the caveat is of a cohort's weight, and is rounded up, so that "at most" is true. A measure with no marked person in the pack has no such caveat: that is ALT.
-4. A builder takes way A only where the marked people are under 1% of the weight in every cohort of the pack. Above that, the test waits for a format that holds a limit. A pack has no member for that share, so a second builder computes it again from the files.
-5. The same rule holds in a comparison with the survey's files, where a person makes the cohort. bean computes the share for that cohort. Under 1% it gives the number with the caveat, and at 1% or more it gives no number. Among children up to 5 years the share for C-reactive protein is 4.5%.
+3. The caveat says "under 1% of a cohort's weight", in a pack and in a comparison with the files. The cap makes that true, and no reader computes a share to check the words. A measure with no marked person in the pack has no such caveat: that is ALT.
+4. A builder takes way A only where the marked people are under 1% of the weight in every cohort of the pack. Above that, the test waits for a format that holds a limit. A pack has no member for that share, so a second builder computes it again from the files. The line of 1% was drawn after the figures were seen: the pack's cohorts reach 0.82%, and children reach 4.5%.
+5. The same rule holds in a comparison with the survey's files, where a person makes the cohort. bean computes the share for that cohort. Under 1% it gives the number with the same caveat, and at 1% or more it gives no number and says why. Among children up to 5 years the share for C-reactive protein is 4.5%.
 6. bean shows a measure's caveats with that measure, not in one list under the table.
-7. Each test must also pass the rules of DECISIONS 309. The source's table of the difference between its two analyzers has no row yet for three of the four. So this decision serves up to four tests.
+7. Each test must also pass the rules of DECISIONS 309. The source's table of the difference between its two analyzers has no row yet for three of the four. So this decision serves up to four tests. A stranger checks rules 1 and 7 against the source's own pages, and rule 6 on a running bean.
 
 This is a new version of the builder's rule, with new packs. The packs on record stay on record.
 
@@ -146,9 +148,9 @@ A recipe is not in the pack. One pack can have several. A recipe can be written 
 
 **Running a recipe is running someone's program.** A person does it in a machine that holds no log and no key. bean never runs one.
 
-**The builders keep every version of the rule.** A row of the builder's table says from which version of the rule it exists, and a flag names the version to build. So the newest code builds every pack on record, in Go and in Python. The builder builds the newest version when no flag is given, from the release that puts the newest pack on record. REFERENCE.md changes its first run and its digests in that release. The tests on the real files, `make pack` and the job are changed to build each version. A recipe names a release as well, for a stranger who wants a fixed program.
+**The builders keep every version of the rule.** A row of the builder's table says from which version of the rule it exists, and a flag names the version to build. So the newest code builds every pack on record, in Go and in Python. The builder builds the newest version when no flag is given, from the release that puts the newest pack on record. It prints the version that it built and the flag for it, and each recipe names the flag. REFERENCE.md changes its first run and its digests in that release. The tests on the real files, `make pack` and the job are changed to build each version. A recipe names a release as well, for a stranger who wants a fixed program.
 
-**Rules for a builder, added to those of REFERENCE.md.**
+**Rules for a builder, added to those of REFERENCE.md.** They hold from version 2 of the survey's rule.
 
 - A rule states everything that the bytes depend on. That is the variable, the weight, who is left out, how a number is read and rounded, and the order of each sum. A reviewer summed one survey's weights in three orders and got three packs.
 - A pack is written in the canonical form of RFC 8785, and REFERENCE.md will state that form in full. Two builders agree only when they write numbers the same way.
@@ -175,10 +177,10 @@ A recipe is not in the pack. One pack can have several. A recipe can be written 
 The line that refuses a reading says what is true, and what not to do:
 
 ```
-not comparable: this pack takes lab.platelets only in x10E3/uL, and the reading is in K/uL.
+not comparable: this pack takes lab.platelets only in x10E3/uL or Thousand/uL, and the reading is in K/uL.
 bean converts nothing, and cannot tell whether the two are one unit. This is about the name of the unit, not about the value.
 Do not type the reading again in another unit, and do not change a pack to make the two match: bean would then sign a result that nobody checked.
-The pack's publisher can add the unit, in a new pack.
+The pack's publisher can add the unit, in a new pack. For the survey's pack that is the bean project.
 ```
 
 bean prints such words once, under the table, as it does today.
@@ -189,7 +191,7 @@ bean prints such words once, under the table, as it does today.
 
 **Why a person would do it:** so that the file that their saved comparisons depend on is not lost.
 
-**The record is decided, and it is built with what uses it.** A pack is a public data file that a person keeps to compare with, and bean has a record for that: `reference.file`. `bean import pack <file>` will write one:
+**The record is sketched, and it is built with what uses it.** It is final on the day it is built, and not before. A pack is a public data file that a person keeps to compare with, and bean has a record for that: `reference.file`. `bean import pack <file>` will write one:
 
 | Member | Value |
 |---|---|
@@ -213,7 +215,7 @@ A `reference.file` keeps a pack if and only if it has `context.pack`. The bytes 
 **Rules for the day it is built.**
 
 - A pack travels in a share only with `-files`, and only when a shared comparison names its SHA-256 or the person names its record. Its bytes must read as a pack and have the stated SHA-256. The review before the share shows its title and its SHA-256, and does not call it a public file. The type of a record is never enough: the set of packs that a person keeps says what they look at.
-- `bean purge` of a kept pack says what it did. The file is erased, and it says how many saved comparisons name the pack. It says that nobody can compute them again from this log unless a copy of the file exists. It asks nothing, as today.
+- `bean purge` of a kept pack says what it did. The file is erased, and it says how many saved comparisons name the pack. It says that nobody can compute them again from this log unless a copy of the file exists. It says that this copy cannot keep the file again. It asks nothing, as today.
 - Whether a pack that was purged can be kept again is decided when keeping is built. Today it cannot: the rule that a deleted record stays deleted has no exception (SPEC.md 7.8). A pack is public data, so an exception may be right, and it needs its own review.
 
 ## Decision 6: the list of packs on record stays code, and the person's own list waits
@@ -224,7 +226,7 @@ So the list stays as it is. What changes is what is said about it.
 
 - **What "on record" means, in exact words.** The SHA-256 of the pack is in a list that is compiled into this bean. With it bean holds each label, each `same` entry and each caveat of the pack, and a check judges a claim against those. The project built the pack from the source's own files, with two programs that share no code and have one author. A job on the code host builds it again from the source's address, with the code of the main branch. That is a second network, and not a second person. Anyone can run the recipe. It does not mean that the tables are right.
 - **The cost, said plainly.** A pack gets on record only with a release of bean. A person with an earlier bean uses a newer pack with the flag, and their claims say that bean had no record of it. A later bean reads those claims rightly (DECISIONS 319). So the project's next pack is on record in the release that first builds it.
-- **A person cannot switch the list off.** ROADMAP said that a person can see and drop any list that came with bean. For `pack/0` that is not so: the list is in the build. It takes nothing from the person: it saves a flag for two packs, and any other pack is used with the flag.
+- **A person cannot switch the list off.** An earlier order of work said that a person can see and drop any list that came with bean (DECISIONS 317). For `pack/0` that is not so: the list is in the build. It takes nothing from the person: it saves a flag for two packs, and any other pack is used with the flag.
 - **The lines that bean prints for any pack are calm and of one kind.** "Whoever built it chose its tables" is as true of a pack on record as of any other. Drafts, for the build to settle:
 
 ```
@@ -236,7 +238,7 @@ any other: This bean does not know this pack. That is not a finding about it.
 
 These lines are for the screen. Two texts keep the words that they have today. The refusal without the flag is changed when these lines are built. The caveat in a saved claim is frozen in method version 1.
 
-**The person's own list of packs waits, and this is what would start it.** It is what the first user from outside asked for (DECISIONS 308): a signed record of the sources that a person uses. A peer can read it. Three audits said to wait, for one reason: one source exists, so there is nothing to choose between. The owner was asked on 2026-11-16, and said to wait. It is built when a pack exists from a second source, or when a peer asks to send their list. A pack that a person made from the project's pack does not count. Until then a person uses any pack with the flag, and nobody is locked in. The owner is asked again with each release that puts a pack on record. One limit is known now: such a record cannot prove that the person chose, while an assistant holds the person's key (F8).
+**The person's own list of packs waits, and this is what would start it.** It is what the first user from outside asked for (DECISIONS 308): a signed record of the sources that a person uses. A peer can read it. Three audits said to wait, for one reason: one source exists, so there is nothing to choose between. The owner was asked on 2026-11-16, and said to wait. It is built when a pack exists from a second source, or when a peer asks to send their list. A pack that a person made from the project's pack does not count. Until then a person uses any pack with the flag, and nobody is locked in. But each claim made with such a pack keeps the stern words of method version 1. The owner is asked again with each release that puts a pack on record. One limit is known now: such a record cannot prove that the person chose, while an assistant holds the person's key (F8).
 
 The list in code is looked at again when a second publisher exists (ROADMAP, path 4).
 
@@ -270,14 +272,14 @@ Where bean falls short of the rule, said in the same place.
 
 ## The order of work that follows
 
-1. **Mend what is shipped: a share with `-files`.** A `reference.file` travels as a public file only when its SHA-256 is one that bean has on record. Any other kept file travels only when the person names its record (F8). A kept copy of a survey file that is not the one on record then needs its record named, and UPGRADING.md says so.
+1. **Mend what is shipped: a share with `-files`.** A `reference.file` travels as a public file only when the bytes that it keeps have a SHA-256 that bean has on record. For a survey file that is the list of digests in bean's code. Any other kept file travels only when the person names its record (F8). A kept copy of a survey file that is not the one on record then needs its record named, and UPGRADING.md says so.
 2. **The documents.** REFERENCE.md gets the recipes of the packs on record, with a form to copy, and the rules for a builder. It gets the canonical form in full, the naming rule with vectors, the exact meaning of "on record", and decision 7. It says that `builder.name` names a rule and not a program, and which version of Unicode its rule on texts means. It also gets the rules by which a test is judged (DECISIONS 240, 309), which today are only in the log of decisions.
 3. **Words in bean and in the Python check.** A format that a reader does not know. And a cell that a pack does not have. Today bean says that a cohort of fewer than 30 people is left out, which is one reason of several.
-4. **`bean compare -expect-pack <SHA-256>`.** A person names the pack that they expect, and bean refuses other bytes. It checks that the bytes are the ones named, and no more. The words, and the claim that is saved, are those of `-unknown-pack`, which stays.
-5. **The next pack**, in `pack/0`, by version 2 of the builder's rule. It holds the tests of decision 2 that pass, and each white cell share that passes the rule on steps. It also holds each `same` entry that a real report shows. With it comes the flag for the version of the rule, in both builders. The tests on the real files, `make pack` and the job change with it. The file of C-reactive protein, `HSCRP_J`, gets a digest on record first. COMPARE.md and the tests no longer say that a test with a mark is left out. The pack is on record in the release that first builds it.
+4. **The builders take a version of the rule.** A flag in both builders, and a proof that version 1 still builds both packs on record, byte for byte. The tests on the real files, `make pack` and the job change with it.
+5. **The next pack**, in `pack/0`, by version 2 of the rule. It holds the tests of decision 2 that pass, and each `same` entry that a real report shows. A white cell share is added only when a real report prints it in the survey's step, and none may pass. The file of C-reactive protein, `HSCRP_J`, gets a digest on record first. COMPARE.md and the tests no longer say that a test with a mark is left out. The pack is on record in the release that first builds it.
 6. **The fasting tests**, after a decision of their own: they need a weight for each test, which the method does not have.
 7. **Keeping a pack**, in three steps: compare by SHA-256, a share that carries the pack, and a check that computes a shared comparison again.
-8. **A first publisher hosts** (ROADMAP, phase 2). This needs nothing from bean and can start at any time. The owner gave the word for the survey's packs (DECISIONS 314).
+8. **A first publisher hosts** (ROADMAP, phase 2). This needs nothing from bean and can start at any time. The owner gave the word for the survey's packs (DECISIONS 314). bean prints the SHA-256 of each pack that it reads, and a person compares it with the one that the publisher states. A flag that refuses other bytes was drafted and cut: it does what `sha256sum` does. It is added when people ask.
 
 ## What breaks, and what happens then
 
@@ -285,6 +287,7 @@ Where bean falls short of the rule, said in the same place.
 |---|---|
 | A 0.7.1 bean meets a `reference.file` record that keeps a pack | It shows a kept file with its media type. Its comparison with the survey's files passes the record by. With `-files` it shares the pack as a public file, when the person names the record or a shared record is about it. |
 | A 0.7.1 bean is given the next `pack/0` pack | It reads it as a pack that it has no record of: the flag, and the caveat in each claim. A later bean with the pack on record reads those claims rightly. |
+| A 0.7.1 reader gets a claim that a newer bean made with the next pack | The newer bean has the pack on record, so the claim has no caveat about it. The 0.7.1 bean marks it `(NOT on record)`, which is true for that reader. The 0.7.1 Python tool refuses it: it expects that caveat. So both people update before they share such a claim, and UPGRADING.md will say so. |
 | The source takes a file away | The pack still computes. The recipe can no longer be run from the source. Whoever kept the files can hand them on, and the SHA-256 proves them. |
 | A builder's rule has a fault | A new version of the rule, and a new pack. The old pack stays what it was, and nothing marks it. A release can say in its lines that a pack on record was found wrong. Saved claims stay as they were signed. |
 | The public log of Go modules is gone | The recipe holds the `go.sum`, and a copy of the modules that matches it is enough. The second build has then nothing to ask. |
