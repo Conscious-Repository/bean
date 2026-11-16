@@ -101,6 +101,7 @@ type sharedFile struct {
 	data                                []byte // the plaintext, with -files
 	public                              bool   // a reference file whose record states a SHA-256 on record: -files alone shares it, once the bytes are held to that SHA-256
 	offRecord                           bool   // a reference file whose record states no SHA-256 on record: it goes only by its record's id
+	named                               bool   // the person named the record by its id
 }
 
 func cmdShare(s *core.Store, args []string) {
@@ -434,7 +435,7 @@ func chooseForShare(s *core.Store, l *core.Loaded, recs []*core.Record, pos []st
 				continue // a record may name one file twice
 			}
 			seen[b.Hash+" "+r.ID] = true
-			sf := sharedFile{blob: b.Hash, record: r.ID, mediaType: b.MediaType, recordType: r.Type, public: public, offRecord: reference && !public}
+			sf := sharedFile{blob: b.Hash, record: r.ID, mediaType: b.MediaType, recordType: r.Type, public: public, offRecord: reference && !public, named: named[r.ID]}
 			if travels {
 				data, err := s.GetBlob(b.Hash)
 				if err != nil {
@@ -496,11 +497,14 @@ func reviewShare(s *core.Store, l *core.Loaded, c shareChoice, out string, files
 			publicHome++
 		case sf.offRecord:
 			// Only what bean knows: what the record states. Nothing was read.
-			how := "with -files and " + sf.record[7:19] + " added to the command"
-			if files {
-				how = "with " + sf.record[7:19] + " added to the command"
+			how := "Run the same command again with -files, and add this id after the other arguments: " + sf.record[7:19] + "."
+			switch {
+			case sf.named:
+				how = "You named it: run the same command again with -files."
+			case files:
+				how = "Run the same command again, and add this id after the other arguments: " + sf.record[7:19] + "."
 			}
-			leftOut = append(leftOut, fmt.Sprintf("  not shared: the file that %s (%s) keeps. Its record does not state the SHA-256 of a file that bean has on record, so the file goes only when you name that record: %s.", sf.record[7:19], sf.recordType, how))
+			leftOut = append(leftOut, fmt.Sprintf("  not shared: the file that %s (%s) keeps. Its record does not state the SHA-256 of a file that bean has on record, so the file goes only with -files and when you name that record. %s Without the file, a reader cannot compute again a comparison that read it.", sf.record[7:19], sf.recordType, how))
 		default:
 			leftOut = append(leftOut, fmt.Sprintf("  not shared: the file that %s (%s) keeps. With -files, name that record by its id to share its file.", sf.record[7:19], sf.recordType))
 		}

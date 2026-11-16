@@ -261,7 +261,7 @@ func TestShareFilesAndComparison(t *testing.T) {
 	// Without -files the files are named, not shared. The files of this
 	// test are synthetic: bean has no record of them, and says so.
 	named := filepath.Join(t.TempDir(), "named")
-	if out, errs, code := run(t, dir, "", "share", "-yes", "-out", named, cmp.ID); code != 0 || !strings.Contains(out, "shared 4 records and 0 files") || strings.Count(errs, "does not state the SHA-256 of a file that bean has on record") != 2 || !strings.Contains(errs, "with -files and ") {
+	if out, errs, code := run(t, dir, "", "share", "-yes", "-out", named, cmp.ID); code != 0 || !strings.Contains(out, "shared 4 records and 0 files") || strings.Count(errs, "does not state the SHA-256 of a file that bean has on record") != 2 || !strings.Contains(errs, "Run the same command again with -files, and add this id") {
 		t.Fatalf("%d\n%s\n%s", code, out, errs)
 	}
 	if _, err := os.Stat(filepath.Join(named, "files")); err == nil {
@@ -273,7 +273,7 @@ func TestShareFilesAndComparison(t *testing.T) {
 	// With -files alone they stay home too: a file that is not on record
 	// goes only when the person names its record.
 	typed := filepath.Join(t.TempDir(), "typed")
-	if out, errs, code := run(t, dir, "", "share", "-yes", "-files", "-out", typed, cmp.ID); code != 0 || !strings.Contains(out, "shared 4 records and 0 files") || strings.Count(errs, "does not state the SHA-256 of a file that bean has on record") != 2 || strings.Contains(errs, "with -files and ") {
+	if out, errs, code := run(t, dir, "", "share", "-yes", "-files", "-out", typed, cmp.ID); code != 0 || !strings.Contains(out, "shared 4 records and 0 files") || strings.Count(errs, "does not state the SHA-256 of a file that bean has on record") != 2 || !strings.Contains(errs, "Run the same command again, and add this id") {
 		t.Fatalf("%d\n%s\n%s", code, out, errs)
 	}
 	if _, err := os.Stat(filepath.Join(typed, "files")); err == nil {
@@ -908,11 +908,17 @@ func TestShareCarriesNoFileByItsTypeAlone(t *testing.T) {
 	if code != 0 || !strings.Contains(stdout, "shared 2 records and 0 files") {
 		t.Fatalf("a note about a file that is not on record: %d\n%s\n%s", code, stdout, errs)
 	}
-	if !strings.Contains(errs, "does not state the SHA-256 of a file that bean has on record") || !strings.Contains(errs, "with "+keeper[7:19]+" added to the command") {
+	if !strings.Contains(errs, "does not state the SHA-256 of a file that bean has on record") || !strings.Contains(errs, "Run the same command again, and add this id after the other arguments: "+keeper[7:19]+".") {
 		t.Errorf("the share does not say why the file stays home, and what to type:\n%s", errs)
 	}
 	if _, err := os.Stat(filepath.Join(about, "files")); err == nil {
 		t.Error("a private file left as a public file, and nobody named its record")
+	}
+	// Named by its id and without -files, it stays, and bean says what is
+	// missing: the flag, not the name.
+	flagless := filepath.Join(t.TempDir(), "flagless")
+	if stdout, errs, code := run(t, dir, "", "share", "-yes", "-out", flagless, note, keeper); code != 0 || !strings.Contains(stdout, "and 0 files") || !strings.Contains(errs, "You named it: run the same command again with -files.") {
+		t.Fatalf("named, and no -files: %d\n%s\n%s", code, stdout, errs)
 	}
 	// Named by its id, with -files, it goes: the person chose it.
 	named := filepath.Join(t.TempDir(), "named")
@@ -1036,7 +1042,7 @@ func TestSharePublicFilesWithTheirComparison(t *testing.T) {
 	if out, _, code := run(t, t.TempDir(), "", "check-bundle", full); code != 0 || !strings.Contains(out, "files: 2 included, 0 named and not included") {
 		t.Errorf("%d\n%s", code, out)
 	}
-	// One of the two records is deleted: the line for one file reads right.
+	// A note about one of the two records: the line for one file reads right.
 	one := filepath.Join(t.TempDir(), "one")
 	keepers := fileRecordIDs(t, dir)
 	note, _, _ := run(t, dir, "", "add", "note", "one file", "-about", keepers[0])
