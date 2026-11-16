@@ -90,18 +90,22 @@ jobs:
             if [ -n "$there" ]; then
               echo "the tag $tag is there, and a tag is never moved. A new release needs a new version in the code."
               [ "$PUBLISH" != true ] || exit 1
+              echo "REFUSED=the tag $tag is there" >> "$GITHUB_ENV"
             fi
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
       # The list holds drafts too. A list that cannot be read fails the step.
       - name: No release has this tag
-        if: env.PUBLISH == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
           found=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" --jq ".[] | select(.tag_name == \"$TAG\") | .id")
-          [ -z "$found" ] || { echo "a release of $TAG is there, and a release is never replaced: nothing is published"; exit 1; }
+          if [ -n "$found" ]; then
+            echo "a release of $TAG is there, and a release is never replaced: nothing is published"
+            [ "$PUBLISH" != true ] || exit 1
+            echo "REFUSED=a release of $TAG is there" >> "$GITHUB_ENV"
+          fi
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version-file: go.mod
@@ -123,4 +127,8 @@ jobs:
         env:
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          { echo "A rehearsal: nothing is published. A release of $TAG from this commit would publish this."; echo; cat dist/NOTES.md; } >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "${REFUSED:-}" ]; then
+            echo "A rehearsal: nothing is published. A release from this commit would be REFUSED: $REFUSED. A new release needs a new version in the code." >> "$GITHUB_STEP_SUMMARY"
+          else
+            { echo "A rehearsal: nothing is published. A release of $TAG from this commit would publish this."; echo; cat dist/NOTES.md; } >> "$GITHUB_STEP_SUMMARY"
+          fi
