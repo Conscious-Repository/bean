@@ -352,6 +352,32 @@ func TestRowOfAPackOnRecord(t *testing.T) {
 			t.Errorf("caveats, %s: not marked:\n%s", name, ls)
 		}
 	}
+	// A claim that was saved before its pack was put on record says that
+	// bean had no record of the pack. That was true on its day, so the row
+	// has no mark (DECISIONS 319). The caveat has one place, and is there
+	// once.
+	unrecorded := strings.Replace(honest, `]`, `,"`+pack.CaveatNotOnRecord+`"]`, 1)
+	for name, tc := range map[string]struct {
+		list   string
+		marked bool
+	}{
+		"saved before the pack was on record": {unrecorded, false},
+		"the same, and twice":                 {strings.Replace(unrecorded, `]`, `,"`+pack.CaveatNotOnRecord+`"]`, 1), true},
+		"the same, in another place":          {strings.Replace(honest, `"`+pack.CaveatCohort+`"`, `"`+pack.CaveatNotOnRecord+`","`+pack.CaveatCohort+`"`, 1), true},
+	} {
+		caveats = tc.list
+		d := t.TempDir()
+		if err := os.CopyFS(d, os.DirFS(dir)); err != nil {
+			t.Fatal(err)
+		}
+		if out, errs, code := run(t, d, claim(onRecord+`"label":"Total Cholesterol (mg/dL)"`, "male, age 30-39")+"\n", "append"); code != 0 {
+			t.Fatalf("%s: append: %d\n%s\n%s", name, code, out, errs)
+		}
+		ls, _, _ := run(t, d, "", "ls", "-type", "comparison.percentile")
+		if !strings.Contains(ls, own+digest[:12]) || strings.Contains(ls, "MISSTATES") != tc.marked {
+			t.Errorf("caveats, %s: marked is not %v:\n%s", name, tc.marked, ls)
+		}
+	}
 	caveats = honest
 	// A reading of a type that the measure does not take, and a record that
 	// is no reading at all: the pack on record says which types it takes.
@@ -377,5 +403,34 @@ func TestRowOfAPackOnRecord(t *testing.T) {
 	}
 	if ls, _, _ := run(t, dir, "", "ls", "-type", "comparison.percentile"); !strings.Contains(ls, "of comparison.percentile ") || !strings.Contains(ls, "(is NOT about a reading)") {
 		t.Errorf("a comparison of a comparison:\n%s", ls)
+	}
+}
+
+// TestSavedComparisonsReadTheSame: a signed record means the same for
+// ever (DECISIONS 319). testdata/saved has one folder for each release. In
+// it is a bundle that the release itself wrote, with synthetic readings
+// and the comparisons that it saved: with each pack on record, with a pack
+// that is not on record, and with the survey's files. One was saved by the
+// build before 0.7.0, with a pack that 0.7.0 then put on record. This
+// build must print for the bundle what check-bundle.txt holds. A change to
+// that file is a change to how an old record reads: say so in UPGRADING.md.
+func TestSavedComparisonsReadTheSame(t *testing.T) {
+	releases, err := os.ReadDir("testdata/saved")
+	if err != nil || len(releases) == 0 {
+		t.Fatalf("no saved comparisons of a release: %v", err)
+	}
+	for _, release := range releases {
+		dir := filepath.Join("testdata", "saved", release.Name())
+		want, err := os.ReadFile(filepath.Join(dir, "check-bundle.txt"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, errs, code := run(t, t.TempDir(), "", "check-bundle", filepath.Join(dir, "bundle"))
+		if code != 0 || got != string(want) {
+			t.Errorf("release %s: exit %d\n%s\ngot:\n%s\nwant:\n%s", release.Name(), code, errs, got, want)
+		}
+		if strings.Contains(got, "MISSTATES") {
+			t.Errorf("release %s: a comparison that bean itself saved reads as one that misstates its pack:\n%s", release.Name(), got)
+		}
 	}
 }

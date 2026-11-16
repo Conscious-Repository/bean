@@ -183,7 +183,7 @@ The owner confirmed the long aim on 2026-11-16. A person keeps their own log. Th
 
 He then said that the infrastructure must be right before new capabilities are added. A design of the whole was written and judged by five reviews (DECISIONS 317). The design holds, with changes. This is the order that came out of it.
 
-**Phase 0: mend what is shipped.** A saved comparison must mean the same for ever. Today its standing can change when bean's list of packs changes. Mend that in bean and in the Python tool, and hold a set of saved comparisons from each release in the tests.
+**Phase 0: mend what is shipped. Done in 0.7.1 (DECISIONS 319).** A saved comparison must mean the same for ever. Its standing changed when a pack was put on record. That is mended in bean and in the Python tool. The tests now hold a set of comparisons that a release saved, and what bean holds of each pack on record.
 
 **Phase 1: decide on paper what is hard to change.** No code. Each of these is in logs or shared files for good once it is used:
 

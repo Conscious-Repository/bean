@@ -106,5 +106,7 @@ A release is the check page with its SHA-256, built on the code host from one co
 
 The rehearsal cannot try one thing: a rule on the code host that stops the job from making a tag. Such a rule shows only when the release is published.
 
+A release that changes how a comparison is saved or read adds its own set to `cmd/bean/testdata/saved/`. Make it with the released commands, in a throwaway log with synthetic readings. Save a comparison with each pack on record, with a pack that is not on record, and with the survey's files. Share them as a bundle, and keep what `bean check-bundle` prints beside it. Every later build must print the same for every set (`TestSavedComparisonsReadTheSame`).
+
 The job refuses a commit that CI has not passed, a tag that is there, and a release that is there. A release with a fault gets a new version: a tag is never moved, and a release is never replaced.
 

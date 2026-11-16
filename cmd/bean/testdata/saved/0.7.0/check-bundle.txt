@@ -1,0 +1,39 @@
+share sha256:18dcca0ae62caad83789d43e9f40ced21ea09616771a46e99463c7866c42822c
+signed by identity sha256:7c1af33872a4c81eeafdd0a188c3a850ff05db61ff6836c609c4aa5b772f7498, with key ed25519:b1a3880e93177b2daea83c214722d1e48afba192aedab1ab851edb0339687841, at 2026-11-16T12:00:00Z
+identity words: lab stuff sock torch erode author program ring
+records: 11 listed; files: 0 included, 2 named and not included
+signed: 11 by the person, 0 by an agent or a peer the person paired, 0 by another key
+corrections: 0 of the listed records replace an earlier record, which is not in the bundle
+note: saved comparisons of release 0.7.0
+a note for a reader with no checker, not signed and not read: README.txt
+It holds:
+  2026-11-01  weight  81.2 kg  631afb577133
+  2026-11-01  comparison.percentile  percentile 58.8 of weight 81.2 kg against Weight (kg), among female, age 40-49 (n 401), by pack 5cae07db6429  7367ad250318
+  2026-11-01  comparison.percentile  percentile 44.3 of lab.cholesterol-total 187 mg/dL, among male, age 30-39 (n 86)  86204a68af3a
+  2026-11-01  comparison.percentile  percentile 44.6 of lab.hdl-cholesterol 52 mg/dL against "Direct HDL-Cholesterol (mg/dL)", among male, age 30-39 (n 86), by pack 6bbce73702a0 (NOT on record)  8bbf070bbcef
+  2026-11-01  lab.hdl-cholesterol  52 mg/dL  93fce3c32f8f
+  2026-11-01  lab.cholesterol-total  187 mg/dL  a637ffb4028e
+  2026-11-01  lab.creatinine  0.98 mg/dL  dcc56231ef92
+  2026-11-01  comparison.percentile  percentile 46 of lab.cholesterol-total 187 mg/dL against Total Cholesterol (mg/dL), among male, age 30-39 (n 339), by pack 10555d676942  ddb1945a136c
+  2026-11-01  comparison.percentile  percentile 60.9 of lab.creatinine 0.98 mg/dL against Creatinine, refrigerated serum (mg/dL), among male, age 30-39 (n 338), by pack 5cae07db6429  e91d29b6b523
+  -  reference.file  file DEMO_J 56e403f99522  1280be733cc4
+  -  reference.file  file TCHOL_J e727d5386c19  845d9e1222d8
+The comparisons above are shown as claimed, and are not computed again here: tools/compare/reproduce.py does that. What they say of themselves, in the sender's words and the words of what they were made with, not this check's:
+  - NHANES is a sample of people living in the United States in the survey years, not a reference range
+  - the reading and NHANES were measured with their own instruments and methods
+  - you chose the cohort: bean does not know whether you belong to it
+  - the lab that measured the reading and NHANES used their own instruments and methods
+  - the cohort is small: fewer than 100 people
+  - this copy of TCHOL_J is not the file on record: its SHA-256 differs
+  - this copy of DEMO_J is not the file on record: its SHA-256 differs
+  - this copy of BMX_J is not the file on record: its SHA-256 differs
+  - this copy of HDL_J is not the file on record: its SHA-256 differs
+  - bean has no record of this pack: nobody has checked its tables, its caveats, or what it sets a reading against
+A comparison by a pack was made with a file of reference data that is not in this bundle. To compute it again, get the pack with that SHA-256 and give it to tools/compare/reproduce.py with the bundle. The SHA-256 names the pack:
+  - 5cae07db64295d565ffae7c251c17fdb9f043dc0638868557275f8b0b0311efa: this is the NHANES 2017-2018 pack of 20 measures that bean has on record
+  - 6bbce73702a06d6b3f7e6e76973889e767d04e3f727ffaafdbe2e5f72d2331da: bean has NO record of this pack. The sender calls it "NHANES 2017-2018: adults by sex and ten years of age". Whoever built it chose its tables, its caveats and what each reading is set against
+  - 10555d6769421d4305cbcd4ff14960d8b966ddd829a50581a9584a60a84d29e2: this is the NHANES 2017-2018 pack that bean has on record
+These are selected records, not a complete history: a correction or a deletion that the share leaves out does not show.
+A signature shows which identity signed, not that a value is true, nor who that identity is.
+The check shows the key that signed. A bundle cannot show that it is still the person's key: a key change made since is not in it. When it matters, ask the person for their current key (bean whoami).
+bundle ok

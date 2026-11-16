@@ -38,6 +38,12 @@ Do not run `purge` or `gc` on the copies. Only they erase anything.
 
 ## Changes
 
+### 0.7.1 (2026-11-16)
+
+One fault is mended. Nothing in a log changes.
+
+- A comparison that you saved with a pack that was not on record says so in its caveats. When a later bean put that pack on record, a check of the comparison said `the claim MISSTATES this pack`, and `tools/compare/reproduce.py` said that it differs. Both were wrong: the caveat was true on its day. Now such a comparison reads with no mark, and computes again. Release 0.7.0 has this fault for a comparison that an earlier build saved with the pack of 20 measures.
+
 ### 0.7.0 (2026-11-16)
 
 The first release with a tag. Nothing in a log changes.

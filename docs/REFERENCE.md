@@ -159,6 +159,8 @@ The four caveats that a claim adds, in this order:
 - `bean has no record of this pack: nobody has checked its tables, its caveats, or what it sets a reading against`, when the pack is not one on record;
 - `the reading was signed by an agent or another key, not by you`, when that is so.
 
+A claim means the same for ever. The third of these caveats says what the signer's bean knew on that day, and a pack can be put on record later. So a check allows that caveat, in its place, for a pack that the reader's bean has on record. A check judges a claim by what the claim names: the reading, the pack and the method.
+
 A reader with the pack checks a claim in four steps. The pack has the SHA-256 that the claim names. The reading's type and unit are in the measure's `same` list. The texts and the caveats are the ones that the pack gives. The method gives every number of the result. `tools/compare/reproduce.py` does this, and shares no code with bean. It fails for a pack that is not on record, unless the reader names that pack.
 
 A saved comparison gives the reading's value away to anyone with the pack ([COMPARE.md](COMPARE.md)). It does not outlive its reading.
