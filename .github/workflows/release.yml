@@ -6,14 +6,18 @@ name: Release
 #
 # The tag must be on main, CI must have passed on its commit, and the tag
 # must name the version in the code. A release is never replaced: a run for
-# a tag that has a release publishes nothing. A release with a fault gets a
-# new version, and a tag is never moved. The release is marked as a
-# pre-release: the record format is at version 0 and the pack and device
-# formats are drafts.
+# a tag that has a release, or a draft of one, publishes nothing. A release
+# with a fault gets a new version, and a tag is never moved. The release is
+# marked as a pre-release: the record format is at version 0 and the pack
+# and device formats are drafts.
 #
 # These checks are in the file at the tagged commit. What keeps a tag off a
-# commit with another file is a rule on the code host: only the owner makes
-# a tag that starts with v.
+# commit with another file, and a release from being deleted and made
+# again, are settings on the code host: only the owner makes a tag that
+# starts with v, and a release cannot be changed.
+#
+# If the last step fails half way, a draft may be left. Delete the draft by
+# hand, then run the job again.
 #
 # Run by hand, the job is a rehearsal: every check that does not need a
 # tag, and the build, and nothing is published.
@@ -24,6 +28,11 @@ on:
 
 permissions: {}
 
+# Two runs for one tag do not publish at the same time.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -31,35 +40,38 @@ jobs:
     permissions:
       contents: write
       checks: read
-    env:
-      GH_TOKEN: ${{ github.token }}
     steps:
       # Each action is named by its commit, so that a moved tag of an action
       # cannot change what builds the page. These are checkout v4 and
-      # setup-go v5.
+      # setup-go v5. The token is given only to the steps that ask the code
+      # host, and not to the build.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: The commit is on main
         run: |
           git fetch origin main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "$GITHUB_REF_NAME is not on main: nothing is published"; exit 1; }
       - name: CI passed on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          passed=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs" --jq '[.check_runs[] | select(.name == "check" and .conclusion == "success")] | length')
-          [ "$passed" -ge 1 ] || { echo "CI has not passed on $GITHUB_SHA: nothing is published"; exit 1; }
+          passed=$(gh api --paginate "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs" --jq '[.check_runs[] | select(.name == "check" and .conclusion == "success")] | length')
+          [ "${passed:-0}" != 0 ] || { echo "CI has not passed on $GITHUB_SHA: nothing is published"; exit 1; }
       - name: The tag names the version in the code
         if: github.event_name == 'push'
         run: |
           version=$(sed -n 's/^const Version = "\(.*\)"/\1/p' core/store.go)
           [ -n "$version" ] && [ "$GITHUB_REF_NAME" = "v$version" ] || { echo "the tag $GITHUB_REF_NAME does not name the version in the code, $version: nothing is published"; exit 1; }
+      # The list holds drafts too. A list that cannot be read fails the step.
       - name: No release has this tag
         if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "a release of $GITHUB_REF_NAME is there, and a release is never replaced: nothing is published"
-            exit 1
-          fi
+          found=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" --jq ".[] | select(.tag_name == \"$GITHUB_REF_NAME\") | .id")
+          [ -z "$found" ] || { echo "a release of $GITHUB_REF_NAME is there, and a release is never replaced: nothing is published"; exit 1; }
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
           go-version-file: go.mod
@@ -67,7 +79,9 @@ jobs:
         run: make dist
       - name: Publish
         if: github.event_name == 'push'
-        run: gh release create "$GITHUB_REF_NAME" dist/bean-check.html dist/SHA256SUMS --prerelease --title "$GITHUB_REF_NAME" --notes-file dist/NOTES.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/bean-check.html dist/SHA256SUMS --verify-tag --prerelease --title "$GITHUB_REF_NAME" --notes-file dist/NOTES.md
       - name: "Rehearsal: what a tag would publish"
         if: github.event_name != 'push'
         run: |
