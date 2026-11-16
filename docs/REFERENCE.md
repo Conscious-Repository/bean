@@ -1,6 +1,6 @@
 # Reference packs: public data to compare a reading with
 
-This is for anyone who publishes reference data, and for anyone who writes a tool that reads it. It says what a pack must hold so that bean, and anyone else, can compare a reading with it and check the result.
+This is for anyone who publishes reference data, and for anyone who writes a tool that reads it. It says what a pack must hold so that bean, and anyone else, can compare a reading with it and check the result. [ARCHITECTURE.md](ARCHITECTURE.md) shows the whole path in one picture.
 
 It is a draft at version 0. One source has been built into a pack: NHANES 2017-2018. The format changes when a second source shows that it must.
 

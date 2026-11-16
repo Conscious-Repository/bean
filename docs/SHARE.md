@@ -2,6 +2,8 @@
 
 `bean share` writes records you choose into a folder: a bundle. You send the folder any way you like. The person who gets it can check that every record is yours and unchanged: with `bean check-bundle`, with a Python script, or in a browser. They need no account, no key of yours and no copy of your log.
 
+[ARCHITECTURE.md](ARCHITECTURE.md) shows the path of a share in one picture.
+
 ```
 bean share -out for-ana 3fa9c1 7b8b81              # these records
 bean share -out lipids -type 'comparison.*'        # every saved comparison, each with its reading
