@@ -38,10 +38,14 @@ Do not run `purge` or `gc` on the copies. Only they erase anything.
 
 ## Changes
 
-### After 0.7.1
+### 0.7.2 (2026-11-16)
 
-On `main`, and in the next release. Nothing in a log changes.
+One fault is mended, and one table changes. Nothing in a log changes.
 
+- **A share with `-files` carried a kept file as a public file by its record's type alone.** A record of the type `reference.file` can name any file, and `bean append` writes one. With `-files`, a share took the file of each such record that a shared record was about, and the review called it "the public file". Nobody had to name the record. A review of the plan for reference data found this (DECISIONS 321, 322).
+- **Now a file is public only when bean has its SHA-256 on record:** a file of the survey as CDC serves it. bean checks the bytes against that SHA-256 before the file leaves. Any other kept file goes only when you name its record by its id.
+- **What changes for you.** A kept copy of a survey file that is not the one on record no longer goes with a comparison. That is a copy that `bean compare` uses only with `-unknown-files`. `bean share` says so for each such file. To send it, add the id of its record: `bean ls -type reference.file` shows the ids.
+- **Whether a file of yours left this way.** `bean import nhanes` keeps only a file that reads as a file of the survey, so a log that was filled with `bean import` has no such record. To be sure, look at each share that you made with `-files`: `bean ls -type share`, then `bean show <id>` lists the files that it carried.
 - The table of `bean compare` starts each row with the date the sample was taken, as `bean ls` shows it. The rows are in order of that date, then of type. A script that read the table by column, or by a line that starts with `lab.`, reads it one column off. Saved comparisons do not change.
 
 ### 0.7.1 (2026-11-16)

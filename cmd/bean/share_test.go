@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
@@ -257,9 +258,10 @@ func TestShareFilesAndComparison(t *testing.T) {
 	json.Unmarshal([]byte(strings.TrimSpace(ls)), &cmp)
 
 	// A comparison comes with its reading and the records of its files.
-	// Without -files the files are named, not shared.
+	// Without -files the files are named, not shared. The files of this
+	// test are synthetic: bean has no record of them, and says so.
 	named := filepath.Join(t.TempDir(), "named")
-	if out, errs, code := run(t, dir, "", "share", "-yes", "-out", named, cmp.ID); code != 0 || !strings.Contains(out, "shared 4 records and 0 files") || !strings.Contains(errs, "not shared: the 2 public files") {
+	if out, errs, code := run(t, dir, "", "share", "-yes", "-out", named, cmp.ID); code != 0 || !strings.Contains(out, "shared 4 records and 0 files") || strings.Count(errs, "it is not a file that bean has on record") != 2 {
 		t.Fatalf("%d\n%s\n%s", code, out, errs)
 	}
 	if _, err := os.Stat(filepath.Join(named, "files")); err == nil {
@@ -268,9 +270,19 @@ func TestShareFilesAndComparison(t *testing.T) {
 	if out, _, code := run(t, t.TempDir(), "", "check-bundle", named); code != 0 || !strings.Contains(out, "files: 0 included, 2 named and not included") {
 		t.Errorf("%d\n%s", code, out)
 	}
-	// With -files each file is there in plaintext, named by its SHA-256.
+	// With -files alone they stay home too: a file that is not on record
+	// goes only when the person names its record.
+	typed := filepath.Join(t.TempDir(), "typed")
+	if out, errs, code := run(t, dir, "", "share", "-yes", "-files", "-out", typed, cmp.ID); code != 0 || !strings.Contains(out, "shared 4 records and 0 files") || strings.Count(errs, "it is not a file that bean has on record") != 2 {
+		t.Fatalf("%d\n%s\n%s", code, out, errs)
+	}
+	if _, err := os.Stat(filepath.Join(typed, "files")); err == nil {
+		t.Error("a file that is not on record was shared, and nobody named its record")
+	}
+	// With -files and its record named, each file is there in plaintext,
+	// named by its SHA-256.
 	full := filepath.Join(t.TempDir(), "full")
-	if out, errs, code := run(t, dir, "", "share", "-yes", "-files", "-out", full, cmp.ID); code != 0 || !strings.Contains(out, "shared 4 records and 2 files") {
+	if out, errs, code := run(t, dir, "", append([]string{"share", "-yes", "-files", "-out", full, cmp.ID}, fileRecordIDs(t, dir)...)...); code != 0 || !strings.Contains(out, "shared 4 records and 2 files") {
 		t.Fatalf("%d\n%s\n%s", code, out, errs)
 	}
 	entries, _ := os.ReadDir(filepath.Join(full, "files"))
@@ -423,7 +435,7 @@ func TestBundleFromMemory(t *testing.T) {
 	}
 	// A comparison with its reading, the records of its two files, and the
 	// files themselves.
-	if stdout, errs, code := run(t, dir, "", "share", "-yes", "-files", "-note", "for Ana", "-out", out, "-type", "comparison.*"); code != 0 || !strings.Contains(stdout, "shared 4 records and 2 files") {
+	if stdout, errs, code := run(t, dir, "", append([]string{"share", "-yes", "-files", "-note", "for Ana", "-out", out, "-type", "comparison.*"}, fileRecordIDs(t, dir)...)...); code != 0 || !strings.Contains(stdout, "shared 4 records and 2 files") {
 		t.Fatalf("%d\n%s\n%s", code, stdout, errs)
 	}
 	want, ok := checkBundle(out)
@@ -767,7 +779,7 @@ func TestSealedFilesComeOut(t *testing.T) {
 	}
 	where := t.TempDir()
 	pkg := filepath.Join(where, "p.bean")
-	stdout, errs, code := run(t, dir, "", "share", "-yes", "-seal", "-files", "-out", pkg, "-type", "comparison.*")
+	stdout, errs, code := run(t, dir, "", append([]string{"share", "-yes", "-seal", "-files", "-out", pkg, "-type", "comparison.*"}, fileRecordIDs(t, dir)...)...)
 	if code != 0 || !strings.Contains(stdout, "shared 4 records and 2 files") {
 		t.Fatalf("%d\n%s\n%s", code, stdout, errs)
 	}
@@ -844,5 +856,150 @@ func TestBundleRowQuotedOnce(t *testing.T) {
 	}
 	if ls, _, _ := run(t, dir, "", "ls", "-type", "weight"); !strings.Contains(ls, "81 kg]  [peer Dr Smith") || strings.Contains(ls, `"81 kg`) {
 		t.Errorf("ls:\n%s", ls)
+	}
+}
+
+// fileRecordIDs returns the ids of the records that keep a reference file.
+func fileRecordIDs(t *testing.T, dir string) []string {
+	t.Helper()
+	ls, _, _ := run(t, dir, "", "ls", "-json", "-type", "reference.file")
+	var ids []string
+	for _, line := range strings.Split(strings.TrimSpace(ls), "\n") {
+		var rec struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal([]byte(line), &rec); err != nil || rec.ID == "" {
+			t.Fatalf("no reference.file: %v\n%s", err, ls)
+		}
+		ids = append(ids, rec.ID)
+	}
+	return ids
+}
+
+// A record of the type reference.file can name any file: bean append writes
+// one. So the type alone must never make a file travel as a public file.
+// Only a file whose SHA-256 bean has on record is public. Any other file
+// goes when the person names its record, and only then (DECISIONS 322).
+func TestShareCarriesNoFileByItsTypeAlone(t *testing.T) {
+	dir := t.TempDir()
+	run(t, dir, "", "init")
+	// A private file, kept by a record that claims to be a reference file.
+	private := filepath.Join(t.TempDir(), "private.txt")
+	secret := "this is a private file, and it must stay home\n"
+	os.WriteFile(private, []byte(secret), 0o600)
+	blob, errs, code := run(t, dir, "", "blob", "put", private)
+	blob = strings.TrimSpace(blob)
+	if code != 0 || !strings.HasPrefix(blob, "sha256:") {
+		t.Fatalf("blob put: %d\n%s\n%s", code, blob, errs)
+	}
+	sum := sha256.Sum256([]byte(secret))
+	rec := fmt.Sprintf(`{"type":"reference.file","value":{"blob":%q},"times":{"observed":null},"source":{"system":"nhanes","adapter":"t@1","ref":null},"context":{"sha256":%q,"bytes":%d,"assurance":"unsigned-file","dataset":"TCHOL_J"},"blobs":[{"hash":%q,"role":"raw-export","media_type":"application/x-sas-xport"}]}`+"\n",
+		blob, hex.EncodeToString(sum[:]), len(secret), blob)
+	if out, errs, code := run(t, dir, rec, "append"); code != 0 {
+		t.Fatalf("append: %d\n%s\n%s", code, out, errs)
+	}
+	keeper := fileRecordIDs(t, dir)[0]
+	note, _, _ := run(t, dir, "", "add", "note", "see this file", "-about", keeper)
+	note = strings.TrimSpace(note)
+
+	// A note about that record brings the record along, and never its file.
+	about := filepath.Join(t.TempDir(), "about")
+	stdout, errs, code := run(t, dir, "", "share", "-yes", "-files", "-out", about, note)
+	if code != 0 || !strings.Contains(stdout, "shared 2 records and 0 files") {
+		t.Fatalf("a note about a file that is not on record: %d\n%s\n%s", code, stdout, errs)
+	}
+	if !strings.Contains(errs, "it is not a file that bean has on record") {
+		t.Errorf("the share does not say why the file stays home:\n%s", errs)
+	}
+	if _, err := os.Stat(filepath.Join(about, "files")); err == nil {
+		t.Error("a private file left as a public file, and nobody named its record")
+	}
+	// Named by its id, with -files, it goes: the person chose it.
+	named := filepath.Join(t.TempDir(), "named")
+	if stdout, errs, code := run(t, dir, "", "share", "-yes", "-files", "-out", named, note, keeper); code != 0 || !strings.Contains(stdout, "shared 2 records and 1 files") {
+		t.Fatalf("named by its id: %d\n%s\n%s", code, stdout, errs)
+	}
+}
+
+// A record can state the SHA-256 of a file on record and keep other bytes.
+// Such a file is public by what the record says, so the share must hold the
+// bytes to that SHA-256, and send nothing when they differ.
+func TestShareHoldsAPublicFileToItsDigest(t *testing.T) {
+	dir := t.TempDir()
+	run(t, dir, "", "init")
+	private := filepath.Join(t.TempDir(), "private.txt")
+	os.WriteFile(private, []byte("not the survey's file\n"), 0o600)
+	blob, _, _ := run(t, dir, "", "blob", "put", private)
+	blob = strings.TrimSpace(blob)
+	onRecord := "0291a6a4f6d82dac8392c8c992b519946824dfeda01647935520cf506ed9f4ab" // TCHOL_J
+	rec := fmt.Sprintf(`{"type":"reference.file","value":{"blob":%q},"times":{"observed":null},"source":{"system":"nhanes","adapter":"t@1","ref":null},"context":{"sha256":%q,"bytes":22,"assurance":"unsigned-file","dataset":"TCHOL_J"},"blobs":[{"hash":%q,"role":"raw-export","media_type":"application/x-sas-xport"}]}`+"\n", blob, onRecord, blob)
+	if out, errs, code := run(t, dir, rec, "append"); code != 0 {
+		t.Fatalf("append: %d\n%s\n%s", code, out, errs)
+	}
+	note, _, _ := run(t, dir, "", "add", "note", "see this file", "-about", fileRecordIDs(t, dir)[0])
+	out := filepath.Join(t.TempDir(), "out")
+	stdout, errs, code := run(t, dir, "", "share", "-yes", "-files", "-out", out, strings.TrimSpace(note))
+	if code == 0 || !strings.Contains(errs, "does not match the SHA-256 in its record") {
+		t.Fatalf("a file that is not what its record states: %d\n%s\n%s", code, stdout, errs)
+	}
+	if _, err := os.Stat(out); err == nil {
+		t.Error("something was written")
+	}
+	// A record that names two files states no SHA-256 for either, whatever
+	// its context says. So neither is public.
+	two := fmt.Sprintf(`{"type":"reference.file","value":{"blob":%q},"times":{"observed":null},"source":{"system":"nhanes","adapter":"t@2","ref":null},"context":{"sha256":%q,"bytes":22,"assurance":"unsigned-file","dataset":"TCHOL_J"},"blobs":[{"hash":%q,"role":"raw-export","media_type":"application/x-sas-xport"},{"hash":%q,"role":"other","media_type":"text/plain"}]}`+"\n", blob, onRecord, blob, blob)
+	if out, errs, code := run(t, dir, two, "append"); code != 0 {
+		t.Fatalf("append: %d\n%s\n%s", code, out, errs)
+	}
+	var twoID string
+	for _, id := range fileRecordIDs(t, dir) {
+		if shown, _, _ := run(t, dir, "", "show", id); strings.Contains(shown, "t@2") {
+			twoID = id
+		}
+	}
+	if twoID == "" {
+		t.Fatal("the record with two files is not in the log")
+	}
+	note2, _, _ := run(t, dir, "", "add", "note", "and this one", "-about", twoID)
+	out2 := filepath.Join(t.TempDir(), "out2")
+	stdout, errs, code = run(t, dir, "", "share", "-yes", "-files", "-out", out2, strings.TrimSpace(note2))
+	if code != 0 || !strings.Contains(stdout, "shared 2 records and 0 files") {
+		t.Fatalf("a record that names two files: %d\n%s\n%s", code, stdout, errs)
+	}
+	if _, err := os.Stat(filepath.Join(out2, "files")); err == nil {
+		t.Error("a file of a record that names two files left as a public file")
+	}
+}
+
+// With BEAN_NHANES_DIR set to a folder of CDC's own files: a kept file that
+// bean has on record is public, and goes with -files and the comparison
+// that read it, with no record named.
+func TestRealFileOnRecordTravels(t *testing.T) {
+	data := os.Getenv("BEAN_NHANES_DIR")
+	if data == "" {
+		t.Skip("BEAN_NHANES_DIR is not set")
+	}
+	path := importerOnPath(t)
+	dir := t.TempDir()
+	run(t, dir, "", "init")
+	for _, f := range []string{"TCHOL_J", "DEMO_J"} {
+		if out, errs, code := runPath(t, dir, path, "import", "-yes", "nhanes", filepath.Join(data, f+".XPT")); code != 0 || !strings.Contains(out, "kept reference.file") {
+			t.Fatalf("import %s: %d\n%s\n%s", f, code, out, errs)
+		}
+	}
+	reading, _, _ := run(t, dir, "", "add", "lab.cholesterol-total", "193", "-unit", "mg/dL", "-at", "2026-11-01")
+	if out, errs, code := run(t, dir, "", "compare", "-sex", "male", "-age", "30-39", "-save", strings.TrimSpace(reading)); code != 0 {
+		t.Fatalf("%s\n%s", out, errs)
+	}
+	home := filepath.Join(t.TempDir(), "home")
+	if out, errs, code := run(t, dir, "", "share", "-yes", "-out", home, "-type", "comparison.*"); code != 0 || !strings.Contains(out, "shared 4 records and 0 files") || !strings.Contains(errs, "not shared: the 2 public files") {
+		t.Fatalf("%d\n%s\n%s", code, out, errs)
+	}
+	full := filepath.Join(t.TempDir(), "full")
+	if out, errs, code := run(t, dir, "", "share", "-yes", "-files", "-out", full, "-type", "comparison.*"); code != 0 || !strings.Contains(out, "shared 4 records and 2 files") {
+		t.Fatalf("%d\n%s\n%s", code, out, errs)
+	}
+	if out, _, code := run(t, t.TempDir(), "", "check-bundle", full); code != 0 || !strings.Contains(out, "files: 2 included, 0 named and not included") {
+		t.Errorf("%d\n%s", code, out)
 	}
 }

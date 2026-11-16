@@ -189,7 +189,7 @@ He then said that the infrastructure must be right before new capabilities are a
 
 **The work that follows from it, in order.**
 
-1. Mend what is shipped: a share with `-files` carries a kept file as public by its record's type alone.
+1. Mend what is shipped: a share with `-files` carried a kept file as public by its record's type alone. **Done in 0.7.2 (DECISIONS 322).**
 2. The documents: recipes with a form to copy, the rules for a builder, the naming rule with vectors, and what "on record" means.
 3. The words for a format that a reader does not know, and for a cell that a pack does not have.
 4. The builders take a version of their rule, and version 1 still builds both packs on record.
@@ -255,7 +255,6 @@ Not planned: a command in bean that fetches from a network, and a view that rank
   - `bean compare -pack <file>` needs a log even to show what a pack holds.
   - `bean add` with a whole number above 9007199254740991 says `bad json`.
 - From the reviews of the plan for reference data (DECISIONS 321):
-  - With `-files`, a share carries every `reference.file` of the person that a shared record is about, as a public file. It decides by the record's type, and such a record can name any file. This is first in the order of work.
   - For a cell that a pack does not have, bean says that a cohort of fewer than 30 people is left out. A pack can leave a cell out for another reason.
   - For a pack in a format that it does not know, bean says that the file is not a pack of version 0.
   - `bean purge` of the record that keeps a file erases the file, also when a saved comparison is about that record. The same file cannot be kept again on that copy.

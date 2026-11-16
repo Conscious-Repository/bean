@@ -50,5 +50,6 @@ jobs:
           BEAN_NHANES_DIR: ${{ runner.temp }}/nhanes
         run: |
           go test ./internal/nhanes ./internal/xpt -run 'Real|NHANES' -v
+          go test ./cmd/bean -run 'TestRealFileOnRecordTravels' -v
           make compare pack
           echo "Each of these files has the SHA-256 that bean has on record, both builders give the pack on record from them, and every saved comparison computes again." >> "$GITHUB_STEP_SUMMARY"

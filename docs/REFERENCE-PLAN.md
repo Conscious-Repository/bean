@@ -8,7 +8,7 @@ It is phase 1 of the order in [ROADMAP.md](ROADMAP.md). That phase decides on pa
 
 **What this plan does not give.** The first user from outside asked to choose the sources that his results are compared with (DECISIONS 308). This plan gives him more tests, and a way to hold a pack. It does not give him that choice. The section on the list of packs says why, and what would start it.
 
-**One fault in what is shipped was found on the way.** With `-files`, a share can carry a kept file as a public file when it is not one (F8). The mend is first in the order of work. Until then, read the review before a share: it lists each file that will travel.
+**One fault in what is shipped was found on the way.** With `-files`, a share can carry a kept file as a public file when it is not one (F8). It is mended in 0.7.2 (DECISIONS 322): a file is public only when bean has its SHA-256 on record.
 
 ## What was measured
 
@@ -42,7 +42,7 @@ These four tests are on almost every real report, and have no reference data tod
 - `bean purge` of that record erases the file, also when a saved comparison is about the record. `bean import` then refuses the same file for good on that copy.
 - `bean append` writes a `reference.file` record with any SHA-256 and any title, and `bean import -yes` asks nothing. An assistant with a shell holds the person's key. So such a record does not prove that a person chose anything.
 - A saved comparison with a pack does not bring the pack along in a share: the claim names no record that keeps it.
-- With `-files`, a share carries every `reference.file` of the person that a shared record is about, as a public file. It decides that by the record's type alone, and a record of that type can name any file. A reviewer made a private note travel that way, and nobody had named its record. This is a fault in what is shipped.
+- With `-files`, a share carries every `reference.file` of the person that a shared record is about, as a public file. It decides that by the record's type alone, and a record of that type can name any file. A reviewer made a private note travel that way, and nobody had named its record. This was a fault in what was shipped, up to 0.7.1.
 
 **F9. A pack that a person changes computes as well as any other.** A reviewer added `lab.cholesterol-total` in `mmol/L` to the `same` list of a measure in `mg/dL`, in a copy of the pack on record. bean then signed a reading of 5.2 mmol/L as percentile 0. The only mark was that bean has no record of the pack.
 
@@ -272,7 +272,7 @@ Where bean falls short of the rule, said in the same place.
 
 ## The order of work that follows
 
-1. **Mend what is shipped: a share with `-files`.** A `reference.file` travels as a public file only when the bytes that it keeps have a SHA-256 that bean has on record. For a survey file that is the list of digests in bean's code. Any other kept file travels only when the person names its record (F8). A kept copy of a survey file that is not the one on record then needs its record named, and UPGRADING.md says so.
+1. **Mend what is shipped: a share with `-files`. Done in 0.7.2 (DECISIONS 322).** A `reference.file` travels as a public file only when the bytes that it keeps have a SHA-256 that bean has on record. For a survey file that is the list of digests in bean's code. Any other kept file travels only when the person names its record (F8). A kept copy of a survey file that is not the one on record then needs its record named, and UPGRADING.md says so.
 2. **The documents.** REFERENCE.md gets the recipes of the packs on record, with a form to copy, and the rules for a builder. It gets the canonical form in full, the naming rule with vectors, the exact meaning of "on record", and decision 7. It says that `builder.name` names a rule and not a program, and which version of Unicode its rule on texts means. It also gets the rules by which a test is judged (DECISIONS 240, 309), which today are only in the log of decisions.
 3. **Words in bean and in the Python check.** A format that a reader does not know. And a cell that a pack does not have. Today bean says that a cohort of fewer than 30 people is left out, which is one reason of several.
 4. **The builders take a version of the rule.** A flag in both builders, and a proof that version 1 still builds both packs on record, byte for byte. The tests on the real files, `make pack` and the job change with it.

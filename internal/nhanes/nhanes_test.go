@@ -367,3 +367,21 @@ var syntheticWant = []Result{
 	{N: 277, Percentile: 65.4, Below: 65.4, Equal: 0, P25: 176, P50: 191, P75: 205},
 	{N: 327, Percentile: 52.1, Below: 51, Equal: 2.1, P25: 178, P50: 192, P75: 205},
 }
+
+// Each digest of Known is on record, and nothing else is: not the empty
+// text, not a digest in upper case, not another digest.
+func TestOnRecord(t *testing.T) {
+	for name, digest := range Known {
+		if !OnRecord(digest) {
+			t.Errorf("the digest of %s is not on record", name)
+		}
+		if OnRecord(strings.ToUpper(digest)) && strings.ToUpper(digest) != digest {
+			t.Errorf("the digest of %s in upper case is on record", name)
+		}
+	}
+	for _, other := range []string{"", "0", strings.Repeat("0", 64), "TCHOL_J"} {
+		if OnRecord(other) {
+			t.Errorf("%q is on record", other)
+		}
+	}
+}

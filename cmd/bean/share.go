@@ -99,7 +99,8 @@ type sharedFile struct {
 	blob, record, mediaType, recordType string
 	digest                              string // SHA-256 of the plaintext, with -files
 	data                                []byte // the plaintext, with -files
-	public                              bool   // a reference file the person kept: -files alone shares it
+	public                              bool   // a reference file that bean has on record: -files alone shares it
+	offRecord                           bool   // a reference file that bean has no record of: it goes only by its record's id
 }
 
 func cmdShare(s *core.Store, args []string) {
@@ -406,6 +407,12 @@ func chooseForShare(s *core.Store, l *core.Loaded, recs []*core.Record, pos []st
 	// that the person kept: never because a record came along, or was picked
 	// by type. A lab report holds a name and a birth date, and a note about
 	// it must not carry it out.
+	//
+	// A reference file is public when bean has its SHA-256 on record: anyone
+	// can then get the same bytes from their publisher. The type of the
+	// record says nothing, since a record of any type can name any file
+	// (DECISIONS 322). The record states the SHA-256, and a file that
+	// travels is held to it below.
 	var kept []sharedFile
 	distinct := map[string]bool{}
 	seen := map[string]bool{}
@@ -416,7 +423,8 @@ func chooseForShare(s *core.Store, l *core.Loaded, recs []*core.Record, pos []st
 	// here, and an export still carries it.
 	opens := mine
 	for _, r := range shared {
-		public := r.Type == nhanes.FileType && r.Author == l.ID
+		reference := r.Type == nhanes.FileType && r.Author == l.ID
+		public := reference && len(r.Blobs) == 1 && nhanes.OnRecord(bundle.StatedDigest(r, r.Blobs[0].Hash))
 		travels := files && (named[r.ID] || public)
 		if travels && len(r.Blobs) > 0 && r.Author != l.ID && opens[r.Author] == "" {
 			fail(fmt.Errorf("%s names a file, and it is not your record or a paired agent's: such a record opens no file, so nothing was shared. Share it without -files, or delete it: bean purge %s", r.ID[7:19], r.ID[7:19]))
@@ -426,7 +434,7 @@ func chooseForShare(s *core.Store, l *core.Loaded, recs []*core.Record, pos []st
 				continue // a record may name one file twice
 			}
 			seen[b.Hash+" "+r.ID] = true
-			sf := sharedFile{blob: b.Hash, record: r.ID, mediaType: b.MediaType, recordType: r.Type, public: public}
+			sf := sharedFile{blob: b.Hash, record: r.ID, mediaType: b.MediaType, recordType: r.Type, public: public, offRecord: reference && !public}
 			if travels {
 				data, err := s.GetBlob(b.Hash)
 				if err != nil {
@@ -486,6 +494,8 @@ func reviewShare(s *core.Store, l *core.Loaded, c shareChoice, out string, files
 			travels++
 		case sf.public:
 			publicHome++
+		case sf.offRecord:
+			leftOut = append(leftOut, fmt.Sprintf("  not shared: the file that %s (%s) keeps: it is not a file that bean has on record. With -files, name that record by its id to share its file.", sf.record[7:19], sf.recordType))
 		default:
 			leftOut = append(leftOut, fmt.Sprintf("  not shared: the file that %s (%s) keeps. With -files, name that record by its id to share its file.", sf.record[7:19], sf.recordType))
 		}
