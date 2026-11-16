@@ -179,12 +179,30 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 
 ## Order
 
-1. Done: the first release, 0.7.0, with the check page. Next beside it: the NHANES packs in a release, once the terms of the source are confirmed, and the Blossom mirrors.
-2. Path 2, step 3: two people side by side. Step 2, the signed reply, is done.
-3. Path 4, steps 1 and 2: a second source, and the NHANES pack published. More tests, as people meet types with no reference data.
-4. Path 3, pairing and import, when a real device or its firmware can produce the folder.
-5. Path 1, step 2: a package sealed to a reader's key.
-6. Path 2, steps 4 and 5, and Path 4, steps 4 and 5, when real peers and a second publisher ask for them.
+The owner confirmed the long aim on 2026-11-16. A person keeps their own log. They share with people they trust. They compare with reference data from many sources, and they choose which sources count. Anyone can publish a source, and no publisher is special.
+
+He then said that the infrastructure must be right before new capabilities are added. A design of the whole was written and judged by five reviews (DECISIONS 317). The design holds, with changes. This is the order that came out of it.
+
+**Phase 0: mend what is shipped. Done in 0.7.1 (DECISIONS 319).** A saved comparison must mean the same for ever. Its standing changed when a pack was put on record. That is mended in bean and in the Python tool. The tests now hold a set of comparisons that a release saved, and what bean holds of each pack on record.
+
+**Phase 1: decide on paper what is hard to change.** No code. Each of these is in logs or shared files for good once it is used:
+
+- the next format of a pack, before any new pack is hosted: every change of format gives every pack a new SHA-256;
+- how a pack says where it came from, so that a stranger can build the same bytes;
+- the list of record types and units that a pack may name, as a file that a publisher can read and check against;
+- the record with which a person keeps a pack;
+- the list of packs on record as data that anyone can build again, with no key of the project;
+- the rule that no publisher is special: bean names none, and a person can see and drop any list that came with bean.
+
+**Phase 2: a first publisher hosts.** A file host that serves a pack under its SHA-256, the SHA-256 stated in two places, and a second host. A relay with signed pointers runs from the start, as a way to find packs. Nothing depends on the relay. Before any real key: a rehearsal with a throwaway identity, a second person who holds the recovery words, and a written list of steps.
+
+**Phase 3: in bean.** A person states the SHA-256 that they expect, and bean refuses other bytes. A person keeps a pack with the log. A check computes a shared comparison again.
+
+**Phase 4: when a second party exists.** A person takes in the record of a peer or a publisher who keeps a pack.
+
+New tests, such as the fasting tests, are new packs. They follow phase 1, so that they are not built twice. The view of two people side by side needs none of this, and can be built at any time.
+
+Not planned: a command in bean that fetches from a network, and a view that ranks or scores two people. bean never runs a program that a pack names. A public card of what a person holds is not planned either.
 
 ## Smaller open paths
 

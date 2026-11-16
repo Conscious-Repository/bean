@@ -26,6 +26,30 @@ New here: [docs/ONBOARDING.md](docs/ONBOARDING.md) goes from install to an impor
 - **You outlive your keys.** 24 words on paper recover your identity on a new machine and retire a lost key.
 - **Leave at any time.** `bean export` writes everything as plaintext. `bean restore -export` reads it back.
 
+## How it works
+
+```mermaid
+flowchart LR
+    subgraph machine["Your machine"]
+        log["Your log: signed records in one folder"]
+        bean["bean"]
+    end
+    peer["A peer or a doctor"]
+    subgraph public["Public data"]
+        source["A source, such as a survey"]
+        pack["A reference pack: one file, named by its SHA-256"]
+        host["Any host: a web server, a Blossom server, a friend's disk"]
+    end
+    bean -->|"signs, stores, reads"| log
+    bean -->|"a sealed file of the records that you chose, and six words"| peer
+    peer -->|"signed notes in reply"| bean
+    source -->|"a builder that anyone can run"| pack
+    pack --> host
+    host -->|"the whole pack, checked by its SHA-256"| bean
+```
+
+Your data stays in your folder. You share chosen records with one person at a time. To compare, public data comes to your machine whole, and your reading never leaves. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the three parts as pictures, with what works today and what is planned.
+
 ## Try it in five minutes
 
 One script runs the whole loop on a synthetic lab report, in a throwaway folder. It imports the report, fetches public survey data from the US CDC, compares, and shares. Then it checks the result without bean.
@@ -47,7 +71,13 @@ It needs Go and `curl`, and downloads about 7 MB from CDC. With Python and `pip 
 | `make` | `make page`, the page that checks a bundle in a browser | It comes with Xcode's command line tools |
 | Python 3 | Optional: the checks that use no bean (`tools/second`, `tools/compare`) | `brew install python`, then `pip install -r tools/requirements.txt` |
 
-Build and install the commands. This installs the newest `main`. For a release, run `git checkout <tag>` before `go install`: the [releases](https://github.com/Conscious-Repository/bean/releases) list the tags.
+Build and install the commands. One line installs the newest release, with no copy of the code:
+
+```
+go install github.com/Conscious-Repository/bean/cmd/...@latest
+```
+
+`bean version` then names the release. To work on the code, or to run the newest `main`, clone it. For a release in a clone, run `git checkout <tag>` before `go install`: the [releases](https://github.com/Conscious-Repository/bean/releases) list the tags.
 
 ```
 git clone https://github.com/Conscious-Repository/bean.git
@@ -344,7 +374,7 @@ Sync every copy before you rotate or restore, then check what the sync brought i
 
 Read [UPGRADING.md](UPGRADING.md) before you run a new build on your log. It lists the changes that alter results, and how to try a new build on a copy first.
 
-## How it works
+## Under the hood
 
 A record is a JSON file in `objects/`, named by the SHA-256 hash of its content and signed with your key. Your identity is the hash of your first record, so it never changes when keys change. Corrections and deletions are new records. The protocol says who may make them, so every copy reaches the same result from the same files. Stored files (PDFs, photos) are encrypted in `blobs/`. Sync copies the files that one copy has and the other does not.
 
@@ -360,6 +390,7 @@ bean protects who wrote what, and protects your identity against a stolen device
 
 | Document | For |
 |---|---|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The whole of bean in three pictures: your machine, a share with one person, a comparison with public data. |
 | [docs/ONBOARDING.md](docs/ONBOARDING.md) | First run, step by step, alone or with an AI. |
 | [docs/COMMANDS.md](docs/COMMANDS.md) | Every command, flag and exit code. |
 | [docs/IMPORTERS.md](docs/IMPORTERS.md) | Write an importer for your own source; community importers. |

@@ -510,11 +510,20 @@ def check_pack_claim(claim, inputs):
     caveats = list(pack["caveats"]) + list(measure["caveats"]) + list(cohort["caveats"]) + [CAVEAT_COHORT]
     if cell["n"] < SMALL_N:
         caveats.append(CAVEAT_SMALL)
+    # That the pack was not on record is what the signer's bean knew on the
+    # day of the claim. A pack can be put on record later. So for a pack
+    # that this tool has on record, a claim may have that caveat, in its
+    # place, or not: a signed record means the same for ever. For a pack
+    # that this tool has no record of, the claim must say so.
+    unknown_at = len(caveats)
     if digest not in KNOWN_PACKS:
         caveats.append(CAVEAT_UNKNOWN_PACK)
         inputs.unrecorded.add(digest)
     if reading.get("author") != claim["author"]:
         caveats.append(CAVEAT_AUTHOR)
+    allowed = [caveats]
+    if digest in KNOWN_PACKS:
+        allowed.append(caveats[:unknown_at] + [CAVEAT_UNKNOWN_PACK] + caveats[unknown_at:])
     known = "on record" if digest in KNOWN_PACKS else "NOT on record"
     what = "%s %s %s against %s %r in pack %s (%s)" % (reading["type"], value, reading["value"].get("unit", ""), mid, measure["label"], digest[:12], known)
     # Step 4: the method gives every number of the result.
@@ -524,7 +533,7 @@ def check_pack_claim(claim, inputs):
     cv = claim["value"]
     if not isinstance(cv, dict) or set(cv) != {"n", "unit"} or not same_number(cv["n"], got["percentile"]) or cv["unit"] != "{percentile}":
         raise ValueError("%s: the claim's value is not the percentile in {percentile}" % what)
-    if ctx["caveats"] != caveats:
+    if ctx["caveats"] not in allowed:
         raise ValueError("%s: the caveats are not the ones these inputs give" % what)
     return "%s, %s: percentile %s, n %s" % (what, cohort["text"], packcheck.num(got["percentile"]), got["n"])
 

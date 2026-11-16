@@ -30,9 +30,14 @@ const (
 // ClaimCaveats reports whether caveats are ones that a claim with this
 // pack, measure and cohort can have: the pack's, the measure's, the
 // cohort's and that the person chose the cohort, in that order, then the
-// small cohort and the reading's signer where each applies. small and
-// otherSigner say whether those two apply; nil means that the caller
-// cannot tell, and then either is allowed.
+// small cohort, that the pack was not on record, and the reading's signer,
+// where each applies. small and otherSigner say whether those two apply;
+// nil means that the caller cannot tell, and then either is allowed.
+//
+// That the pack was not on record is what the signer's bean knew on the
+// day of the claim. A pack can be put on record later, so a claim may
+// have that caveat or not, whatever this bean has on record: a signed
+// record means the same for ever (DECISIONS 319).
 func (k OnRecordPack) ClaimCaveats(measure, cohort string, caveats []string, small, otherSigner *bool) bool {
 	want := append(append(append(append([]string{}, k.Caveats...), k.MeasureCaveats[measure]...), k.CohortCaveats[cohort]...), CaveatCohort)
 	if len(caveats) < len(want) {
@@ -47,7 +52,7 @@ func (k OnRecordPack) ClaimCaveats(measure, cohort string, caveats []string, sma
 	for _, optional := range []struct {
 		text    string
 		applies *bool
-	}{{fmt.Sprintf(CaveatSmall, SmallN), small}, {CaveatAuthor, otherSigner}} {
+	}{{fmt.Sprintf(CaveatSmall, SmallN), small}, {CaveatNotOnRecord, nil}, {CaveatAuthor, otherSigner}} {
 		has := len(rest) > 0 && rest[0] == optional.text
 		if has {
 			rest = rest[1:]

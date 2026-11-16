@@ -1,6 +1,6 @@
 # Reference packs: public data to compare a reading with
 
-This is for anyone who publishes reference data, and for anyone who writes a tool that reads it. It says what a pack must hold so that bean, and anyone else, can compare a reading with it and check the result.
+This is for anyone who publishes reference data, and for anyone who writes a tool that reads it. It says what a pack must hold so that bean, and anyone else, can compare a reading with it and check the result. [ARCHITECTURE.md](ARCHITECTURE.md) shows the whole path in one picture.
 
 It is a draft at version 0. One source has been built into a pack: NHANES 2017-2018. The format changes when a second source shows that it must.
 
@@ -159,6 +159,8 @@ The four caveats that a claim adds, in this order:
 - `bean has no record of this pack: nobody has checked its tables, its caveats, or what it sets a reading against`, when the pack is not one on record;
 - `the reading was signed by an agent or another key, not by you`, when that is so.
 
+A claim means the same for ever. The third of these caveats says what the signer's bean knew on that day, and a pack can be put on record later. So a check allows that caveat, in its place, for a pack that the reader's bean has on record. A check judges a claim by what the claim names: the reading, the pack and the method.
+
 A reader with the pack checks a claim in four steps. The pack has the SHA-256 that the claim names. The reading's type and unit are in the measure's `same` list. The texts and the caveats are the ones that the pack gives. The method gives every number of the result. `tools/compare/reproduce.py` does this, and shares no code with bean. It fails for a pack that is not on record, unless the reader names that pack.
 
 A saved comparison gives the reading's value away to anyone with the pack ([COMPARE.md](COMPARE.md)). It does not outlive its reading.
@@ -211,6 +213,7 @@ One list in bean's code is not how many publishers will be known. A publisher's 
 
 A pack is public data, and a file. It needs no account and no server of its own.
 
+- **No publisher is special.** bean names no publisher of a pack, and no host of one. A file and its SHA-256 on a page is a full publication: a signature, a Blossom server and a relay are additions. One thing falls short of this today: the list of packs on record is in bean's code ([ROADMAP.md](ROADMAP.md)).
 - **Any host will do.** A web server, a file sent by e-mail, a disk. A host that serves a file under its SHA-256 as the path fits a pack with no change. The Blossom servers of Nostr do that.
 - **A pointer is not the data.** A publisher can announce a pack: its title, its SHA-256 and where it is. A signed note on Nostr relays can carry that. The relays then hold a pointer and no health record.
 - **A host may charge for bytes.** Storage and bandwidth cost money, and a host can ask for payment before it serves a file. bean holds no wallet. A person pays a host, if they must, with their own tools.

@@ -171,6 +171,30 @@ forge "another n" 'c["result"]["n"] += 1'
 forge "another quartile" 'c["result"]["p75"] = c["result"]["p50"]'
 forge "another value" 'r["value"]["n"] = 99.9'
 
+# A pack can be put on record after a claim was saved with it. The claim
+# then still says that bean had no record of the pack, and it must still
+# compute again: a signed record means the same for ever (DECISIONS 319).
+"$PY" -I - "$ROOT" "$DIGEST" "$T/records.jsonl" "$T/syn.pack" >"$T/later.txt" 2>&1 <<'PYEOF' || say "reproduce.py refuses claims that were saved before their pack was put on record: $(tail -2 "$T/later.txt")"
+import sys
+sys.path.insert(0, sys.argv[1] + "/tools/compare")
+import reproduce
+reproduce.KNOWN_PACKS[sys.argv[2]] = "a pack that was put on record after the claims were saved"
+sys.exit(reproduce.main(["reproduce.py"] + sys.argv[3:]))
+PYEOF
+grep -q "on record" "$T/later.txt" && ! grep -q "NOT on record" "$T/later.txt" || say "reproduce.py did not take the pack as one on record in the check of claims saved before"
+
+# The comparisons that a release saved must compute again in every later
+# build. cmd/bean/testdata/saved holds a bundle that each release wrote.
+# Here: the one with the pack of the synthetic files, which this build must
+# still build to the same bytes, and the one with the files themselves.
+# Those with a pack of CDC's files are computed again below, where CDC's
+# files are given.
+for kept in "$ROOT"/cmd/bean/testdata/saved/*/bundle; do
+  "$PY" -I "$ROOT/tools/compare/reproduce.py" -accept-pack "$DIGEST" "$kept" "$T/syn.pack" "$DATA/DEMO_J.XPT" "$DATA/TCHOL_J.XPT" >"$T/saved.txt" 2>&1
+  grep -q '^DIFFERS' "$T/saved.txt" && say "a comparison that a release saved does not compute again: $(grep '^DIFFERS' "$T/saved.txt" | head -1)"
+  [ "$(grep -c '^reproduced' "$T/saved.txt")" -ge 2 ] || say "reproduce.py computes fewer than 2 of the comparisons in $kept again: $(tail -1 "$T/saved.txt")"
+done
+
 # Packs with one thing wrong. bean and check.py must both refuse each.
 "$PY" -I - "$T/syn.pack" "$T/wrong" <<'EOF' || { echo "the wrong packs were not made"; exit 1; }
 import copy, json, os, sys
@@ -281,6 +305,11 @@ if [ -n "${BEAN_NHANES_DIR:-}" ]; then
     bean -dir "$T/log" compare -pack "$T/real-$n.pack" 2>&1 | grep -q "that bean has on record" || say "the pack of $n files of CDC is not a pack on record"
     "$PY" -I "$HERE/check.py" "$T/real-$n.pack" >/dev/null 2>&1 || say "check.py refuses the pack of $n files of CDC"
     "$PY" -I "$HERE/rebuild_nhanes.py" "$T/real-$n.pack" "${REAL[@]}" >"$T/re.txt" 2>&1 || say "rebuild_nhanes.py on $n files of CDC: $(tail -1 "$T/re.txt")"
+  done
+  # With both packs of CDC's files, every comparison that a release saved
+  # computes again. One of them was saved before its pack was on record.
+  for kept in "$ROOT"/cmd/bean/testdata/saved/*/bundle; do
+    "$PY" -I "$ROOT/tools/compare/reproduce.py" -accept-pack "$DIGEST" "$kept" "$T/syn.pack" "$T"/real-*.pack "$DATA/DEMO_J.XPT" "$DATA/TCHOL_J.XPT" >"$T/saved.txt" 2>&1 || say "the comparisons that a release saved do not all compute again: $(grep -v '^reproduced' "$T/saved.txt" | head -2)"
   done
   real=", and each pack of CDC's files is one on record"
 fi

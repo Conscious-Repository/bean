@@ -2,6 +2,8 @@
 
 `bean share` writes records you choose into a folder: a bundle. You send the folder any way you like. The person who gets it can check that every record is yours and unchanged: with `bean check-bundle`, with a Python script, or in a browser. They need no account, no key of yours and no copy of your log.
 
+[ARCHITECTURE.md](ARCHITECTURE.md) shows the path of a share in one picture.
+
 ```
 bean share -out for-ana 3fa9c1 7b8b81              # these records
 bean share -out lipids -type 'comparison.*'        # every saved comparison, each with its reading
@@ -117,7 +119,7 @@ They cannot tell, and bean says so on every check:
 
 - **That it is complete.** A bundle is the records you chose. A correction or a deletion you left out, or made later, does not show. "All my readings this year" is your word, not something the bundle proves.
 - **That a value is true.** A signature shows who signed.
-- **Who you are.** An identity is a key, not a name. The check shows the identity as six words. Your reader knows that it is you only when you read them the same words, by a way that an attacker does not control.
+- **Who you are.** An identity is a key, not a name. The check shows the identity as eight words. Your reader knows that it is you only when you read them the same words, by a way that an attacker does not control.
 - **That the key is still yours.** A bundle holds the key changes made before it was signed, not later ones. Someone who stole a key you have since retired can sign a bundle with it, leave the retirement out, and it passes. The check prints the key that signed. When it matters, the reader asks you for your current key (`bean whoami`) by another way, and compares.
 
 And you should know:
