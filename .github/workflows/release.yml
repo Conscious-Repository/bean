@@ -57,8 +57,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          passed=$(gh api --paginate "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs" --jq '[.check_runs[] | select(.name == "check" and .conclusion == "success")] | length')
-          [ "${passed:-0}" != 0 ] || { echo "CI has not passed on $GITHUB_SHA: nothing is published"; exit 1; }
+          passed=$(gh api --paginate "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs" --jq '.check_runs[] | select(.name == "check" and .conclusion == "success") | .id')
+          [ -n "$passed" ] || { echo "CI has not passed on $GITHUB_SHA: nothing is published"; exit 1; }
       - name: The tag names the version in the code
         if: github.event_name == 'push'
         run: |
