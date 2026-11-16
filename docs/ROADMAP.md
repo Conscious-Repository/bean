@@ -179,12 +179,22 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 
 ## Order
 
-1. Done: the first release, 0.7.0, with the check page. Next beside it: the NHANES packs in a release, once the terms of the source are confirmed, and the Blossom mirrors.
-2. Path 2, step 3: two people side by side. Step 2, the signed reply, is done.
-3. Path 4, steps 1 and 2: a second source, and the NHANES pack published. More tests, as people meet types with no reference data.
-4. Path 3, pairing and import, when a real device or its firmware can produce the folder.
-5. Path 1, step 2: a package sealed to a reader's key.
-6. Path 2, steps 4 and 5, and Path 4, steps 4 and 5, when real peers and a second publisher ask for them.
+The owner set the aim on 2026-11-16. A person compares their own data, on their own machine, with public data and with a peer. They can also point a peer to what they hold. Three reviews judged a plan for it, one for each paragon, and changed its order (DECISIONS 313).
+
+1. **Side by side with a peer** (path 2, step 3). bean shows the readings of a bundle that a peer sent beside the person's own, by type and unit. It computes nothing across the two people. It needs no network and no key, and both people who use bean have a log.
+2. **A check that computes a shared comparison again**, when the reader gives the pack (path 4, step 3). Today a check reads the claim, and does not do the arithmetic. With this, bean also keeps a pack with the log, so that a saved comparison can be computed again when no host has the pack.
+3. **The packs on a host, by SHA-256** (path 4, step 2). It is documents and an upload, and no code in bean. It waits for the owner's word on the terms of the source. Any host that serves a file under its SHA-256 will do, and any person can host a pack for a peer. A signed note that points to a pack is a hint for finding it, and never makes a pack one on record.
+4. **More tests**, chosen by what real logs lack: `bean compare -type 'lab.*'` names the types with no reference data. The fasting part of the sample gives glucose, triglycerides, LDL and insulin. The rule for a value below a detection limit gives ALT, GGT, bilirubin and C-reactive protein.
+
+Then, each when its condition holds:
+
+- **A second source, from another publisher.** First as research: one source confirmed from its publisher's own site.
+- **The person's own list of packs, and a peer's vouch** (DECISIONS 308), when a second pack exists that the project did not build. This is what the first user outside the owner asked for.
+- **A publisher's identity.** Before AION signs a first note with a key of its own: how a reader knows the publisher when a key is lost.
+- **A package by link**, after a package can be sealed to a reader's key (path 1, step 2).
+- Path 3, when a real device can produce the folder.
+
+Not planned: a command in bean that fetches from a network, and a view that ranks or scores two people. A public card of what a person holds is not planned either.
 
 ## Smaller open paths
 
