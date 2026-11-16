@@ -99,8 +99,8 @@ type sharedFile struct {
 	blob, record, mediaType, recordType string
 	digest                              string // SHA-256 of the plaintext, with -files
 	data                                []byte // the plaintext, with -files
-	public                              bool   // a reference file that bean has on record: -files alone shares it
-	offRecord                           bool   // a reference file that bean has no record of: it goes only by its record's id
+	public                              bool   // a reference file whose record states a SHA-256 on record: -files alone shares it, once the bytes are held to that SHA-256
+	offRecord                           bool   // a reference file whose record states no SHA-256 on record: it goes only by its record's id
 }
 
 func cmdShare(s *core.Store, args []string) {
@@ -495,14 +495,24 @@ func reviewShare(s *core.Store, l *core.Loaded, c shareChoice, out string, files
 		case sf.public:
 			publicHome++
 		case sf.offRecord:
-			leftOut = append(leftOut, fmt.Sprintf("  not shared: the file that %s (%s) keeps: it is not a file that bean has on record. With -files, name that record by its id to share its file.", sf.record[7:19], sf.recordType))
+			// Only what bean knows: what the record states. Nothing was read.
+			how := "with -files and " + sf.record[7:19] + " added to the command"
+			if files {
+				how = "with " + sf.record[7:19] + " added to the command"
+			}
+			leftOut = append(leftOut, fmt.Sprintf("  not shared: the file that %s (%s) keeps. Its record does not state the SHA-256 of a file that bean has on record, so the file goes only when you name that record: %s.", sf.record[7:19], sf.recordType, how))
 		default:
 			leftOut = append(leftOut, fmt.Sprintf("  not shared: the file that %s (%s) keeps. With -files, name that record by its id to share its file.", sf.record[7:19], sf.recordType))
 		}
 	}
-	// The public files are said once, with what their absence means.
+	// The public files are said once, with what their absence means. No
+	// file was read, so this says what the records state and no more.
 	if publicHome > 0 {
-		leftOut = append(leftOut, fmt.Sprintf("  not shared: the %d public files that the reference.file records keep. Add -files to share them: without them a reader needs the files from their publisher to compute a comparison again.", publicHome))
+		which := fmt.Sprintf("the files that %d reference.file records keep. Each record states the SHA-256 of a file that bean has on record", publicHome)
+		if publicHome == 1 {
+			which = "the file that 1 reference.file record keeps. The record states the SHA-256 of a file that bean has on record"
+		}
+		leftOut = append(leftOut, fmt.Sprintf("  not shared: %s. Add -files to share them: bean then holds the bytes to that SHA-256. Without them a reader needs the files from their publisher to compute a comparison again.", which))
 	}
 	// A comparison with a reference pack names the pack and does not hold
 	// it: the reader needs that file to compute the comparison again.
@@ -554,7 +564,9 @@ func reviewShare(s *core.Store, l *core.Loaded, c shareChoice, out string, files
 			switch {
 			case sf.data == nil:
 			case sf.public:
-				fmt.Fprintf(w, "  the public file that %s (%s) keeps: %d bytes\n", sf.record[7:19], sf.recordType, len(sf.data))
+				fmt.Fprintf(w, "  the public file that %s (%s) keeps: %d bytes. Its SHA-256 is one that bean has on record for a file of the survey.\n", sf.record[7:19], sf.recordType, len(sf.data))
+			case sf.offRecord:
+				fmt.Fprintf(w, "  THE WHOLE FILE that %s (%s) keeps, which you named: %s, %d bytes, in plaintext. Its record does not state a file that bean has on record, so bean cannot say what it holds.\n", sf.record[7:19], sf.recordType, safe(sf.mediaType), len(sf.data))
 			default:
 				fmt.Fprintf(w, "  THE WHOLE FILE that %s (%s) keeps, as you imported it: %s, %d bytes, in plaintext. A lab report holds your name and birth date.\n", sf.record[7:19], sf.recordType, safe(sf.mediaType), len(sf.data))
 			}

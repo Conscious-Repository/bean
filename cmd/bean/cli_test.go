@@ -9,12 +9,22 @@ import (
 	"testing"
 
 	"github.com/Conscious-Repository/bean/core"
+	"github.com/Conscious-Repository/bean/internal/nhanes"
 )
 
 // The test binary runs main() when BEAN_TEST_MAIN is set, so these tests
 // drive the real CLI: arguments, exit codes, stdout and stderr.
 func TestMain(m *testing.M) {
 	if os.Getenv("BEAN_TEST_MAIN") == "1" {
+		// A test can put the digest of a synthetic file on record, as
+		// "TCHOL_J=<SHA-256>,DEMO_J=<SHA-256>": the real files are too large
+		// to keep in the repository. This is test code: the program that
+		// ships reads no such variable.
+		for _, pair := range strings.Split(os.Getenv("BEAN_TEST_ON_RECORD"), ",") {
+			if name, digest, ok := strings.Cut(pair, "="); ok {
+				nhanes.Known[name] = digest
+			}
+		}
 		os.Args = append([]string{"bean"}, os.Args[1:]...)
 		main()
 		os.Exit(0)

@@ -206,7 +206,7 @@ Your record of the name is an `agent.pair` record with `value.role` `peer`. Its 
 
 ## Check a shared comparison
 
-A comparison with the survey's files, shared with `-files`, can be computed again from the bundle alone. Without `-files` it needs the bundle and the files: fetched from CDC, or your own kept copies in a `bean export`.
+A comparison with the survey's files, shared with `-files`, can be computed again from the bundle alone. That holds for files that bean has on record. A kept copy that is not on record is in the bundle only when you named its record. Without `-files` it needs the bundle and the files: fetched from CDC, or your own kept copies in a `bean export`.
 
 ```
 python3 tools/compare/reproduce.py with-files

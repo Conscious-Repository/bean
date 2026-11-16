@@ -63,9 +63,6 @@ var Known = map[string]string{
 // survey. Bytes with such a digest are a file that its publisher serves to
 // anyone, whatever a record says about them.
 func OnRecord(sha256 string) bool {
-	if sha256 == "" {
-		return false
-	}
 	for _, digest := range Known {
 		if digest == sha256 {
 			return true
