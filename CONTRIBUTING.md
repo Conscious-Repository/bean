@@ -95,3 +95,16 @@ vectors/                  published test vectors (SPEC.md 14); conformance/ has
 ## Commits
 
 One subject line that says what changed, then a body that says why. Keep `docs/DECISIONS.md` and `docs/ROADMAP.md` current in the same commit as the code.
+
+## Release
+
+A release is the check page with its SHA-256, built on the code host from one commit of `main`. Its tag is `v` and the version in the code.
+
+1. Set `Version` in `core/store.go`, and add the release to `UPGRADING.md`. Merge that to `main`, and wait for CI on `main`.
+2. On the code host, open Actions, then Release, then "Run workflow" on `main`. Leave "publish" off. This is a rehearsal: it checks and builds, and publishes nothing. Its summary says what a release would publish, or why one would be refused.
+3. Run it again with "publish" on. The job makes the tag on that commit and publishes the release. Merge nothing between the two runs: each run takes the newest commit of `main`.
+
+The rehearsal cannot try one thing: a rule on the code host that stops the job from making a tag. Such a rule shows only when the release is published.
+
+The job refuses a commit that CI has not passed, a tag that is there, and a release that is there. A release with a fault gets a new version: a tag is never moved, and a release is never replaced.
+
