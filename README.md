@@ -47,7 +47,7 @@ It needs Go and `curl`, and downloads about 7 MB from CDC. With Python and `pip 
 | `make` | `make page`, the page that checks a bundle in a browser | It comes with Xcode's command line tools |
 | Python 3 | Optional: the checks that use no bean (`tools/second`, `tools/compare`) | `brew install python`, then `pip install -r tools/requirements.txt` |
 
-Build and install the commands.
+Build and install the commands. This installs the newest `main`. For a release, run `git checkout <tag>` before `go install`: the [releases](https://github.com/Conscious-Repository/bean/releases) list the tags.
 
 ```
 git clone https://github.com/Conscious-Repository/bean.git
