@@ -189,10 +189,10 @@ grep -q "on record" "$T/later.txt" && ! grep -q "NOT on record" "$T/later.txt" |
 # still build to the same bytes, and the one with the files themselves.
 # Those with a pack of CDC's files are computed again below, where CDC's
 # files are given.
-for saved in "$ROOT"/cmd/bean/testdata/saved/*/bundle; do
-  "$PY" -I "$ROOT/tools/compare/reproduce.py" -accept-pack "$DIGEST" "$saved" "$T/syn.pack" "$DATA/DEMO_J.XPT" "$DATA/TCHOL_J.XPT" >"$T/saved.txt" 2>&1
+for kept in "$ROOT"/cmd/bean/testdata/saved/*/bundle; do
+  "$PY" -I "$ROOT/tools/compare/reproduce.py" -accept-pack "$DIGEST" "$kept" "$T/syn.pack" "$DATA/DEMO_J.XPT" "$DATA/TCHOL_J.XPT" >"$T/saved.txt" 2>&1
   grep -q '^DIFFERS' "$T/saved.txt" && say "a comparison that a release saved does not compute again: $(grep '^DIFFERS' "$T/saved.txt" | head -1)"
-  [ "$(grep -c '^reproduced' "$T/saved.txt")" -ge 2 ] || say "reproduce.py computes fewer than 2 of the comparisons in $saved again: $(tail -1 "$T/saved.txt")"
+  [ "$(grep -c '^reproduced' "$T/saved.txt")" -ge 2 ] || say "reproduce.py computes fewer than 2 of the comparisons in $kept again: $(tail -1 "$T/saved.txt")"
 done
 
 # Packs with one thing wrong. bean and check.py must both refuse each.
@@ -308,8 +308,8 @@ if [ -n "${BEAN_NHANES_DIR:-}" ]; then
   done
   # With both packs of CDC's files, every comparison that a release saved
   # computes again. One of them was saved before its pack was on record.
-  for saved in "$ROOT"/cmd/bean/testdata/saved/*/bundle; do
-    "$PY" -I "$ROOT/tools/compare/reproduce.py" -accept-pack "$DIGEST" "$saved" "$T/syn.pack" "$T"/real-*.pack "$DATA/DEMO_J.XPT" "$DATA/TCHOL_J.XPT" >"$T/saved.txt" 2>&1 || say "the comparisons that a release saved do not all compute again: $(grep -v '^reproduced' "$T/saved.txt" | head -2)"
+  for kept in "$ROOT"/cmd/bean/testdata/saved/*/bundle; do
+    "$PY" -I "$ROOT/tools/compare/reproduce.py" -accept-pack "$DIGEST" "$kept" "$T/syn.pack" "$T"/real-*.pack "$DATA/DEMO_J.XPT" "$DATA/TCHOL_J.XPT" >"$T/saved.txt" 2>&1 || say "the comparisons that a release saved do not all compute again: $(grep -v '^reproduced' "$T/saved.txt" | head -2)"
   done
   real=", and each pack of CDC's files is one on record"
 fi

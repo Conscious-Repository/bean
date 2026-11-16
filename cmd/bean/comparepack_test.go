@@ -361,9 +361,11 @@ func TestRowOfAPackOnRecord(t *testing.T) {
 		list   string
 		marked bool
 	}{
-		"saved before the pack was on record": {unrecorded, false},
-		"the same, and twice":                 {strings.Replace(unrecorded, `]`, `,"`+pack.CaveatNotOnRecord+`"]`, 1), true},
-		"the same, in another place":          {strings.Replace(honest, `"`+pack.CaveatCohort+`"`, `"`+pack.CaveatNotOnRecord+`","`+pack.CaveatCohort+`"`, 1), true},
+		"saved before the pack was on record":                     {unrecorded, false},
+		"the same, and twice":                                     {strings.Replace(unrecorded, `]`, `,"`+pack.CaveatNotOnRecord+`"]`, 1), true},
+		"the same, in another place":                              {strings.Replace(honest, `"`+pack.CaveatCohort+`"`, `"`+pack.CaveatNotOnRecord+`","`+pack.CaveatCohort+`"`, 1), true},
+		"the same, as the first caveat":                           {strings.Replace(honest, `[`, `["`+pack.CaveatNotOnRecord+`",`, 1), true},
+		"the same, with a caveat after it that bean never writes": {strings.Replace(unrecorded, `]`, `,"endorsed by a medical association"]`, 1), true},
 	} {
 		caveats = tc.list
 		d := t.TempDir()
