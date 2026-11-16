@@ -53,7 +53,7 @@ func TestCLIHelpAndErrors(t *testing.T) {
 			t.Errorf("%v: exit %d\n%s", args, code, out)
 		}
 	}
-	if out, _, code := run(t, dir, "", "version"); code != 0 || !strings.HasPrefix(out, "bean 0.6.0") {
+	if out, _, code := run(t, dir, "", "version"); code != 0 || !strings.HasPrefix(out, "bean "+core.Version+" (records v 0)\n") {
 		t.Errorf("version: %d %q", code, out)
 	}
 	if _, errs, code := run(t, dir, ""); code != 2 || !strings.Contains(errs, "usage: bean") {

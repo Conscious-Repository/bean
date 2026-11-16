@@ -2,13 +2,13 @@
 
 This file is the one place for open paths: what bean should do next, in what order, and what is not decided. Work that is done is in the git history, and the reasons are in [DECISIONS.md](DECISIONS.md). Nothing here is final.
 
-## Where bean stands (2026-11-14)
+## Where bean stands (2026-11-16)
 
 A person can keep a log, and import lab reports, Apple Health and CSV files. They can compare a reading with public reference data: with a survey's own files, or with a reference pack. They can share chosen records as one sealed file that opens with six words, and a reader checks it in a browser. A reader who runs bean can answer with signed notes, and the person takes them into their log. Independent second implementations and a real-browser test guard those paths.
 
 **bean is in use.** A second person keeps a log with it, and the owner keeps his own. So `main` is a release, whether or not it has a tag (DECISIONS 310). A log that an earlier build wrote must read the same in a later build, or [UPGRADING.md](../UPGRADING.md) says what changes.
 
-Four things are still missing. The check page has no public address. Two people cannot see their records side by side. A device cannot sign what it captures. Only one public source has been built into a pack. They are the four paths below.
+Three things are still missing. Two people cannot see their records side by side. A device cannot sign what it captures. Only one public source has been built into a pack. They are in the four paths below.
 
 ## Path 1: a sealed package for one reader
 
@@ -23,14 +23,14 @@ Four things are still missing. The check page has no public address. Two people 
 5. **Record who it was for.** The share record says that a passphrase was used. With a reader's key it will name the reader's address.
 
 6. **The reader knows who signed. Done:** identity words (DECISIONS 280). The sender reads eight words in the call that carries the opening words, and the check shows the same eight (DECISIONS 287).
-7. **One public address for the check page. Not done, and the owner's to decide.** A reader with no terminal must get the page from another place than the records. The page names its commit, CI records its SHA-256 on every push, and a tag publishes both (`make dist`). What is missing is the address, and a second place that states the SHA-256.
+7. **One public address for the check page. Done (DECISIONS 311):** the releases of the repository, which is public. A tag on `main` builds the page on the code host's machine and publishes it with its SHA-256. CI records the SHA-256 of every push as well. Not done: a second, independent place that states the SHA-256, and a short address of the project's own.
 
 **What it cannot do.** A reader who has opened the package holds a copy for good. Withdrawing permission stops the next share, not the last one.
 
 **Open.**
 
 - Should `-seal` become what `bean share` does unless told otherwise? Today a plain folder is the default, because the checks and the examples are built on it.
-- Where does the page live? A project domain, or the pages of the code host once the repository is public. A second, independent place for its SHA-256 is what catches a host that serves a changed page.
+- Does the page need a project domain? Today it lives in the releases of the code host. A second, independent place for its SHA-256 is what catches a host that serves a changed page.
 - Does a package need an end date after which the page refuses to open it? An end date stops an honest reader's page. It does not stop a copy.
 
 ## Path 2: people compare with each other
@@ -135,7 +135,7 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 **The plan.**
 
 1. **A second source, from another publisher.** The format is not frozen before a second real source is built into a pack. Each candidate is confirmed first from its publisher's own site: the terms, a stable address, and whether a file changes without notice.
-2. **Publish the NHANES pack** beside the check page, with its SHA-256, and mirror it (the section on where the files live). Then a person needs one download of under 1 MB, not eight files.
+2. **Publish the NHANES pack** beside the check page, with its SHA-256, and mirror it (the section on where the files live). Then a person needs one download of under 1 MB, not eight files. It waits for the owner to confirm the terms of the source (DECISIONS 311).
 3. **The check page computes a shared comparison again**, when the reader gives it the pack.
 4. **A publisher signs.** A record by the publisher's bean identity names a pack's SHA-256, and travels as a bundle. This is built when a second publisher exists.
 5. **A pointer on relays.** A publisher announces a pack on Nostr relays: title, SHA-256, where it is. The relays hold a pointer and no health record. bean keys can already be Nostr keys.
@@ -179,7 +179,7 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 
 ## Order
 
-1. Path 1, step 7: a public address for the check page, and the first release, with its Blossom mirrors. Everything a reader does starts there.
+1. Done: the first release, 0.7.0, with the check page. Next beside it: the NHANES packs in a release, once the terms of the source are confirmed, and the Blossom mirrors.
 2. Path 2, step 3: two people side by side. Step 2, the signed reply, is done.
 3. Path 4, steps 1 and 2: a second source, and the NHANES pack published. More tests, as people meet types with no reference data.
 4. Path 3, pairing and import, when a real device or its firmware can produce the folder.

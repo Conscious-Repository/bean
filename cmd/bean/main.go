@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -231,6 +232,9 @@ func main() {
 		fmt.Println(help)
 	case "version":
 		fmt.Printf("bean %s (records v 0)\n", core.Version)
+		if from := builtFrom(); from != "" {
+			fmt.Println(from)
+		}
 	case "init":
 		inf := flag.NewFlagSet("init", flag.ContinueOnError)
 		inf.SetOutput(io.Discard)
@@ -573,4 +577,32 @@ func gitTree(dir string) string {
 		}
 		d = parent
 	}
+}
+
+// builtFrom says which source this program was built from, when the Go
+// tool recorded it: the commit of a checkout, or the version of a module
+// that go install fetched. Two builds of one version are told apart by it.
+func builtFrom() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return ""
+	}
+	commit, changed := "", false
+	for _, s := range info.Settings {
+		switch s.Key {
+		case "vcs.revision":
+			commit = s.Value
+		case "vcs.modified":
+			changed = s.Value == "true"
+		}
+	}
+	switch {
+	case len(commit) >= 12 && changed:
+		return "built from commit " + commit[:12] + ", with changes that are not committed"
+	case len(commit) >= 12:
+		return "built from commit " + commit[:12]
+	case info.Main.Version != "" && info.Main.Version != "(devel)":
+		return "built from module version " + info.Main.Version
+	}
+	return ""
 }
