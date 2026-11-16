@@ -34,7 +34,7 @@ This page says what bean protects, what it does not protect, and where each key 
 
 **A saved comparison gives its reading away.** The record holds the cohort and the result. With the public files, anyone who has the record can work the value out.
 
-**A page that checks a bundle is only as good as its sender.** A forged page can call anything good. Get `bean-check.html` from the project, or build it with `make page`, and compare its SHA-256.
+**A page that checks a bundle is only as good as its sender.** A forged page can call anything good. Get `bean-check.html` from the project's [releases](https://github.com/Conscious-Repository/bean/releases), or build it with `make page`, and compare its SHA-256.
 
 ## Keys
 

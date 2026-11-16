@@ -5,7 +5,6 @@ From nothing to a working log: install, identity, a checked lab import, an AI as
 ## You need
 
 - A Mac with [Homebrew](https://brew.sh). Linux works with the same tools.
-- Access to this repository on GitHub. It is private for now: sign in first, with `gh auth login` or an SSH key.
 - An encrypted disk. On a Mac, turn on FileVault. bean signs records but does not encrypt the record files.
 - A lab report PDF, if you have one. bean reads the layouts it knows; today, the Labcorp patient report and the Quest Diagnostics report. To practice, use `cmd/bean-import-lab/testdata/real-layout.txt` (Labcorp) or `quest-layout.html` (Quest): real layouts with synthetic content. Practice in a throwaway folder, not in your log: `bean -dir /tmp/practice init`, then `bean -dir /tmp/practice import lab ...`.
 - Pen and paper for 24 words.

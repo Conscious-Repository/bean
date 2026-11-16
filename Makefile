@@ -114,7 +114,10 @@ dist:
 	mkdir -p dist
 	go run ./tools/page -o dist/bean-check.html >/dev/null
 	cd dist && sha256sum bean-check.html > SHA256SUMS
-	@{ echo "bean-check.html checks shared records in a browser: it installs nothing and sends nothing."; echo; \
+	@{ echo "bean $$(sed -n 's/^const Version = "\(.*\)"/\1/p' core/store.go), from commit $$(git rev-parse HEAD)."; echo; \
+	  echo "UPGRADING.md lists what changes for a log that you have: read it before you run a new build. A log that an earlier build wrote reads the same in a later build, or that file says what changes."; echo; \
+	  echo "This is marked a pre-release: the record format is at version 0, and the formats of a reference pack and of a device's folder are drafts."; echo; \
+	  echo "bean-check.html checks shared records in a browser: it installs nothing and sends nothing."; echo; \
 	  echo "SHA-256 of bean-check.html:"; echo; sed 's/^/    /' dist/SHA256SUMS; echo; \
 	  echo "To get the same file, byte for byte: check out this commit, then run make page with $$(go env GOVERSION)."; } > dist/NOTES.md
 	@cat dist/SHA256SUMS

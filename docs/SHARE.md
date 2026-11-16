@@ -95,7 +95,7 @@ No earlier verdict stays on the page. The technical lines of `bean check-bundle`
 
 A page cannot prove itself: a forged page prints whatever its maker likes, and a page cannot compute the SHA-256 of its own file. So the trust comes from where the reader got the page.
 
-- **A reader with no terminal** gets the page from the bean project, not from the sender. The sender tells them where, in the same call that gives the words. Today the project has no public address for the page, and the page says so: that is the next step ([ROADMAP.md](ROADMAP.md)). Until then, such a reader trusts the sender for the page as well.
+- **A reader with no terminal** gets the page from the bean project, not from the sender. The sender tells them where, in the same call that gives the words. The place is the project's [releases](https://github.com/Conscious-Repository/bean/releases): each has the page and its SHA-256. A reader who takes the page from the sender trusts the sender for the page as well.
 - **What to tell a first reader today.** "Get the page from me by another way than the file, or build it yourself. It came from me, so its verdict is not independent of me. The eight words that I read to you show that the records are mine, on a page that you trust." A page that travels with the file can be replaced with it, and can show any words.
 - **A reader with a terminal** builds the page (`make page`) at the commit that a copy names, and compares the SHA-256 of the two files. Or they do not use the page: `bean check-bundle` and `tools/second/checkbundle.py` are the same check.
 - **What a second source adds.** One address can serve one reader a changed page. A SHA-256 that is published in a second place, or a build of one's own, is what catches that.
