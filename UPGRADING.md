@@ -38,6 +38,12 @@ Do not run `purge` or `gc` on the copies. Only they erase anything.
 
 ## Changes
 
+### After 0.7.1
+
+On `main`, and in the next release. Nothing in a log changes.
+
+- The table of `bean compare` starts each row with the date the sample was taken, as `bean ls` shows it. The rows are in order of that date, then of type. A script that read the table by column, or by a line that starts with `lab.`, reads it one column off. Saved comparisons do not change.
+
 ### 0.7.1 (2026-11-16)
 
 One fault is mended. Nothing in a log changes.

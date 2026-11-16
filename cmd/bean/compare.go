@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -15,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/Conscious-Repository/bean/core"
 	"github.com/Conscious-Repository/bean/internal/nhanes"
@@ -502,15 +504,22 @@ func printComparisons(w io.Writer, rows []comparison, head, known string, all bo
 	var table bytes.Buffer
 	shown := 0
 	tw := tabwriter.NewWriter(&table, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "READING\tVALUE\tPERCENTILE\tLOWER\tSAME\tMIDDLE HALF\tMEDIAN\tN\tNOTE\tID")
+	fmt.Fprintln(tw, "DATE\tREADING\tVALUE\tPERCENTILE\tLOWER\tSAME\tMIDDLE HALF\tMEDIAN\tN\tNOTE\tID")
 	var caveats, help, unmapped, against []string
 	once := func(list *[]string, text string) {
 		if text != "" && !slices.Contains(*list, text) {
 			*list = append(*list, text)
 		}
 	}
+	// One draw's readings sit together: by the time they were taken, then
+	// by type. The order of rows is left as it was given.
+	rows = slices.Clone(rows)
+	slices.SortStableFunc(rows, func(a, b comparison) int {
+		return cmp.Or(strings.Compare(observedStart(a.reading), observedStart(b.reading)), strings.Compare(a.reading.Type, b.reading.Type))
+	})
 	for _, c := range rows {
 		r := c.reading
+		when := safe(whenText(r))
 		value := safe(strings.TrimSpace(valueText(r) + "  " + c.by))
 		switch {
 		case c.unmapped && !all:
@@ -521,7 +530,7 @@ func printComparisons(w io.Writer, rows []comparison, head, known string, all bo
 				n = strconv.Itoa(c.result.N)
 			}
 			shown++
-			fmt.Fprintf(tw, "%s\t%s\t-\t-\t-\t-\t-\t%s\tnot comparable: %s\t%s\n", r.Type, value, n, safe(c.refused), r.ID[7:19])
+			fmt.Fprintf(tw, "%s\t%s\t%s\t-\t-\t-\t-\t-\t%s\tnot comparable: %s\t%s\n", when, r.Type, value, n, safe(c.refused), r.ID[7:19])
 			for _, text := range c.help {
 				once(&help, text)
 			}
@@ -540,7 +549,7 @@ func printComparisons(w io.Writer, rows []comparison, head, known string, all bo
 				note = append(note, "pack NOT on record")
 			}
 			shown++
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s%%\t%s%%\t%s to %s\t%s\t%d\t%s\t%s\n", r.Type, value,
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s%%\t%s%%\t%s to %s\t%s\t%d\t%s\t%s\n", when, r.Type, value,
 				nhanes.Num(res.Percentile), nhanes.Num(res.Below), nhanes.Num(res.Equal), nhanes.Num(res.P25), nhanes.Num(res.P75), nhanes.Num(res.P50), res.N, strings.Join(note, ", "), r.ID[7:19])
 			for _, text := range c.caveats {
 				once(&caveats, text)
@@ -634,4 +643,16 @@ func comparisonRecord(c comparison, cohort nhanes.Cohort) map[string]any {
 			},
 		},
 	}
+}
+
+// observedStart is a key that sorts readings by when they were taken: the
+// observed start in UTC, or as written when it is not a full time. A reading
+// with no time sorts first.
+func observedStart(r *core.Record) string {
+	obs, _ := r.Observed.(map[string]any)
+	start, _ := obs["start"].(string)
+	if t, err := time.Parse(time.RFC3339Nano, start); err == nil {
+		return t.UTC().Format(time.RFC3339Nano)
+	}
+	return start
 }
