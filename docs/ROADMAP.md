@@ -179,7 +179,7 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 
 ## Order
 
-The owner confirmed the long aim on 2026-11-16. A person keeps their own log. They share with people they trust. They compare with reference data from many sources, and they choose which sources count. Anyone can publish a source, and AION is the first of many.
+The owner confirmed the long aim on 2026-11-16. A person keeps their own log. They share with people they trust. They compare with reference data from many sources, and they choose which sources count. Anyone can publish a source, and no publisher is special.
 
 He then said that the infrastructure must be right before new capabilities are added. A design of the whole was written and judged by five reviews (DECISIONS 317). The design holds, with changes. This is the order that came out of it.
 
@@ -192,9 +192,9 @@ He then said that the infrastructure must be right before new capabilities are a
 - the list of record types and units that a pack may name, as a file that a publisher can read and check against;
 - the record with which a person keeps a pack;
 - the list of packs on record as data that anyone can build again, with no key of the project;
-- rules that keep AION one publisher among many, written into the proposal on governance.
+- the rule that no publisher is special: bean names none, and a person can see and drop any list that came with bean.
 
-**Phase 2: AION hosts, in the plainest way.** A file host that serves a pack under its SHA-256, the SHA-256 stated in two places, and a second host. A relay is an addition for finding packs, and nothing depends on it. Before any real key: a rehearsal with a throwaway identity, a second person who holds the recovery words, and a written list of steps.
+**Phase 2: a first publisher hosts.** A file host that serves a pack under its SHA-256, the SHA-256 stated in two places, and a second host. A relay with signed pointers runs from the start, as a way to find packs. Nothing depends on the relay. Before any real key: a rehearsal with a throwaway identity, a second person who holds the recovery words, and a written list of steps.
 
 **Phase 3: in bean.** A person states the SHA-256 that they expect, and bean refuses other bytes. A person keeps a pack with the log. A check computes a shared comparison again.
 

@@ -103,7 +103,7 @@ flowchart LR
     source --> builder
     builder --> pack
     pack -->|"today: you build it, or someone hands you the file"| compare
-    pack -.->|"a publisher, such as AION, uploads it"| host
+    pack -.->|"a publisher uploads it"| host
     pack -.->|"the publisher signs a pointer: title, SHA-256, address"| relay
     relay -.->|"where to find it"| compare
     host -.->|"the whole pack, checked by its SHA-256"| compare
