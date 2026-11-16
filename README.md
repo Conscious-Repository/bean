@@ -346,6 +346,28 @@ Read [UPGRADING.md](UPGRADING.md) before you run a new build on your log. It lis
 
 ## How it works
 
+```mermaid
+flowchart LR
+    subgraph machine["Your machine"]
+        log["Your log: signed records in one folder"]
+        bean["bean"]
+    end
+    peer["A peer or a doctor"]
+    subgraph public["Public data"]
+        source["A source, such as a survey"]
+        pack["A reference pack: one file, named by its SHA-256"]
+        host["Any host: a web server, a Blossom server, a friend's disk"]
+    end
+    bean -->|"signs, stores, reads"| log
+    bean -->|"a sealed file of the records that you chose, and six words"| peer
+    peer -->|"signed notes in reply"| bean
+    source -->|"a builder that anyone can run"| pack
+    pack --> host
+    host -->|"the whole pack, checked by its SHA-256"| bean
+```
+
+Your data stays in your folder. You share chosen records with one person at a time. To compare, public data comes to your machine whole, and your reading never leaves. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the three parts as pictures, with what works today and what is planned.
+
 A record is a JSON file in `objects/`, named by the SHA-256 hash of its content and signed with your key. Your identity is the hash of your first record, so it never changes when keys change. Corrections and deletions are new records. The protocol says who may make them, so every copy reaches the same result from the same files. Stored files (PDFs, photos) are encrypted in `blobs/`. Sync copies the files that one copy has and the other does not.
 
 Every record is checked when it is first read, then cached, the same way git trusts its object store. `bean verify` checks everything again. At 20,000 records, `add` and an AI query take under 1 s and `verify` about 1.3 s (4-core Linux virtual machine, measured 2026-11-10). At 230,000 records on one machine (measured 2026-10-30), `add` takes about 7 s, `verify` about 11 s and `rotate` about 9 s. Each needs about 2.5 GB of memory. Every write goes to disk before it counts.
@@ -360,6 +382,7 @@ bean protects who wrote what, and protects your identity against a stolen device
 
 | Document | For |
 |---|---|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The whole of bean in three pictures: your machine, a share with one person, a comparison with public data. |
 | [docs/ONBOARDING.md](docs/ONBOARDING.md) | First run, step by step, alone or with an AI. |
 | [docs/COMMANDS.md](docs/COMMANDS.md) | Every command, flag and exit code. |
 | [docs/IMPORTERS.md](docs/IMPORTERS.md) | Write an importer for your own source; community importers. |
