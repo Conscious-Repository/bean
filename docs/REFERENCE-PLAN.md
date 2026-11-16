@@ -63,7 +63,7 @@ Two drafts of a `pack/1` were written and attacked. This is what became of each 
 | Change that was drafted | What the attack showed | Now |
 |---|---|---|
 | A value may be zero | The tests with many zeros are coarse counts, and a reading can be finer than their step (F1). | Those counts wait. The white cell shares can be built in `pack/0`, except the share of eosinophils. |
-| A member for a detection limit | One member was wrong on bilirubin, where the fill value is also a measured value, and on a source with two limits. A right rule needs two members and a way to say "no number". | Decision 2 serves the four tests in `pack/0`, with no change of format. |
+| A member for a detection limit | One member was wrong on bilirubin, where the fill value is also a measured value, and on a source with two limits. A right rule needs two members and a way to say "no number". | Decision 2 serves the four tests in `pack/0`, with the source's own values and a caveat. |
 | The bytes must be canonical | It was forced only by zero. Without zero, no reader disagrees with another (F3). | A rule for the builder, as today. The rule for a reader was written and tested, and is kept below. |
 | The source's terms and the builder's address, as members | An address in the bytes goes stale and cannot be mended. | A publisher states both beside the pack (decision 3). |
 | A claim without the caveat that bean has no record of the pack | Right, by DECISIONS 319. But it is a new method version for a change of words alone. | Kept for the next method version, below. |
@@ -95,7 +95,7 @@ A new method version costs each reader a second grammar of claims. So it comes w
 
 ## Decision 2: the four tests with a detection limit
 
-ALT, GGT, total bilirubin and C-reactive protein wait today because the survey's file has a mark for a value below the limit (DECISIONS 240). Three ways to serve them were weighed, each with the numbers of F2. No way needs a new format. The reviews did not agree, so the choice is the owner's.
+ALT, GGT, total bilirubin and C-reactive protein wait today because the survey's file has a mark for a value below the limit (DECISIONS 240). Three ways to serve them were weighed, each with the numbers of F2. No way needs a new format. The reviews did not agree. The owner was asked, and left it to common sense and the project's values. **Way A is decided.**
 
 | Way | What a person gets | What it costs |
 |---|---|---|
@@ -105,7 +105,7 @@ ALT, GGT, total bilirubin and C-reactive protein wait today because the survey's
 
 A fourth way was tried and cut: leave the marked people out of the cell. Every reading above the limit then lies too low, and the median of one cohort moved from 2.01 to 2.17.
 
-**The recommendation is A.** The seats that measured it said so three times. Its error is confined to readings that no lab prints, it is bounded, and the signed claim itself states it. The caveat of such a measure, with the numbers that the builder computes:
+**Why A.** Three reviews measured it and said so. The table is then what the source's file holds, with nothing left out by the builder's choice. So anyone can check each cell against the public file. Its error is confined to readings that a lab seldom prints. The error is bounded, and the signed claim itself states it. Way B gives a person in eight cohorts nothing, for one or two people each. The caveat of such a measure, with the numbers that the builder computes:
 
 ```
 NHANES could not measure a value below 0.15 mg/L, and writes 0.11 for such a person: at most 0.82% of a cohort. A result for a reading below 0.15 is not exact.
@@ -113,7 +113,7 @@ NHANES could not measure a value below 0.15 mg/L, and writes 0.11 for such a per
 
 A builder takes way A only where the marked people are under 1% of the weight in every cohort of the pack. Above that, the test waits for a format that holds a limit. Each test must also pass the rules of DECISIONS 309.
 
-Whatever way is chosen is a new version of the builder's rule, with new packs. The packs on record stay on record.
+This is a new version of the builder's rule, with new packs. The packs on record stay on record.
 
 ## Decision 3: how anyone checks where a pack came from
 
@@ -221,7 +221,7 @@ any other: This bean does not know this pack. That is not a finding about it.
            Compare its SHA-256 with the one that its publisher states, or build it again from the files that it names.
 ```
 
-**The person's own list of packs waits, and this is what would start it.** It is what the first user from outside asked for (DECISIONS 308): a signed record of the sources that a person uses. A peer can read it. Three audits said to wait, for one reason: one source exists, so there is nothing to choose between. It is built when a pack exists from a second source, or when a peer asks to send their list. A pack that a person made from the project's pack does not count. One limit is known now: such a record cannot prove that the person chose, while an assistant holds the person's key (F8).
+**The person's own list of packs waits, and this is what would start it.** It is what the first user from outside asked for (DECISIONS 308): a signed record of the sources that a person uses. A peer can read it. Three audits said to wait, for one reason: one source exists, so there is nothing to choose between. The owner was asked on 2026-11-16, and said to wait. It is built when a pack exists from a second source, or when a peer asks to send their list. A pack that a person made from the project's pack does not count. One limit is known now: such a record cannot prove that the person chose, while an assistant holds the person's key (F8).
 
 The list in code is looked at again when a second publisher exists (ROADMAP, path 4).
 
@@ -252,7 +252,6 @@ Where bean falls short of the rule, said in the same place.
 - **Keeping a pack:** nobody learns anything. The file is in the person's log.
 - **A share that carries a pack:** the reader learns which pack, which the comparison names already. A record that keeps a pack, when it is shared by itself, tells the reader one source of the sender.
 - **Running a recipe:** the source's host, the code host, the module proxy and the public log each see a fetch of public files. None sees a reading.
-- **A pack with a missing cell, in way B of decision 2:** nobody learns the person's cohort. The refusal is on the person's screen and is not signed.
 
 ## The order of work that follows
 
@@ -260,7 +259,7 @@ Where bean falls short of the rule, said in the same place.
 2. **Words in bean, the Python check and the check page.** A format that a reader does not know. And a cell that a pack does not have. Today bean says that a cohort of fewer than 30 people is left out, which is one reason of several.
 3. **Mend what is shipped: a share with `-files`.** A `reference.file` travels as public only when its bytes are the public file that its record states (F8).
 4. **A flag with which a person names the SHA-256 that they expect.** bean then refuses other bytes. It checks that the bytes are the ones named, and no more: the words, and the claim that is saved, are those of `-unknown-pack`. The Python tool calls its like `-accept-pack`. A name such as `-expect-pack` promises less.
-5. **The next pack**, in `pack/0`, by a new version of the builder's rule. It holds the four tests in the way of decision 2, the white cell shares, and each `same` entry that a real report shows. Each test is judged by the rules of item 1. The file of C-reactive protein, `HSCRP_J`, gets a digest on record first. The pack is on record in the release that first builds it.
+5. **The next pack**, in `pack/0`, by a new version of the builder's rule. It holds the four tests of decision 2, the white cell shares, and each `same` entry that a real report shows. Each test is judged by the rules of item 1. The file of C-reactive protein, `HSCRP_J`, gets a digest on record first. The pack is on record in the release that first builds it.
 6. **The fasting tests**, after a decision of their own: they need a weight for each test, which the method does not have.
 7. **Keeping a pack**, in three steps: compare by SHA-256, a share that carries the pack, and a check that computes a shared comparison again.
 8. **A first publisher hosts** (ROADMAP, phase 2). This needs nothing from bean and can start at any time. The owner gave the word for the survey's packs (DECISIONS 314).
@@ -271,7 +270,6 @@ Where bean falls short of the rule, said in the same place.
 |---|---|
 | A 0.7.1 bean meets a `reference.file` record that keeps a pack | It shows a kept file with its media type. Its comparison with the survey's files passes the record by. With `-files` it shares the pack as a public file when the person names the record. |
 | A 0.7.1 bean is given the next `pack/0` pack | It reads it as a pack that it has no record of: the flag, and the caveat in each claim. A later bean with the pack on record reads those claims rightly. |
-| A 0.7.1 bean meets a cell that the next pack leaves out, in way B of decision 2 | It says that a cohort of fewer than 30 people is left out, which is false for that cell. The measure's caveat has the reason. This is a cost of way B. |
 | The source takes a file away | The pack still computes. The recipe can no longer be run from the source. Whoever kept the files can hand them on, and the SHA-256 proves them. |
 | A builder's rule has a fault | A new version of the rule, and a new pack. The old pack stays what it was, and nothing marks it. A release can say in its lines that a pack on record was found wrong. Saved claims stay as they were signed. |
 | The public log of Go modules is gone | The recipe holds the `go.sum`, and a copy of the modules that matches it is enough. The second build has then nothing to ask. |
@@ -279,7 +277,7 @@ Where bean falls short of the rule, said in the same place.
 
 ## Known weak points
 
-- In way A of decision 2 a pack holds, for 12 people, a value that the source wrote and nobody measured. In way B eight cells wait.
+- By decision 2 a pack holds, for 12 people, a value that the source wrote and nobody measured. A reading below the source's limit gets a place that is not exact.
 - The share of eosinophils waits for zero, for 10 people in 7,523.
 - A pack that is not canonical is still accepted (F3).
 - The rule on the texts of a pack names categories of Unicode. Two readers with tables of different years can disagree on a new character.
