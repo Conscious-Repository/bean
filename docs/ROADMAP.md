@@ -181,21 +181,26 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 
 The owner confirmed the long aim on 2026-11-16. A person keeps their own log. They share with people they trust. They compare with reference data from many sources, and they choose which sources count. Anyone can publish a source, and AION is the first of many.
 
-Two audits on that day set this order (DECISIONS 313 and 316). Each step ships alone.
+He then said that the infrastructure must be right before new capabilities are added. A design of the whole was written and judged by five reviews (DECISIONS 317). The design holds, with changes. This is the order that came out of it.
 
-1. **The fasting tests, as a new pack:** glucose, triglycerides, LDL and insulin. It is what real logs lack. The builder needs a weight for each test, and the pack says that a person's own reading may not be fasting.
-2. **The packs on a host of AION's own, with a pointer on a relay** (path 4, step 2). It is documents and the work of running a server, and no code in bean. It runs beside step 1.
-3. **Side by side with a peer** (path 2, step 3). bean shows the readings of a bundle that a peer sent beside the person's own. It computes nothing across the two people.
-4. **A person keeps a pack with their log.** A kept pack needs no flag, and each result says plainly why the person uses it. A saved comparison can then be computed again when no host has the pack.
-5. **A check that computes a shared comparison again**, when the reader gives the pack (path 4, step 3). It comes before any word that sounds like trust.
-6. **"This peer keeps this pack":** a signed record of a peer or a publisher, taken in under a name. It is built when a second party exists. That is a peer who runs bean and wants it, or a pack from a builder that is not the project's.
+**Phase 0: mend what is shipped.** A saved comparison must mean the same for ever. Today its standing can change when bean's list of packs changes. Mend that in bean and in the Python tool, and hold a set of saved comparisons from each release in the tests.
 
-Then, each when its condition holds:
+**Phase 1: decide on paper what is hard to change.** No code. Each of these is in logs or shared files for good once it is used:
 
-- **A second source, from another publisher.** First as research: one source confirmed from its publisher's own site. Until one exists, the project is still the one that says which source files are right.
-- **The rule for a value below a detection limit:** ALT, GGT, bilirubin and C-reactive protein.
-- **A package by link**, after a package can be sealed to a reader's key (path 1, step 2).
-- Path 3, when a real device can produce the folder.
+- the next format of a pack, before any new pack is hosted: every change of format gives every pack a new SHA-256;
+- how a pack says where it came from, so that a stranger can build the same bytes;
+- the list of record types and units that a pack may name, as a file that a publisher can read and check against;
+- the record with which a person keeps a pack;
+- the list of packs on record as data that anyone can build again, with no key of the project;
+- rules that keep AION one publisher among many, written into the proposal on governance.
+
+**Phase 2: AION hosts, in the plainest way.** A file host that serves a pack under its SHA-256, the SHA-256 stated in two places, and a second host. A relay is an addition for finding packs, and nothing depends on it. Before any real key: a rehearsal with a throwaway identity, a second person who holds the recovery words, and a written list of steps.
+
+**Phase 3: in bean.** A person states the SHA-256 that they expect, and bean refuses other bytes. A person keeps a pack with the log. A check computes a shared comparison again.
+
+**Phase 4: when a second party exists.** A person takes in the record of a peer or a publisher who keeps a pack.
+
+New tests, such as the fasting tests, are new packs. They follow phase 1, so that they are not built twice. The view of two people side by side needs none of this, and can be built at any time.
 
 Not planned: a command in bean that fetches from a network, and a view that ranks or scores two people. bean never runs a program that a pack names. A public card of what a person holds is not planned either.
 
