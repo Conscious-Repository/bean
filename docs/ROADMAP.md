@@ -31,6 +31,7 @@ Three things are still missing. Two people cannot see their records side by side
 
 - Should `-seal` become what `bean share` does unless told otherwise? Today a plain folder is the default, because the checks and the examples are built on it.
 - Does the page need a project domain? Today it lives in the releases of the code host. A second, independent place for its SHA-256 is what catches a host that serves a changed page.
+- Should `bean share` take `-except <id>`? Today a person who sees one record that must not leave names all the others by id, or narrows by time. For a long share that is many ids (DECISIONS 323).
 - Does a package need an end date after which the page refuses to open it? An end date stops an honest reader's page. It does not stop a copy.
 
 ## Path 2: people compare with each other

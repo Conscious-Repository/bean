@@ -561,12 +561,18 @@ func reviewShare(s *core.Store, l *core.Loaded, c shareChoice, out string, files
 				fmt.Fprintln(w, row(r)+"  (comes along: "+by[7:19]+" is about it)")
 			}
 		}
-		if lines := contextLines(shared); len(lines) > 0 {
-			fmt.Fprintln(w, "Beside what each row shows, the records carry these fields. The reader gets every field and every value:")
+		listed := slices.Clone(shared)
+		for _, r := range proof {
+			if r.Type == "agent.pair" {
+				listed = append(listed, r)
+			}
+		}
+		if lines := fieldLines(listed); len(lines) > 0 {
+			fmt.Fprintln(w, "Beside what each row shows, these records and their pairings hold these fields. The reader gets all of it, also where a line below cuts a list:")
 			for _, line := range lines {
 				fmt.Fprintln(w, line)
 			}
-			fmt.Fprintln(w, "To leave a record out, answer n. Then share again, and name the records that you want by their ids.")
+			fmt.Fprintln(w, "To leave a record out, answer n. Then share again with only the records that you want: name them by their ids, or narrow -type with -since and -until.")
 		}
 		if note != "" {
 			fmt.Fprintf(w, "  with your note for the reader: %s\n", safe(note))
@@ -586,7 +592,7 @@ func reviewShare(s *core.Store, l *core.Loaded, c shareChoice, out string, files
 			fmt.Fprintln(w, line)
 		}
 		fmt.Fprintf(w, "  also: your %d identity records and %d pairings, and the share record itself\n", len(proof)-pairings, pairings)
-		fmt.Fprintln(w, "Each record also carries the name of its source, the time when it was entered, your key and the version of bean. Your identity records show when you made your log, when you changed a key, and how many records you had at each change.")
+		fmt.Fprintln(w, "Each record also carries the time when it was entered, your key and the version of bean. Your identity records show when you made your log, when you changed a key, and how many records you had at each change.")
 		if seal {
 			fmt.Fprintln(w, "A sealed package is a disclosure: it is encrypted on its way, and once its reader has opened it, it cannot be taken back. Each record carries your identity id, so two packages of yours can be linked.")
 		} else {
