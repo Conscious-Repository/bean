@@ -38,7 +38,7 @@ Do not run `purge` or `gc` on the copies. Only they erase anything.
 
 ## Changes
 
-### 0.7.2 (2026-11-16)
+### 0.7.2 (2026-11-17)
 
 One fault is mended, and one table changes. Nothing in a log changes.
 
