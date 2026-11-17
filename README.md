@@ -32,7 +32,7 @@ New here: [docs/ONBOARDING.md](docs/ONBOARDING.md) goes from install to an impor
 flowchart TB
     subgraph public["Public data"]
         direction LR
-        source["A source,<br/>such as a survey"] -->|"a builder<br/>anyone can run"| pack["A reference pack:<br/>one file, named<br/>by its SHA-256"]
+        source["A source,<br/>such as a survey"] -->|"a builder that<br/>anyone can run"| pack["A reference pack:<br/>one file, named<br/>by its SHA-256"]
         pack --> host["Any host: a web server,<br/>a Blossom server,<br/>a friend's disk"]
     end
     subgraph machine["Your machine"]
