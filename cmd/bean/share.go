@@ -562,10 +562,11 @@ func reviewShare(s *core.Store, l *core.Loaded, c shareChoice, out string, files
 			}
 		}
 		if lines := contextLines(shared); len(lines) > 0 {
-			fmt.Fprintln(w, "Beside the values, these records carry what their source wrote. The reader sees all of it:")
+			fmt.Fprintln(w, "Beside what each row shows, the records carry these fields. The reader gets every field and every value:")
 			for _, line := range lines {
 				fmt.Fprintln(w, line)
 			}
+			fmt.Fprintln(w, "To leave a record out, answer n. Then share again, and name the records that you want by their ids.")
 		}
 		if note != "" {
 			fmt.Fprintf(w, "  with your note for the reader: %s\n", safe(note))

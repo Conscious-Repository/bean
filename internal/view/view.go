@@ -299,9 +299,10 @@ func Value(r *core.Record) string {
 }
 
 // Safe returns s with every character that can end a line, move the
-// cursor, start a terminal escape or reorder text written as \xNN or
-// \uNNNN, so text from a record cannot fake output lines or control the
-// terminal. Other characters are unchanged.
+// cursor, start a terminal escape, reorder text or hide itself written
+// as \xNN, \uNNNN or \UNNNNNNNN. So text from a record cannot fake output
+// lines, control the terminal or hide words. Other characters are
+// unchanged.
 func Safe(s string) string {
 	var b strings.Builder
 	for i := 0; i < len(s); {
@@ -312,8 +313,12 @@ func Safe(s string) string {
 		case r < 0x20 || r == 0x7f:
 			fmt.Fprintf(&b, `\x%02x`, r)
 		case r >= 0x80 && r <= 0x9f, r == 0x061c, r == 0x200e, r == 0x200f,
-			r >= 0x2028 && r <= 0x202e, r >= 0x2066 && r <= 0x2069:
+			r >= 0x2028 && r <= 0x202e, r >= 0x2066 && r <= 0x2069,
+			r == 0x00ad, r == 0x180e, r >= 0x200b && r <= 0x200d,
+			r >= 0x2060 && r <= 0x2064, r == 0xfeff:
 			fmt.Fprintf(&b, `\u%04x`, r)
+		case r >= 0xe0000 && r <= 0xe007f:
+			fmt.Fprintf(&b, `\U%08x`, r)
 		default:
 			b.WriteString(s[i : i+n])
 		}

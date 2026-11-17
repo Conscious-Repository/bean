@@ -19,7 +19,7 @@ Three things are still missing. Two people cannot see their records side by side
 1. **Seal with a passphrase first. Done:** `bean share -seal` ([SHARE.md](SHARE.md), DECISIONS 275). bean packs the bundle into one file, encrypts it, and makes six random words. The person gives the words to the reader by another channel, such as a phone call. The check page asks for the words, opens the file on the reader's device, and runs the check. This needs no key from the reader.
 2. **Seal to a reader's key next.** The check page makes a key for the reader, in their browser. The secret part stays on their device. They send the public part, a short reader address, to the sender. `bean share -to <address>` seals the package to it. A reader who runs bean gets an address from bean.
 3. **Use a standard format. Done.** The file is an `age` file, so a tool other than bean can open it. bean invents no cipher.
-4. **Say what leaves. Done (DECISIONS 323).** The review before a share says that the person's identity id travels. It flags a kept lab report, which holds a name and a birth date. It lists every field that a record carries beside its value, with each value in full.
+4. **Say what leaves. Done (DECISIONS 323).** The review before a share says that the person's identity id travels. It flags a kept lab report, which holds a name and a birth date. It lists every field that a record carries beside its row, with its values.
 5. **Record who it was for.** The share record says that a passphrase was used. With a reader's key it will name the reader's address.
 
 6. **The reader knows who signed. Done:** identity words (DECISIONS 280). The sender reads eight words in the call that carries the opening words, and the check shows the same eight (DECISIONS 287).

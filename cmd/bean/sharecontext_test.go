@@ -8,59 +8,95 @@ import (
 	"github.com/Conscious-Repository/bean/core"
 )
 
-// The review before a share lists every context field that travels, with
-// each different value in full. A lab's comment can hold a name.
+func id(i int) string { return fmt.Sprintf("sha256:%012x%052x", i+1, 0) }
+
+// The review before a share lists every field that travels beside the row,
+// with each different value in full. A lab's comment can hold a name.
 func TestShareReviewListsContext(t *testing.T) {
 	comment := "Called to Dr. Example Person on 01/02/2026, read back."
-	reading := func(test, c string) *core.Record {
-		ctx := map[string]any{"test": test, "performing_lab": "Example Lab", "note": "my own note", "flag": "High",
-			"report_sha256": strings.Repeat("ab", 32), "fasting": map[string]any{"hours": 12}}
+	long := strings.Repeat("a long note that the row cuts at 80 characters ", 3)
+	reading := func(i int, test, c string) *core.Record {
+		ctx := map[string]any{"test": test, "performing_lab": "Example Lab", "note": long, "flag": "High",
+			"fasting": map[string]any{"range": "<5"}}
 		if c != "" {
 			ctx["lab_comment"] = c
 		}
-		return &core.Record{Type: "lab.x", Context: ctx}
+		return &core.Record{ID: id(i), Type: "lab.x", Context: ctx,
+			Value:  map[string]any{"n": 5.0, "unit": "mg", "hidden": "Jane Roe 1970"},
+			Source: core.Source{System: "Example Clinic of Jane Roe", Adapter: "x@1", Ref: "hmac-sha256:00"}}
 	}
-	comparison := &core.Record{Type: "comparison.percentile", Context: map[string]any{"cohort": map[string]any{"text": "male"}, "secret_field": "left out"}}
-	got := strings.Join(contextLines([]*core.Record{reading("WBC", comment), reading("RBC", ""), reading("HGB", "a\x1b[2Jb\nfake row"), comparison}), "\n")
+	// A record that calls itself a comparison is listed like any other.
+	fake := &core.Record{ID: id(9), Type: "comparison.fake", Context: map[string]any{"secret": "John Doe, 12 Main St"}}
+	got := strings.Join(contextLines([]*core.Record{reading(0, "WBC", comment), reading(1, "RBC", ""), reading(2, "HGB", "a\x1b[2Jb\nfake row\u200b"), fake}), "\n")
 
 	for _, want := range []string{
-		`  lab_comment, in 2 records:`,
-		`    "` + comment + `"`,
-		`    "a\x1b[2Jb\x0afake row"`,
-		`  performing_lab, in 3 records: "Example Lab"`,
-		`  test, in 3 records: "WBC", "RBC", "HGB"`,
-		`  fasting, in 3 records: {"hours":12}`,
-		`  report_sha256, in 3 records:`,
+		`  context.lab_comment, in 2 records:`,
+		`    "` + comment + `"  (` + shortID(id(0)) + `)`,
+		`    "a\x1b[2Jb\x0afake row\u200b"  (` + shortID(id(2)) + `)`,
+		`  context.performing_lab, in 3 records: "Example Lab"`,
+		`  context.test, in 3 records: "WBC", "RBC", "HGB"`,
+		`  context.fasting, in 3 records: {"range":"<5"}`,
+		`  context.flag, in 3 records: "High"`,
+		`    "` + long + `"`,
+		`  context.secret, in 1 record: "John Doe, 12 Main St"`,
+		`  value.hidden, in 3 records: "Jane Roe 1970"`,
+		`  source.system, in 3 records: "Example Clinic of Jane Roe"`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("review lacks %q:\n%s", want, got)
 		}
 	}
-	// The row shows note and flag already; a comparison is bean's own.
-	for _, not := range []string{"my own note", "High", "secret_field", "left out", "\x1b", "\nfake"} {
+	// The number and unit are in the row; ref is an id that bean derives.
+	for _, not := range []string{"value.n", "value.unit", "hmac-sha256", "\x1b", "\nfake", "\u200b"} {
 		if strings.Contains(got, not) {
 			t.Errorf("review shows %q:\n%s", not, got)
 		}
 	}
 }
 
-// Past maxValues different values a field shows its count and a few, and
-// says how to see each record's own.
-func TestShareReviewCapsLongFields(t *testing.T) {
+// A value cannot close its own quotes, and a field name cannot pass for a
+// header with a value.
+func TestShareReviewQuotes(t *testing.T) {
+	r := &core.Record{ID: id(0), Type: "x", Context: map[string]any{
+		"lab_comment":             `x", "fake", "y\`,
+		`ctl, in 1 record: "ok"`: "q",
+	}}
+	got := strings.Join(contextLines([]*core.Record{r}), "\n")
+	for _, want := range []string{
+		`  context.lab_comment, in 1 record: "x\", \"fake\", \"y\\"`,
+		`  "context.ctl, in 1 record: \"ok\"", in 1 record: "q"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("review lacks %q:\n%s", want, got)
+		}
+	}
+}
+
+// Past maxValues different short values a field shows its count and the
+// longest few, and says that the rest are not shown. A field with a long
+// value is never cut.
+func TestShareReviewCapsShortFields(t *testing.T) {
 	var shared []*core.Record
-	for i := range maxValues + 1 {
-		shared = append(shared, &core.Record{Type: "apple-health.x", Context: map[string]any{"source_record_index": fmt.Sprint(i), "assurance": "unsigned-export"}})
+	for i := range maxValues + 10 {
+		ctx := map[string]any{"source_record_index": fmt.Sprint(i), "comment": fmt.Sprint("c", i)}
+		if i == 40 {
+			ctx["source_record_index"] = "Jane Roe 1/1/70"
+			ctx["comment"] = strings.Repeat("a name hides in a long comment ", 2)
+		}
+		shared = append(shared, &core.Record{ID: id(i), Type: "apple-health.x", Context: ctx})
 	}
-	lines := contextLines(shared)
-	got := strings.Join(lines, "\n")
-	want := fmt.Sprintf(`  source_record_index, in %d records, %d different values, such as:`, maxValues+1, maxValues+1)
-	if !strings.Contains(got, want) || !strings.Contains(got, fmt.Sprintf("and %d other values: bean show <id>", maxValues+1-examples)) {
-		t.Errorf("long field not capped:\n%s", got)
+	got := strings.Join(contextLines(shared), "\n")
+	n := maxValues + 10
+	for _, want := range []string{
+		fmt.Sprintf(`  context.source_record_index, in %d records, %d different values. The longest: "Jane Roe 1/1/70"`, n, n),
+		fmt.Sprintf("    %d more values are not shown here. bean show <id> shows a record in full.", n-examples),
+		`    "c0"`, `    "c59"`, `    "a name hides in a long comment a name hides in a long comment "  (` + shortID(id(40)) + `)`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("review lacks %q:\n%s", want, got)
+		}
 	}
-	if len(lines) != 1+1+examples+1 {
-		t.Errorf("%d lines, want %d:\n%s", len(lines), 2+examples+1, got)
-	}
-	if one := contextLines(shared[:1]); len(one) != 2 || !strings.Contains(one[0], "in 1 record:") {
+	if one := contextLines(shared[:1]); !strings.Contains(one[0], "in 1 record: ") {
 		t.Errorf("one record: %q", one)
 	}
 }
