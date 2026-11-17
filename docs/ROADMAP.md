@@ -255,6 +255,9 @@ Not planned: a command in bean that fetches from a network, and a view that rank
   - Two packs can place one reading differently, and both claims are kept. Each row names its pack.
   - `bean compare -pack <file>` needs a log even to show what a pack holds.
   - `bean add` with a whole number above 9007199254740991 says `bad json`.
+- From the reviews of the share review (DECISIONS 323):
+  - `view.Safe` shows a space other than U+0020, a combining mark and a few rare blank characters as they are. A value can look blank, struck through, or like another value. It cannot hide a name: the letters are shown.
+  - A field of more than 50 different numbers or times shows its count. Many numbers could still spell a message.
 - From the reviews of the plan for reference data (DECISIONS 321):
   - For a cell that a pack does not have, bean says that a cohort of fewer than 30 people is left out. A pack can leave a cell out for another reason.
   - For a pack in a format that it does not know, bean says that the file is not a pack of version 0.
