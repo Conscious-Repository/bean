@@ -28,6 +28,10 @@ W1=$(b add weight 81.2 -unit kg -at 2026-11-02)
 N1=$(b add note "felt fine" -about "$W1" -at 2026-11-02)
 b compare -unknown-files -sex male -age 30-39 -save "$R1" >/dev/null 2>&1 || { echo "compare failed"; exit 1; }
 C1=$(b ls -json -type comparison.percentile | "$PY" -I -c 'import sys, json; print(json.loads(sys.stdin.readline())["id"])')
+# The records that keep the survey's files. The files of this run are
+# synthetic: bean has no record of them, so a share carries one only when
+# its record is named.
+FR=$(b ls -json -type reference.file | "$PY" -I -c 'import sys, json; print(" ".join(json.loads(line)["id"] for line in sys.stdin))')
 # A reading that an agent signed, and a key rotation after the first records.
 b agent init -label assistant >/dev/null 2>&1
 A1=$(b add -agent symptom.headache 4 -unit '{score}' -at 2026-11-03)
@@ -75,7 +79,11 @@ share "$T/plain" "$W1";                     both "one record" "$T/plain" ok
 share "$T/about" "$N1";                     both "a note with what it is about" "$T/about" ok
 [ -f "$(obj "$T/about" "$W1")" ] || { echo "DIFFER: the record a note is about did not come along"; rc=1; }
 share "$T/cmp" "$C1";                       both "a comparison, files named" "$T/cmp" ok
-share "$T/cmpf" -files "$C1";               both "a comparison with its files" "$T/cmpf" ok
+share "$T/cmpf" -files "$C1" $FR;           both "a comparison with its files" "$T/cmpf" ok
+[ "$(ls "$T/cmpf/files" 2>/dev/null | wc -l)" -eq 2 ] || { echo "DIFFER: a comparison with its files named did not carry both files"; rc=1; }
+# Without their records named, files that are not on record stay home.
+share "$T/cmph" -files "$C1"
+[ ! -e "$T/cmph/files" ] || { echo "DIFFER: a file that is not on record left, and nobody named its record"; rc=1; }
 share "$T/agent" "$A1";                     both "a reading an agent signed" "$T/agent" ok
 grep -q '^signed: 0 by the person, 1 by an agent or a peer the person paired, 0 by another key' "$T/go.txt" || { echo "DIFFER: an agent's reading is not counted as one"; rc=1; }
 share "$T/rot" "$R1" "$R2";                 both "records from before and after a key rotation" "$T/rot" ok
@@ -97,7 +105,7 @@ n=$((n + 1)); "$NODE" "$ROOT/tools/page/check.mjs" "$T/bean-check.html" "$T/bad.
 # A sealed package: one file that opens with six words. bean, the page and
 # a Python reader of the age format that shares no code with either must all
 # open it with the words, and none without them or after a change.
-b share -yes -seal -files -note "sealed" -out "$T/sealed.bean" "$C1" >"$T/seal.txt" 2>"$T/err" || { echo "share -seal failed: $(cat "$T/err")"; exit 1; }
+b share -yes -seal -files -note "sealed" -out "$T/sealed.bean" "$C1" $FR >"$T/seal.txt" 2>"$T/err" || { echo "share -seal failed: $(cat "$T/err")"; exit 1; }
 WORDS=$(sed -n 's/^  //p' "$T/seal.txt" | head -1)
 "$PY" -I -c 'import sys; d = bytearray(open(sys.argv[1], "rb").read()); d[-40] ^= 1; open(sys.argv[2], "wb").write(d)' "$T/sealed.bean" "$T/sealed-changed.bean"
 # opens <name> <file> <words> <want: ok|bad>
@@ -136,7 +144,7 @@ grep -aq "$(echo "$R1" | cut -c8-30)" "$T/sealed.bean" && { echo "DIFFER: a seal
 [ -z "$(ls -A "$T" | grep '^\.bean-share-')" ] || { echo "DIFFER: a sealed share left its working folder behind"; rc=1; }
 # A sealed share writes one file and nothing else: no plaintext beside it,
 # at any moment. The folder it writes into holds exactly the package.
-mkdir "$T/alone"; b share -yes -seal -files -out "$T/alone/p.bean" "$C1" >/dev/null 2>&1
+mkdir "$T/alone"; b share -yes -seal -files -out "$T/alone/p.bean" "$C1" $FR >/dev/null 2>&1
 [ "$(ls -A "$T/alone")" = "p.bean" ] || { echo "DIFFER: a sealed share wrote more than the package: $(ls -A "$T/alone" | tr '\n' ' ')"; rc=1; }
 
 # A correction travels without the record it replaces, and the reader is told.

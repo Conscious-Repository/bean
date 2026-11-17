@@ -122,11 +122,11 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 
 **Done: more tests in the NHANES pack (DECISIONS 309).** A second pack is on record: 20 measures, from eight files. It adds six tests of the standard biochemistry profile, and ferritin. The tests are ones that the two real report layouts print. The first pack stays on record.
 
-**Next for the breadth of tests.** `bean compare -type 'lab.*'` names the types with no reference data in one line, with no value. Each of these needs its own step:
+**Next for the breadth of tests.** `bean compare -type 'lab.*'` names the types with no reference data in one line, with no value. [REFERENCE-PLAN.md](REFERENCE-PLAN.md) decides how each of these is served, or what it waits for (DECISIONS 321).
 
-- **A rule for a value below a detection limit.** ALT, GGT, total bilirubin and C-reactive protein wait for it. The rule needs a new member of a pack, so it is a change of the format.
-- **The fasting part of the sample:** glucose, triglycerides, LDL and insulin. They need another weight.
-- **More of the blood count:** the share and the count of each kind of white cell. `CBC_J` is in both packs on record, so these rows need a new version of the builder.
+- **A value below a detection limit:** ALT, GGT, total bilirubin and C-reactive protein. They are built in `pack/0` with the source's own value and a caveat, where few people are marked. Each must still pass the rule on analyzers.
+- **The fasting part of the sample:** glucose, triglycerides, LDL and insulin. They need a weight for each test, which the method does not have. That is a decision of its own.
+- **More of the blood count.** A white cell share is built when real reports print it in the survey's own step. The counts of basophils and eosinophils wait: they are coarse, and they need a value of zero.
 - **Tests where two analyzers differ too much for a percentile:** sodium, chloride, calcium, AST, alkaline phosphatase and iron. A percentile is the wrong result for them. Another kind of result may fit, such as a range that the source states.
 - **A caveat with a size.** Each result says that the instruments differ, and not by how much. For the tests of the biochemistry profile CDC gives a figure, and a measure's caveat could state it.
 - **Albumin, globulin and carbon dioxide**, when a source confirms that the lab and NHANES measure one thing ([COMPARE.md](COMPARE.md)).
@@ -135,13 +135,13 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 **The plan.**
 
 1. **A second source, from another publisher.** The format is not frozen before a second real source is built into a pack. Each candidate is confirmed first from its publisher's own site: the terms, a stable address, and whether a file changes without notice.
-2. **Publish the NHANES pack** beside the check page, with its SHA-256, and mirror it (the section on where the files live). Then a person needs one download of under 1 MB, not eight files. It waits for the owner to confirm the terms of the source (DECISIONS 311).
+2. **Publish the NHANES pack** beside the check page, with its SHA-256, and mirror it (the section on where the files live). Then a person needs one download of under 1 MB, not eight files. The owner read the terms of the source and gave the word (DECISIONS 314).
 3. **The check page computes a shared comparison again**, when the reader gives it the pack.
 4. **A publisher signs.** A record by the publisher's bean identity names a pack's SHA-256, and travels as a bundle. This is built when a second publisher exists.
 5. **A pointer on relays.** A publisher announces a pack on Nostr relays: title, SHA-256, where it is. The relays hold a pointer and no health record. bean keys can already be Nostr keys.
 6. **More kinds of cell**, each when a real source needs it: percentile points, a fitted curve, counts of a category. REFERENCE.md says what each may state.
 
-**The person's own list of packs: scoped, and it waits (DECISIONS 308).** The first user outside the owner asked to choose his sources, and in time to use the sources of his peers. Today any pack works with `-unknown-pack`, so nobody is locked in. A signed record, "I use this pack", is the trace that a peer's vouch will be. It is built when a second pack exists that someone other than the project built, or when a peer asks to send their list. Entry 308 holds the rules for it.
+**The person's own list of packs: scoped, and it waits (DECISIONS 308).** The first user outside the owner asked to choose his sources, and in time to use the sources of his peers. Today any pack works with `-unknown-pack`, so nobody is locked in. A signed record, "I use this pack", is the trace that a peer's vouch will be. It is built when a pack exists from a second source, or when a peer asks to send their list. Entry 308 holds the rules for it. The owner was asked again on 2026-11-16, and said to wait (DECISIONS 321). He is asked again with each release that puts a pack on record.
 
 **Who is paid for what.** A host may charge for bytes. A publisher may sell a pack that took work to build. Nobody is paid to compute a comparison: the request would carry the cohort or the value. bean holds no wallet.
 
@@ -160,9 +160,9 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 
 **The plan.**
 
-1. **At the first release, mirror.** Put the check page and the NHANES pack on the project's own domain. Put the same bytes on one or two Blossom servers, with an existing Blossom client. State each SHA-256 in the release notes.
+1. **Mirror.** The check page is in the project's releases. A publisher puts a pack on a host of its own. It puts the same bytes on one or two Blossom servers, with an existing Blossom client. It states the SHA-256 in a second place.
 2. **One line in the documents.** A `curl` command with the server and the SHA-256, then the check. bean fetches nothing itself.
-3. **A signed note with each SHA-256.** A project key signs a note on Nostr relays: the title, the SHA-256 and the servers. This is the second place for a digest (path 1, step 7, and path 4, step 5).
+3. **A signed note with each SHA-256.** A publisher's key signs a note on Nostr relays: the title, the SHA-256 and the servers. bean has no key of its own (DECISIONS 317). This is the second place for a digest (path 1, step 7, and path 4, step 5).
 4. **A sealed package by link.** A person uploads the encrypted file with a Blossom client and sends the link. The six words go by phone, as now. SHARE.md then says what the server sees.
 5. **A fetch command in bean, only if people ask.** Until then bean stays offline.
 
@@ -185,22 +185,23 @@ He then said that the infrastructure must be right before new capabilities are a
 
 **Phase 0: mend what is shipped. Done in 0.7.1 (DECISIONS 319).** A saved comparison must mean the same for ever. Its standing changed when a pack was put on record. That is mended in bean and in the Python tool. The tests now hold a set of comparisons that a release saved, and what bean holds of each pack on record.
 
-**Phase 1: decide on paper what is hard to change.** No code. Each of these is in logs or shared files for good once it is used:
+**Phase 1: decide on paper what is hard to change. Done (DECISIONS 321).** [REFERENCE-PLAN.md](REFERENCE-PLAN.md) is the result, after six laps of reviews by readers who had not seen the work. Its main result is a refusal: no new format, no new record type and no new method version now. Each of them waits for a real case, and the plan names that case. It decides how a pack's origin is checked, how the tests with a detection limit are served, and what a kept pack is. It says where bean falls short of the rule that no publisher is special. It does not give the first user his wish to choose his sources: that waits for a second source.
 
-- the next format of a pack, before any new pack is hosted: every change of format gives every pack a new SHA-256;
-- how a pack says where it came from, so that a stranger can build the same bytes;
-- the list of record types and units that a pack may name, as a file that a publisher can read and check against;
-- the record with which a person keeps a pack;
-- the list of packs on record as data that anyone can build again, with no key of the project;
-- the rule that no publisher is special: bean names none, and a person can see and drop any list that came with bean.
+**The work that follows from it, in order.**
 
-**Phase 2: a first publisher hosts.** A file host that serves a pack under its SHA-256, the SHA-256 stated in two places, and a second host. A relay with signed pointers runs from the start, as a way to find packs. Nothing depends on the relay. Before any real key: a rehearsal with a throwaway identity, a second person who holds the recovery words, and a written list of steps.
+1. Mend what is shipped: a share with `-files` carried a kept file as public by its record's type alone. **Done in 0.7.2 (DECISIONS 322).**
+2. The documents: recipes with a form to copy, the rules for a builder, the naming rule with vectors, and what "on record" means.
+3. The words for a format that a reader does not know, and for a cell that a pack does not have.
+4. The builders take a version of their rule, and version 1 still builds both packs on record.
+5. The next pack, in `pack/0`, by version 2 of the builder's rule. It is on record in the release that first builds it.
+6. The fasting tests, after a decision of their own.
+7. Keeping a pack with the log: compare by SHA-256, a share that carries the pack, and a check that computes a shared comparison again.
 
-**Phase 3: in bean.** A person states the SHA-256 that they expect, and bean refuses other bytes. A person keeps a pack with the log. A check computes a shared comparison again.
+**Phase 2: a first publisher hosts.** It needs nothing from bean, and can start at any time. A file host that serves a pack under its SHA-256, the SHA-256 stated in two places, and a second host. A relay with signed pointers runs from the start, as a way to find packs. Nothing depends on the relay. Before any real key: a rehearsal with a throwaway identity, a second person who holds the recovery words, and a written list of steps. Open for this phase: who keeps a copy of the survey's files and of each release, for the day that their host is gone.
 
-**Phase 4: when a second party exists.** A person takes in the record of a peer or a publisher who keeps a pack.
+**Phase 3: when a second party exists.** The person's own list of packs (DECISIONS 308). And a person takes in the record of a peer or a publisher who keeps a pack.
 
-New tests, such as the fasting tests, are new packs. They follow phase 1, so that they are not built twice. The view of two people side by side needs none of this, and can be built at any time.
+The view of two people side by side needs none of this, and can be built at any time.
 
 Not planned: a command in bean that fetches from a network, and a view that ranks or scores two people. bean never runs a program that a pack names. A public card of what a person holds is not planned either.
 
@@ -211,7 +212,7 @@ Not planned: a command in bean that fetches from a network, and a view that rank
 - **More tests and cohort rules.** Each is one row in `internal/nhanes`, from the file's own label and a real report's name.
 - **More importers,** each from a real file, never from memory. A time zone flag for CSV times.
 - **A check of a whole export in Python.**
-- **Release.** A `go install` path and a neutral home ([GOVERNANCE-PROPOSAL.md](GOVERNANCE-PROPOSAL.md)). A tag that starts with `v` publishes `bean-check.html` with its SHA-256 (`release.yml`). No tag exists yet.
+- **Release.** Releases 0.7.0 and 0.7.1 are out, each with `bean-check.html` and its SHA-256 (DECISIONS 315, 319). Open: a neutral home ([GOVERNANCE-PROPOSAL.md](GOVERNANCE-PROPOSAL.md)).
 - **The owner's to do.** Confirm the NHANES digests from a second connection. Open the repository to the people who will try it. Then require the CI check on `main`.
 - **Freeze at `v` 0** (CORE.md section 6), after two weeks of real use with no change to CORE.md.
 
@@ -253,6 +254,12 @@ Not planned: a command in bean that fetches from a network, and a view that rank
   - Two packs can place one reading differently, and both claims are kept. Each row names its pack.
   - `bean compare -pack <file>` needs a log even to show what a pack holds.
   - `bean add` with a whole number above 9007199254740991 says `bad json`.
+- From the reviews of the plan for reference data (DECISIONS 321):
+  - For a cell that a pack does not have, bean says that a cohort of fewer than 30 people is left out. A pack can leave a cell out for another reason.
+  - For a pack in a format that it does not know, bean says that the file is not a pack of version 0.
+  - `bean purge` of the record that keeps a file erases the file, also when a saved comparison is about that record. The same file cannot be kept again on that copy.
+  - A pack that is not in canonical form is accepted, as another pack.
+  - Nothing marks a pack on record that is later found wrong.
 - No way to test the 24 words without rotating. `net/http` is in the binary only to detect image types. CI does not run `lint`, `vuln` or fuzzing.
 
 ## Not planned

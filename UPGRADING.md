@@ -38,10 +38,32 @@ Do not run `purge` or `gc` on the copies. Only they erase anything.
 
 ## Changes
 
-### After 0.7.1
+### 0.7.2 (2026-11-17)
 
-On `main`, and in the next release. Nothing in a log changes.
+One fault is mended, and one table changes. Nothing in a log changes.
 
+- **A share with `-files` carried a kept file as a public file by its record's type alone.** A record of the type `reference.file` can name any file. `bean append` writes such a record, and you or an assistant of yours could have run it. With `-files`, a share took the file of each such record that a shared record was about, and the review called it "the public file". Nobody had to name the record. A review of the plan for reference data found this (DECISIONS 321, 322).
+- **Now a file is public only when bean has its SHA-256 on record:** a file of the survey as CDC serves it. bean checks the bytes against that SHA-256 before the file leaves. Any other kept file goes only when you name its record by its id.
+- **What changes for you.** A kept copy of a survey file that is not the one on record no longer goes with a comparison. That is a copy that `bean compare` uses only with `-unknown-files`, or a file of a data set that bean has no SHA-256 for. `bean share` names each such file and says what to add to the command: the id of its record. A script that shared such files does not fail. It sends fewer files, and says so on stderr.
+- **Whether a file of yours left this way.** If you kept files only with `bean import`, no private file left: `bean import nhanes` keeps only a file that reads as a file of the survey. A `reference.file` record that names another kind of file comes from `bean append`. To be sure, look at each share that you made with `-files`. Run these yourself, or ask your assistant to.
+  1. `bean ls -type share` lists your shares.
+  2. `bean show <id>` shows a share. Under `context`, `files` has one entry for each file that the share carried, with the `sha256` of its bytes and the id of its `record`. A share that carried no file has no entry there.
+  3. Compare each `sha256` with the list below. A file with one of these is a file of the survey, as CDC serves it.
+  4. Any other file went because you named its record, or by this fault. What a record says of itself, such as a `dataset`, proves nothing here: `bean append` writes that too.
+
+  If a share carried a file that you did not mean to send, its reader has that file. bean cannot take it back: ask the reader to delete it.
+
+  ```
+  c0b46e0345ea19404928656277c8b0d10b0cca348a9b2fe4fc3c67e8b7ee73ec  DEMO_J
+  0291a6a4f6d82dac8392c8c992b519946824dfeda01647935520cf506ed9f4ab  TCHOL_J
+  9f4eb41b89f0c9f3d6262f873e671eeb2f2eb40581a8426b2a3c8fd4fc19439e  HDL_J
+  35f07094573a0061a03ed609a5a363b34eb1b1c7065d1623b43d72e132a8a654  GHB_J
+  00f964098dc91272e415344554cbf1b627ecaeb2eda201518527446a7d81e742  CBC_J
+  8d675e42d8826ac98714b2c3dd4c5138a5e353fb4424f7eff5e6db4a01ce838a  BMX_J
+  390ae5205acfbcb87e0ca3d9aabd1c801b60657d3f2802ac08d5b3ed93f0af6d  DR1TOT_J
+  5bcd5722c1892883b96a9d7fed0befadabacae313f800fadc0133cd5dd00c4c6  BIOPRO_J
+  6bc5775797aafbd627316b6208418275fb8951cd571276e1a64436769afa16d5  FERTIN_J
+  ```
 - The table of `bean compare` starts each row with the date the sample was taken, as `bean ls` shows it. The rows are in order of that date, then of type. A script that read the table by column, or by a line that starts with `lab.`, reads it one column off. Saved comparisons do not change.
 
 ### 0.7.1 (2026-11-16)

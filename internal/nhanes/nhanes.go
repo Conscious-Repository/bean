@@ -59,6 +59,18 @@ var Known = map[string]string{
 	"FERTIN_J": "6bc5775797aafbd627316b6208418275fb8951cd571276e1a64436769afa16d5",
 }
 
+// OnRecord reports a SHA-256 that is the one on record for a file of the
+// survey. Bytes with such a digest are a file that its publisher serves to
+// anyone, whatever a record says about them.
+func OnRecord(sha256 string) bool {
+	for _, digest := range Known {
+		if digest == sha256 {
+			return true
+		}
+	}
+	return false
+}
+
 // CohortFile is a data set whose variables a cohort rule may name.
 type CohortFile struct {
 	// Weight is the sample weight that an analysis with this file must
