@@ -100,28 +100,28 @@ func TestShareReviewQuotes(t *testing.T) {
 	}
 }
 
-// Past maxValues different short values a field shows its count and the
-// longest few, and says that the rest are not shown. A field with a long
-// value is never cut, and a long value in many records says how many.
-func TestShareReviewCapsShortFields(t *testing.T) {
+// Only a field of numbers or times, past maxValues of them, shows a count
+// in place of its values. A short text among many is shown: decoys cannot
+// hide a name. A long value in many records says how many.
+func TestShareReviewCutsOnlyNumbersAndTimes(t *testing.T) {
 	var shared []*core.Record
 	n := maxValues + 10
 	for i := range n {
-		index, comment := fmt.Sprint(i), fmt.Sprint("c", i)
+		who, comment := fmt.Sprintf("decoy number %03d, longer than a name", i), fmt.Sprint("c", i)
 		if i == 40 {
-			index, comment = "Jane Roe 1/1/70", strings.Repeat("a name hides in a long comment ", 2)
+			who = "Jane Q Public"
 		}
 		if i >= 50 {
 			comment = strings.Repeat("the same long comment in many records ", 2)
 		}
-		shared = append(shared, rec(t, i, `{`+envelope+`,"type":"apple-health.x","context":{"source_record_index":"`+index+`","comment":"`+comment+`"}}`))
+		shared = append(shared, rec(t, i, `{`+envelope+`,"type":"apple-health.x","context":{"source_record_index":`+fmt.Sprint(i)+`,`+
+			`"source_created":"2026-11-02T08:`+fmt.Sprintf("%02d", i%60)+`:00Z","who":"`+who+`","comment":"`+comment+`"}}`))
 	}
 	got := strings.Join(fieldLines(shared), "\n")
 	for _, want := range []string{
-		fmt.Sprintf(`  context.source_record_index, in %d records, %d different values. The longest: "Jane Roe 1/1/70"`, n, n),
-		fmt.Sprintf("    %d more values are not shown here, and one of them could hold a name.", n-examples),
-		`    "c0"`, `    "c49"`,
-		`    "a name hides in a long comment a name hides in a long comment "  (` + shortID(id(40)) + `)`,
+		fmt.Sprintf(`  context.source_record_index, in %d records: %d different numbers or times, not shown here`, n, n),
+		fmt.Sprintf(`  context.source_created, in %d records: %d different numbers or times, not shown here`, n, 60),
+		`"Jane Q Public"`, `"decoy number 059, longer than a name"`,
 		`    "the same long comment in many records the same long comment in many records "  (in 10 records)`,
 	} {
 		if !strings.Contains(got, want) {
