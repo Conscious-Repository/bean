@@ -561,6 +561,12 @@ func reviewShare(s *core.Store, l *core.Loaded, c shareChoice, out string, files
 				fmt.Fprintln(w, row(r)+"  (comes along: "+by[7:19]+" is about it)")
 			}
 		}
+		if lines := contextLines(shared); len(lines) > 0 {
+			fmt.Fprintln(w, "Beside the values, these records carry what their source wrote. The reader sees all of it:")
+			for _, line := range lines {
+				fmt.Fprintln(w, line)
+			}
+		}
 		if note != "" {
 			fmt.Fprintf(w, "  with your note for the reader: %s\n", safe(note))
 		}
@@ -579,7 +585,7 @@ func reviewShare(s *core.Store, l *core.Loaded, c shareChoice, out string, files
 			fmt.Fprintln(w, line)
 		}
 		fmt.Fprintf(w, "  also: your %d identity records and %d pairings, and the share record itself\n", len(proof)-pairings, pairings)
-		fmt.Fprintln(w, "Each record also carries the time when it was entered, your key and the version of bean. Your identity records show when you made your log, when you changed a key, and how many records you had at each change.")
+		fmt.Fprintln(w, "Each record also carries the name of its source, the time when it was entered, your key and the version of bean. Your identity records show when you made your log, when you changed a key, and how many records you had at each change.")
 		if seal {
 			fmt.Fprintln(w, "A sealed package is a disclosure: it is encrypted on its way, and once its reader has opened it, it cannot be taken back. Each record carries your identity id, so two packages of yours can be linked.")
 		} else {
