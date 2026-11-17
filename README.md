@@ -29,23 +29,20 @@ New here: [docs/ONBOARDING.md](docs/ONBOARDING.md) goes from install to an impor
 ## How it works
 
 ```mermaid
-flowchart LR
+flowchart TB
+    subgraph public["Public data"]
+        direction LR
+        source["A source,<br/>such as a survey"] -->|"a builder that<br/>anyone can run"| pack["A reference pack:<br/>one file, named<br/>by its SHA-256"]
+        pack --> host["Any host: a web server,<br/>a Blossom server,<br/>a friend's disk"]
+    end
     subgraph machine["Your machine"]
-        log["Your log: signed records in one folder"]
-        bean["bean"]
+        direction LR
+        bean["bean"] -->|"signs, stores, reads"| log["Your log:<br/>signed records<br/>in one folder"]
     end
     peer["A peer or a doctor"]
-    subgraph public["Public data"]
-        source["A source, such as a survey"]
-        pack["A reference pack: one file, named by its SHA-256"]
-        host["Any host: a web server, a Blossom server, a friend's disk"]
-    end
-    bean -->|"signs, stores, reads"| log
-    bean -->|"a sealed file of the records that you chose, and six words"| peer
-    peer -->|"signed notes in reply"| bean
-    source -->|"a builder that anyone can run"| pack
-    pack --> host
-    host -->|"the whole pack, checked by its SHA-256"| bean
+    public -->|"the whole pack, checked by its SHA-256"| machine
+    machine -->|"a sealed file of the records<br/>that you chose, and<br/>six words"| peer
+    peer -->|"signed notes in reply"| machine
 ```
 
 Your data stays in your folder. You share chosen records with one person at a time. To compare, public data comes to your machine whole, and your reading never leaves. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the three parts as pictures, with what works today and what is planned.
