@@ -10,6 +10,113 @@ A person can keep a log, and import lab reports, Apple Health and CSV files. The
 
 Three things are still missing. Two people cannot see their records side by side. A device cannot sign what it captures. Only one public source has been built into a pack. They are in the four paths below.
 
+## Next: a first run with a peer, a seal to a reader's key, and a first pool (2026-11-18)
+
+The owner set the next aim on 2026-11-18 (DECISIONS 325). Two people share, and see their records side by side. A person compares with a group, from a pack that a publisher hosts. Three reviews, one for each paragon, judged the plan in laps. They changed its order and added rules.
+
+**The design for a seal to a reader's key goes on beside the view of two people, by the owner's word.** He chose that seal as the way a package travels. The first run with a peer uses six words, unless the seal is built and released by then. A run with a key follows step 4.
+
+**What does not change.** The core, the record format and `pack/0`. bean fetches nothing. No health record goes to a relay, and no service computes a comparison.
+
+**The steps in bean. Each stands alone.** Steps 1 and 2 are one track, and steps 3 and 4 are another. A step that touches a key or a share has its own audit and its own release.
+
+1. **A first run with a real peer, with what exists.** The rules are below.
+2. **Two people side by side** (path 2, step 3). The view shows readings and notes, and no photo. The first run shows what it must hold.
+3. **A design for sealing to a reader's key, with its own audit** (path 1, step 2). It is under its own audit, and is not in the repository yet. It answers these questions.
+   - Where is a reader's key kept, and which copies of a log hold it?
+   - How does a sender know that an address is the reader's? A second channel must confirm it before a package is sealed.
+   - How long does a reader's key live? Can a reader make an address for one sender, and drop its key after reading?
+   - Does a share record name the address that it was sealed to?
+   - How is a reply sealed back?
+   - What does an earlier bean say about such a package? The answer of today is below.
+   - Does the check page open with a key, and does it make one?
+4. **Seal to a key**, as the design says. The address is a recipient of the `age` format, so bean invents nothing.
+5. **A builder of a pool, with synthetic contributors**, under `tools/` (path 4, "A pool"). It is a test of the path, and not a pool.
+
+**The first run with a peer.**
+
+- Each of the two runs bean and keeps a log. Each runs the commands themselves, and no assistant does: a check prints the other person's values.
+- A reader who has only a browser can check a package, and cannot reply.
+- Each has readings. A report in a layout that bean reads gives them. So does a value that the person enters by hand, with the type name and unit that a pack lists. [COMPARE.md](COMPARE.md) lists them for the survey's packs.
+- A value that was entered by hand reads like a lab's result. The person says so in a note.
+- `bean share -seal` writes one file. It goes by a channel that the two already use, and the six words go by another.
+- Each reads the other's package with `check-bundle`, and answers with `reply` and `accept`. [SHARE.md](SHARE.md) says what the two compare by voice.
+- A comparison with a pack is not needed for the run. A share does not carry the pack: the sender sends its file too, or the reader builds it.
+
+**What an earlier bean says about a package that is sealed to a key.** Release 0.7.2 asks for six words, and such a package has none. When six words are typed, it refuses, and says that it is another kind of file. The check page says to check the six words. The request for words and the page's line are wrong for such a package. UPGRADING.md will say so, and both people update first.
+
+**What a package that opens with a key shows.** Only that someone knew the address: anyone can seal to an address. The check says so. The signatures and the identity words show who signed, as today. Today the call for the six words also carries the identity words. With no such call, the two still compare them once.
+
+**Beside these, with no code in bean.**
+
+**A first publisher hosts.** This is phase 2 of the order below.
+
+- A file host that serves a file under its SHA-256. A file and its SHA-256 on a page is a full publication.
+- The two packs of the survey.
+- A rehearsal with a throwaway identity, before any real key.
+- A relay with a pointer to each pack, because the owner asked for it (DECISIONS 318). Nothing depends on it.
+- A pointer is a Nostr event of kind 1063, which exists. bean invents no kind.
+- The logs hold no network address of a person, and are kept for a week at most. That is the publisher's word: nobody can check it.
+- A document of the setup, in this repository, before the first pack is announced. It names each program with its version, the rule for uploads, and the tags of a pointer. It holds no key. A second publisher can copy it.
+- For the packs, the host and the relay are programs that exist.
+
+**What a pointer may claim.** It is a hint for finding a pack.
+
+- A key that was made for the relay signs it. No key of a log does.
+- It does not show who the publisher is, and it never puts a pack on record.
+- It is never the second place for a SHA-256. A second place is one that the host's operator does not control, or a build from the source's files.
+- A reader who follows a pointer fetches from a host that they do not know, with a tool of their own. The SHA-256 says whether the bytes are the ones that were named.
+- A record of the publisher's bean identity is what ties a pack to a publisher (path 4, step 4). It is not built.
+
+**A package by link, after step 4.** The sender puts the sealed file on a file host, with a tool that exists, and sends the link.
+
+- A key that was made for that one upload signs it. No key of a log does: not the signing key, and not an agent's key.
+- A link is a convenience, and no host is a gate. A sender with no host sends the file by any channel, as today.
+- A host may ask for an account or for payment. bean holds no wallet.
+- The link names the file by its SHA-256. The reader computes the SHA-256 of what they fetched, and compares.
+- A host learns the size, the time, the key of the upload, and the network address of the upload and of each fetch. It holds the sealed bytes for as long as it likes.
+- When a host is gone, the link is gone. The sender holds the file, and sends it again.
+- A package goes on a public host only when it is sealed to a key (DECISIONS 313). The design of step 3 first says how long such a key lives.
+- A reader fetches with a tool of their own.
+
+**A host that offers itself to people for their packages** takes only files that start as an `age` file. It takes them up to a stated size, for a stated time. A host can read that start, and cannot tell what is inside. A sender cannot hold another person's host to this rule. The rule is code in the host, and a second publisher needs the same code. So that code gets a repository beside this one, with no publisher's name, when it is written.
+
+**The owner's example, said plainly.** He named a skin irritation that a person photographs over some days.
+
+- After these steps the person keeps the photos, and a score in their own words.
+- They send both to a peer, sealed. A photo goes only when they name its record, with `-files`.
+- A photo's file can hold what the camera wrote: a place, a time, a device. bean does not take that out, and the review does not say so yet.
+- The peer saves each photo from the package and opens it with any viewer. The peer answers with signed notes.
+- bean shows no photo, and sets no two photos side by side.
+- bean has no public data on skin, and does not say what an irritation is.
+
+**Not in these steps.**
+
+- A pool of real contributions (path 4, "A pool").
+- Finding each other (path 2, step 4). People talk where they already do, and exchange an address there.
+- A command that fetches, a table of names, and a unit that bean converts.
+- A comparison of photos with a group.
+
+**Known and left.**
+
+- Two people who name one thing with two types are not lined up (DECISIONS 323).
+- The review before a share does not warn of what a photo's file can hold. That is a small change, with its own audit.
+- The second user's reports hold no reading (DECISIONS 306). As the peer of the run, he would enter values by hand.
+- A reading that no pack takes waits for a pack. Only a publisher can add it.
+
+**The owner's to decide.** The first two are the author's proposals, which the reviews let stand. The owner asked both questions, and has not answered them.
+
+- **Where the code lives.** Proposed: what runs offline is in this repository, and what listens on a network is not. Formats, checks, builders and the document of a setup are here. A publisher's network address, terms and keys are its own. No key is in any repository.
+- **How many spellings of one quantity are reconciled.** Proposed: the one who pools does it, in a pack's `same` list (path 4, "A pool"). bean keeps no table of names.
+- Whether the first run goes on six words, or waits for the seal to a key.
+- Where the first publisher's server runs, and under which network address.
+- Who the peer of the first run is, and whether values that were entered by hand are enough for it (DECISIONS 323).
+- Which host takes a package for the run by link.
+- Whether a publisher's real key is used after the rehearsal.
+- Whether a first pool with no step of contribution is enough. His answer began with a contribution.
+- Whether the first host carries the synthetic pool's pack. A pack of made-up people on a real host can mislead.
+- Whether the survey's next pack comes before the builder of a pool. The next pack gives a person more tests. The builder gives none.
+
 ## Path 1: a sealed package for one reader
 
 **The need.** A person sends records to a doctor or a peer. Only that reader can open the package. The reader may have no key and no account.
@@ -17,10 +124,10 @@ Three things are still missing. Two people cannot see their records side by side
 **The plan.**
 
 1. **Seal with a passphrase first. Done:** `bean share -seal` ([SHARE.md](SHARE.md), DECISIONS 275). bean packs the bundle into one file, encrypts it, and makes six random words. The person gives the words to the reader by another channel, such as a phone call. The check page asks for the words, opens the file on the reader's device, and runs the check. This needs no key from the reader.
-2. **Seal to a reader's key next.** The check page makes a key for the reader, in their browser. The secret part stays on their device. They send the public part, a short reader address, to the sender. `bean share -to <address>` seals the package to it. A reader who runs bean gets an address from bean.
+2. **Seal to a reader's key next.** The check page makes a key for the reader, in their browser. The secret part stays on their device. They send the public part, a short reader address, to the sender. `bean share -to <address>` seals the package to it. A reader who runs bean gets an address from bean. Whether the page makes a key is now a question of the design (the section "Next", step 3).
 3. **Use a standard format. Done.** The file is an `age` file, so a tool other than bean can open it. bean invents no cipher.
 4. **Say what leaves. Done (DECISIONS 324).** The review before a share says that the person's identity id travels. It flags a kept lab report, which holds a name and a birth date. It lists every field that a record carries beside its row, with its values.
-5. **Record who it was for.** The share record says that a passphrase was used. With a reader's key it will name the reader's address.
+5. **Record who it was for.** The share record says that a passphrase was used. With a reader's key it may name the reader's address: the design decides (the section "Next", step 3).
 
 6. **The reader knows who signed. Done:** identity words (DECISIONS 280). The sender reads eight words in the call that carries the opening words, and the check shows the same eight (DECISIONS 287).
 7. **One public address for the check page. Done (DECISIONS 311):** the releases of the repository, which is public. A tag on `main` builds the page on the code host's machine and publishes it with its SHA-256. CI records the SHA-256 of every push as well. Not done: a second, independent place that states the SHA-256, and a short address of the project's own.
@@ -45,7 +152,7 @@ Three things are still missing. Two people cannot see their records side by side
 3. **Side by side.** bean shows the records of two people next to each other, each with its signer and its caveats. It computes nothing across them. The rules are in DECISIONS 323. The steps:
    1. The view. It reads the person's log and one bundle that checks. Its command is not named yet. Readings with the same type and printed unit share a row. A pack that the person names adds other spellings.
    2. The checks of `bean accept` for a bundle, so that a peer shows under their name.
-   3. One run with a real peer, when each has a report in a layout that bean reads. The second user's reports wait for the reader of unknown layouts (smaller open paths).
+   3. One run with a real peer. It comes first (the section "Next", step 1). Each has readings: from a report in a layout that bean reads, or entered by hand (DECISIONS 325). The second user's reports wait for the reader of unknown layouts (smaller open paths).
 4. **Finding each other.** A person publishes a short card: a condition, what they look for, and a reader address. It holds no measurement. Others answer with a sealed package. Where cards live is not decided.
 5. **A statistic over a group.** A group wants its own distribution, and no member wants to show their values. This is the one step that needs computing on hidden values. It waits for a real group, and for steps 1 to 4.
 
@@ -60,7 +167,7 @@ Three things are still missing. Two people cannot see their records side by side
 **Open.**
 
 - The first peers are people who already know and trust each other (the owner, 2026-11-11). So steps 1 to 3 come first, and step 4 waits.
-- A reply from a reader who has only a browser. The page would make a key for that reader and sign with it, which is step 2 of path 1.
+- A reply from a reader who has only a browser. The page would make a key for that reader and sign with it. Whether the page makes a key is a question of the design (path 1, step 2).
 - A peer's notes in the peer's own log. Today the peer keeps the reply file and its words. Their log holds only a record that they replied.
 - A reply to a reply. Today a note is about a record of a share, and the owner answers with a new share.
 - Who runs the place where cards live: nobody (people pass addresses by hand), an open network, or AION?
@@ -137,13 +244,39 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 - **Albumin, globulin and carbon dioxide**, when a source confirms that the lab and NHANES measure one thing ([COMPARE.md](COMPARE.md)).
 - **Hormones, vitamins and thyroid tests** are in other files, some of other survey years. A second cycle is a second set of files and weights.
 
+**A pool: a pack from what people contribute (DECISIONS 325).** A group's own data is a source like any other, and its pack is a pack like any other.
+
+**The first pool is a test of the path.** It holds nothing that the survey's pack lacks, and it tests no mapping. Nobody contributes to it: its bundles are made for the test.
+
+- **It is built from saved comparisons.** A saved comparison names its reading, its measure and its cohort. `bean share -type 'comparison.*'` sends each with its reading. So the sharer's own bean did the mapping, with a pack on record.
+- **The builder is one program in Python, under `tools/`.** It checks a bundle with `checkbundle.py`, a claim with `reproduce.py`, and its pack with `check.py`. The rules below are its own, and the program is the rule.
+- **Which claims count.** The builder is given one pack of the survey. For the test, that pack is built from the synthetic files in `internal/nhanes/testdata`. A claim counts when it names that pack. The identity's own key signed the claim and its reading. An agent's record does not count.
+- **One value for each identity and measure.** The builder takes the reading with the latest `times.observed.start`, compared as an instant. It looks only at readings with a claim that counts. A reading in two bundles is one reading. A reading with no such time is not taken. It takes none when two readings share that instant, or when the reading has claims in two cohorts. It counts each such case. The sharer chose which readings to share, and stated their times.
+- **The pack's measures are the survey pack's:** label, unit, `same` list and caveats. A cell needs 30 identities, and one cell is enough for the test.
+- **The pack says what it is, where a reader sees it.** A cohort's id is `pool-` and the survey's id. Its text is `synthetic pool: ` and the survey's text. The title, the source's name and publisher, and the caveats are the builder's own, and say the same. They never name the survey's publisher as the pool's.
+- **The bundles are one archive in this repository, a test vector.** The pack names it in `source.files`, and anyone builds the pack again. It is used with `-unknown-pack`.
+
+**What a pool of real people needs first, on paper.** None of it is built.
+
+- **A pack from data that is not public.** `pack/0` names in `source.files` a file that anyone can fetch. A real pool has none. So this is a decision on the format, and on a publisher's signature (the plan below, step 4, and "Open").
+- **A contribution that the person meant.** A share is not bound to a reader today, so anyone who holds one can pass it on to a pool. A contribution counts only when its share record names the publisher's address. The design of a seal to a key decides whether a share record names one.
+- **A pack that is published cannot be taken back.** Whoever fetched it holds a copy.
+- **Mapping stays with the one who pools.** The publisher's rule decides which type and unit is which measure. The rule has a version, and its result is the pack's `same` list. bean keeps no table of names, and no reader converts a unit.
+- **A reading that no `same` list has is not pooled.** The publisher counts such readings, and the counts are its list of work.
+- **What a pool's pack may claim.** It says that it is a pool, and that each contributor chose a cohort. Its n counts identities, not people: one person can make many. bean's own line under a result says "in this sample" today, and a pack's n is "the number of people". A pool is not a sample, so both need other words for a pool.
+- **Consent, and how long a contribution is kept.** A person cannot see what a publisher holds, and cannot take a reading back.
+- **A review of the law, before a publisher holds a person's readings.**
+- **What the publisher learns:** at least each contributor's reading, its times, the cohort and the identity id. SHARE.md lists what else a share carries. A person may contribute under an identity that they made for the pool.
+- **A cell shows real values, with no name.** The rule says whether the builder groups or rounds them. Two packs that differ by one contributor show that person's value.
+- **A pool cannot tell a real contribution from one that was made up.** One person with many keys can fill a cell. A device's signature narrows that: a signed reading was made by a device, and not typed (path 3). It does not show whose body was measured.
+
 **The plan.**
 
 1. **A second source, from another publisher.** The format is not frozen before a second real source is built into a pack. Each candidate is confirmed first from its publisher's own site: the terms, a stable address, and whether a file changes without notice.
 2. **Publish the NHANES pack** beside the check page, with its SHA-256, and mirror it (the section on where the files live). Then a person needs one download of under 1 MB, not eight files. The owner read the terms of the source and gave the word (DECISIONS 314).
 3. **The check page computes a shared comparison again**, when the reader gives it the pack.
 4. **A publisher signs.** A record by the publisher's bean identity names a pack's SHA-256, and travels as a bundle. This is built when a second publisher exists.
-5. **A pointer on relays.** A publisher announces a pack on Nostr relays: title, SHA-256, where it is. The relays hold a pointer and no health record. bean keys can already be Nostr keys.
+5. **A pointer on relays.** A publisher announces a pack on Nostr relays: title, SHA-256, where it is. The relays hold a pointer and no health record. A key that was made for the relay signs it, and no key of a log (the section "Next").
 6. **More kinds of cell**, each when a real source needs it: percentile points, a fitted curve, counts of a category. REFERENCE.md says what each may state.
 
 **The person's own list of packs: scoped, and it waits (DECISIONS 308).** The first user outside the owner asked to choose his sources, and in time to use the sources of his peers. Today any pack works with `-unknown-pack`, so nobody is locked in. A signed record, "I use this pack", is the trace that a peer's vouch will be. It is built when a pack exists from a second source, or when a peer asks to send their list. Entry 308 holds the rules for it. The owner was asked again on 2026-11-16, and said to wait (DECISIONS 321). He is asked again with each release that puts a pack on record.
@@ -167,8 +300,8 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 
 1. **Mirror.** The check page is in the project's releases. A publisher puts a pack on a host of its own. It puts the same bytes on one or two Blossom servers, with an existing Blossom client. It states the SHA-256 in a second place.
 2. **One line in the documents.** A `curl` command with the server and the SHA-256, then the check. bean fetches nothing itself.
-3. **A signed note with each SHA-256.** A publisher's key signs a note on Nostr relays: the title, the SHA-256 and the servers. bean has no key of its own (DECISIONS 317). This is the second place for a digest (path 1, step 7, and path 4, step 5).
-4. **A sealed package by link.** A person uploads the encrypted file with a Blossom client and sends the link. The six words go by phone, as now. SHARE.md then says what the server sees.
+3. **A signed note with each SHA-256.** A note on Nostr relays names the title, the SHA-256 and the servers. bean has no key of its own (DECISIONS 317). A note is a hint for finding a file. It is not a second place for a digest. The operator of a host can write a note that agrees with a changed file (DECISIONS 325).
+4. **A sealed package by link.** A person uploads the encrypted file with a Blossom client and sends the link. A package on a public host is sealed to the reader's key, not with words (DECISIONS 313, 325). The section "Next" has the rules. SHARE.md then says what the server sees.
 5. **A fetch command in bean, only if people ask.** Until then bean stays offline.
 
 **What a server learns.** That someone fetched a file, from which address, and when. For a package it also holds the size and the ciphertext, for as long as it likes. Nobody can make a server delete a file.
@@ -207,6 +340,8 @@ He then said that the infrastructure must be right before new capabilities are a
 **Phase 3: when a second party exists.** The person's own list of packs (DECISIONS 308). And a person takes in the record of a peer or a publisher who keeps a pack.
 
 The view of two people side by side needs none of this, and can be built at any time.
+
+**The next steps (DECISIONS 325)** are in the section "Next", near the top. They take a first run with a peer, the view of two people, phase 2, and the seal to a reader's key. They add one builder of a pool. The documents of item 2 above do not wait. The other work that follows from phase 1 keeps its order, after the first run with a peer.
 
 Not planned: a command in bean that fetches from a network, and a view that ranks or scores two people. bean never runs a program that a pack names. A public card of what a person holds is not planned either.
 
