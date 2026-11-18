@@ -729,7 +729,7 @@ func TestShareSealed(t *testing.T) {
 	zipPath := filepath.Join(where, "plain.zip")
 	os.WriteFile(zipPath, packed, 0o600)
 	want, _ := checkBundle(folder)
-	if got, ok, _ := checkPackage(zipPath); !ok || len(got) != len(want) {
+	if got, ok, _ := checkPackage(zipPath, ""); !ok || len(got) != len(want) {
 		t.Errorf("a zip file of the folder:\n%s", strings.Join(got, "\n"))
 	}
 	if again, _ := bundle.Pack(folder); !bytes.Equal(again, packed) {

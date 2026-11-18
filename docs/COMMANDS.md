@@ -167,9 +167,13 @@ Compares with a reference pack: one file of public reference data, with a table 
 
 ## Share
 
-### `share -out <folder or file> [-seal] [-files] [-note <text>] [-yes] <id>... | -type <type> [-since <time>] [-until <time>]`
+### `share -out <folder or file> [-seal | -for <address> [-address-words "<eight words>"]] [-files] [-note <text>] [-yes] <id>... | -type <type> [-since <time>] [-until <time>]`
 
-Writes chosen records into a new or empty folder, a bundle, that anyone can check without your log or keys. With `-seal` it writes one new file instead: the bundle, encrypted, with six words that open it. It prints the words once and does not keep them. [SHARE.md](SHARE.md) says what goes in, what a reader can tell, and the format.
+Writes chosen records into a new or empty folder, a bundle, that anyone can check without your log or keys. With `-seal` it writes one new file instead: the bundle, encrypted, with six words that open it. It prints the words once and does not keep them. With `-for` it writes one new file that is sealed to a reader's address. [SHARE.md](SHARE.md) says what goes in, what a reader can tell, and the format.
+
+- `-for <address>` seals to a reader's address, and implies `-seal`. The reader makes the address with `bean address`. bean takes it only as the lower-case text that the age library writes, and stops for any other text.
+- `-address-words` are the eight address words that the reader gave you. Without the flag bean asks for them on a terminal, and `-yes` never stands in for them. Without a terminal and without the flag it writes nothing. When they are not the words of the address, it writes nothing.
+- With `-for`, bean prints no six words. It makes the file, new and empty, then adds the share record, then writes the package. If the file cannot be written whole, it says what it did.
 
 - Give record ids, or `-type` with optional `-since` and `-until`. Only current records about you can be shared, and not one that another identity signed. A record brings the record it is about, one step and no further. A type never picks a record that keeps a file, such as a lab report: name that one by its id.
 - `-files` also writes, in plaintext, the file of each record you named by its id. It also writes each reference file among the records that bean has on record, by the SHA-256 of its bytes. A file never goes because its record came along or was picked by type. A kept copy of a survey file that is not the one on record goes only when you name its record. What stays home is said on stderr. Only your record or a paired agent's opens a file: bean refuses `-files` for a named record of any other key.
@@ -179,24 +183,33 @@ Writes chosen records into a new or empty folder, a bundle, that anyone can chec
 
 It builds the bundle beside its place, checks it as its reader will, and moves it there. Then it adds one `share` record to your log: the signed list of what the bundle holds, which is in the bundle too. A share that fails leaves neither. A bundle is not encrypted, and once sent it cannot be taken back. It prints `shared <n> records and <m> files in <folder>`, then `share record <id>`.
 
-### `check-bundle [-unpack <new folder>] <folder or file>`
+### `address -out <new file> | -key <file>`
 
-Checks a bundle, shows what it holds when it passes, and changes nothing in it. Given a file, it reads a zip file of a bundle's folder, or a sealed package. For a sealed package it asks for the six words, and reads them from standard input. With wrong words the last line is `the package did not open: nothing was checked`, exit 1. With `-unpack`, a package that passes is written into a new folder as a bundle, with the files it carries. It needs no log, and reads only the bundle's `objects` and `files` folders; anything else in the folder is named and not read. It prints any record that fails, then the share record's id and the identity and key that signed it. It prints how many records and files it holds. It prints who signed the records: the person, an agent the person paired, or another key. It prints how many are corrections of a record that is not in the bundle. When every check passed it lists the records under `It holds:`, a comparison in words with its reading, cohort and n. Then `bundle ok`, exit 0, or `bundle FAILED: <n> problems`, exit 1. It says each time what no bundle can show: that it is complete, that a value is true, and who the identity is. Nor can a bundle show that the key that signed is still the person's. `tools/second/checkbundle.py` does the same check without bean.
+Makes a key file for packages that are sealed to you, or shows the address of one. [SHARE.md](SHARE.md) ("Seal it to a reader's address") says what a key file is and what it costs.
+
+- `-out` makes a key and writes it into a new file with mode 0600. It writes over no file. The file is a standard age identity file. When a log is found, a place inside the log's folder is refused.
+- `-key` shows the address of a key file, also of one that `age-keygen` made. It prints nothing secret. When the mode of the file lets other users read it, bean warns on standard error.
+- Both print `address <address>`, then `address words <eight words>`, then what you must know before you give the address away.
+- It needs no log. bean keeps no key file and no list of them: `bean restore` and `bean export` do not hold one.
+
+### `check-bundle [-key <file>] [-unpack <new folder>] <folder or file>`
+
+Checks a bundle, shows what it holds when it passes, and changes nothing in it. Given a file, it reads a zip file of a bundle's folder, or a sealed package. One scan of the file's header decides what it asks for. For a package that is sealed with words it asks for the six words, and reads them from standard input. A package that is sealed to an address opens with `-key <file>`, your key file with exactly one identity. Flags come before the file's name. With wrong words, without the key or with another key, the last line is `the package did not open: nothing was checked`, exit 1. When a key opened the package, the check first says that anyone who has your address can seal to it. With `-unpack`, a package that passes is written into a new folder as a bundle, with the files it carries. It needs no log, and reads only the bundle's `objects` and `files` folders; anything else in the folder is named and not read. It prints any record that fails, then the share record's id and the identity and key that signed it. It prints how many records and files it holds. It prints who signed the records: the person, an agent the person paired, or another key. It prints how many are corrections of a record that is not in the bundle. When every check passed it lists the records under `It holds:`, a comparison in words with its reading, cohort and n. Then `bundle ok`, exit 0, or `bundle FAILED: <n> problems`, exit 1. It says each time what no bundle can show: that it is complete, that a value is true, and who the identity is. Nor can a bundle show that the key that signed is still the person's. `tools/second/checkbundle.py` does the same check without bean.
 
 A reader with no terminal runs the same check in a browser. `make page` builds `bean-check.html`, one file that reads a bundle's folder or a zip file of it and sends nothing ([SHARE.md](SHARE.md)).
 
-### `reply -to <what you received> -out <new file> <id> <note> [<id> <note>]...`
+### `reply -to <what you received> [-key <file>] -out <new file> <id> <note> [<id> <note>]...`
 
 Signs notes about records that someone shared with you, and seals them for that person. [SHARE.md](SHARE.md) ("A signed reply") says what a reply holds and what it shows.
 
-- `-to` is a sealed package, or a bundle's folder or zip file. It must pass `check-bundle`. For a sealed package bean asks for its six words on standard input.
+- `-to` is a sealed package, or a bundle's folder or zip file. It must pass `check-bundle`. For a sealed package bean asks for its six words on standard input. A package that is sealed to your address opens with `-key <file>`. Then bean first says what a key shows, and what to ask the signer.
 - Each `<id>` names a record of that share: its id from the check, or the first 6 or more hex digits. The id of the share record names the share itself. Each `<note>` is a text of 1 to 4000 bytes. Put `--` before the first id when a note starts with `-`.
 - It needs your own log and key: a note is signed with your key, about the other person.
-- It writes one new file, sealed, and prints the six words that open it and your identity words. Your log gets a `reply` record: to whom, to which share, how many notes. The notes are in the file only.
+- It writes one new file, sealed with six words, and prints the words and your identity words. That is so also when the share came sealed to your address. Your log gets a `reply` record: to whom, to which share, how many notes. The notes are in the file only.
 
 ### `accept [-label <name>] [-words "<eight words>"] [-yes] <reply>`
 
-Checks a reply to a share of yours and takes its notes into your log. It asks for the six words. Then it shows the share, the eight identity words of whoever signed, and each note with the record that it is about. Then it asks.
+Checks a reply to a share of yours and takes its notes into your log. It asks for the six words. A file that is sealed to a key is not a reply of this bean, and bean says so. Then it shows the share, the eight identity words of whoever signed, and each note with the record that it is about. Then it asks.
 
 - `-label` is the name under which this person's notes show. The first reply of an identity needs it. An identity keeps its name, and a name belongs to one identity. A name has 1 to 64 characters: the letters a to z, digits, single spaces, and `. ' _ - @`. It does not start with the word `peer`. The label of an agent follows the same rule, and is not the name of a peer.
 - `-words` are the identity words that the person read to you. When they are not the signer's, nothing is taken.

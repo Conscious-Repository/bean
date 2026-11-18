@@ -27,6 +27,16 @@ f=$(ls "$T"/b/bad/objects/*/*.json | head -1)
 FR=$("$T/ex/bin/bean" -dir "$T/ex/log" ls -json -type reference.file | "$PY" -I -c 'import sys, json; print(" ".join(json.loads(line)["id"] for line in sys.stdin))')
 "$T/ex/bin/bean" -dir "$T/ex/log" share -yes -seal -files -out "$T/b/sealed.bean" -type 'comparison.*' $FR >"$T/seal.txt" 2>/dev/null
 WORDS=$(sed -n 's/^  //p' "$T/seal.txt" | head -1)
+# The same records, sealed to a reader's address, which the page does not
+# open. And that file with a second reader in its header, which nothing of
+# bean opens.
+"$T/ex/bin/bean" -dir "$T/empty" address -out "$T/reader.key" >"$T/addr.txt"
+"$T/ex/bin/bean" -dir "$T/ex/log" share -yes -for "$(sed -n 's/^address \(age1.*\)/\1/p' "$T/addr.txt")" -address-words "$(sed -n 's/^address words //p' "$T/addr.txt")" -out "$T/b/forkey.bean" -type 'comparison.*' >/dev/null 2>&1
+"$PY" -I -c 'import sys
+d = open(sys.argv[1], "rb").read(); start = d.index(b"\n") + 1; mac = d.index(b"\n--- ")
+open(sys.argv[2], "wb").write(d[:start] + d[start:mac + 1] + d[start:])' "$T/b/forkey.bean" "$T/b/two.bean"
+# The package for a key once more, under the name of the package with words.
+mkdir "$T/b/same"; cp "$T/b/forkey.bean" "$T/b/same/sealed.bean"
 # A bundle with a row that the check marks: a comparison that the person
 # signed by hand and that names no reference data.
 cp -R "$T/ex/log" "$T/marked-log"

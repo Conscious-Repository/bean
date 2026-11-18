@@ -2,7 +2,7 @@
 // disk as a reader does, and uses its buttons. tools/page/smoke.sh makes
 // the bundles and runs it. It needs Playwright with Chromium.
 //
-//     node smoke.cjs <bean-check.html> <folder with good/, good.zip, bad/ and sealed.bean> <six words>
+//     node smoke.cjs <bean-check.html> <folder with good/, good.zip, bad/, sealed.bean, forkey.bean and two.bean> <six words>
 const { chromium } = require("playwright");
 const path = require("path");
 
@@ -100,6 +100,40 @@ const path = require("path");
     expect("a text file is shown in the page", (await page.locator("#reader-box").isVisible()) && (await page.textContent("#reader")).length > 0);
   }
 
+  // A package that is sealed to a key. The page asks its check what the
+  // file asks for before it shows anything. It shows no box for words, and
+  // says that the file is sealed to a key and that it cannot open it.
+  await page.setInputFiles("#zip", path.join(dir, "forkey.bean"));
+  await settled();
+  expect("a package that is sealed to a key gets no box for words", !(await page.locator("#words-box").isVisible()) && (await page.locator("#result").isVisible()));
+  const toKey = await page.textContent("#verdict-text");
+  expect("the page says that the file is sealed to a key", (await title()) === "This file is sealed to a key.");
+  expect("the page says that it cannot open it, and what opens it", toKey.includes("This page cannot open") && toKey.includes("with bean or with the age tool") && toKey.includes("a file that is sealed with six words"));
+  expect("nothing of a package that is sealed to a key is shown", !(await rowsShown()) && !(await page.locator("#who-box").isVisible()) && !(await page.locator("#problems-box").isVisible()) && !(await page.locator("#opened").isVisible()));
+  expect("a file that did not open is not green", (await page.getAttribute("#verdict", "class")) === "verdict bad");
+
+  // An age file that names two readers: no box for words, and the reason.
+  await page.setInputFiles("#zip", path.join(dir, "two.bean"));
+  await settled();
+  expect("a file for two readers gets no box for words", !(await page.locator("#words-box").isVisible()) && (await title()) === "This file did not open.");
+  expect("the page says why", (await page.textContent("#problems")).includes("has 2 stanzas") && !(await page.textContent("#verdict-text")).includes("six words"));
+
+  // After those, a package with words still gets its box.
+  await page.setInputFiles("#zip", path.join(dir, "sealed.bean"));
+  await settled();
+  expect("a package with words gets the box again", (await page.locator("#words-box").isVisible()) && !(await page.locator("#result").isVisible()));
+
+  // A second file with the same name: the box for words of the first does
+  // not stay for a file that asks for no words.
+  await page.setInputFiles("#zip", path.join(dir, "same", "sealed.bean"));
+  await settled();
+  expect("a file of the same name that is sealed to a key gets no box for words", !(await page.locator("#words-box").isVisible()) && (await title()) === "This file is sealed to a key.");
+  await page.setInputFiles("#zip", path.join(dir, "sealed.bean"));
+  await settled();
+  await page.setInputFiles("#zip", path.join(dir, "good.zip"));
+  await settled();
+  expect("a file that needs no words takes the box away", !(await page.locator("#words-box").isVisible()) && (await title()).startsWith("These records passed the check."));
+
   // A row that the check marks turns the box amber, counts the rows to
   // read, and draws the mark apart from the record's own text.
   await page.setInputFiles("#zip", path.join(dir, "marked.zip"));
@@ -116,5 +150,5 @@ const path = require("path");
 
   await browser.close();
   if (failed) process.exit(1);
-  console.log("page: a real browser opens it from the disk, passes a good bundle as a folder and as a zip file, opens a sealed package with its words only and saves a file it carries, fails a damaged one, keeps no earlier verdict, and loads nothing");
+  console.log("page: a real browser opens it from the disk, passes a good bundle as a folder and as a zip file, opens a sealed package with its words only and saves a file it carries, says of a package that is sealed to a key that it cannot open it, fails a damaged one, keeps no earlier verdict, and loads nothing");
 })().catch((err) => { console.error(err); process.exit(1); });

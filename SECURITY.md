@@ -32,6 +32,8 @@ This page says what bean protects, what it does not protect, and where each key 
 
 **A bundle is a disclosure.** A plain bundle is not encrypted. `bean share -seal` encrypts it with six words, which protects it on its way. A reader who has opened it holds a copy for good, and whoever learns both the file and the words can open it. Two bundles of yours can be linked by your identity id ([docs/SHARE.md](docs/SHARE.md)).
 
+**A package that is sealed to your address opens for whatever runs as you.** `bean share -for` seals a package to a reader's address, and the reader's key file opens it. A program that runs as you, such as an assistant with a shell, opens such a package with no word typed. Then another person's values are in its context. The six words were also a gate: such a program does not have them. A stolen key file opens every package that was sealed to it and still exists anywhere. This bean does not open a key file that is protected with a passphrase ([docs/SHARE.md](docs/SHARE.md)).
+
 **A saved comparison gives its reading away.** The record holds the cohort and the result. With the public files, anyone who has the record can work the value out.
 
 **A page that checks a bundle is only as good as its sender.** A forged page can call anything good. Get `bean-check.html` from the project's [releases](https://github.com/Conscious-Repository/bean/releases), or build it with `make page`, and compare its SHA-256.
@@ -44,8 +46,9 @@ This page says what bean protects, what it does not protect, and where each key 
 | Signing key | `local/signing-key`, mode 0600 | Add, correct and delete your records. |
 | Identity secret | `local/identity-secret`, mode 0600 | Decrypt stored files; make dedupe refs. |
 | Agent key | `local/agent-key`, one per machine | Add records about you, as the agent. |
+| A reader's key file | One file that you place, mode 0600. bean warns when other users can read it. Not in a log. It has no paper copy. | Open every package that was sealed to its address. The address cannot be taken back. |
 
-`local/` never syncs. A backup of `local/` is as sensitive as the keys in it. The 24 words rebuild the keys (`bean restore`). They do not rebuild `local/purged-refs.jsonl`, so back up that file (above).
+`local/` never syncs. A backup of `local/` is as sensitive as the keys in it. The 24 words rebuild the keys (`bean restore`). They do not rebuild `local/purged-refs.jsonl`, so back up that file (above). They do not rebuild a reader's key file either. `bean restore`, `bean export` and a copy of the log do not hold it.
 
 ## Report a problem
 

@@ -43,7 +43,7 @@ flowchart LR
 
 ## 2. Share with one person
 
-You choose records, and bean packs them into one sealed file. The file goes by any channel. Six words open it, and they go by another channel, such as a phone call.
+You choose records, and bean packs them into one sealed file. The file goes by any channel. Six words open it, and they go by another channel, such as a phone call. Two people who both run bean can seal to the reader's address instead. Then the reader's key file opens the package, and no words are read out ([SHARE.md](SHARE.md)).
 
 ```mermaid
 flowchart LR

@@ -242,6 +242,8 @@ bean share -seal -out for-ana.bean -note "my lipids" -type 'comparison.*'
 bean check-bundle for-ana.bean     # what Ana runs: it asks for the six words, checks, then shows what it holds
 ```
 
+Two people who both run bean can share with no words read out. The reader makes a key file once with `bean address`, and gives its address to the sender. `bean share -for <address>` seals a package to it, and `bean check-bundle -key <file>` opens it. [docs/SHARE.md](docs/SHARE.md) says what that costs: a key file to guard, and no call that says which share a package is.
+
 - It shows what will leave and asks first. Only the records you choose go, with what they are about. Files go only with `-files`, and a lab report only when you name it.
 - The reader can tell that each record is yours and unchanged, and that nothing was added or removed. They can check it without bean: `tools/second/checkbundle.py`.
 - A reader who runs bean can answer. `bean reply` signs notes about the records that you shared. `bean accept` shows the reader's identity words, and takes the notes into your log under a name that you give. Only notes about what you shared can come in.
@@ -395,7 +397,7 @@ bean protects who wrote what, and protects your identity against a stolen device
 | [docs/REFERENCE.md](docs/REFERENCE.md) | Reference packs: public data as one file, its format, who hosts what, and the checks. |
 | [docs/REFERENCE-PLAN.md](docs/REFERENCE-PLAN.md) | What is decided for reference data before more is built, with the facts that were measured. |
 | [docs/SHARE.md](docs/SHARE.md) | Share chosen records as a bundle anyone can check: what goes in, limits, format. |
-| [docs/SHARE-PLAN.md](docs/SHARE-PLAN.md) | A seal to a reader's key: what is decided before it is built, and what it costs. |
+| [docs/SHARE-PLAN.md](docs/SHARE-PLAN.md) | A seal to a reader's key: what was decided before it was built, what is built, and what it costs. |
 | [examples/blood](examples/blood/README.md) | The whole loop in one script, on a synthetic report. |
 | [cmd/bean/vocabulary.md](cmd/bean/vocabulary.md) | The usual record types and units. |
 | Importer notes: [lab](cmd/bean-import-lab/README.md), [Apple Health](cmd/bean-import-apple-health/README.md), [NHANES](cmd/bean-import-nhanes/README.md) | What each importer reads, keeps and refuses. |

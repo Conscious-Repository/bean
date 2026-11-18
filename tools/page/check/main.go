@@ -68,9 +68,15 @@ func checked(in bundle.Input) bundle.Result {
 
 // check is beanCheck(name, file, paths, datas, words). file is the bytes of
 // a zip file or of a sealed package, or null; then paths and datas are the
-// files of a chosen folder. words open a sealed package. It
-// returns the result as JSON: bundle.Result, and lines, the same text that
-// bean check-bundle prints. Every string is made safe to show.
+// files of a chosen folder. words open a package that is sealed with words.
+// It returns the result as JSON: bundle.Result, and lines, the same text
+// that bean check-bundle prints. Every string is made safe to show.
+//
+// The page calls it first with no words. The result's asks then says what
+// the file asks for, from one scan of its header: "words", "key", "other",
+// or "" for what is not one sealed file. The page's script shows the box
+// for words only for "words", and decides nothing by itself. This check
+// opens no package with a key.
 func check(_ js.Value, args []js.Value) (out any) {
 	// The check fails closed: whatever goes wrong in it, the page is told
 	// that the bundle did not pass.

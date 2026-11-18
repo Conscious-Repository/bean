@@ -38,6 +38,22 @@ Do not run `purge` or `gc` on the copies. Only they erase anything.
 
 ## Changes
 
+### 0.8.0 (2026-11-18)
+
+A package can be sealed to a reader's address. Nothing in a log changes, and `bean share -seal` with its six words is as before ([docs/SHARE.md](docs/SHARE.md), DECISIONS 327).
+
+- **New commands and flags.** `bean address` makes a reader's key file, or shows its address. `bean share -for <address>` seals to it. `-key <file>` on `bean check-bundle` and on `bean reply -to` opens such a package. No flag that existed changes its meaning.
+- **Both people update first.** A reader with release 0.7.2, or with its page, cannot open a package that is sealed to an address. What they say is wrong for such a file. A bean that has `bean address` can open one.
+- **What `bean check-bundle` of release 0.7.2 prints for such a file.** First `Type the six words of this package, then Enter:`, and such a package has no words. With no words typed it prints `problem: <file> is sealed: it opens with the six words that its sender gave you`. With six words of the list it prints `problem: <file> was not opened: it is not sealed with words: this is another kind of age file`. Then `the package did not open: nothing was checked`, exit 1.
+- **What the page of release 0.7.2 shows for such a file.** The box `This file is sealed. Type the six words that its sender gave you, with a space between them:`. After six words it says `This file did not open.` Then it says `Nothing is known about “<file>”. Check the six words and type them again. If they are right, the file was changed on the way: ask the sender for a new one.`
+- **Nothing is read wrongly.** Release 0.7.2 opens no such file, and shows no record of one.
+- **A share record can say `"seal": "recipient"`.** It names no address. An earlier bean reads such a record as any other share record: no check of a log or of a bundle reads that member.
+- **What changes for a file that you have.** A package with six words opens as before, with the same lines. An `age` file that is not such a package is now refused before bean asks for words. bean says what the file asks for: a key, or something that bean does not open. The page asks its check what a file asks for, before it shows the box for words.
+- **A place that reaches your log's folder through a link is now refused.** So is one that names the folder in other capitals, on a disk that does not tell them apart. That holds for a bundle, a reply and a key file. Before, bean judged the path as it was written. `check-bundle -unpack` has no such check, as before.
+- **An `age` file in armor is refused by name.** Before, bean said that it could not read it as a zip file.
+- **A key file is not in your log.** `bean restore`, `bean export` and a copy of the log do not hold it. If you lose the file, you cannot open what was sealed to it.
+- **A reply still makes six words.** `bean accept` takes no file that is sealed to a key.
+
 ### 0.7.2 (2026-11-17)
 
 One fault is mended, and one table changes. Nothing in a log changes.
