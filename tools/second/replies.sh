@@ -3,7 +3,8 @@
 # bean and the Python checker (checkreply.py, which follows docs/SHARE.md,
 # "The reply, exactly", and shares no code with bean) give the same verdict
 # on each: both pass, or both refuse. A sealed reply must open for a Python
-# reader of its format, and the two must name the replier by the same words.
+# reader of its format, with six words or with a key file, and the two must
+# name the replier by the same words.
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
@@ -51,6 +52,32 @@ opened "$T/reply.bean" "$T/r";              both "a reply with two notes" "$T/r"
 echo "$RW" | ben accept -yes -label Ana -words "$IW" "$T/reply.bean" >"$T/accept.txt" 2>"$T/err" || { echo "DIFFER: bean accept refused the reply: $(cat "$T/err")"; rc=1; }
 grep -q '^took 2 notes' "$T/accept.txt" || { echo "DIFFER: bean accept did not take two notes"; rc=1; }
 
+# A reply that is sealed to the person's address. The Python reader opens it
+# with the key file, in a key mode of its own, and the two checks hold it to
+# one verdict. Neither opens it with another key.
+bean address -out "$T/ben.key" >"$T/addr.txt" 2>"$T/err" || die "bean address failed"
+bean address -out "$T/other.key" >/dev/null 2>"$T/err" || die "bean address failed"
+BA=$(sed -n 's/^address \(age1.*\)/\1/p' "$T/addr.txt"); BW=$(sed -n 's/^address words //p' "$T/addr.txt")
+echo "$SW" | ana reply -to "$T/for-ana.bean" -for "$BA" -address-words "$BW" -yes -out "$T/reply-key.bean" "$R1" "Sealed to your address." >"$T/reply.txt" 2>"$T/err" || die "reply -for failed"
+grep -q 'six words' "$T/reply.txt" && { echo "DIFFER: a reply to an address prints six words"; rc=1; }
+rm -rf "$T/rk"; "$PY" -I "$HERE/unseal.py" -key "$T/ben.key" "$T/reply-key.bean" "$T/rk" >"$T/err" 2>&1 || die "unseal.py -key did not open the reply to an address"
+both "a reply sealed to an address" "$T/rk" ok
+[ "identity words: $IW" = "$(grep '^identity words: ' "$T/py.txt")" ] || { echo "DIFFER: the identity words of a reply to an address differ"; rc=1; }
+grep -q '"seal":"recipient"' "$(of "$T/rk" reply)" || { echo "DIFFER: the reply record of a reply to an address does not say recipient"; rc=1; }
+bean check-bundle -key "$T/ben.key" "$T/reply-key.bean" >"$T/go.txt" 2>&1 </dev/null
+grep -q '^This is a reply to a share' "$T/go.txt" || { echo "DIFFER: bean does not open the reply to an address with its key"; rc=1; }
+bean check-bundle -key "$T/other.key" "$T/reply-key.bean" >"$T/go.txt" 2>&1 </dev/null && { echo "DIFFER: bean opens a reply to an address with another key"; rc=1; }
+rm -rf "$T/rk2"; "$PY" -I "$HERE/unseal.py" -key "$T/other.key" "$T/reply-key.bean" "$T/rk2" >/dev/null 2>&1 </dev/null && { echo "DIFFER: unseal.py opens a reply to an address with another key"; rc=1; }
+# bean accept -key opens it and lists its notes. It asks on a terminal, and
+# -yes does not go with -key, so a script takes nothing.
+ben accept -key "$T/ben.key" "$T/reply-key.bean" >"$T/accept.txt" 2>"$T/err" </dev/null && { echo "DIFFER: bean accept -key took notes with no terminal"; rc=1; }
+grep -q 'Sealed to your address' "$T/accept.txt" && grep -q 'at a terminal' "$T/err" || { echo "DIFFER: bean accept -key does not list the reply to an address: $(cat "$T/err")"; rc=1; }
+ben accept -key "$T/ben.key" -yes -words "$IW" "$T/reply-key.bean" >/dev/null 2>&1 </dev/null; [ $? = 2 ] || { echo "DIFFER: bean accept takes -yes with -key"; rc=1; }
+# Where the age tool is installed, it opens the reply with the key file.
+if command -v age >/dev/null; then
+  age -d -i "$T/ben.key" -o "$T/reply-key.zip" "$T/reply-key.bean" 2>"$T/err" && bean check-bundle "$T/reply-key.zip" 2>&1 </dev/null | grep -q '^This is a reply to a share' || { echo "DIFFER: the age tool does not open a reply to an address: $(cat "$T/err")"; rc=1; }
+fi
+
 # Damage that needs no key.
 copy "$T/r"; rm "$(of "$T/d" note)";        both "a listed note is not there" "$T/d" bad
 copy "$T/r"; echo "accept me" >"$T/d/README.txt"; both "a text beside the records" "$T/d" bad
@@ -90,5 +117,5 @@ both "a reply of an identity that changed its key twice from one place" "$T/d" b
 [ "$(wc -l <"$T/cases.txt")" -ge 30 ] || { echo "DIFFER: forgereply.py wrote too few cases"; rc=1; }
 while read -r name want; do both "$name" "$T/py/$name" "$want"; done <"$T/cases.txt"
 
-[ "$rc" = 0 ] && echo "replies: bean and checkreply.py agree on $n replies: good ones, damaged ones, and ones that Python signed to break one rule each. bean accept takes the one that both pass"
+[ "$rc" = 0 ] && echo "replies: bean and checkreply.py agree on $n replies: good ones, damaged ones, and ones that Python signed to break one rule each. bean accept takes the one that both pass, and lists one that is sealed to an address"
 exit $rc

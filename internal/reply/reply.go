@@ -68,6 +68,10 @@ type Result struct {
 	To, Share string
 	// ReplyID is the id of the reply record, and When the time it states.
 	ReplyID, When string
+	// Seal is what the reply record says of how the reply left: "passphrase"
+	// or "recipient", or "" when it says nothing. No rule reads it. bean
+	// accept reads it once, for a reply that a key opened.
+	Seal string
 	// Notes are the notes, in id order. They are set only when every check
 	// passed.
 	Notes []Note
@@ -204,6 +208,7 @@ func Check(in bundle.Input) Result {
 	for _, node := range chain {
 		res.Chain = append(res.Chain, node.ID)
 	}
+	res.Seal, _ = manifest.Context["seal"].(string)
 	res.When = "-"
 	if obs, ok := manifest.Observed.(map[string]any); ok {
 		res.When, _ = obs["start"].(string)

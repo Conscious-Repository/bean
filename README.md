@@ -242,7 +242,7 @@ bean share -seal -out for-ana.bean -note "my lipids" -type 'comparison.*'
 bean check-bundle for-ana.bean     # what Ana runs: it asks for the six words, checks, then shows what it holds
 ```
 
-Two people who both run bean can share with no words read out. The reader makes a key file once with `bean address`, and gives its address to the sender. `bean share -for <address>` seals a package to it, and `bean check-bundle -key <file>` opens it. [docs/SHARE.md](docs/SHARE.md) says what that costs: a key file to guard, and no call that says which share a package is.
+Two people who both run bean can share with no words read out. The reader makes a key file once with `bean address`, and gives its address to the sender. `bean share -for <address>` seals a package to it, and `bean check-bundle -key <file>` opens it. A reply goes back the same way: `bean reply -for`, and `bean accept -key`. [docs/SHARE.md](docs/SHARE.md) says what that costs: a key file to guard, and no call that says which share a package is.
 
 - It shows what will leave and asks first. Only the records you choose go, with what they are about. Files go only with `-files`, and a lab report only when you name it.
 - The reader can tell that each record is yours and unchanged, and that nothing was added or removed. They can check it without bean: `tools/second/checkbundle.py`.

@@ -2,7 +2,7 @@
 
 This is for anyone who builds or reviews the next way to seal a package. [SHARE.md](SHARE.md) is what exists. This document says what is added, in which steps, and what it costs. It was written before any of it was built.
 
-**Step 1 is built** (release 0.8.0, DECISIONS 327). SHARE.md now describes it, and the section "Step 1 as built" below says where the build adds to this plan. Step 2, and what is under "Later", are not built. The rest of this document stands as it was decided: where it says "will", read it as the plan.
+**Step 1 is built** (release 0.8.0, DECISIONS 327). **Step 2 is built** (release 0.8.1, DECISIONS 330). SHARE.md now describes both. The sections "Step 1 as built" and "Step 2 as built" below say where each build adds to this plan. What is under "Later" is not built. The rest of this document stands as it was decided: where it says "will", read it as the plan.
 
 It is step 3 of the section "Next" in [ROADMAP.md](ROADMAP.md). Six drafts were written. Reviewers who had not seen the work judged each, one for each paragon. DECISIONS 326 has the account.
 
@@ -200,12 +200,33 @@ It has its own audit. It may be in the same release as step 1.
 - `bean accept -key <file>` opens it. Its checks do not change. With `-yes` and `-words`, a program that runs as the person then takes a peer's notes with no act of the person. The audit of this step judges that.
 - A reader replies before they delete a key that was made for one sender. Or they unpack the package first, and reply to the folder.
 
+### Step 2 as built
+
+The build follows the plan above. ROADMAP.md names three points for its design and its audit, and these answers are the author's, judged by the audit.
+
+- **The gate of `bean accept -key`.** `-yes` does not go with `-key`: it is a usage error, before anything is read. With six words, a program that runs as the person cannot open a reply. With a key file on the disk it can, and it can make the eight identity words from the reply itself. So `-yes` with `-words` would take a peer's notes with no act of the person. `bean accept -key` asks on a terminal, and takes nothing without one. A program that makes a terminal of its own answers it, as 326 (c) says of a terminal rule: the documents say so.
+- **A mark of format.** The reply does not carry one. It is format 0 of a reply, with the same six rules. Only its seal differs, and release 0.8.0 refuses that seal by name. The mark is a step of its own, before the clock of 1.0 starts.
+- **Where a reply goes.** Only to the address that `-for` names, behind the gate. bean reads no address from a package.
+
+It adds these points, which the plan left open.
+
+- **The gate runs before the package is opened.** On a terminal bean asks for the address words first, then for the six words of the package.
+- **`-yes` and `-address-words` go with `-for` only.** Given alone, each is a usage error: a flag that does nothing reads as a flag that was obeyed.
+- **bean says six lines before it writes,** with `-yes` too. They are in SHARE.md. Then it asks on a terminal.
+- **`bean accept -key` says what a key shows,** and marks a reply whose record does not say `recipient`, as `check-bundle` marks a share. Its checks do not change: these are lines, and no refusal.
+- **Without a terminal, `bean accept -key` lists the reply and takes nothing.** It says to run it at a terminal, and not to pass `-yes`.
+- **One line of `bean accept` changes.** For a file that is sealed to a key, without `-key`, it says how to open it.
+- **`bean check-bundle` on a reply that a key opened** names `bean accept -key`.
+- **The writer of step 1 names what it writes.** Its lines for a reply say "reply record". Its lines for a share stay byte for byte.
+- **A signal waits from the empty file on,** as for a share.
+- **`make bundles` holds the openers to one verdict for a reply to an address.** `unseal.py` needed no change: its key mode opens a reply as it opens a share. Nor did `checkreply.py`: no rule reads `seal`.
+
 ## What a person does who wants no words read out
 
 - **Once.** The reader runs `bean address -out`. They give the address by one channel, and the eight address words by another. The sender keeps both where nobody else can change them: neither is a secret, but a changed pair passes the gate.
 - **Each package.** The sender runs `bean share -for <address> -address-words "…"`. The file goes by any channel, or by link.
 - **What stands in the place of the six words.** Eight address words that are not secret, given to bean with each share. A key file that the reader guards. And one question from the reader, by another way than the package came.
-- **Until step 2,** a reply still makes six words.
+- **Until step 2,** a reply still makes six words. Since step 2, a reply can go to an address too.
 
 ## Later, each with a real case and a design of its own
 

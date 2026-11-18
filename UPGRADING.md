@@ -38,6 +38,17 @@ Do not run `purge` or `gc` on the copies. Only they erase anything.
 
 ## Changes
 
+### 0.8.1 (2026-11-18)
+
+A reply can be sealed to the address of the person who shared. Nothing in a log changes. `bean share` and a reply with six words are as before ([docs/SHARE.md](docs/SHARE.md#a-reply-to-an-address), DECISIONS 330).
+
+- **New flags.** `-for <address>`, `-address-words` and `-yes` on `bean reply`, and `-key <file>` on `bean accept`. No flag that existed changes its meaning.
+- **`-yes` does not go with `-key` on `bean accept`.** It is a usage error, exit 2. `bean accept -key` asks on a terminal.
+- **Both people update first.** Release 0.8.0 does not take a reply that is sealed to an address. `bean accept` prints `this file is sealed to a key. bean accept takes a reply, and this bean seals a reply with words: nothing was taken`, exit 1. With `-key` it prints its usage line, exit 2.
+- **One line of `bean accept` changes.** For a file that is sealed to a key, without `-key`, it now says: `this file is sealed to a key. Open it with bean accept -key <your key file>: nothing was taken`. Exit 1, as before.
+- **`bean check-bundle` on a reply that a key opened** names `bean accept -key <their key file>`. For any other reply it names `bean accept`, as before.
+- **A `reply` record can say `"seal": "recipient"`.** It names no address. An earlier bean reads it as any other `reply` record: no check reads that member.
+
 ### 0.8.0 (2026-11-18)
 
 A package can be sealed to a reader's address. Nothing in a log changes, and `bean share -seal` with its six words is as before ([docs/SHARE.md](docs/SHARE.md), DECISIONS 327).
