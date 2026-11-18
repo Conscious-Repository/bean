@@ -24,7 +24,7 @@ New here: [docs/ONBOARDING.md](docs/ONBOARDING.md) goes from install to an impor
 - **Nothing is edited.** A correction is a new record that replaces the old one. A deletion is a record that every copy obeys.
 - **Signatures, not trust.** Every record is signed and named by its hash. `bean verify` finds any change.
 - **You outlive your keys.** 24 words on paper recover your identity on a new machine and retire a lost key.
-- **Leave at any time.** `bean export` writes everything as plaintext. `bean restore -export` reads it back.
+- **Leave at any time.** `bean export` writes every record that you did not delete, and your stored files, as plaintext. `bean restore -export` reads it back. An export holds no key file, no package and no reference pack: [keep those yourself](#backups-and-a-lost-laptop).
 
 ## How it works
 
@@ -337,6 +337,13 @@ Anyone who can read the server's folder can read your records: they are plain JS
 Any copy of `objects/` and `blobs/` is a backup: Time Machine, a drive, another machine. The 24 words rebuild the keys in `local/`. Also back up `local/purged-refs.jsonl`: it is the only record of which imports you deleted. Without it, importing the same source data again brings deleted readings back ([SECURITY.md](SECURITY.md)).
 
 A backup is a copy of the log. An export is plain files for leaving; `bean restore -export` turns one back into a log ([ONBOARDING](docs/ONBOARDING.md#7-leave-and-come-back)).
+
+**What a backup and an export do not hold.** Keep each of these yourself.
+
+- **A key file from `bean address`.** It is outside the log, and the 24 words do not bring it back. Without it, no package that was sealed to its address opens again. bean does not encrypt a key file, so keep it as any secret key is kept ([SECURITY.md](SECURITY.md), [docs/SHARE.md](docs/SHARE.md#seal-it-to-a-readers-address)).
+- **A package or a bundle that you sent or received.** It is a file or a folder outside the log.
+- **A reference pack.** A saved comparison names its pack by a SHA-256, and nobody computes that comparison again without the file.
+- **What an export leaves out of the log.** The records that you deleted, and the files of `local/`, which [docs/COMMANDS.md](docs/COMMANDS.md#files-in-a-log-folder) lists. `manifest.json` in an export lists what bean did not write, and why.
 
 If you lose the laptop:
 

@@ -62,7 +62,7 @@ A pack is one file of reference data, and a cell is its table for one measure an
 
 **The proposed order.** A step that touches keys or sharing has its own audit. A step with code is a release of its own, with a number below 0.9.
 
-1. **First: publish 0.8.0, with true words on leaving.** One small change comes before the tag.
+1. **First: publish 0.8.0, with true words on leaving.** One small change comes before the tag. **The change is made (DECISIONS 329). The tag waits for the owner's word.**
    - The README says today that `bean export` writes everything, and SECURITY.md and ARCHITECTURE.md say the like. A reader can take an export for a whole backup.
    - The three documents say: an export holds every record and file that bean could read. It leaves out what you deleted. `manifest.json` lists what it could not write. Those sentences are held to the code before the tag. It holds no key file, no package and no pack. A key file is kept apart, and the 24 words do not bring it back. Nor does an export hold `local/purged-refs.jsonl`, which the README already says to back up, or the other files of `local/` that COMMANDS.md lists.
    - A saved comparison names its pack, and an export does not hold the pack: keep it. An address that your peers hold opens nothing for you once its key file is lost.

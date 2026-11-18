@@ -220,7 +220,7 @@ bean -dir ~/health-restored blob get <stored as id> | shasum -a 256
 
 The hash matches your original. To use the restored log, point `BEAN_DIR` and your MCP config at `~/health-restored`. Never `bean init` for this: a new identity cannot read your export.
 
-Saved comparisons, the reference files you kept and the records of your shares are in the export like every record. A comparison with the survey's files can be checked from the export alone ([COMPARE.md](COMPARE.md)). A comparison with a reference pack also needs the pack. Your log names it and does not hold it, so keep that file with your export. The bundles you sent are folders outside your log: keep those yourself.
+Saved comparisons, the reference files you kept and the records of your shares are in the export like every record. A comparison with the survey's files can be checked from the export alone ([COMPARE.md](COMPARE.md)). A comparison with a reference pack also needs the pack. Your log names it and does not hold it, so keep that file with your export. The bundles and packages that you sent or received are outside your log: keep those yourself. A key file from `bean address` is outside your log too, and the 24 words do not bring it back. Without it, no package that was sealed to its address opens again. bean does not encrypt a key file, so keep it as any secret key is kept.
 
 ## Troubleshooting
 
