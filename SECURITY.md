@@ -46,7 +46,7 @@ This page says what bean protects, what it does not protect, and where each key 
 | Signing key | `local/signing-key`, mode 0600 | Add, correct and delete your records. |
 | Identity secret | `local/identity-secret`, mode 0600 | Decrypt stored files; make dedupe refs. |
 | Agent key | `local/agent-key`, one per machine | Add records about you, as the agent. |
-| A reader's key file | One file that you place, mode 0600. Not in a log. It has no paper copy. | Open every package that was sealed to its address. The address cannot be taken back. |
+| A reader's key file | One file that you place, mode 0600. bean warns when other users can read it. Not in a log. It has no paper copy. | Open every package that was sealed to its address. The address cannot be taken back. |
 
 `local/` never syncs. A backup of `local/` is as sensitive as the keys in it. The 24 words rebuild the keys (`bean restore`). They do not rebuild `local/purged-refs.jsonl`, so back up that file (above). They do not rebuild a reader's key file either. `bean restore`, `bean export` and a copy of the log do not hold it.
 

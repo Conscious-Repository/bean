@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"filippo.io/age"
 
@@ -117,7 +118,8 @@ func readBack(path string, key *age.X25519Identity) error {
 
 // readKey reads the key file that -key names: exactly one age identity,
 // and not one that is protected with a passphrase. What it says of a file
-// that is not such a key holds nothing of the file.
+// that is not such a key holds nothing of the file. It warns, on standard
+// error, when the mode of the file lets other users read it.
 func readKey(path string) (*age.X25519Identity, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -134,6 +136,12 @@ func readKey(path string) (*age.X25519Identity, error) {
 	key, err := bundle.ParseKey(data)
 	if err != nil {
 		return nil, fmt.Errorf("the key file %s was not used: %w", path, err)
+	}
+	// A warning, and no refusal: the key is read, and the person is told.
+	// It says what the mode of the file says, and no more. Windows keeps no
+	// such mode.
+	if info, err := f.Stat(); err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o044 != 0 && runtime.GOOS != "windows" {
+		fmt.Fprintf(os.Stderr, "warning: the mode of the key file %s is %04o, which lets other users of this machine read it. Whoever has a copy of the file opens every package that was sealed to its address. To take that away: chmod 600 <the file>\n", safe(path), info.Mode().Perm())
 	}
 	return key, nil
 }

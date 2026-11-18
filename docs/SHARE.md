@@ -120,6 +120,7 @@ $ bean check-bundle -key ~/keys/bean-reader.key for-ana.bean
 - **That check looks one way only.** It does not mark a package that opened with words and whose record says `recipient`. A record that says `recipient` shows what the signer wrote, and not for which address.
 - **A file for two readers is refused,** though the `age` tool opens it. A package names one reader. An `age` file in armor is refused too: the `age` tool opens it.
 - **A key file that is protected with a passphrase is refused.** This bean does not open one.
+- **A key file that other users can read gets a warning.** bean reads the mode of the file, and says how to mend it: `chmod 600`. It still uses the key. That holds for `bean address -key` too.
 - **A file that is not such a key gets one fixed line,** with nothing of the file in it.
 - **Without bean.** `age -d -i <key file> for-ana.bean > bundle.zip` opens a package, and `bean check-bundle bundle.zip` or `checkbundle.py` then checks it. `tools/second/unseal.py -key <key file> for-ana.bean <new folder>` opens one too, and shares no code with bean. On these ways nothing says what a key shows: anyone who has your address can seal to it.
 - **The check page does not open such a package.** It says that the file is sealed to a key, and that it cannot open it. A forged page that took a key would open every package of that key.

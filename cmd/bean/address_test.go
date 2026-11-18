@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -91,6 +92,24 @@ func TestAddress(t *testing.T) {
 	for _, line := range addressLines {
 		if !strings.Contains(out2, line) {
 			t.Errorf("address -key does not say: %s", line)
+		}
+	}
+	// A key file that other users can read: bean reads it, and warns. A file
+	// with mode 0600 gets no warning, from -out and from -key.
+	if strings.Contains(errs+errs2, "warning") {
+		t.Errorf("a key file with mode 0600 gets a warning:\n%s\n%s", errs, errs2)
+	}
+	if runtime.GOOS != "windows" {
+		loose := filepath.Join(where, "loose.key")
+		for mode, warned := range map[os.FileMode]bool{0o644: true, 0o640: true, 0o604: true, 0o600: false, 0o700: false} {
+			os.Remove(loose)
+			os.WriteFile(loose, data, mode)
+			os.Chmod(loose, mode) // not cut by the umask
+			out, errs, code := run(t, empty, "", "address", "-key", loose)
+			says := strings.Contains(errs, fmt.Sprintf("warning: the mode of the key file %s is %04o, which lets other users of this machine read it", loose, mode)) && strings.Contains(errs, "chmod 600")
+			if code != 0 || lineAfter(out, "address ") != address || says != warned || (!warned && errs != "") || strings.Contains(out+errs, "AGE-SECRET-KEY") {
+				t.Errorf("address -key on a key file with mode %04o: %d, warned %v\n%s", mode, code, says, errs)
+			}
 		}
 	}
 	// A key file of age-keygen, whose comment line names another address:
@@ -432,6 +451,20 @@ func TestShareFor(t *testing.T) {
 	}
 	if strings.Contains(stdout, "does NOT say") {
 		t.Errorf("a package that bean sealed to a key is marked as sealed again:\n%s", stdout)
+	}
+	// A key file that other users can read opens the package too, and bean
+	// warns on standard error.
+	if runtime.GOOS != "windows" {
+		loose := filepath.Join(f.where, "loose.key")
+		os.WriteFile(loose, mustRead(t, f.key), 0o644)
+		os.Chmod(loose, 0o644)
+		stdout, errs, code := run(t, reader, "", "check-bundle", "-key", loose, f.pkg)
+		if code != 0 || !strings.Contains(stdout, "bundle ok") || !strings.Contains(errs, "lets other users of this machine read it") || strings.Contains(stdout, "warning") {
+			t.Errorf("check-bundle with a key file of mode 0644: %d\n%s\n%s", code, stdout, errs)
+		}
+	}
+	if strings.Contains(errs, "warning") {
+		t.Errorf("check-bundle with a key file of mode 0600 warns: %s", errs)
 	}
 	// Another key, and what is not a key file.
 	other, _, _ := newAddress(t, "other.key")

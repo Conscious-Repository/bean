@@ -179,6 +179,7 @@ The build follows the plan above. It adds these points, which the plan left open
 - **`bean reply -to` with `-key` says what a key shows,** before it signs a note. The plan gave those lines to the check only.
 - **A place inside the log is judged by what is on the disk.** A place that reaches the log's folder through a link is inside it. So is one that is written in other capitals, on a disk that does not tell them apart. That holds for a key file, and now for a bundle and a reply too.
 - **No address words at all get a line of their own.** A script whose variable is empty is not told to ask the reader again.
+- **A key file that other users can read gets a warning,** wherever bean reads one. It is one line on standard error, and bean still uses the key. The owner asked for it after the last lap of the audit.
 - **`bean address -out` does not print the mode of the file.** It asks for mode 0600, and does not check what the disk gave.
 - **The check page hides one line.** For a package that is sealed to a key, the check's line names `-key`. The page says its three things, and not that line.
 - **`check.mjs` takes `-asks`.** `make bundles` passes it for every sealed file, and it fails when the page's check answers otherwise.

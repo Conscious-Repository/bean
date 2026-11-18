@@ -188,7 +188,7 @@ It builds the bundle beside its place, checks it as its reader will, and moves i
 Makes a key file for packages that are sealed to you, or shows the address of one. [SHARE.md](SHARE.md) ("Seal it to a reader's address") says what a key file is and what it costs.
 
 - `-out` makes a key and writes it into a new file with mode 0600. It writes over no file. The file is a standard age identity file. When a log is found, a place inside the log's folder is refused.
-- `-key` shows the address of a key file, also of one that `age-keygen` made. It prints nothing secret.
+- `-key` shows the address of a key file, also of one that `age-keygen` made. It prints nothing secret. When the mode of the file lets other users read it, bean warns on standard error.
 - Both print `address <address>`, then `address words <eight words>`, then what you must know before you give the address away.
 - It needs no log. bean keeps no key file and no list of them: `bean restore` and `bean export` do not hold one.
 
