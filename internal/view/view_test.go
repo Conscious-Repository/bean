@@ -27,3 +27,23 @@ func TestNoTextPassesForAMark(t *testing.T) {
 		}
 	}
 }
+
+// Characters that a terminal draws as nothing are written out, so a text
+// cannot hide words or pass for an empty one.
+func TestSafeShowsInvisible(t *testing.T) {
+	for in, want := range map[string]string{
+		"\u200b":                                     `\u200b`,
+		"a\u00adb\ufeffc\u2060d\u180e":               `a\u00adb\ufeffc\u2060d\u180e`,
+		"\U000e0041\U000e0042 secret":                `\U000e0041\U000e0042 secret`,
+		"fine\U000e0100\U000e01ef":                   `fine\U000e0100\U000e01ef`,
+		"vs\ufe0f\u034f\u115f\u1160":                 `vs\ufe0f\u034f\u115f\u1160`,
+		"\u3164\uffa0\u17b4\u17b5\u2800\ufff0\ufffb": `\u3164\uffa0\u17b4\u17b5\u2800\ufff0\ufffb`,
+		"\u2028\u202e\u0085":                         `\u2028\u202e\u0085`,
+		"Ünïcödé 日本 ✓ a b":                           "Ünïcödé 日本 ✓ a b",
+		"café ü":                                     "café ü",
+	} {
+		if got := Safe(in); got != want {
+			t.Errorf("Safe(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

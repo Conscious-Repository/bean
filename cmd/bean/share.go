@@ -561,6 +561,18 @@ func reviewShare(s *core.Store, l *core.Loaded, c shareChoice, out string, files
 				fmt.Fprintln(w, row(r)+"  (comes along: "+by[7:19]+" is about it)")
 			}
 		}
+		listed, whose := slices.Clone(shared), "these records"
+		for _, r := range proof {
+			if r.Type == "agent.pair" {
+				listed, whose = append(listed, r), "these records and their pairings"
+			}
+		}
+		if lines := fieldLines(listed); len(lines) > 0 {
+			fmt.Fprintf(w, "Beside what each row shows, %s hold these fields. The reader gets every value, also one that a line below does not print:\n", whose)
+			for _, line := range lines {
+				fmt.Fprintln(w, line)
+			}
+		}
 		if note != "" {
 			fmt.Fprintf(w, "  with your note for the reader: %s\n", safe(note))
 		}
@@ -585,6 +597,7 @@ func reviewShare(s *core.Store, l *core.Loaded, c shareChoice, out string, files
 		} else {
 			fmt.Fprintln(w, "A bundle is a disclosure: it is not encrypted, and once sent it cannot be taken back. Each record carries your identity id, so two bundles of yours can be linked. With -seal it is one encrypted file.")
 		}
+		fmt.Fprintln(w, "To leave a record out, answer n. Then share again with only the records that you want: name them by their ids, or narrow -type with -since and -until.")
 		fmt.Fprintf(w, "Share %d records? [y/N] ", len(shared))
 		if !confirmed(bufio.NewReader(os.Stdin)) {
 			fail(errors.New("nothing was written: not shared"))

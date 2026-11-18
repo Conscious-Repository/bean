@@ -19,7 +19,7 @@ Three things are still missing. Two people cannot see their records side by side
 1. **Seal with a passphrase first. Done:** `bean share -seal` ([SHARE.md](SHARE.md), DECISIONS 275). bean packs the bundle into one file, encrypts it, and makes six random words. The person gives the words to the reader by another channel, such as a phone call. The check page asks for the words, opens the file on the reader's device, and runs the check. This needs no key from the reader.
 2. **Seal to a reader's key next.** The check page makes a key for the reader, in their browser. The secret part stays on their device. They send the public part, a short reader address, to the sender. `bean share -to <address>` seals the package to it. A reader who runs bean gets an address from bean.
 3. **Use a standard format. Done.** The file is an `age` file, so a tool other than bean can open it. bean invents no cipher.
-4. **Say what leaves.** The review before a share also says that the person's identity id travels. It flags a file that holds a name or a birth date.
+4. **Say what leaves. Done (DECISIONS 324).** The review before a share says that the person's identity id travels. It flags a kept lab report, which holds a name and a birth date. It lists every field that a record carries beside its row, with its values.
 5. **Record who it was for.** The share record says that a passphrase was used. With a reader's key it will name the reader's address.
 
 6. **The reader knows who signed. Done:** identity words (DECISIONS 280). The sender reads eight words in the call that carries the opening words, and the check shows the same eight (DECISIONS 287).
@@ -31,6 +31,7 @@ Three things are still missing. Two people cannot see their records side by side
 
 - Should `-seal` become what `bean share` does unless told otherwise? Today a plain folder is the default, because the checks and the examples are built on it.
 - Does the page need a project domain? Today it lives in the releases of the code host. A second, independent place for its SHA-256 is what catches a host that serves a changed page.
+- Should `bean share` take `-except <id>`? Today a person who sees one record that must not leave names all the others by id, or narrows by time. For a long share that is many ids (DECISIONS 324).
 - Does a package need an end date after which the page refuses to open it? An end date stops an honest reader's page. It does not stop a copy.
 
 ## Path 2: people compare with each other
@@ -258,6 +259,9 @@ Not planned: a command in bean that fetches from a network, and a view that rank
   - Two packs can place one reading differently, and both claims are kept. Each row names its pack.
   - `bean compare -pack <file>` needs a log even to show what a pack holds.
   - `bean add` with a whole number above 9007199254740991 says `bad json`.
+- From the reviews of the share review (DECISIONS 324):
+  - `view.Safe` shows a space other than U+0020, a combining mark and a few rare blank characters as they are. A value can look blank, struck through, or like another value. It cannot hide a name: the letters are shown.
+  - A field of more than 50 different numbers or times shows its count. Many numbers could still spell a message.
 - From the reviews of the plan for reference data (DECISIONS 321):
   - For a cell that a pack does not have, bean says that a cohort of fewer than 30 people is left out. A pack can leave a cell out for another reason.
   - For a pack in a format that it does not know, bean says that the file is not a pack of version 0.
