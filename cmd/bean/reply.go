@@ -31,14 +31,26 @@ import (
 // the current key of an identity, which the person confirms by its eight
 // identity words. Only the notes go into the person's log.
 
-// readPackage reads a bundle or a reply from a folder or a file. For a
-// sealed package it asks for the six words on in.
-func readPackage(path string, in *bufio.Reader) bundle.Input {
+// notSealedLine and withWordsLine say that a key file was named and is not
+// used. The key file is not read then.
+const (
+	notSealedLine = "It is not sealed. -key is not used."
+	withWordsLine = "It is sealed with words. -key is not used: give the six words."
+)
+
+// readPackage reads a bundle or a reply from a folder or a file. One scan
+// of the file's header decides what it asks for. For a package that is
+// sealed with words it asks for the six words on in. A package that is
+// sealed to a key opens with the key file that keyFile names, or "".
+func readPackage(path string, in *bufio.Reader, keyFile string) bundle.Input {
 	info, err := os.Stat(path)
 	if err != nil {
 		return bundle.Input{Fatal: []string{fmt.Sprintf("%s cannot be read: %s", path, err)}}
 	}
 	if info.IsDir() {
+		if keyFile != "" {
+			fmt.Fprintln(os.Stderr, notSealedLine)
+		}
 		return bundle.ReadDir(path)
 	}
 	if info.Size() > 2<<30 {
@@ -49,9 +61,22 @@ func readPackage(path string, in *bufio.Reader) bundle.Input {
 		return bundle.Input{Fatal: []string{fmt.Sprintf("%s cannot be read: %s", path, err)}}
 	}
 	words := ""
-	if bundle.IsSealed(data) {
+	switch asks, _ := bundle.Asks(data); {
+	case asks == bundle.AsksKey && keyFile != "":
+		// The one key of that file is tried, and no other.
+		key, err := readKey(keyFile)
+		if err != nil {
+			return bundle.Input{Fatal: []string{fmt.Sprintf("%s was not opened: %s", path, err)}, Locked: true, Asks: asks}
+		}
+		return bundle.FromPackageKey(path, data, key)
+	case asks == bundle.AsksWords:
+		if keyFile != "" {
+			fmt.Fprintln(os.Stderr, withWordsLine)
+		}
 		fmt.Fprintln(os.Stderr, "Type the six words of this package, then Enter:")
 		words, _ = in.ReadString('\n')
+	case asks == "" && keyFile != "":
+		fmt.Fprintln(os.Stderr, notSealedLine)
 	}
 	return bundle.FromPackage(path, data, words)
 }
@@ -62,6 +87,7 @@ func cmdReply(s *core.Store, args []string) {
 	fs.SetOutput(io.Discard)
 	to := fs.String("to", "", "what you received: a sealed package, or a bundle's folder or zip file")
 	out := fs.String("out", "", "the reply to write: a new file")
+	keyFile := fs.String("key", "", "when what you received is sealed to a key: the key file that opens it")
 	pos, err := parseInterspersed(fs, args)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "A note that starts with - is read as an option. Put -- before the first id.")
@@ -69,6 +95,11 @@ func cmdReply(s *core.Store, args []string) {
 	if err != nil || *to == "" || *out == "" || len(pos) == 0 || len(pos)%2 != 0 {
 		usage()
 	}
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "key" && *keyFile == "" {
+			badArg(errors.New("-key names a key file"))
+		}
+	})
 	if abs, err := filepath.Abs(*out); err == nil && insideLog(abs) {
 		fail(fmt.Errorf("%s is inside your log: a reply goes somewhere else", *out))
 	}
@@ -78,7 +109,7 @@ func cmdReply(s *core.Store, args []string) {
 	stdin := bufio.NewReader(os.Stdin)
 	// What was received must pass its check: a note is about a record of a
 	// share that is what its sender signed.
-	got := bundle.Check(readPackage(*to, stdin))
+	got := bundle.Check(readPackage(*to, stdin, *keyFile))
 	if !got.OK {
 		for _, line := range got.Lines() {
 			fmt.Fprintln(os.Stderr, safe(line))
@@ -87,6 +118,11 @@ func cmdReply(s *core.Store, args []string) {
 			fail(errors.New("nothing was written: what you reply to did not open"))
 		}
 		fail(errors.New("nothing was written: what you reply to does not pass bean check-bundle"))
+	}
+	// What a key shows, and what it does not, before a note is signed: a
+	// package that someone sealed again reads like any other.
+	for _, line := range got.ByKey {
+		fmt.Fprintln(os.Stderr, safe(line))
 	}
 	l, err := s.Load()
 	if err != nil {
@@ -235,9 +271,11 @@ func cmdAccept(s *core.Store, args []string) {
 		fail(fmt.Errorf("%s is not a reply: a reply is one sealed file of at most %d MiB", pos[0], maxReply>>20))
 	}
 	stdin := bufio.NewReader(os.Stdin)
-	in := readPackage(pos[0], stdin)
+	in := readPackage(pos[0], stdin, "")
 	res := reply.Check(in)
 	switch {
+	case in.Asks == bundle.AsksKey:
+		fail(errors.New("this file is sealed to a key. bean accept takes a reply, and this bean seals a reply with words: nothing was taken"))
 	case res.Locked:
 		fail(errors.New("the reply did not open: nothing was checked, and nothing was taken"))
 	case !res.Unread && !in.Opened:

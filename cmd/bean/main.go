@@ -50,16 +50,22 @@ Compare
                                 what the pack holds.
 
 Share
-  share -out <folder or file> [-seal] [-files] [-note <text>] [-yes] <id>... | -type <type> [-since <time>] [-until <time>]
+  share -out <folder or file> [-seal | -for <address> [-address-words "<eight words>"]] [-files] [-note <text>] [-yes] <id>... | -type <type> [-since <time>] [-until <time>]
                                 Write chosen records into a folder that anyone
                                 can check without your log or keys. With -seal:
                                 one file that only its reader can open, with
-                                six words that you give them.
-  check-bundle [-unpack <new folder>] <folder or file>
+                                six words that you give them. With -for: one
+                                file that is sealed to the reader's address.
+  address -out <new file> | -key <file>
+                                Make a key file and its address, for packages
+                                that are sealed to you. Or show the address
+                                of a key file. It needs no log.
+  check-bundle [-key <file>] [-unpack <new folder>] <folder or file>
                                 Check a bundle or a sealed package someone
-                                sent you. -unpack writes a package that
-                                passes into a folder, with its files.
-  reply -to <what you received> -out <new file> <id> <note> [<id> <note>]...
+                                sent you. -key opens a package that is sealed
+                                to your address. -unpack writes a package
+                                that passes into a folder, with its files.
+  reply -to <what you received> [-key <file>] -out <new file> <id> <note> [<id> <note>]...
                                 Sign notes about records that someone shared
                                 with you, and seal them for that person.
   accept [-label <name>] [-words "<eight words>"] [-yes] <reply>
@@ -113,9 +119,10 @@ var syntax = map[string]string{
 	"ls":            "ls [-type <t>] [-since <time>] [-until <time>] [-author me|agent|<id>|<npub>] [-all] [-json]",
 	"show":          "show <id>",
 	"verify":        "verify",
-	"share":         "share -out <new folder or file> [-seal] [-files] [-note <text>] [-yes] <id>... | -type <type> [-since <time>] [-until <time>]",
-	"check-bundle":  "check-bundle [-unpack <new folder>] <folder, zip file or sealed package>",
-	"reply":         "reply -to <what you received> -out <new file> <id> <note> [<id> <note>]...",
+	"share":         "share -out <new folder or file> [-seal | -for <address> [-address-words \"<eight words>\"]] [-files] [-note <text>] [-yes] <id>... | -type <type> [-since <time>] [-until <time>]",
+	"address":       "address -out <new key file> | address -key <key file>",
+	"check-bundle":  "check-bundle [-key <key file>] [-unpack <new folder>] <folder, zip file or sealed package>",
+	"reply":         "reply -to <what you received> [-key <key file>] -out <new file> <id> <note> [<id> <note>]...",
 	"accept":        "accept [-label <name>] [-words \"<eight words>\"] [-yes] <reply>",
 	"unpair":        "unpair <name>",
 	"compare":       "compare -sex male|female -age <from>-<to> [-where <DATASET>.<VARIABLE>=<value>|<from>-<to>]... [-unknown-files] [-save] <id>... | -type <type>\n       bean [-dir <folder>] compare -pack <file> [-cohort <cohort> [-unknown-pack] [-save] <id>... | -type <type>]",
@@ -326,6 +333,8 @@ func main() {
 		cmdCompare(s, rest)
 	case "share":
 		cmdShare(s, rest)
+	case "address":
+		cmdAddress(s, rest)
 	case "check-bundle":
 		cmdCheckBundle(rest)
 	case "reply":

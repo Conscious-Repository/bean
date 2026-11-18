@@ -2,9 +2,9 @@
 
 This file is the one place for open paths: what bean should do next, in what order, and what is not decided. Work that is done is in the git history, and the reasons are in [DECISIONS.md](DECISIONS.md). Nothing here is final.
 
-## Where bean stands (2026-11-16)
+## Where bean stands (2026-11-18)
 
-A person can keep a log, and import lab reports, Apple Health and CSV files. They can compare a reading with public reference data: with a survey's own files, or with a reference pack. They can share chosen records as one sealed file that opens with six words, and a reader checks it in a browser. A reader who runs bean can answer with signed notes, and the person takes them into their log. Independent second implementations and a real-browser test guard those paths.
+A person can keep a log, and import lab reports, Apple Health and CSV files. They can compare a reading with public reference data: with a survey's own files, or with a reference pack. They can share chosen records as one sealed file that opens with six words, and a reader checks it in a browser. Two people who both run bean can seal a package to the reader's address, with no words read out. A reader who runs bean can answer with signed notes, and the person takes them into their log. Independent second implementations and a real-browser test guard those paths.
 
 **bean is in use.** A second person keeps a log with it, and the owner keeps his own. So `main` is a release, whether or not it has a tag (DECISIONS 310). A log that an earlier build wrote must read the same in a later build, or [UPGRADING.md](../UPGRADING.md) says what changes.
 
@@ -14,7 +14,7 @@ Three things are still missing. Two people cannot see their records side by side
 
 The owner set the next aim on 2026-11-18 (DECISIONS 325). Two people share, and see their records side by side. A person compares with a group, from a pack that a publisher hosts. Three reviews, one for each paragon, judged the plan in laps. They changed its order and added rules.
 
-**The design for a seal to a reader's key goes on beside the view of two people, by the owner's word.** He chose that seal as the way a package travels. The first run with a peer uses six words, unless the seal is built and released by then. A run with a key follows step 4.
+**The design for a seal to a reader's key went on beside the view of two people, by the owner's word.** He chose that seal as the way a package travels. Its first step is built (DECISIONS 327). The first run with a peer uses six words, unless that build is released by then. Which seal the run uses is the owner's to decide.
 
 **What does not change.** The core, the record format and `pack/0`. bean fetches nothing. No health record goes to a relay, and no service computes a comparison.
 
@@ -31,6 +31,9 @@ The owner set the next aim on 2026-11-18 (DECISIONS 325). Two people share, and 
    - What does an earlier bean say about such a package? The answer of today is below.
    - Does the check page open with a key, and does it make one?
 4. **Seal to a key**, in the two steps of SHARE-PLAN.md, each with its own audit. The address is a recipient of the `age` format, so bean invents nothing.
+   - **Step 1 is built** (release 0.8.0, DECISIONS 327): `bean address`, `bean share -for`, and `-key` on `check-bundle` and on `reply -to`. [SHARE.md](SHARE.md) says how to use it and what it costs.
+   - **Step 2 is not built:** a reply to an address, and `bean accept -key`. Until then a reply makes six words.
+   - **The owner's to decide:** whether a key file that is protected with a passphrase comes before a package of his goes on a public host.
 5. **A builder of a pool, with synthetic contributors**, under `tools/` (path 4, "A pool"). It is a test of the path, and not a pool.
 
 **The first run with a peer.**
@@ -43,7 +46,7 @@ The owner set the next aim on 2026-11-18 (DECISIONS 325). Two people share, and 
 - Each reads the other's package with `check-bundle`, and answers with `reply` and `accept`. [SHARE.md](SHARE.md) says what the two compare by voice.
 - A comparison with a pack is not needed for the run. A share does not carry the pack: the sender sends its file too, or the reader builds it.
 
-**What an earlier bean says about a package that is sealed to a key.** Release 0.7.2 asks for six words, and such a package has none. When six words are typed, it refuses, and says that it is another kind of file. The check page says to check the six words. The request for words and the page's line are wrong for such a package. UPGRADING.md will say so, and both people update first.
+**What an earlier bean says about a package that is sealed to a key.** Release 0.7.2 asks for six words, and such a package has none. When six words are typed, it refuses, and says that it is another kind of file. The check page says to check the six words. The request for words and the page's line are wrong for such a package. [UPGRADING.md](../UPGRADING.md) quotes both, and both people update first.
 
 **What a package that opens with a key shows.** Only that someone knew the address: anyone can seal to an address. The check says so. The signatures and the identity words show who signed, as today. Today the call for the six words also carries the identity words. With no such call, the two still compare them once.
 
@@ -124,10 +127,10 @@ The owner set the next aim on 2026-11-18 (DECISIONS 325). Two people share, and 
 **The plan.**
 
 1. **Seal with a passphrase first. Done:** `bean share -seal` ([SHARE.md](SHARE.md), DECISIONS 275). bean packs the bundle into one file, encrypts it, and makes six random words. The person gives the words to the reader by another channel, such as a phone call. The check page asks for the words, opens the file on the reader's device, and runs the check. This needs no key from the reader.
-2. **Seal to a reader's key next.** The check page makes a key for the reader, in their browser. The secret part stays on their device. They send the public part, a short reader address, to the sender. `bean share -for <address>` seals the package to it. A reader who runs bean gets an address from bean. The design is [SHARE-PLAN.md](SHARE-PLAN.md) (DECISIONS 326). The address from bean is its first step, and a key that the page makes is later.
+2. **Seal to a reader's key. Done for a reader who runs bean** (DECISIONS 327). `bean address` makes a key file and its address. `bean share -for <address>` seals the package to it, and `-key <file>` opens it. The design is [SHARE-PLAN.md](SHARE-PLAN.md) (DECISIONS 326). **Not done:** a key that the check page makes for a reader with only a browser. The plan lists it as later, with a design of its own: a forged page would take a key that opens every package.
 3. **Use a standard format. Done.** The file is an `age` file, so a tool other than bean can open it. bean invents no cipher.
 4. **Say what leaves. Done (DECISIONS 324).** The review before a share says that the person's identity id travels. It flags a kept lab report, which holds a name and a birth date. It lists every field that a record carries beside its row, with its values.
-5. **Record who it was for.** The share record says that a passphrase was used. With a reader's key it says only that a key was used. It names no address until something reads one (SHARE-PLAN.md).
+5. **Record who it was for.** The share record says that a passphrase was used. With a reader's address it says `"seal": "recipient"`, and no more. It names no address until something reads one (SHARE-PLAN.md).
 
 6. **The reader knows who signed. Done:** identity words (DECISIONS 280). The sender reads eight words in the call that carries the opening words, and the check shows the same eight (DECISIONS 287).
 7. **One public address for the check page. Done (DECISIONS 311):** the releases of the repository, which is public. A tag on `main` builds the page on the code host's machine and publishes it with its SHA-256. CI records the SHA-256 of every push as well. Not done: a second, independent place that states the SHA-256, and a short address of the project's own.

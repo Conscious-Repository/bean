@@ -8,7 +8,8 @@
 bean share -out for-ana 3fa9c1 7b8b81              # these records
 bean share -out lipids -type 'comparison.*'        # every saved comparison, each with its reading
 bean share -out with-files -files 7b8b81           # also the files those records keep
-bean share -seal -out for-ana.bean 3fa9c1          # one file that only its reader can open
+bean share -seal -out for-ana.bean 3fa9c1          # one file that only its reader can open, with six words
+bean share -for age1... -out for-ana.bean 3fa9c1   # one file that is sealed to the reader's address
 ```
 
 ## Seal it for one reader
@@ -44,6 +45,110 @@ The check also shows this share's time and the start of its id, 41ae07c2d9e1: ..
 
 Your log's share record says `"seal": "passphrase"`. It does not hold the words.
 
+## Seal it to a reader's address
+
+Two people who both run bean can share with no words read out. The reader makes a key file once, and gives its address to the sender. The sender seals each package to that address, and the reader's key file opens it.
+
+```
+# the reader, once
+$ bean address -out ~/keys/bean-reader.key
+wrote the key file /Users/ana/keys/bean-reader.key
+address age1c66cfc86n0mk5kf3lsq8twsqlfyvahd3wvf50wwdzulm66y6pvqsu7l2az
+address words table nothing proud slender scare away clay cherry
+...
+
+# the sender, for each package
+$ bean share -for age1c66cfc86n0mk5kf3lsq8twsqlfyvahd3wvf50wwdzulm66y6pvqsu7l2az \
+    -address-words "table nothing proud slender scare away clay cherry" -out for-ana.bean 3fa9c1
+
+# the reader
+$ bean check-bundle -key ~/keys/bean-reader.key for-ana.bean
+```
+
+**The key file and the address.**
+
+- **An address** is a recipient of the age format for X25519: the text `age1…`, 62 characters. It is not a secret.
+- **Its key** is a standard age identity file. You place it. bean keeps no such key and no list of them, and no copy of a log holds one.
+- **`bean address -out <new file>`** makes a key. bean asks for mode 0600, and writes over no file. It makes no folder: the folder must be there. It holds the line `# public key: <address>`, as `age-keygen` writes it, and the secret.
+- **It needs no log.** When it finds a log, it refuses a place inside the log's folder, also through a link. A copy of the log would carry the key.
+- **It prints the address only after the file is written, synced and read back.**
+- **`bean address -key <file>`** shows the address of a key file. It works the address out from the secret, and prints nothing secret.
+- **A key from `age-keygen` works.** Run `bean address -key` on it before you give the address away. It prints the address words, and what you must know.
+- **The eight address words** are made from the address as identity words are made from an id. Take the SHA-256 of the address text, in ASCII, with no line end. Its first 88 bits are eight numbers of 11 bits, and each is a word of the BIP-39 English list. So a tool other than bean can make them. The address in the example has the words in the example.
+
+**What `bean address` says each time, before you give the address away.** First: give the address by one channel, and the address words by another, such as a call. Then:
+
+- The key is this one file. `bean restore`, `bean export` and a copy of your log do not hold it.
+- Without the file you cannot open what was sealed to it. Then make a new address, and ask for a new share.
+- Whoever has a copy of the file opens every package that was sealed to it. That holds for as long as a copy of the package exists.
+- A folder that syncs, and a backup, each hold a copy of the file.
+- An address cannot be taken back. If the file is stolen, tell each sender to stop, by another channel.
+- A program that runs as you, such as an assistant with a shell, opens such a package with no word typed.
+- A sender needs the eight address words from you, and gives them to bean with every share.
+- No call tells you which share a package is. The check shows its time and id. Ask the sender, by another way than the package came.
+- To open on a second machine you copy the file, and every copy opens everything.
+- If you delete the file, tell each sender. Their next package is one that you cannot open.
+- For a package on a public host: make an address for that one sender. Delete the key file after you have read and answered.
+
+**The sender's side.**
+
+- **`-for <address>` seals to the address.** It implies `-seal`, and bean writes one recipient. The file is an age file, and the `age` tool opens it with the key file.
+- **The address has one spelling.** bean reads it with the age library, and takes only the lower-case text that the library writes back. For any other text it stops. An empty address is not "no address": bean stops.
+- **bean asks for the eight address words that the reader gave you.** It does not print them here. `-address-words` gives them for a script, and `-yes` never stands in for them. Without a terminal and without `-address-words`, bean stops.
+- **What the words catch.** A wrong or swapped address, when the words came by another channel than the address. Words that came with the address prove nothing.
+- **Keep the address and its words where nobody else can change them.** Neither is a secret, but a changed pair passes.
+- **When the words are not those of the address,** nothing is written, and bean shows nothing that is made from the address. Run the command again after a mistyped word. If not, ask the reader again.
+- **The review says what this seal means, before it asks:**
+  - The package is sealed to an address. Whoever holds the key file of that address can open it.
+  - bean checked only that the address words belong to the address.
+  - A reader with only a browser, or with an earlier bean, cannot open it. Such a reader needs a package that is sealed with words.
+  - A program that runs as the reader opens it with no word typed.
+  - It stays closed only while the key file stays with the reader and the cipher holds. That is so for as long as any copy of the file exists.
+  - You cannot open this file again, unless the address is your own. To keep a copy, do not delete those records, or keep a `bean export`.
+  - Your share record names no address. A `-note` can say who the package is for. The note is signed, and travels to the reader and to whoever gets the bundle later.
+- **What bean prints when the share is written.** Your identity words and the start of the share's id, as for any share. It prints no six words. It says again that you cannot open this file, and that an earlier bean does not open it.
+- **bean opens what it sealed once, with the file's own key,** and checks what came out. It does not open the part that is for the reader: only the reader's key does. `make bundles` opens bean's packages with a reader's key, with bean and with Python.
+
+**The reader's side.**
+
+- **`-key <file>`** on `check-bundle` and on `reply -to` names your key file. The file holds exactly one identity, and bean tries that key and no other. The flag comes before the file's name.
+- **What a key shows.** The check says: the package was sealed to your address. Anyone who has your address can seal to it, also an older share of the signer. bean cannot tell who sealed it.
+- **Then the signer's identity words, and the share's time and id,** as for any package. The identity words show who signed the records.
+- **Ask the signer whether they sent you a share whose id starts so.** Ask by another way than the package came: whoever delivered a false package would answer on that way.
+- **`bean reply -to` says the same,** before it signs a note: what a key shows, and what to ask the signer.
+- **A share that someone sealed again.** A share that bean sealed to an address says `"seal": "recipient"` in its share record. A package can open with a key when its record does not say so. Then the check says that the signer's record does NOT say so: someone sealed it again, or another tool sealed it.
+- **That check looks one way only.** It does not mark a package that opened with words and whose record says `recipient`. A record that says `recipient` shows what the signer wrote, and not for which address.
+- **A file for two readers is refused,** though the `age` tool opens it. A package names one reader. An `age` file in armor is refused too: the `age` tool opens it.
+- **A key file that is protected with a passphrase is refused.** This bean does not open one.
+- **A file that is not such a key gets one fixed line,** with nothing of the file in it.
+- **Without bean.** `age -d -i <key file> for-ana.bean > bundle.zip` opens a package, and `bean check-bundle bundle.zip` or `checkbundle.py` then checks it. `tools/second/unseal.py -key <key file> for-ana.bean <new folder>` opens one too, and shares no code with bean. On these ways nothing says what a key shows: anyone who has your address can seal to it.
+- **The check page does not open such a package.** It says that the file is sealed to a key, and that it cannot open it. A forged page that took a key would open every package of that key.
+- **An earlier bean does not open it.** [UPGRADING.md](../UPGRADING.md) says what release 0.7.2 prints. Both people update first.
+- **A reply still makes six words.** `bean reply` seals with words, also when the share came sealed to an address. `bean accept` on a file that is sealed to a key says so.
+
+**What bean says when a package and a key do not go together.**
+
+| Case | What bean says |
+|---|---|
+| Sealed to a key, and no `-key` | It is sealed to a key, not with words. Open it with `-key <your key file>`. If you no longer have the file, you cannot open it: ask the sender to share again, for a new address. |
+| `-key` with a package that is sealed with words | It is sealed with words. `-key` is not used: give the six words. Then bean asks for them. |
+| `-key` with a folder or a plain zip file | It is not sealed. `-key` is not used. Then bean checks it. |
+| The key does not open it | It was sealed to another address, or it was changed on the way. bean cannot tell which. `bean address -key <file>` shows the address of a key file. |
+| `bean accept` on a file that is sealed to a key | `bean accept` takes a reply, and this bean seals a reply with words. |
+
+**When to choose which seal.**
+
+- **Words:** for a reader with no key, or with only a browser. It takes one call for each package.
+- **An address:** for two people who run bean. After one exchange, no secret is passed for a package. The question of which share it is stays.
+
+**What is lost with an address.**
+
+- **The reader holds a key file that can be lost or stolen.** A stolen key file opens everything that was sealed to it and still exists anywhere.
+- **The sender cannot open the file again.**
+- **A program that runs as the reader opens what others sent, with no act of the person.** The six words were also a gate: such a program does not have them. bean says so, and does not prevent it.
+- **The call is gone in which the sender said which share this is.** An older share that someone sealed again opens like a new one. Whoever holds any key of the sender, also a retired one, can deliver a share that they signed.
+- **It is not closed for good.** Such a package is closed until the reader's key file leaks or the cipher breaks. On a host that keeps files for good, that matters.
+
 ## What goes in
 
 - **The records you name**, by id or by `-type` (with `-since` and `-until`). Only current records about you: not a corrected one and not a deleted one. A record that another identity signed does not go either, since a bundle carries only your identity records. A type picks your own records and your agents' only. A record that another key signed, such as a peer's note, goes when you name it by its id.
@@ -57,13 +162,28 @@ Your log's share record says `"seal": "passphrase"`. It does not hold the words.
 
 bean shows the list and asks before it writes: each record, the cohort of a comparison, each file, and how many identity records go along. `-yes` skips that, for scripts. Without a terminal and without `-yes` it writes nothing. That stops an assistant from sharing through a tool that has no terminal. It does not stop a program that has your shell and passes `-yes`: what runs as you can do what you can.
 
-The bundle is written whole or not at all: it is built beside its place, checked as its reader will check it, and moved there. Only then does the share record go into your log, as type `share`: your own record of what you disclosed and when. `bean ls -type share` lists them. A share that fails leaves no bundle and no record. Ctrl-C before the bundle is in place removes what was built. From that moment the share runs to its end, so that no bundle exists without its record. Only a kill that cannot be caught (`kill -9`) can leave one without the other. For a plain bundle, such a kill can also leave the half-built folder, named `.bean-share-` and a number, beside the place you named: remove it. For a sealed package it can leave a package that nobody can open.
+The bundle is written whole or not at all: it is built beside its place, checked as its reader will check it, and moved there. Only then does the share record go into your log, as type `share`: your own record of what you disclosed and when. `bean ls -type share` lists them. A share that fails leaves no bundle and no record. That holds for a folder and for a package with six words. Ctrl-C before the bundle is in place removes what was built. From that moment the share runs to its end, so that no bundle exists without its record. Only a kill that cannot be caught (`kill -9`) can leave one without the other. For a plain bundle, such a kill can also leave the half-built folder, named `.bean-share-` and a number, beside the place you named: remove it. For a sealed package it can leave a package that nobody can open.
+
+**A package that is sealed to an address is written in another order.** Such a package can be opened the moment it is written: the reader's key exists already. So the share record is in your log before the first byte is in the file.
+
+1. bean seals in memory, and opens the result with the file's own key. It checks what came out.
+2. It makes the output file, new and empty. If that fails, nothing was written.
+3. It adds the share record. If that fails, it removes the empty file.
+4. It writes the package into the file.
+
+A log then never knows less than what left. It can know more: a share record can exist for a file that never left.
+
+- **When the file cannot be written whole,** bean says only what it did. It names the path and the id of the share record. A part of such a file can open with the reader's key.
+- **When bean removed the file,** it says so. If the place does not sync, no part of the file left, and `bean purge <id>` deletes the record.
+- **When bean could not remove the file,** it says to delete it.
+- **A kill that cannot be caught** can leave an empty file, or a part of the package, with its share record.
 
 ## Reading a bundle someone sent you
 
 ```
 bean check-bundle for-ana          # a folder, or a zip file of it
 bean check-bundle for-ana.bean     # a sealed package: it asks for the six words
+bean check-bundle -key ~/keys/bean-reader.key for-ana.bean   # a package that is sealed to your address
 ```
 
 One command checks the bundle and, when it passes, shows what it holds. Each record has its time as the sender recorded it, its type and its value. A record that the sender did not sign shows who signed it. Each comparison is in words, such as `percentile 46 of lab.cholesterol-total 187 mg/dL, among male, age 30-39 (n 339)`, with its caveats below. A bundle that fails lists no record and shows no note. The check still prints the share record's id, its signer and the counts. You need no log of your own for this, and the check changes nothing in the folder.
@@ -74,12 +194,15 @@ A comparison is shown as its claim states it. The check proves who signed the cl
 
 ### In a browser, with no install
 
-A reader with no terminal opens one page, `bean-check.html`, and chooses the file they received, or a folder. The page gives one of four verdicts:
+A reader with no terminal opens one page, `bean-check.html`, and chooses the file they received, or a folder. The page gives one of five verdicts:
 
 - **The records passed.** The page says what the check shows and what it does not. It shows the signer's identity words, the time and id of the share, your note, each record, and what no bundle can show. The box is green. It is amber, and counts the rows to read, when the check marks a comparison or when a record is not signed by the person. A comparison's numbers are labelled "as claimed, not computed here". A text file that the package carries can be read in the page, and any file can be saved.
 - **The records failed.** The page shows what failed and nothing else: no record, no note, and not who signed.
 - **The file did not open.** The words were wrong, or the file was changed. The form stays, to try again.
+- **The file is sealed to a key.** The page cannot open it. The reader opens it with bean or with the `age` tool, or asks for a file that is sealed with six words.
 - **Nothing was checked.** The wrong folder, or a file that is not a bundle.
+
+The page asks its check what a file asks for, before it shows anything. Its script does not look into the file. It shows the box for words only for a package that is sealed with words. `tools/page/check.mjs` holds the page's check to that answer, and `make pagetest` tries the page's script in a real browser.
 
 No earlier verdict stays on the page. The technical lines of `bean check-bundle` are under "Details for a technical reader". A printed page names the file, the time of the check and the page's commit.
 
@@ -135,7 +258,7 @@ And you should know:
 - **A bundle is a disclosure.** It is not encrypted, and once sent it cannot be taken back. Deleting or correcting a record later does not reach a bundle you sent: send a new one.
 - **Keep the folder you sent** if you want to know later what was in it. The share record in your log lists ids; a record you deleted since is gone from your log, and the bundle is the only copy.
 - **One share holds up to about 14,000 records.** Its list must fit one record. Share a long series in parts, by `-since` and `-until`.
-- **Send it sealed.** `bean share -seal` writes one encrypted file that opens with six words ([above](#seal-it-for-one-reader)). A plain bundle is a folder that anyone who carries it can read. Zip it, and send it only over a channel that encrypts end to end. Without `-files` a bundle is a few kilobytes; with the NHANES files, 4 to 18 MB. A package sealed to a reader's own key is on the roadmap.
+- **Send it sealed.** `bean share -seal` writes one encrypted file that opens with six words ([above](#seal-it-for-one-reader)). `bean share -for` seals it to a reader's address ([above](#seal-it-to-a-readers-address)). A plain bundle is a folder that anyone who carries it can read. Zip it, and send it only over a channel that encrypts end to end. Without `-files` a bundle is a few kilobytes; with the NHANES files, 4 to 18 MB.
 - **Two bundles of yours can be linked.** Every record carries your identity id.
 - **Your identity records say how many records you had at each key change.** A key change lists the ids of the records it seals. The ids are hashes and give no content away, but their number shows.
 - **A correction travels without what it corrects.** A record that replaces an earlier one is shared alone; the earlier one stays home. The check says how many such corrections a bundle holds.
@@ -157,7 +280,7 @@ bean accept -label Ana reply-to-ben.bean
 
 **The reader's side.**
 
-- `-to` is what they received. It must pass its check, so a sealed package asks for its six words.
+- `-to` is what they received. It must pass its check, so a sealed package asks for its six words. A package that is sealed to their address opens with `-key <file>`.
 - Then come pairs: a record of the share, and the text of a note about it. Name the record by its id from the check, or by the first 6 or more hex digits. The id of the share record names the share as a whole.
 - bean writes one sealed file and prints six words that open it. The reader sends the file one way and gives you the words another, as you did.
 - bean also prints the reader's identity words and the start of the reply's id. They tell you both.
@@ -247,7 +370,7 @@ The share record is an ordinary record:
 | `context.proof` | the ids of the identity records and pairings that travel with them |
 | `context.files` | absent, or one entry per file in `files/`. An entry has `blob` (the id by which a listed record names the file) and `record` (that record). It also has `sha256` (64 hex digits) and `bytes` (a whole number) of the plaintext. A stored file that stays home has no entry: its own record names it. |
 | `context.note` | the `-note`, if any |
-| `context.seal` | `"passphrase"` when the share left as a sealed package; absent for a folder |
+| `context.seal` | `"passphrase"` when the share left sealed with six words. `"recipient"` when it left sealed to an address: the record names no address, and no hash of one. Absent for a folder. No rule of a bundle reads it. `bean check-bundle` reads it once, for a package that a key opened ([above](#seal-it-to-a-readers-address)). |
 
 A bundle passes when all of this holds. A list in the share record that is not as the table says fails the check; it is never read in a kinder way.
 

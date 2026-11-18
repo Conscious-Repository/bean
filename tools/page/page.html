@@ -220,9 +220,18 @@ function show(name, res, packed) {
     const extra = (res.ignored || []).filter((n) => n !== "README.txt");
     if (extra.length) lines.push("Also there, not signed and not checked: " + extra.join(", ") + ".");
     if (res.files) lines.push("It carries " + res.files + (res.files === 1 ? " file" : " files") + ", listed below: what you read or save is what was checked.");
-  } else if (res.locked) {
+  } else if (res.locked && res.asks === "key") {
+    // The check says what the file asks for. This page opens nothing with
+    // a key: a key opens every package that was sealed to it.
+    $("verdict-title").textContent = "This file is sealed to a key.";
+    lines.push("This page cannot open " + clean(name) + ".");
+    lines.push("If the key is yours, open the file with bean or with the age tool. If not, ask the sender for a file that is sealed with six words.");
+  } else if (res.locked && res.asks === "words") {
     $("verdict-title").textContent = "This file did not open.";
     lines.push("Nothing is known about " + clean(name) + ". Check the six words and type them again. If they are right, the file was changed on the way: ask the sender for a new one.");
+  } else if (res.locked) {
+    $("verdict-title").textContent = "This file did not open.";
+    lines.push("Nothing is known about " + clean(name) + ". It is not a file that this page opens: the reason is below.");
   } else if (res.unread) {
     $("verdict-title").textContent = "Nothing was checked.";
     lines.push(clean(name) + " could not be read as shared records. Nothing is known about it.");
@@ -241,7 +250,9 @@ function show(name, res, packed) {
   $("opened").hidden = !res.opened;
   $("note-box").hidden = !(res.ok && res.note);
   $("note").textContent = res.note || "";
-  $("problems-box").hidden = res.ok;
+  // For a file that is sealed to a key, the check's own line names a
+  // command of bean. The verdict above says it for a reader of this page.
+  $("problems-box").hidden = res.ok || (res.locked && res.asks === "key");
   $("problems-title").textContent = res.unread ? "Why" : "What failed";
   fill($("problems"), res.problems || []);
   const rows = res.ok && res.rows ? res.rows : null;
@@ -354,14 +365,26 @@ function unread(name, why) {
   show(name, { ok: false, unread: true, problems: [why] });
 }
 
-// A sealed package starts with this line. It opens with six words.
-const SEALED = "age-encryption.org/v1\n";
 let waiting = null; // a sealed package that waits for its words
 
+// forget takes away the package that waits for its words, and the box.
+function forget() {
+  waiting = null;
+  $("words-box").hidden = true;
+  $("words").value = ""; // typed words do not stay in the page
+}
+
 async function checkZip(file) {
+  // A file that was chosen before, and waits for its words, waits no more:
+  // the box for words belongs to the file that is checked now.
+  forget();
   if (file.size > MAX_BYTES) return unread(file.name, "this file is too large to be a bundle");
   const data = new Uint8Array(await file.arrayBuffer());
-  if (new TextDecoder().decode(data.subarray(0, SEALED.length)) === SEALED) {
+  // The check says what the file asks for, before anything is shown. This
+  // script does not look into the file. Without words the check does no
+  // work on a sealed file: it reads the header.
+  const res = JSON.parse(beanCheck(file.name, data, null, null));
+  if (res.locked && res.asks === "words") {
     // Ask for the words. Nothing is known about the package until then.
     waiting = { name: file.name, data };
     $("words").value = "";
@@ -369,7 +392,7 @@ async function checkZip(file) {
     $("words").focus();
     return;
   }
-  show(file.name, JSON.parse(beanCheck(file.name, data, null, null)), true);
+  show(file.name, res, true);
 }
 
 $("words-box").onsubmit = (ev) => {
@@ -391,6 +414,7 @@ $("words-box").onsubmit = (ev) => {
 // checkFolder hands over every path, and the bytes of what can be part of
 // a bundle: what lies under objects/ and files/. Nothing else is read.
 async function checkFolder(name, list) {
+  forget();
   if (!list.length) return unread(name, "the folder holds no files");
   if (list.length > MAX_FILES) return unread(name, "this folder holds too many files to be a bundle: choose the bundle's own folder");
   const paths = [], datas = [];
@@ -414,11 +438,7 @@ async function run(name, work) {
   }
   busy = true;
   $("result").hidden = true;
-  if (!waiting || waiting.name !== name) {
-    waiting = null;
-    $("words-box").hidden = true;
-    $("words").value = ""; // typed words do not stay in the page
-  }
+  if (!waiting || waiting.name !== name) forget();
   $("status").textContent = "Checking " + clean(name) + "…";
   for (const b of document.querySelectorAll("button")) b.disabled = true;
   // Let the page draw that, before the check keeps it busy.

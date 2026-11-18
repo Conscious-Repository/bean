@@ -23,6 +23,7 @@ Give the assistant these rules first:
 > 2. Do not look at my health data. Do not open my lab reports or log files, and do not run `bean ls`, `bean show`, `bean compare`, `bean check-bundle`, `bean export` or `bean blob get` unless I ask. Never run `bean share`: I decide what leaves, at my own terminal. Use exit codes and counts: the `added` line of an import, the `summary` line of `bean verify`.
 > 3. If no reading was read, ask for the counts of `bean-import-lab -count`, as the guide shows, not the report or its values.
 > 4. Keep my data on my machine. Do not upload files or paste my records anywhere. Connecting you to my log through MCP is where my records start to reach your provider. Do it only when I say so, read-only first (`bean mcp`, no `-write` or `-blobs`). Ask before `-write` or `-blobs`.
+> 5. Never run `bean address`, and never read or copy a key file. A key file opens every package that was sealed to its address. Never pass `-key` or `-address-words` for me. I type the address words myself: they are my check that an address is my reader's.
 
 ## 1. Install
 

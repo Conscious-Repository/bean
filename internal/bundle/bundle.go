@@ -24,6 +24,13 @@ import (
 // ShareType is the type of the record that lists what a bundle holds.
 const ShareType = "share"
 
+// What a share record says of how the bundle left, in context.seal: sealed
+// with words, or sealed to a reader's address. A folder has no such member.
+const (
+	SealPassphrase = "passphrase"
+	SealRecipient  = "recipient"
+)
+
 // Caveats are what no bundle can show. Every check prints them.
 var Caveats = []string{
 	"These are selected records, not a complete history: a correction or a deletion that the share leaves out does not show.",
@@ -91,8 +98,14 @@ type Input struct {
 	// FilesFault says why files/ could not be listed, or "".
 	FilesFault string
 	// Locked reports a sealed package that did not open: no words, wrong
-	// words, or a changed file. Opened reports one that its words opened.
+	// words, no key, another key, or a changed file. Opened reports one
+	// that its words or its key opened.
 	Locked, Opened bool
+	// Asks is what the file asks of its reader, by its header alone:
+	// AsksWords, AsksKey or AsksOther. It is "" for what is not one sealed
+	// file. It is set whenever the header was scanned, before any word or
+	// key is looked at.
+	Asks string
 }
 
 // Carried is one file that a bundle carries.
@@ -128,6 +141,10 @@ type Result struct {
 	// sealed a package that they open.
 	Locked bool `json:"locked"`
 	Opened bool `json:"opened"`
+	// Asks is what the file asks of its reader: "words", "key", "other",
+	// or "" for what is not one sealed file. bean check-bundle and the
+	// page both decide by it whether to ask for words.
+	Asks string `json:"asks"`
 	// Identity is the id of the identity that signed the share record, and
 	// Words that id as six words that a person can read out. Key is the
 	// key that signed, and When the time that the share record states.
@@ -144,6 +161,11 @@ type Result struct {
 	// check passed. A reply names the record that each of its notes is
 	// about.
 	Listed []string `json:"-"`
+	// ByKey is what the check says because a key opened the package: what
+	// a key shows, whether the signer's record says that the share was
+	// sealed to a key, and what to ask the signer. Head holds these lines
+	// too. bean reply prints them before it writes.
+	ByKey []string `json:"-"`
 	// Head is what the check says before the records: who shared, when, and
 	// the counts.
 	Head []string `json:"head"`
@@ -207,10 +229,10 @@ func Check(in Input) Result {
 		return res
 	}
 	if len(in.Fatal) > 0 {
-		res.Problems, res.Unread, res.Locked = slices.Clone(in.Fatal), true, in.Locked
+		res.Problems, res.Unread, res.Locked, res.Asks = slices.Clone(in.Fatal), true, in.Locked, in.Asks
 		return done()
 	}
-	res.Opened = in.Opened
+	res.Opened, res.Asks = in.Opened, in.Asks
 	res.Problems = slices.Clone(in.Problems)
 	// Rule 1: every record file passes the checks of a log, with nothing
 	// left over: no error, no warning, no record of a newer format.
@@ -443,10 +465,29 @@ func Check(in Input) Result {
 	if obs, ok := share.Observed.(map[string]any); ok {
 		when, _ = obs["start"].(string)
 	}
+	// A package that a key opened shows only that someone knew the address:
+	// an address is public, and the format does not show who sealed.
+	byKey := in.Opened && in.Asks == AsksKey
+	if byKey {
+		res.ByKey = append(res.ByKey, "The package was sealed to your address. Anyone who has your address can seal to it, also an older share of the signer. bean cannot tell who sealed it.")
+		// The one check of what the signer signed about the seal. It looks
+		// one way only, and a record that says "recipient" does not show for
+		// which address.
+		if seal, _ := share.Context["seal"].(string); seal != SealRecipient {
+			res.ByKey = append(res.ByKey, "The signer's record does NOT say that this share was sealed to a key. Someone sealed it again, or another tool sealed it.")
+		}
+		res.Head = append(res.Head, res.ByKey...)
+	}
 	res.Head = append(res.Head,
 		fmt.Sprintf("share %s", share.ID),
 		fmt.Sprintf("signed by identity %s, with key %s, at %s", person, share.Kid, when),
 		fmt.Sprintf("identity words: %s", core.IDWords(person)),
+	)
+	if byKey {
+		ask := fmt.Sprintf("Ask the signer, by another way than this package came, whether they sent you a share whose id starts %s.", share.ID[7:19])
+		res.ByKey, res.Head = append(res.ByKey, ask), append(res.Head, ask)
+	}
+	res.Head = append(res.Head,
 		fmt.Sprintf("records: %d listed; files: %d included, %d named and not included", len(listed), included, named),
 		fmt.Sprintf("signed: %d by the person, %d by an agent or a peer the person paired, %d by another key", byPerson, byAgent, byOther),
 		fmt.Sprintf("corrections: %d of the listed records replace an earlier record, which is not in the bundle", corrections),

@@ -1,6 +1,8 @@
-# A seal to a reader's key: what is decided before it is built
+# A seal to a reader's key: what was decided before it was built
 
-This is for anyone who builds or reviews the next way to seal a package. [SHARE.md](SHARE.md) is what exists: a package that opens with six words. This document says what is added, in which steps, and what it costs. Nothing in it is built yet.
+This is for anyone who builds or reviews the next way to seal a package. [SHARE.md](SHARE.md) is what exists. This document says what is added, in which steps, and what it costs. It was written before any of it was built.
+
+**Step 1 is built** (release 0.8.0, DECISIONS 327). SHARE.md now describes it, and the section "Step 1 as built" below says where the build adds to this plan. Step 2, and what is under "Later", are not built. The rest of this document stands as it was decided: where it says "will", read it as the plan.
 
 It is step 3 of the section "Next" in [ROADMAP.md](ROADMAP.md). Six drafts were written. Reviewers who had not seen the work judged each, one for each paragon. DECISIONS 326 has the account.
 
@@ -161,6 +163,27 @@ For a package that is sealed to a key it says three things. The package is seale
 - **ONBOARDING.md.** The rules for an assistant name `bean address`, `-key`, a key file and address words. A person does those themselves.
 - **UPGRADING.md.** What release 0.7.2 and its page print for such a file, word for word (F1). Both people update first. A bean that has `bean address` can open such a file.
 - **COMMANDS.md and ROADMAP.md.**
+
+### Step 1 as built
+
+The build follows the plan above. It adds these points, which the plan left open.
+
+- **`-key` with a package that needs no key.** bean says that `-key` is not used, and goes on. It asks for the six words, or checks the folder. It does not read the key file then.
+- **An empty address.** `-for ""` is not "no address": bean stops. A script whose variable is empty must not write a plain folder.
+- **The key file.** It holds the line `# public key: <address>` and the secret. `age-keygen` also writes a line with the time, and bean writes none.
+- **`bean address` says one thing first.** Before its list it says to give the address by one channel, and the address words by another.
+- **`bean share -for` says one thing more when the share is written:** a bean that has no `bean address` does not open the file. A script that passes `-yes` sees no review.
+- **Three reasons of the scan are told apart.** A header with a carriage return, a header that names no reader or more than one, and a reader of another kind. A reader of another kind beside a reader for a key counts as two readers.
+- **An `age` file that the scan refuses** is one more answer of "what the file asks for". The page shows no box for words for it, and says why.
+- **An `age` file in armor is refused by name.** It is sealed, so bean does not say "it is not sealed" of it.
+- **`bean reply -to` with `-key` says what a key shows,** before it signs a note. The plan gave those lines to the check only.
+- **A place inside the log is judged by what is on the disk.** A place that reaches the log's folder through a link is inside it. So is one that is written in other capitals, on a disk that does not tell them apart. That holds for a key file, and now for a bundle and a reply too.
+- **No address words at all get a line of their own.** A script whose variable is empty is not told to ask the reader again.
+- **`bean address -out` does not print the mode of the file.** It asks for mode 0600, and does not check what the disk gave.
+- **The check page hides one line.** For a package that is sealed to a key, the check's line names `-key`. The page says its three things, and not that line.
+- **`check.mjs` takes `-asks`.** `make bundles` passes it for every sealed file, and it fails when the page's check answers otherwise.
+- **`make pagetest` has the case too,** in a real browser. It is not part of CI.
+- **The order of the gate.** It runs after the checks of the output place, and before anything is written to the log.
 
 ## Step 2: a reply to an address
 

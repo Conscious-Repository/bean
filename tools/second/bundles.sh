@@ -2,8 +2,9 @@
 # bundles.sh: makes share bundles with bean, good and damaged, and checks
 # that bean check-bundle and the Python checker (checkbundle.py, which follows
 # docs/SHARE.md and shares no code with bean) give the same verdict on each:
-# both pass, or both refuse. A sealed package must open for bean, for the
-# page and for a Python reader of its format. The page that checks a bundle in a browser
+# both pass, or both refuse. A package that is sealed with words must open
+# for bean, for the page and for a Python reader of its format. One that is
+# sealed to a key must open for bean and for that Python reader. The page that checks a bundle in a browser
 # (tools/page) is built and asked too, without a browser: it must print what
 # bean prints, from a folder and from a zip file. It also computes a shared
 # comparison again from its bundle alone.
@@ -112,7 +113,9 @@ WORDS=$(sed -n 's/^  //p' "$T/seal.txt" | head -1)
 opens() {
   n=$((n + 1)); want=0; [ "$4" = ok ] || want=1
   echo "$3" | bean check-bundle "$2" >"$T/go.txt" 2>/dev/null; g=$?
-  "$NODE" "$ROOT/tools/page/check.mjs" "$T/bean-check.html" "$2" "$3" >"$T/js.txt" 2>&1; j=$?
+  # The page's script shows the box for words only when its check says that
+  # the file asks for words: check.mjs exits 3 when the check says otherwise.
+  "$NODE" "$ROOT/tools/page/check.mjs" -asks words "$T/bean-check.html" "$2" "$3" >"$T/js.txt" 2>&1; j=$?
   rm -rf "$T/opened"; p=1
   if echo "$3" | "$PY" -I "$HERE/unseal.py" "$2" "$T/opened" >"$T/py.txt" 2>&1; then "$PY" -I "$HERE/checkbundle.py" "$T/opened" >>"$T/py.txt" 2>&1; p=$?; fi
   if [ "$g" != "$want" ] || [ "$j" != "$want" ] || [ "$p" != "$want" ]; then
@@ -146,6 +149,117 @@ grep -aq "$(echo "$R1" | cut -c8-30)" "$T/sealed.bean" && { echo "DIFFER: a seal
 # at any moment. The folder it writes into holds exactly the package.
 mkdir "$T/alone"; b share -yes -seal -files -out "$T/alone/p.bean" "$C1" $FR >/dev/null 2>&1
 [ "$(ls -A "$T/alone")" = "p.bean" ] || { echo "DIFFER: a sealed share wrote more than the package: $(ls -A "$T/alone" | tr '\n' ' ')"; rc=1; }
+
+# A package that is sealed to a reader's address. bean with the key file and
+# the Python opener in its key mode, which share no code, must both open it,
+# and neither without the key, with another key, or after a change. The page
+# opens no such package. Its check must say what the file asks for, before
+# the page shows a box for words, and must print what bean prints.
+bean address -out "$T/reader.key" >"$T/addr.txt" 2>"$T/err" || { echo "bean address failed: $(cat "$T/err")"; exit 1; }
+bean address -out "$T/other.key" >/dev/null 2>&1 || { echo "bean address failed"; exit 1; }
+ADDR=$(sed -n 's/^address \(age1.*\)/\1/p' "$T/addr.txt"); AW=$(sed -n 's/^address words //p' "$T/addr.txt")
+b share -yes -files -note "to a key" -for "$ADDR" -address-words "$AW" -out "$T/forkey.bean" "$C1" $FR >"$T/for.txt" 2>"$T/err" || { echo "share -for failed: $(cat "$T/err")"; exit 1; }
+grep -q 'six words' "$T/for.txt" && { echo "DIFFER: a share to an address prints a line about six words"; rc=1; }
+# keyopens <name> <file> <key file, or ""> <want: ok|bad> [what the file asks for: key|other]
+keyopens() {
+  n=$((n + 1)); want=0; [ "$4" = ok ] || want=1
+  rm -rf "$T/opened"; p=1
+  if [ -n "$3" ]; then
+    bean check-bundle -key "$3" "$2" >"$T/go.txt" 2>/dev/null </dev/null; g=$?
+    if "$PY" -I "$HERE/unseal.py" -key "$3" "$2" "$T/opened" >"$T/py.txt" 2>&1 </dev/null; then "$PY" -I "$HERE/checkbundle.py" "$T/opened" >>"$T/py.txt" 2>&1; p=$?; fi
+  else
+    bean check-bundle "$2" >"$T/go.txt" 2>/dev/null </dev/null; g=$?
+    if echo "abandon ability able about above absent" | "$PY" -I "$HERE/unseal.py" "$2" "$T/opened" >"$T/py.txt" 2>&1; then "$PY" -I "$HERE/checkbundle.py" "$T/opened" >>"$T/py.txt" 2>&1; p=$?; fi
+  fi
+  if [ "$g" != "$want" ] || [ "$p" != "$want" ]; then
+    echo "DIFFER $1: want $4, bean exit $g, Python exit $p"; tail -2 "$T/go.txt" "$T/py.txt" | sed 's/^/    /'; rc=1
+  fi
+  if [ "$want" = 0 ] && [ "$(grep -E '^(share|identity words:|records:|signed:|corrections:) ' "$T/go.txt")" != "$(grep -E '^(share|identity words:|records:|signed:|corrections:) ' "$T/py.txt")" ]; then
+    echo "DIFFER $1: the two openers do not show the same share"; rc=1
+  fi
+  # The page: its check gets no key. It says what the file asks for, opens
+  # nothing, also when six words are typed, and prints bean's own lines.
+  bean check-bundle "$2" >"$T/nokey.txt" 2>/dev/null </dev/null
+  "$NODE" "$ROOT/tools/page/check.mjs" -asks "${5:-key}" "$T/bean-check.html" "$2" "abandon ability able about above absent" >"$T/js.txt" 2>&1; j=$?
+  if [ "$j" != 1 ] || ! cmp -s "$T/nokey.txt" "$T/js.txt"; then
+    echo "DIFFER $1: the page's check (exit $j) does not refuse it as bean does with no key"; diff "$T/nokey.txt" "$T/js.txt" | head -4 | sed 's/^/    /'; rc=1
+  fi
+}
+keyopens "a package for a key, with its key" "$T/forkey.bean" "$T/reader.key" ok
+grep -q '^The package was sealed to your address' "$T/go.txt" || { echo "DIFFER: the check does not say what a key shows"; rc=1; }
+grep -q 'does NOT say' "$T/go.txt" && { echo "DIFFER: a package that bean sealed to a key is marked as sealed again"; rc=1; }
+keyopens "a package for a key, with another key" "$T/forkey.bean" "$T/other.key" bad
+keyopens "a package for a key, with no key" "$T/forkey.bean" "" bad
+grep -q 'is sealed to a key, not with words' "$T/go.txt" || { echo "DIFFER: with no key, bean does not say that the package is sealed to a key"; rc=1; }
+# Changed on the way, with the right key. A file for two readers is refused,
+# though the age tool opens one: a package names one reader.
+for change in byte mac-padded mac-changed trailing-byte cut cut-one two-readers return kind grease; do
+  "$PY" -I -c 'import sys
+d = open(sys.argv[1], "rb").read(); how = sys.argv[3]
+start = d.index(b"\n") + 1; mac = d.index(b"\n--- "); end = d.index(b"\n", mac + 1)
+stanza = d[start:mac + 1]
+if how == "byte": d = d[:-40] + bytes([d[-40] ^ 1]) + d[-39:]
+if how == "mac-padded": d = d[:end] + b"=" + d[end:]
+if how == "mac-changed": d = d[:mac + 5] + (b"B" if d[mac + 5:mac + 6] == b"A" else b"A") + d[mac + 6:]
+if how == "trailing-byte": d += b"x"
+if how == "cut": d = d[:-100]
+if how == "cut-one": d = d[:-1]
+if how == "two-readers": d = d[:start] + stanza + d[start:]
+if how == "return": d = d[:mac] + b"\r" + d[mac:]
+if how == "kind": d = d.replace(b"-> X25519 ", b"-> ssh-ed25519 ", 1)
+if how == "grease": d = d[:mac + 1] + b"-> grease AAAA\nAAAA\n" + d[mac + 1:]
+open(sys.argv[2], "wb").write(d)' "$T/forkey.bean" "$T/v.bean" "$change"
+  asks=key; case $change in two-readers|return|kind|grease) asks=other;; esac
+  keyopens "a package for a key, changed: $change" "$T/v.bean" "$T/reader.key" bad $asks
+  # A file with a reader for a key and one more is sealed to an address:
+  # bean says that it names two readers, and not that no address is in it.
+  if [ "$change" = grease ] && ! grep -q 'has 2 stanzas' "$T/go.txt"; then echo "DIFFER: a stanza for a key with one more is not said to be two stanzas"; rc=1; fi
+done
+grep -aq "$(echo "$R1" | cut -c8-30)" "$T/forkey.bean" && { echo "DIFFER: a package for a key shows a record's id in the clear"; rc=1; }
+# Key files of many shapes: bean and the Python opener read the same ones
+# as a key, and refuse the same ones.
+for shape in good crlf comment-first vt-after ff-after fs-after cr-in-comment cr-cr-lf lower two none space-after blank-lines other-letters long-after second-late; do
+  n=$((n + 1))
+  "$PY" -I -c 'import sys
+lines = [l for l in open(sys.argv[1]).read().split("\n") if l]
+secret = next(l for l in lines if not l.startswith("#")); how = sys.argv[3]
+out = {
+  "good": secret + "\n", "crlf": "# c\r\n" + secret + "\r\n", "comment-first": "# a\n# b\n" + secret + "\n",
+  "vt-after": secret + "\x0b# c\n", "ff-after": secret + "\x0c# c\n", "fs-after": secret + "\x1c# c\n",
+  "cr-in-comment": "# c\r" + secret + "\n", "cr-cr-lf": secret + "\r\r\n", "lower": secret.lower() + "\n",
+  "two": secret + "\n" + secret + "\n", "none": "# only a comment\n", "space-after": secret + " \n",
+  "blank-lines": "\n\n" + secret + "\n\n",
+  "other-letters": "# K\u00e4the\n" + secret + "\n", "long-after": secret + "\n" + "# a comment line\n" * 5000,
+  "second-late": secret + "\n" + "# a comment line\n" * 5000 + secret.replace("Q", "P", 1) + "\n",
+}[how]
+open(sys.argv[2], "w", newline="", encoding="utf-8").write(out)' "$T/reader.key" "$T/shape.key" "$shape"
+  bean address -key "$T/shape.key" >/dev/null 2>&1; g=$?
+  rm -rf "$T/opened"; "$PY" -I "$HERE/unseal.py" -key "$T/shape.key" "$T/forkey.bean" "$T/opened" >"$T/py.txt" 2>&1; p=$?
+  bean check-bundle -key "$T/shape.key" "$T/forkey.bean" >/dev/null 2>&1; c=$?
+  if [ "$g" != "$p" ] || [ "$g" != "$c" ]; then echo "DIFFER a key file, $shape: bean address exit $g, bean check-bundle exit $c, unseal.py exit $p"; rc=1; fi
+done
+# The log says "recipient", and names no address.
+b ls -json -type share | grep -q '"seal":"recipient"' || { echo "DIFFER: the share record does not say recipient"; rc=1; }
+b ls -all -json | grep -q "$(echo "$ADDR" | cut -c5-40)" && { echo "DIFFER: the log names the address"; rc=1; }
+# A package that someone sealed again to the reader's address: the signer's
+# record does not say that it was sealed to a key, and the check marks it.
+if command -v age >/dev/null && command -v age-keygen >/dev/null; then
+  n=$((n + 1))
+  ("$PY" -I -c 'import shutil, sys; shutil.make_archive(sys.argv[2], "zip", sys.argv[1])' "$T/cmpf" "$T/cmpf-plain") && age -r "$ADDR" -o "$T/again.bean" "$T/cmpf-plain.zip" || { echo "the age tool failed"; exit 1; }
+  keyopens "a plain bundle that the age tool sealed to the reader" "$T/again.bean" "$T/reader.key" ok
+  grep -q "^The signer's record does NOT say that this share was sealed to a key" "$T/go.txt" || { echo "DIFFER: a share that was sealed again is not marked"; rc=1; }
+  # The age tool opens what bean sealed, with the key file that bean made.
+  age -d -i "$T/reader.key" -o "$T/by-age.zip" "$T/forkey.bean" 2>"$T/err" && bean check-bundle "$T/by-age.zip" >/dev/null 2>&1 || { echo "DIFFER: the age tool does not open what bean sealed: $(cat "$T/err")"; rc=1; }
+  # bean reads a key file of age-keygen, and shows the address that it has.
+  age-keygen -o "$T/keygen.key" 2>/dev/null
+  [ "$(bean address -key "$T/keygen.key" | sed -n 's/^address \(age1.*\)/\1/p')" = "$(age-keygen -y "$T/keygen.key")" ] || { echo "DIFFER: bean address -key does not show the address of a key of age-keygen"; rc=1; }
+  # A file for two readers: the age tool opens it, and neither opener does.
+  age -r "$ADDR" -r "$(age-keygen -y "$T/keygen.key")" -o "$T/two.bean" "$T/cmpf-plain.zip"
+  age -d -i "$T/reader.key" "$T/two.bean" >/dev/null 2>&1 || { echo "the age tool does not open a file for two readers"; exit 1; }
+  keyopens "a file that the age tool sealed for two readers" "$T/two.bean" "$T/reader.key" bad other
+else
+  echo "bundles: the age tool is not here, so it was not asked to open what bean sealed"
+fi
 
 # A correction travels without the record it replaces, and the reader is told.
 K1=$(b add weight 82.5 -unit kg -at 2026-11-02 -corrects "$W1")
@@ -305,5 +419,5 @@ grep -q '"type":"agent.pair"' "$T"/unpaired/objects/*/*.json && { echo "DIFFER: 
 both "a folder that is not a bundle" "$T/bin" bad
 both "a whole log, not a bundle" "$L" bad
 
-[ "$rc" = 0 ] && echo "bundles: bean check-bundle and checkbundle.py agree on $n bundles, good and damaged, the page that checks one in a browser says what bean says, and a shared comparison computes again from its bundle"
+[ "$rc" = 0 ] && echo "bundles: bean check-bundle and checkbundle.py agree on $n bundles, good and damaged, bean and unseal.py open the same packages with words and with a key, the page that checks one in a browser says what bean says, and a shared comparison computes again from its bundle"
 exit $rc
