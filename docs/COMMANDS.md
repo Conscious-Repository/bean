@@ -269,7 +269,7 @@ Copies to this log every record and file that the other folder has and this one 
 
 ### `export <folder>`
 
-Writes a plaintext copy of every record and file into an empty or new folder, with a `manifest.json`. The export is not encrypted. Prints `exported <r> records, <b> blobs (plaintext)` when it ran to its end. Into a folder that is not empty it fails at once and writes nothing. bean writes the export into a new folder beside the one you name, called `<folder>.partial-<digits>`, and moves it into place when it is whole. So the folder you name holds a whole export or nothing. A name that is a file, or a link that leads nowhere, is refused and stays as it is. If a run is stopped part way, that other folder stays, with records in plaintext. The next export names it and stops: delete it, then export again.
+Writes a plaintext copy of the log into an empty or new folder, with a `manifest.json`. The copy is every record that you did not delete, and your stored files. It holds no key and nothing of `local/`, so no reader's key file and no `local/purged-refs.jsonl`. It holds no package and no reference pack. The export is not encrypted. Prints `exported <r> records, <b> blobs (plaintext)` when it ran to its end. Into a folder that is not empty it fails at once and writes nothing. bean writes the export into a new folder beside the one you name, called `<folder>.partial-<digits>`, and moves it into place when it is whole. So the folder you name holds a whole export or nothing. A name that is a file, or a link that leads nowhere, is refused and stays as it is. If a run is stopped part way, that other folder stays, with records in plaintext. The next export names it and stops: delete it, then export again.
 
 | In the export | What it holds |
 |---|---|

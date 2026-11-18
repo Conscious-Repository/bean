@@ -39,7 +39,7 @@ flowchart LR
 - A record is a claim with an author, a time and a source. It is never edited: a correction is a new record.
 - The signing key in `local` is not copied by a sync. The 24 words are on paper, and never on a device.
 - A record that your assistant writes is signed by the assistant's key, and shows as the assistant's.
-- `bean verify` checks every record again. `bean export` writes everything as plain files, so that you can leave.
+- `bean verify` checks every record again. `bean export` writes your records and your stored files as plain files, so that you can leave. It holds no key file, no package and no reference pack ([SECURITY.md](../SECURITY.md)).
 
 ## 2. Share with one person
 

@@ -145,6 +145,26 @@ if git cat-file -e cdd4ed5 2>/dev/null; then
 	else bad "could not build cdd4ed5"; fi
 else echo "skip old hlog records: commit cdd4ed5 not in this clone"; fi
 
+echo "== leaving: an export, a restore, and a key file that was kept apart (DECISIONS 328)"
+# A reader gets a package that is sealed to their address, and then leaves:
+# an export and the 24 words. The key file is outside the log, so neither
+# holds it. With the key file that was kept apart, the old package opens
+# for the restored log. Without it, nothing opens.
+S=$W/lv-sender; R=$W/lv-reader; newlog "$S"; newlog "$R"
+bean -dir "$W/lv-nolog" address -out "$W/lv-reader.key" >"$W/lv-addr.txt" 2>/dev/null
+LADDR=$(sed -n 's/^address \(age1.*\)/\1/p' "$W/lv-addr.txt"); LWORDS=$(sed -n 's/^address words //p' "$W/lv-addr.txt")
+LREC=$(bean -dir "$S" add weight 81 -unit kg)
+want "a share to the reader's address" 0 "share record" bean -dir "$S" share -yes -for "$LADDR" -address-words "$LWORDS" -out "$W/lv-pkg.bean" "$LREC"
+bean -dir "$R" add weight 70 -unit kg >/dev/null
+want "the reader exports" 0 "exported" bean -dir "$R" export "$W/lv-export"
+if grep -rqs 'AGE-SECRET-KEY' "$W/lv-export" "$R"; then bad "an export or the log holds a reader's key file"; else ok "neither the export nor the log holds the reader's key file"; fi
+bean -dir "$W/lv-restored" restore -export "$W/lv-export" -nostr new <"$R.words" >"$W/lv-restore.out" 2>&1 ||
+	bean -dir "$W/lv-restored" restore -seal-all -export "$W/lv-export" -nostr new <"$R.words" >"$W/lv-restore.out" 2>&1
+want "the restored log verifies" 0 "" bean -dir "$W/lv-restored" verify
+want "the restored log holds the reader's record" 0 "70 kg" bean -dir "$W/lv-restored" ls
+want "an old package opens after the restore, with the key file that was kept apart" 0 "bundle ok" bean -dir "$W/lv-restored" check-bundle -key "$W/lv-reader.key" "$W/lv-pkg.bean"
+want "without the key file the old package does not open" 1 "sealed to a key" bean -dir "$W/lv-restored" check-bundle "$W/lv-pkg.bean"
+
 echo "== oversized and hostile input"
 A=$W/big; newlog "$A"
 python3 -c 'print("{\"type\":\"hr\",\"value\":{\"s\":\"" + "x"*(2<<20) + "\"},\"times\":{\"observed\":null},\"source\":{\"system\":\"s\",\"adapter\":\"a@1\",\"ref\":null}}")' >"$W/huge.jsonl"
