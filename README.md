@@ -395,6 +395,7 @@ bean protects who wrote what, and protects your identity against a stolen device
 | [docs/REFERENCE.md](docs/REFERENCE.md) | Reference packs: public data as one file, its format, who hosts what, and the checks. |
 | [docs/REFERENCE-PLAN.md](docs/REFERENCE-PLAN.md) | What is decided for reference data before more is built, with the facts that were measured. |
 | [docs/SHARE.md](docs/SHARE.md) | Share chosen records as a bundle anyone can check: what goes in, limits, format. |
+| [docs/SHARE-PLAN.md](docs/SHARE-PLAN.md) | A seal to a reader's key: what is decided before it is built, and what it costs. |
 | [examples/blood](examples/blood/README.md) | The whole loop in one script, on a synthetic report. |
 | [cmd/bean/vocabulary.md](cmd/bean/vocabulary.md) | The usual record types and units. |
 | Importer notes: [lab](cmd/bean-import-lab/README.md), [Apple Health](cmd/bean-import-apple-health/README.md), [NHANES](cmd/bean-import-nhanes/README.md) | What each importer reads, keeps and refuses. |
