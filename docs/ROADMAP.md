@@ -19,7 +19,7 @@ Three things are still missing. Two people cannot see their records side by side
 1. **Seal with a passphrase first. Done:** `bean share -seal` ([SHARE.md](SHARE.md), DECISIONS 275). bean packs the bundle into one file, encrypts it, and makes six random words. The person gives the words to the reader by another channel, such as a phone call. The check page asks for the words, opens the file on the reader's device, and runs the check. This needs no key from the reader.
 2. **Seal to a reader's key next.** The check page makes a key for the reader, in their browser. The secret part stays on their device. They send the public part, a short reader address, to the sender. `bean share -to <address>` seals the package to it. A reader who runs bean gets an address from bean.
 3. **Use a standard format. Done.** The file is an `age` file, so a tool other than bean can open it. bean invents no cipher.
-4. **Say what leaves. Done (DECISIONS 323).** The review before a share says that the person's identity id travels. It flags a kept lab report, which holds a name and a birth date. It lists every field that a record carries beside its row, with its values.
+4. **Say what leaves. Done (DECISIONS 324).** The review before a share says that the person's identity id travels. It flags a kept lab report, which holds a name and a birth date. It lists every field that a record carries beside its row, with its values.
 5. **Record who it was for.** The share record says that a passphrase was used. With a reader's key it will name the reader's address.
 
 6. **The reader knows who signed. Done:** identity words (DECISIONS 280). The sender reads eight words in the call that carries the opening words, and the check shows the same eight (DECISIONS 287).
@@ -31,7 +31,7 @@ Three things are still missing. Two people cannot see their records side by side
 
 - Should `-seal` become what `bean share` does unless told otherwise? Today a plain folder is the default, because the checks and the examples are built on it.
 - Does the page need a project domain? Today it lives in the releases of the code host. A second, independent place for its SHA-256 is what catches a host that serves a changed page.
-- Should `bean share` take `-except <id>`? Today a person who sees one record that must not leave names all the others by id, or narrows by time. For a long share that is many ids (DECISIONS 323).
+- Should `bean share` take `-except <id>`? Today a person who sees one record that must not leave names all the others by id, or narrows by time. For a long share that is many ids (DECISIONS 324).
 - Does a package need an end date after which the page refuses to open it? An end date stops an honest reader's page. It does not stop a copy.
 
 ## Path 2: people compare with each other
@@ -42,7 +42,10 @@ Three things are still missing. Two people cannot see their records side by side
 
 1. **One person to one person.** Path 1 is this step. A person sends a sealed package, such as a biopsy report with their notes, to a peer they already know. The peer checks it and reads it.
 2. **A reply that the owner can keep. Done:** `bean reply` and `bean accept` ([SHARE.md](SHARE.md), DECISIONS 290). A peer who runs bean signs notes about the records that they received, and sends them back sealed. The owner compares the peer's identity words and the reply's id, and takes the notes into their log under a name. A note is text about one shared record, and a reply that holds anything else is refused. The log remembers how far a peer's chain of keys had got, so a retired key takes nothing later. `bean unpair` takes a name back.
-3. **Side by side.** bean shows the records of two people next to each other, each with its signer and its caveats. It computes nothing across them.
+3. **Side by side.** bean shows the records of two people next to each other, each with its signer and its caveats. It computes nothing across them. The rules are in DECISIONS 323. The steps:
+   1. The view. It reads the person's log and one bundle that checks. Its command is not named yet. Readings with the same type and printed unit share a row. A pack that the person names adds other spellings.
+   2. The checks of `bean accept` for a bundle, so that a peer shows under their name.
+   3. One run with a real peer, when each has a report in a layout that bean reads. The second user's reports wait for the reader of unknown layouts (smaller open paths).
 4. **Finding each other.** A person publishes a short card: a condition, what they look for, and a reader address. It holds no measurement. Others answer with a sealed package. Where cards live is not decided.
 5. **A statistic over a group.** A group wants its own distribution, and no member wants to show their values. This is the one step that needs computing on hidden values. It waits for a real group, and for steps 1 to 4.
 
@@ -61,6 +64,7 @@ Three things are still missing. Two people cannot see their records side by side
 - A peer's notes in the peer's own log. Today the peer keeps the reply file and its words. Their log holds only a record that they replied.
 - A reply to a reply. Today a note is about a record of a share, and the owner answers with a new share.
 - Who runs the place where cards live: nobody (people pass addresses by hand), an open network, or AION?
+- A spelling that no pack has waits for a pack (REFERENCE-PLAN decision 4). A table of names waits for a real case (DECISIONS 323).
 
 ## Path 3: a device signs what it captures
 
@@ -255,7 +259,7 @@ Not planned: a command in bean that fetches from a network, and a view that rank
   - Two packs can place one reading differently, and both claims are kept. Each row names its pack.
   - `bean compare -pack <file>` needs a log even to show what a pack holds.
   - `bean add` with a whole number above 9007199254740991 says `bad json`.
-- From the reviews of the share review (DECISIONS 323):
+- From the reviews of the share review (DECISIONS 324):
   - `view.Safe` shows a space other than U+0020, a combining mark and a few rare blank characters as they are. A value can look blank, struck through, or like another value. It cannot hide a name: the letters are shown.
   - A field of more than 50 different numbers or times shows its count. Many numbers could still spell a message.
 - From the reviews of the plan for reference data (DECISIONS 321):
