@@ -14,13 +14,13 @@ Three things are still missing. Two people cannot see their records side by side
 
 The owner set the next aim on 2026-11-18 (DECISIONS 325). Two people share, and see their records side by side. A person compares with a group, from a pack that a publisher hosts. Three reviews, one for each paragon, judged the plan in laps. They changed its order and added rules.
 
-**The design for a seal to a reader's key went on beside the view of two people, by the owner's word.** He chose that seal as the way a package travels. Its first step is built (DECISIONS 327). The first run with a peer uses six words, unless that build is released by then. Which seal the run uses is the owner's to decide.
+**The design for a seal to a reader's key went on beside the view of two people, by the owner's word.** He chose that seal as the way a package travels. Its first step is built (DECISIONS 327). The owner decided on 2026-11-18 that a reply to an address comes before the first run with a peer (DECISIONS 328). The order below says what happens if it is late.
 
 **What does not change.** The core, the record format and `pack/0`. bean fetches nothing. No health record goes to a relay, and no service computes a comparison.
 
-**The steps in bean. Each stands alone.** Steps 1 and 2 are one track, and steps 3 and 4 are another. A step that touches a key or a share has its own audit and its own release.
+**The steps in bean.** Their order is below, under "The order to 0.9". This list keeps the numbers by which other sections name the steps. A step that touches a key or a share has its own audit and its own release.
 
-1. **A first run with a real peer, with what exists.** The rules are below.
+1. **A first run with a real peer.** The rules are below. By the owner's word, a reply to an address is built before it.
 2. **Two people side by side** (path 2, step 3). The view shows readings and notes, and no photo. The first run shows what it must hold.
 3. **A design for sealing to a reader's key, with its own audit** (path 1, step 2). **Done on paper:** [SHARE-PLAN.md](SHARE-PLAN.md) (DECISIONS 326). It answers these questions.
    - Where is a reader's key kept, and which copies of a log hold it?
@@ -31,10 +31,98 @@ The owner set the next aim on 2026-11-18 (DECISIONS 325). Two people share, and 
    - What does an earlier bean say about such a package? The answer of today is below.
    - Does the check page open with a key, and does it make one?
 4. **Seal to a key**, in the two steps of SHARE-PLAN.md, each with its own audit. The address is a recipient of the `age` format, so bean invents nothing.
-   - **Step 1 is built** (release 0.8.0, DECISIONS 327): `bean address`, `bean share -for`, and `-key` on `check-bundle` and on `reply -to`. [SHARE.md](SHARE.md) says how to use it and what it costs.
+   - **Step 1 is built** on `main`, to be released as 0.8.0 (DECISIONS 327): `bean address`, `bean share -for`, and `-key` on `check-bundle` and on `reply -to`. [SHARE.md](SHARE.md) says how to use it and what it costs.
    - **Step 2 is not built:** a reply to an address, and `bean accept -key`. Until then a reply makes six words.
-   - **The owner's to decide:** whether a key file that is protected with a passphrase comes before a package of his goes on a public host.
-5. **A builder of a pool, with synthetic contributors**, under `tools/` (path 4, "A pool"). It is a test of the path, and not a pool.
+   - **Decided by the owner (DECISIONS 328):** a key file with a passphrase comes before any package of his goes on a public host.
+5. **A builder of a pool, with synthetic contributors**, under `tools/` (path 4, "A pool"). It is a test of the path, and not a pool. Proposed: it is not in the order to 0.9 below, since it gives a person nothing until a group that can reach 30 exists. The owner chose it (DECISIONS 325), and he decides whether it waits.
+
+**The order to 0.9, and what 1.0 is: a proposal (DECISIONS 328).** The owner asked for a path in stages that leads to his whole loop. The loop is: import, share 1:1, compare with pools or with packs that others host. Device signing comes later. This adds an order to the steps above. It adds two small things: true words on leaving, and a mark of format for a bundle and a reply. A third waits: a flag that takes a SHA-256.
+
+A pack is one file of reference data, and a cell is its table for one measure and one cohort ([REFERENCE.md](REFERENCE.md)). A mark of format is a member that says which version of a format a file has.
+
+**What the owner decided, when he was asked (2026-11-18).** Each line gives the question in short, and the answer that he chose in quotation marks. DECISIONS 328 (b) has what each answer said beside it.
+
+- What "a user uploads data" means: "Import into own log".
+- Who walks the loop at 1.0: "People with a terminal".
+- What "compare against pools of user data" is at 1.0: "Side by side, two people".
+- When a reply to an address is built: "Before the first run".
+- What 1.0 promises. His own words: "maybe we should plan to leave this at .9 for a while too until we're positive formats are locked".
+- Whether a key file with a passphrase is built before any package of his goes on a public host: "Yes, before a public host".
+
+**The owner decided the points above. The rest is the author's proposal:** what 0.9 holds, the order, and the rules for 1.0. Reviewers who had not seen the work judged it, one for each paragon, and DECISIONS 328 has the account. Their reviews are not kept. He can change any of it.
+
+**0.9 is the loop for two people with a terminal, with the survey's packs.**
+
+1. Import into your own log.
+2. Share 1:1 and get an answer: with six words, or with identity words and address words.
+3. Compare with a pack of the survey, which bean has on record. A person builds it with `bean-pack-nhanes` from the survey's files, which [COMPARE.md](COMPARE.md) lists. Or they fetch it, when the packs are on a host.
+4. Set your records next to one peer's. bean computes nothing across the two.
+
+**0.9 is not the owner's whole loop, and its status says so first.** No pool exists, and no other entity hosts a pack.
+
+**The proposed order.** A step that touches keys or sharing has its own audit. A step with code is a release of its own, with a number below 0.9.
+
+1. **First: publish 0.8.0, with true words on leaving.** One small change comes before the tag.
+   - The README says today that `bean export` writes everything, and SECURITY.md and ARCHITECTURE.md say the like. A reader can take an export for a whole backup.
+   - The three documents say: an export holds every record and file that bean could read. It leaves out what you deleted. `manifest.json` lists what it could not write. Those sentences are held to the code before the tag. It holds no key file, no package and no pack. A key file is kept apart, and the 24 words do not bring it back. Nor does an export hold `local/purged-refs.jsonl`, which the README already says to back up, or the other files of `local/` that COMMANDS.md lists.
+   - A saved comparison names its pack, and an export does not hold the pack: keep it. An address that your peers hold opens nothing for you once its key file is lost.
+   - SHARE.md and SECURITY.md say already what a copy of a key file opens, and that a lost one opens nothing again. The README points to them, and adds one thing: bean does not encrypt a key file, so keep it as any secret key is kept.
+   - One case in `tools/smoke.sh` restores from an export, and opens an old package with a key file that was kept apart.
+   - Then a tag and a release with the check page, on the owner's word.
+2. **Second: a reply to an address** ("Seal to a key" in the list above, its second half). Three points are for its design and its audit.
+   - **A bundle and a reply get a way to say their format.** Today only a record has a version. The mark is a design of its own, on paper. It is ready before the audit of the reply ends, so that the audit can say whether the reply must carry it. It does not hold the reply up. A file with no mark is format 0. A build from before the mark may refuse a file that carries it: then UPGRADING.md says so, and both people update first. If the mark is built, `tools/second` and the vectors change with it.
+   - **The gate of `bean accept -key`.** With `-yes` and `-words`, a program that runs as the person and holds the key file takes a peer's notes. It can make the eight words from the reply itself. The reviews of this order recommend that `-yes` does not work with `-key`. The audit decides.
+   - **Where a reply goes.** Only to an address that the sender gave by a second channel, never to one that a package carries.
+3. **Third: the first real run with a peer** (the first entry of the list above). Its round trip needs no six words. It needs identity words once, and address words.
+   - Both people update first.
+   - The two compare identity words by voice once. Each gives the other an address, and its address words by a second channel.
+   - The packages go by a channel that the two already use. No package of the owner's goes on a public host until a key file can be protected.
+   - Each person runs at their own terminal every command that prints a health value. An assistant helps as ONBOARDING.md says: it sees exit codes and counts, and no value.
+   - The run is timed from the install on.
+   - If the reply to an address is not merged when the peer is ready, the owner says whether the run goes on six words.
+4. **Fourth: side by side, for two people** ("Two people side by side" in the list above). It follows the rules of DECISIONS 323 (b) and (c), and no more: rows next to rows. The run shapes it. These points are for its design and its audit.
+   - The view takes a package as an argument, as `bean check-bundle` does. It keeps nothing.
+   - A peer's row is the signer's word, checked against no lab and no device. It shows what the bundle carries: who signed, and whether the record names a file. It shows the source in quotation marks, as the signer named it. A row of the peer and a row of the person are marked apart. A shared row means the same type and the same unit, as each signer wrote them. It does not mean the same measurement. The view shows each text of a peer safely, and says that a share is chosen records and no whole history.
+   - A row that an agent of the peer signed says so. The peer chose to share it, and that is all that stands behind it.
+   - The record format has no mark for "entered by hand", and this step adds none. The view says of no row that it is from a lab.
+   - The time of a share is the signer's claim. bean cannot tell whether a key is still current.
+   - A peer shows under a name only when the person accepted a reply of theirs before. If not, the view shows eight identity words and a key.
+5. **Fifth: 0.9.** Its status is written on that day, from what is true then. From here the version stays at 0.9 until the owner says that the formats are locked.
+
+**Proposed, beside the order: the survey's packs on a host** (phase 2 of the section "Order"). It is the owner's own act, with no code in bean, and no step waits for it.
+
+- It keeps the rules of "A first publisher hosts" below: a document of the setup, and a rehearsal with a throwaway identity.
+- It gives a person a real file to fetch.
+- The SHA-256 of each pack is also in the project's repository. The owner controls both places. A second person who states the digests from their own connection is a true second place.
+- All reviews of this order recommend it before the run. The owner decides.
+
+**A key file with a passphrase is in no step of this order.** No step puts a package on a public host, so no step needs it. The owner's rule stands.
+
+**What the status of 0.9 says, at least.** It is in the README.
+
+- bean computes nothing over a group of its users, and there is no pool. A comparison with a survey is a percentile in that survey's sample.
+- No publisher but the project has made a pack. As it is on that day: whether anyone hosts one, and whether a second person has confirmed the digests on record.
+- bean does not diagnose.
+- It points to SHARE.md and SECURITY.md for what a share, a key file and an export do not do. Each such line is written with the step that makes its act.
+
+**Not in the order to 0.9.**
+
+- **bean holds a pack to a SHA-256 that the person gives.** It is one new flag of `bean compare -pack`, as `reproduce.py` has with `-accept-pack`. A result says: held to the SHA-256 that you gave, and bean cannot tell where you got it. It is built before a pack of a second publisher is announced. `-unknown-pack` does not change with it. Until then, the compare of a SHA-256 for such a pack is the person's own act. 0.9 does not count it as part of the loop.
+- **Proposed: the builder of a pool** (the last entry of the list above). It stays out until the owner answers.
+- **A pack from a pool of real people, a view of more than two people, and device signing.** Each waits for its real case (paths 2, 3 and 4).
+
+**Proposed: 1.0 is the day the formats are locked.** It is no step of work. This plan proposes the rules of that promise, and not its words. Whoever makes the promise writes it on that day.
+
+- **It lists what it covers and what stays a draft, in one place, by name.** The device format stays a draft. If the owner lets 1.0 come while `pack/0` is a draft, every saved comparison is a draft with it. The promise then says that the comparing part is not locked, and that a tool that writes packs builds on a draft.
+- **The record format has frozen at `v` 0** (CORE.md section 6), or the promise names it as a draft.
+- **It states its own clock.** CORE.md section 6 sets one for the record format: two weeks of real use, and only a change to a validity rule starts them again. The promise sets the same for a bundle and a reply, and states the day each clock started. The mark and its rules are written down before a clock starts, and the start is a commit that anyone can name. It states how many exchanges ran since that day, and between how many people. One exchange does not earn a promise.
+- **It names its evidence:** how many logs, from which date, with which build, and which record types they hold. Today two people keep a log. The reports of the second held no reading that bean reads (DECISIONS 306).
+- **It claims nothing about a member that a build does not know** (CORE.md rule 8). A share that names its reader can come later. A rule that a pool's builder sets on such a member is the builder's rule.
+- **A bundle and a reply can say their format,** and that mark has run its clock. Until then no build can refuse a later format, and no test can hold that.
+- **Each locked format names its vectors,** and the second implementation that reads them.
+- **If nobody outside the project reviewed it, 1.0 says so.**
+
+**"The person fetches, bean checks."** The owner asked what the three paragons would do about a pack on another entity's server. All three: no network code in bean. A SHA-256 shows that the bytes are the ones that were named. It does not show who made a pack, or that it is true.
 
 **The first run with a peer.**
 
@@ -42,8 +130,8 @@ The owner set the next aim on 2026-11-18 (DECISIONS 325). Two people share, and 
 - A reader who has only a browser can check a package, and cannot reply.
 - Each has readings. A report in a layout that bean reads gives them. So does a value that the person enters by hand, with the type name and unit that a pack lists. [COMPARE.md](COMPARE.md) lists them for the survey's packs.
 - A value that was entered by hand reads like a lab's result. The person says so in a note.
-- `bean share -seal` writes one file. It goes by a channel that the two already use, and the six words go by another.
-- Each reads the other's package with `check-bundle`, and answers with `reply` and `accept`. [SHARE.md](SHARE.md) says what the two compare by voice.
+- `bean share -for <address>` writes one file, sealed to the reader's address. It goes by a channel that the two already use. `bean share -seal` and its six words are the fallback, as the order above says.
+- Each reads the other's package with `check-bundle`, and answers with `reply` and `accept`. For a package that is sealed to an address, `-key` names the key file. [SHARE.md](SHARE.md) says what the two compare by voice.
 - A comparison with a pack is not needed for the run. A share does not carry the pack: the sender sends its file too, or the reader builds it.
 
 **What an earlier bean says about a package that is sealed to a key.** Release 0.7.2 asks for six words, and such a package has none. When six words are typed, it refuses, and says that it is another kind of file. The check page says to check the six words. The request for words and the page's line are wrong for such a package. [UPGRADING.md](../UPGRADING.md) quotes both, and both people update first.
@@ -79,7 +167,7 @@ The owner set the next aim on 2026-11-18 (DECISIONS 325). Two people share, and 
 - The link names the file by its SHA-256. The reader computes the SHA-256 of what they fetched, and compares.
 - A host learns the size, the time, the key of the upload, and the network address of the upload and of each fetch. It holds the sealed bytes for as long as it likes.
 - When a host is gone, the link is gone. The sender holds the file, and sends it again.
-- A package goes on a public host only when it is sealed to a key (DECISIONS 313). The design of step 3 first says how long such a key lives.
+- A package goes on a public host only when it is sealed to a key (DECISIONS 313). The design of step 3 first says how long such a key lives. For his own packages the owner added a rule: a key file with a passphrase comes first (DECISIONS 328).
 - A reader fetches with a tool of their own.
 
 **A host that offers itself to people for their packages** takes only files that start as an `age` file. It takes them up to a stated size, for a stated time. A host can read that start, and cannot tell what is inside. A sender cannot hold another person's host to this rule. The rule is code in the host, and a second publisher needs the same code. So that code gets a repository beside this one, with no publisher's name, when it is written.
@@ -111,14 +199,20 @@ The owner set the next aim on 2026-11-18 (DECISIONS 325). Two people share, and 
 
 - **Where the code lives.** Proposed: what runs offline is in this repository, and what listens on a network is not. Formats, checks, builders and the document of a setup are here. A publisher's network address, terms and keys are its own. No key is in any repository.
 - **How many spellings of one quantity are reconciled.** Proposed: the one who pools does it, in a pack's `same` list (path 4, "A pool"). bean keeps no table of names.
-- Whether the first run goes on six words, or waits for the seal to a key.
+- Whether the first run goes on six words, if the reply to an address is not merged when the peer is ready.
 - Where the first publisher's server runs, and under which network address.
 - Who the peer of the first run is, and whether values that were entered by hand are enough for it (DECISIONS 323).
-- Which host takes a package for the run by link.
+- Which host takes a package by link, once a key file can be protected.
 - Whether a publisher's real key is used after the rehearsal.
 - Whether a first pool with no step of contribution is enough. His answer began with a contribution.
 - Whether the first host carries the synthetic pool's pack. A pack of made-up people on a real host can mislead.
 - Whether the survey's next pack comes before the builder of a pool. The next pack gives a person more tests. The builder gives none.
+- Whether the builder of a pool waits for a group that can reach 30 (DECISIONS 328). He chose the builder on 2026-11-18, as a proof of the path. All reviews of the order recommend that it waits.
+- Whether the survey's packs are on a host before the run. All reviews recommend it.
+- Whether 1.0 can come while `pack/0` is a draft. The reviews recommend it: 1.0 then names the comparing part as not locked, and does not wait for a second source that nobody has.
+- Whether a review by a person outside the project is a condition of 1.0. The reviews recommend that it is wanted, and is no condition.
+- Whether bean ever keeps a package or a pack with the log, so that an export holds it. For a pack, that is item 7 of the work in the section "Order".
+- Whether a record ever gets a mark for a value that was entered by hand. It would be a change to the format.
 
 ## Path 1: a sealed package for one reader
 
@@ -155,7 +249,7 @@ The owner set the next aim on 2026-11-18 (DECISIONS 325). Two people share, and 
 3. **Side by side.** bean shows the records of two people next to each other, each with its signer and its caveats. It computes nothing across them. The rules are in DECISIONS 323. The steps:
    1. The view. It reads the person's log and one bundle that checks. Its command is not named yet. Readings with the same type and printed unit share a row. A pack that the person names adds other spellings.
    2. The checks of `bean accept` for a bundle, so that a peer shows under their name.
-   3. One run with a real peer. It comes first (the section "Next", step 1). Each has readings: from a report in a layout that bean reads, or entered by hand (DECISIONS 325). The second user's reports wait for the reader of unknown layouts (smaller open paths).
+   3. One run with a real peer. It comes before the view (the order in the section "Next"). Each has readings: from a report in a layout that bean reads, or entered by hand (DECISIONS 325). The second user's reports wait for the reader of unknown layouts (smaller open paths).
 4. **Finding each other.** A person publishes a short card: a condition, what they look for, and a reader address. It holds no measurement. Others answer with a sealed package. Where cards live is not decided.
 5. **A statistic over a group.** A group wants its own distribution, and no member wants to show their values. This is the one step that needs computing on hidden values. It waits for a real group, and for steps 1 to 4.
 
@@ -273,6 +367,13 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 - **A cell shows real values, with no name.** The rule says whether the builder groups or rounds them. Two packs that differ by one contributor show that person's value.
 - **A pool cannot tell a real contribution from one that was made up.** One person with many keys can fill a cell. A device's signature narrows that: a signed reading was made by a device, and not typed (path 3). It does not show whose body was measured.
 
+**Proposed additions to that list (DECISIONS 328). The owner decides, on the day a group exists.**
+
+- **What a contributor is told in writing, and agrees to in writing.** The publisher collects the plain values of every contributor. The words say who can read them, and how long they are kept. A pack lists every value of a cell, so whoever holds the pack reads each value in it. No such words, no contribution.
+- **A contribution asks the person at a terminal,** and shows every field that leaves, as a share does. bean cannot tell a person from a program that holds a terminal, and the words say so.
+- **Leaving before the next pack does not take back a value that is in an earlier one.**
+- **A reader of such a pack cannot build it again:** only the publisher holds the contributions. A result that was made with it says so, and never calls the pack's n "the number of people". Today's warning tells a person to build a pack again from its files: for a pool it gets other words.
+
 **The plan.**
 
 1. **A second source, from another publisher.** The format is not frozen before a second real source is built into a pack. Each candidate is confirmed first from its publisher's own site: the terms, a stable address, and whether a file changes without notice.
@@ -342,9 +443,9 @@ He then said that the infrastructure must be right before new capabilities are a
 
 **Phase 3: when a second party exists.** The person's own list of packs (DECISIONS 308). And a person takes in the record of a peer or a publisher who keeps a pack.
 
-The view of two people side by side needs none of this, and can be built at any time.
+The view of two people side by side needs none of this infrastructure. Its place in the order is in the section "Next".
 
-**The next steps (DECISIONS 325)** are in the section "Next", near the top. They take a first run with a peer, the view of two people, phase 2, and the seal to a reader's key. They add one builder of a pool. The documents of item 2 above do not wait. The other work that follows from phase 1 keeps its order, after the first run with a peer.
+**The next steps (DECISIONS 325)** are in the section "Next", near the top. They take a first run with a peer, the view of two people, phase 2, and the seal to a reader's key. They name one builder of a pool, which is proposed to wait (DECISIONS 328). The documents of item 2 above do not wait. The other work that follows from phase 1 keeps its order, after the first run with a peer.
 
 Not planned: a command in bean that fetches from a network, and a view that ranks or scores two people. bean never runs a program that a pack names. A public card of what a person holds is not planned either.
 
