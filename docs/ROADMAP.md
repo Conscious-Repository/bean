@@ -22,7 +22,7 @@ The owner set the next aim on 2026-11-18 (DECISIONS 325). Two people share, and 
 
 1. **A first run with a real peer, with what exists.** The rules are below.
 2. **Two people side by side** (path 2, step 3). The view shows readings and notes, and no photo. The first run shows what it must hold.
-3. **A design for sealing to a reader's key, with its own audit** (path 1, step 2). It is under its own audit, and is not in the repository yet. It answers these questions.
+3. **A design for sealing to a reader's key, with its own audit** (path 1, step 2). **Done on paper:** [SHARE-PLAN.md](SHARE-PLAN.md) (DECISIONS 326). It answers these questions.
    - Where is a reader's key kept, and which copies of a log hold it?
    - How does a sender know that an address is the reader's? A second channel must confirm it before a package is sealed.
    - How long does a reader's key live? Can a reader make an address for one sender, and drop its key after reading?
@@ -30,7 +30,7 @@ The owner set the next aim on 2026-11-18 (DECISIONS 325). Two people share, and 
    - How is a reply sealed back?
    - What does an earlier bean say about such a package? The answer of today is below.
    - Does the check page open with a key, and does it make one?
-4. **Seal to a key**, as the design says. The address is a recipient of the `age` format, so bean invents nothing.
+4. **Seal to a key**, in the two steps of SHARE-PLAN.md, each with its own audit. The address is a recipient of the `age` format, so bean invents nothing.
 5. **A builder of a pool, with synthetic contributors**, under `tools/` (path 4, "A pool"). It is a test of the path, and not a pool.
 
 **The first run with a peer.**
@@ -124,10 +124,10 @@ The owner set the next aim on 2026-11-18 (DECISIONS 325). Two people share, and 
 **The plan.**
 
 1. **Seal with a passphrase first. Done:** `bean share -seal` ([SHARE.md](SHARE.md), DECISIONS 275). bean packs the bundle into one file, encrypts it, and makes six random words. The person gives the words to the reader by another channel, such as a phone call. The check page asks for the words, opens the file on the reader's device, and runs the check. This needs no key from the reader.
-2. **Seal to a reader's key next.** The check page makes a key for the reader, in their browser. The secret part stays on their device. They send the public part, a short reader address, to the sender. `bean share -to <address>` seals the package to it. A reader who runs bean gets an address from bean. Whether the page makes a key is now a question of the design (the section "Next", step 3).
+2. **Seal to a reader's key next.** The check page makes a key for the reader, in their browser. The secret part stays on their device. They send the public part, a short reader address, to the sender. `bean share -for <address>` seals the package to it. A reader who runs bean gets an address from bean. The design is [SHARE-PLAN.md](SHARE-PLAN.md) (DECISIONS 326). The address from bean is its first step, and a key that the page makes is later.
 3. **Use a standard format. Done.** The file is an `age` file, so a tool other than bean can open it. bean invents no cipher.
 4. **Say what leaves. Done (DECISIONS 324).** The review before a share says that the person's identity id travels. It flags a kept lab report, which holds a name and a birth date. It lists every field that a record carries beside its row, with its values.
-5. **Record who it was for.** The share record says that a passphrase was used. With a reader's key it may name the reader's address: the design decides (the section "Next", step 3).
+5. **Record who it was for.** The share record says that a passphrase was used. With a reader's key it says only that a key was used. It names no address until something reads one (SHARE-PLAN.md).
 
 6. **The reader knows who signed. Done:** identity words (DECISIONS 280). The sender reads eight words in the call that carries the opening words, and the check shows the same eight (DECISIONS 287).
 7. **One public address for the check page. Done (DECISIONS 311):** the releases of the repository, which is public. A tag on `main` builds the page on the code host's machine and publishes it with its SHA-256. CI records the SHA-256 of every push as well. Not done: a second, independent place that states the SHA-256, and a short address of the project's own.
@@ -167,7 +167,7 @@ The owner set the next aim on 2026-11-18 (DECISIONS 325). Two people share, and 
 **Open.**
 
 - The first peers are people who already know and trust each other (the owner, 2026-11-11). So steps 1 to 3 come first, and step 4 waits.
-- A reply from a reader who has only a browser. The page would make a key for that reader and sign with it. Whether the page makes a key is a question of the design (path 1, step 2).
+- A reply from a reader who has only a browser. The page would make a key for that reader and sign with it. A key that the page makes is later (SHARE-PLAN.md).
 - A peer's notes in the peer's own log. Today the peer keeps the reply file and its words. Their log holds only a record that they replied.
 - A reply to a reply. Today a note is about a record of a share, and the owner answers with a new share.
 - Who runs the place where cards live: nobody (people pass addresses by hand), an open network, or AION?
@@ -259,7 +259,7 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 **What a pool of real people needs first, on paper.** None of it is built.
 
 - **A pack from data that is not public.** `pack/0` names in `source.files` a file that anyone can fetch. A real pool has none. So this is a decision on the format, and on a publisher's signature (the plan below, step 4, and "Open").
-- **A contribution that the person meant.** A share is not bound to a reader today, so anyone who holds one can pass it on to a pool. A contribution counts only when its share record names the publisher's address. The design of a seal to a key decides whether a share record names one.
+- **A contribution that the person meant.** A share is not bound to a reader today, so anyone who holds one can pass it on to a pool. A contribution counts only when its share record names the publisher's address. A share record names no address yet (SHARE-PLAN.md). A pool brings that member, with a design of its own.
 - **A pack that is published cannot be taken back.** Whoever fetched it holds a copy.
 - **Mapping stays with the one who pools.** The publisher's rule decides which type and unit is which measure. The rule has a version, and its result is the pack's `same` list. bean keeps no table of names, and no reader converts a unit.
 - **A reading that no `same` list has is not pooled.** The publisher counts such readings, and the counts are its list of work.
