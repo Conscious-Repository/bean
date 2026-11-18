@@ -41,7 +41,10 @@ Three things are still missing. Two people cannot see their records side by side
 
 1. **One person to one person.** Path 1 is this step. A person sends a sealed package, such as a biopsy report with their notes, to a peer they already know. The peer checks it and reads it.
 2. **A reply that the owner can keep. Done:** `bean reply` and `bean accept` ([SHARE.md](SHARE.md), DECISIONS 290). A peer who runs bean signs notes about the records that they received, and sends them back sealed. The owner compares the peer's identity words and the reply's id, and takes the notes into their log under a name. A note is text about one shared record, and a reply that holds anything else is refused. The log remembers how far a peer's chain of keys had got, so a retired key takes nothing later. `bean unpair` takes a name back.
-3. **Side by side.** bean shows the records of two people next to each other, each with its signer and its caveats. It computes nothing across them.
+3. **Side by side.** bean shows the records of two people next to each other, each with its signer and its caveats. It computes nothing across them. The rules are in DECISIONS 323. The steps:
+   1. The view. It reads the person's log and one bundle that checks. Its command is not named yet. Readings with the same type and printed unit share a row. A pack that the person names adds other spellings.
+   2. The checks of `bean accept` for a bundle, so that a peer shows under their name.
+   3. One run with a real peer, when each has a report in a layout that bean reads. The second user's reports wait for the reader of unknown layouts (smaller open paths).
 4. **Finding each other.** A person publishes a short card: a condition, what they look for, and a reader address. It holds no measurement. Others answer with a sealed package. Where cards live is not decided.
 5. **A statistic over a group.** A group wants its own distribution, and no member wants to show their values. This is the one step that needs computing on hidden values. It waits for a real group, and for steps 1 to 4.
 
@@ -60,6 +63,7 @@ Three things are still missing. Two people cannot see their records side by side
 - A peer's notes in the peer's own log. Today the peer keeps the reply file and its words. Their log holds only a record that they replied.
 - A reply to a reply. Today a note is about a record of a share, and the owner answers with a new share.
 - Who runs the place where cards live: nobody (people pass addresses by hand), an open network, or AION?
+- A spelling that no pack has waits for a pack (REFERENCE-PLAN decision 4). A table of names waits for a real case (DECISIONS 323).
 
 ## Path 3: a device signs what it captures
 
