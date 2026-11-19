@@ -179,7 +179,8 @@ func TestRefuses(t *testing.T) {
 		},
 		"a weight missing":            func(top map[string]any) { cell(top, 1)["weights"] = []any{float64(10), float64(11)} },
 		"no values":                   func(top map[string]any) { cell(top, 1)["values"], cell(top, 1)["weights"] = []any{}, []any{} },
-		"too few people":              func(top map[string]any) { cell(top, 1)["n"] = float64(29) },
+		"no people":                   func(top map[string]any) { cell(top, 1)["n"] = float64(0) },
+		"fewer people than none":      func(top map[string]any) { cell(top, 1)["n"] = float64(-3) },
 		"an n with a fraction":        func(top map[string]any) { cell(top, 1)["n"] = 31.5 },
 		"fewer people than values":    func(top map[string]any) { cell(top, 0)["n"] = float64(39) },
 		"a measure that is not there": func(top map[string]any) { cell(top, 0)["measure"] = "M3" },
@@ -212,6 +213,16 @@ func TestRefuses(t *testing.T) {
 		if _, err := Read(data); err == nil {
 			t.Errorf("%s: read as a pack", name)
 		}
+	}
+	// A cell of one person with one value is read: a cell has no least size.
+	one := func(top map[string]any) {
+		c := cell(top, 1)
+		c["n"], c["values"], c["weights"] = float64(1), []any{float64(52)}, []any{float64(1)}
+	}
+	if p, err := Read(change(one)); err != nil {
+		t.Errorf("a cell of one person: %v", err)
+	} else if res, err := p.Cells[1].Place(52); err != nil || res.N != 1 || res.Percentile != 50 {
+		t.Errorf("a value in a cell of one person with that value: %+v, %v", res, err)
 	}
 	// The largest n that a cell may state is read.
 	if _, err := Read(change(func(top map[string]any) { cell(top, 0)["n"] = float64(MaxN) })); err != nil {

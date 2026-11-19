@@ -18,7 +18,9 @@ import (
 var held = map[string]string{
 	"10555d6769421d4305cbcd4ff14960d8b966ddd829a50581a9584a60a84d29e2": "85a9c365f62f4ad15de88b79cd4f27b9bafe5c0966e3d2bf800813e72ebda38f",
 	"5cae07db64295d565ffae7c251c17fdb9f043dc0638868557275f8b0b0311efa": "65754cc3eb13f0e710de3ad86bb787459ace755525449a8660c73e9dfa53f501",
-	"the texts of a claim": "1b2d353a14d66ab6095f554b067d452010185adc8f12983be1ce9c53d9e09714",
+	// This row left out the least n of a cell on 2026-11-19 (DECISIONS 333,
+	// UPGRADING.md 0.8.2): a cell has none now, and no text of a claim changed.
+	"the texts of a claim": "f44279528f561dcf2b97cf59a82e7b134b8cb58888d753fcf00384b31b6212dc",
 }
 
 func digestOf(v any) string {
@@ -32,7 +34,7 @@ func digestOf(v any) string {
 
 func TestWhatIsOnRecordNeverChanges(t *testing.T) {
 	got := map[string]string{
-		"the texts of a claim": digestOf([]any{CaveatCohort, fmt.Sprintf(CaveatSmall, SmallN), CaveatNotOnRecord, CaveatAuthor, MethodID, MethodVersion, MinN, SmallN, Format, Kind}),
+		"the texts of a claim": digestOf([]any{CaveatCohort, fmt.Sprintf(CaveatSmall, SmallN), CaveatNotOnRecord, CaveatAuthor, MethodID, MethodVersion, SmallN, Format, Kind}),
 	}
 	for digest, k := range Known {
 		got[digest] = digestOf(k)

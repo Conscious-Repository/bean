@@ -37,7 +37,6 @@ from decimal import Decimal
 
 FORMAT = "pack/0"
 MAX_BYTES = 64 * 1024 * 1024
-MIN_N = 30
 MAX_N = 2147483647  # the largest n that a cell may state
 MIN_NUMBER, MAX_NUMBER = 1e-12, 1e15  # the bounds of a value and of a weight
 MAX_TEXT = 400
@@ -356,9 +355,10 @@ def check_pack(p):
                 raise Refused("%s: weight %d is not a number" % (w, j))
             if not MIN_NUMBER <= x <= MAX_NUMBER:
                 raise Refused("%s: weight %d is not from 1e-12 to 1e15" % (w, j))
-        n = whole(c["n"], w + " n", 0)
-        if n < MIN_N or n > MAX_N:
-            raise Refused("%s has an n that is not from %d to %d" % (w, MIN_N, MAX_N))
+        n = c["n"]
+        if not is_num(n) or n != int(n) or not 1 <= n <= MAX_N:
+            raise Refused("%s has an n that is not a whole number from 1 to %d" % (w, MAX_N))
+        n = int(n)
         if n < len(values):
             raise Refused("%s has an n below the number of distinct values" % w)
     return p

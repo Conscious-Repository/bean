@@ -203,7 +203,7 @@ os.mkdir(out)
 good = json.load(open(src))
 def cell(p): return p["cells"][0]
 def first(d): return d[sorted(d)[0]]
-def many(p): return next(c for c in p["cells"] if len(c["values"]) > 40)  # so that n stays above 30
+def many(p): return next(c for c in p["cells"] if len(c["values"]) > 40)  # a cell with many values: n below their number is what is tried
 cases = {
     "format": lambda p: p.update(bean="pack/1"),
     "member-more": lambda p: p.update(signature="x"),
@@ -240,7 +240,7 @@ cases = {
     "same-comparison": lambda p: first(p["measures"])["same"].append({"type": "comparison.percentile", "unit": "{percentile}"}),
     "weight-missing": lambda p: cell(p)["weights"].pop(),
     "values-none": lambda p: cell(p).update(values=[], weights=[]),
-    "n-small": lambda p: cell(p).update(n=29),
+    "n-zero": lambda p: cell(p).update(n=0),
     "n-fraction": lambda p: cell(p).update(n=cell(p)["n"] + 0.5),
     "n-below-values": lambda p: many(p).update(n=len(many(p)["values"]) - 1),
     "measure-unknown": lambda p: cell(p).update(measure="NOPE"),
@@ -293,6 +293,29 @@ open(sys.argv[2], "w").write(text)
 EOF2
 bean -dir "$T/log" compare -pack "$T/other.pack" >/dev/null 2>&1 || say "bean refuses a pack that is written another way"
 "$PY" -I "$HERE/check.py" "$T/other.pack" >/dev/null 2>&1 || say "check.py refuses a pack that is written another way"
+
+# A cell has no least number of people. Both read a pack with a cell of
+# three and one of one, bean compares with each, and reproduce.py computes
+# what bean saved.
+SMALL=$("$PY" -I - "$T/syn.pack" "$T/small.pack" <<'EOF2'
+import json, sys
+p = json.load(open(sys.argv[1]))
+cells = [c for c in p["cells"] if c["measure"] == "LBDHDD"]
+cells[0].update(n=3, values=[40, 50, 60], weights=[1, 1, 1])
+cells[1].update(n=1, values=[52], weights=[1])
+json.dump(p, open(sys.argv[2], "w"), separators=(",", ":"), sort_keys=True)
+print(cells[0]["cohort"], cells[1]["cohort"])
+EOF2
+)
+"$PY" -I "$HERE/check.py" "$T/small.pack" >/dev/null 2>&1 || say "check.py refuses a pack with a cell of three people and a cell of one"
+SMALLDIGEST=$("$PY" -I -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$T/small.pack")
+for cohort in $SMALL; do
+  b compare -pack "$T/small.pack" -unknown-pack -cohort "$cohort" -type lab.hdl-cholesterol -save >"$T/small.txt" 2>&1 || say "bean does not compare with a small cell ($cohort): $(tail -1 "$T/small.txt")"
+  grep -q "small cohort" "$T/small.txt" || say "bean does not say that a cell of few people is small ($cohort)"
+done
+b ls -json >"$T/small-records.jsonl"
+"$PY" -I "$ROOT/tools/compare/reproduce.py" -accept-pack "$SMALLDIGEST" -accept-pack "$DIGEST" "$T/small-records.jsonl" "$T/syn.pack" "$T/small.pack" >"$T/small-rp.txt" 2>&1 \
+  || say "reproduce.py does not get what bean saved with a small cell: $(tail -2 "$T/small-rp.txt")"
 
 real=""
 if [ -n "${BEAN_NHANES_DIR:-}" ]; then

@@ -98,7 +98,7 @@ It is `tools/pool/` and `make pool`.
 - **The note is a tripwire.** A bundle is left out unless its share's note is exactly `synthetic contributor`. Anyone can write that note. It guards against an accident, and proves nothing.
 - **One reading for each identity and measure.** An identity with two different bundles is left out of the pool. So is an identity with two readings of one measure that count. So is an identity whose reading has claims in two cohorts. This is the test's rule, and the author's choice. What would give more: ROADMAP's rule, which takes the latest reading. ROADMAP keeps its own rule for a real pool, where a person must be able to correct a reading.
 - **One bundle is one bundle.** A bundle is its `objects` and its `files`. Two folders with one share id that pass their check, and are the same in `objects` and `files`, are one bundle. It is taken once.
-- **What it prints.** One line for each identity: taken, or left out and why. Each identity that it takes counts as one in its cell. It names each cell that it drops for having fewer than 30. A bundle that fails its check has no identity that can be trusted, so its line names the folder. The builder writes out safely every text that it quotes, so that no text can fake a line.
+- **What it prints.** One line for each identity: taken, or left out and why. Each identity that it takes counts as one in its cell. A bundle that fails its check has no identity that can be trusted, so its line names the folder. The builder writes out safely every text that it quotes, so that no text can fake a line.
 
 ### The pack
 
@@ -106,7 +106,7 @@ It is `tools/pool/` and `make pool`.
 - **It says what it is, where a reader sees it.** A cohort's id starts with `pool-`. A cohort's text starts with `synthetic pool:`. The title says the same. The source's name, publisher and home say `none: synthetic`.
 - **Its caveats are the builder's own,** for the pack, for each measure and for each cohort. They say what the builder knows. "n counts identity ids, not people." "Whoever ran the builder said that every contributor is made up; the builder cannot check that."
 - **Its measures keep the survey pack's ids, labels, units and `same` lists.**
-- **A cell needs as many identities as `pack/0` asks: 30 today.** The builder reads that number from `tools/pack/check.py`, and keeps no copy of it. It leaves out a cell of fewer. The test vector puts 30 contributors or more into one cohort for one measure, and one cell is enough for the test.
+- **A cell has no least number of identities** (DECISIONS 333). The builder drops no cell for its size. The test vector is to have one cell of forty identities, and one of one.
 - **A test holds this much.** No such text names the survey or its publisher: the title, the source's name, publisher and home, and the builder's name. Nor does a caveat of the pack, of a measure or of a cohort.
 - **It names both of its inputs.** `source.files` has two entries: the archive, and the survey pack that the claims name.
 
