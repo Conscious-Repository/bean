@@ -93,7 +93,7 @@ It is `tools/pool/` and `make pool`. **It is built (DECISIONS 334).** [tools/poo
 - **It reads opened bundles only,** as a folder or as an archive. So it has one path.
 - **Its inputs are named.** The bundles. The survey pack. A URL for the archive and one for the survey pack, with no default. And a flag `-synthetic`, without which it stops.
 - **It prints the SHA-256 of the survey pack that it was given.**
-- **It checks each bundle** (`checkbundle.py`), and computes each claim again (`reproduce.py`). bean has no record of the survey pack. So the builder takes a claim only when it names the SHA-256 of the pack that it was given. That is what `-accept-pack` does for a person. It gives the check the records of a bundle's `objects` and the survey pack, and nothing else. It adds no check of a bundle or of a claim. Its own rules are below, and this one: a reading whose value `pack/0` cannot hold is left out, and named.
+- **It checks each bundle** (`checkbundle.py`), and computes each claim again (`reproduce.py`). bean has no record of the survey pack. The survey pack is the only pack that the check of a claim is given. So a claim that names another pack does not compute again. That is what `-accept-pack` does for a person. It gives the check the records of a bundle's `objects` and the survey pack, and nothing else. It adds no check of a bundle or of a claim. Its own rules are below, and this one: a reading whose value `pack/0` cannot hold is left out, and named.
 - **Whose records count.** A claim counts only when it computes again with the survey pack that the builder was given. A claim and its reading count only when the identity's own key signed both. An agent's record does not count.
 - **The note is a tripwire.** A bundle is left out unless its share's note is exactly `synthetic contributor`. Anyone can write that note. It guards against an accident, and proves nothing.
 - **Only comparisons and their readings.** A bundle that holds another record, or a file that a record carries, is left out. An archive holds the records of a bundle, and nothing else of its folder: not the `README.txt` that bean writes there.
@@ -165,13 +165,13 @@ It is `examples/pool/`: a short script and a README. **It is built (DECISIONS 33
 
 ### The steps
 
-1. **A relay and a file host.** `nak serve --blossom` on localhost, on a stated port. The script starts it, refuses any host but localhost, and stops it at its end.
+1. **A relay and a file host.** `nak serve --blossom` on 127.0.0.1, on a stated port. The script starts it, refuses any host but that one, and stops it at its end. It uses no proxy, and builds bean without a fetch.
 2. **Keys.** The script clears `NOSTR_SECRET_KEY` first, and sets it for one command at a time. `nak key generate` makes a new key for each upload, and one for the pointer. Every command that signs gets such a key. So no key of a log is used, and `nak` never signs with the machine's key (F9).
 3. **One log, for step 9.** The script makes it in a scratch folder of its own, with a made-up reading. It is the other user's log, and no comparison is saved in it.
 4. **Upload.** The script uploads the archive and the survey pack with `nak blossom upload`. They are the two committed files. Then it runs the builder on them, with the URLs that the host gave the two, and uploads the pack.
-5. **A pointer.** The script publishes one event of kind 1063 for the pack. Its content starts `synthetic pool:`. A key that was made for the relay signs it, and the script checks that the event carries that key.
-6. **Find and fetch.** Another user finds the event with `nak req -k 1063`, and fetches the pack with `curl`. They compute its SHA-256 and compare it with the one in the event. That shows that the host served what the pointer named, and no more.
-7. **The other two files.** They fetch the archive and the survey pack from the URLs that the pack names. They hold each to the SHA-256 that the pack states.
+5. **A pointer.** The script publishes one event of kind 1063 for the pack. Its content starts `synthetic pool:`. A key that was made for the pointer signs it, and the script checks that the event carries that key.
+6. **Find and fetch.** Another user finds the event with `nak req -k 1063`, and fetches the pack with `curl`. They hold it to the SHA-256 and the size of the event, each of which the event must name once. That shows that the host served what the pointer named, and no more.
+7. **The other two files.** They fetch the archive and the survey pack from the URLs that the pack names. They hold each to the SHA-256 and the size that the pack states.
 8. **Build again.** They build the pack from the archive and the survey pack, with the builder, and with the two URLs as the fetched pack names them. They compare the SHA-256 with the file that they fetched. This is the step that checks something.
 9. **Compare.** They run `bean compare -pack … -unknown-pack`.
 
