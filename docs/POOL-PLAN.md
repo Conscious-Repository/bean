@@ -94,12 +94,12 @@ It is `tools/pool/` and `make pool`. **It is built (DECISIONS 334).** [tools/poo
 - **Its inputs are named.** The bundles. The survey pack. A URL for the archive and one for the survey pack, with no default. And a flag `-synthetic`, without which it stops.
 - **It prints the SHA-256 of the survey pack that it was given.**
 - **It checks each bundle** (`checkbundle.py`), and computes each claim again (`reproduce.py`). bean has no record of the survey pack. So the builder takes a claim only when it names the SHA-256 of the pack that it was given. That is what `-accept-pack` does for a person. It gives the check the records of a bundle's `objects` and the survey pack, and nothing else. It adds no check of a bundle or of a claim. Its own rules are below, and this one: a reading whose value `pack/0` cannot hold is left out, and named.
-- **Whose records count.** A claim and its reading count only when the identity's own key signed both. An agent's record does not count.
+- **Whose records count.** A claim counts only when it computes again with the survey pack that the builder was given. A claim and its reading count only when the identity's own key signed both. An agent's record does not count.
 - **The note is a tripwire.** A bundle is left out unless its share's note is exactly `synthetic contributor`. Anyone can write that note. It guards against an accident, and proves nothing.
 - **Only comparisons and their readings.** A bundle that holds another record, or a file that a record carries, is left out. An archive holds the records of a bundle, and nothing else of its folder: not the `README.txt` that bean writes there.
 - **Every claim of a bundle counts, or the bundle is left out.** So no record rides into the archive on a claim that does not count. A bundle whose records are larger together than 1 MiB is left out too.
 - **One reading for each identity and measure.** An identity with two different bundles that pass their check is left out of the pool, whatever their notes. So is an identity with two readings of one measure that count. So is an identity whose reading has claims in two cohorts. This is the test's rule, and the author's choice. What would give more: ROADMAP's rule, which takes the latest reading. ROADMAP keeps its own rule for a real pool, where a person must be able to correct a reading.
-- **One bundle is one bundle.** A bundle is its `objects` and its `files`. Two folders with one share id that pass their check are one bundle, and it is taken once. They hold the same records and files: the share record lists each one, and the check holds the list.
+- **One bundle is one bundle.** Two folders with one share id that pass their check are one bundle, and it is taken once. They hold the same records: the share record lists each one, and the check holds the list.
 - **What it prints.** One line for each identity: taken, or left out and why. Each identity that it takes counts as one in its cell. A bundle that fails its check has no identity that can be trusted, so its line names the folder. The builder writes out safely every text that it quotes, so that no text can fake a line.
 
 ### The pack
@@ -114,11 +114,11 @@ It is `tools/pool/` and `make pool`. **It is built (DECISIONS 334).** [tools/poo
 
 ### The archive
 
-- **From a folder,** the builder writes the archive first, and then the pack that names it. The archive holds the bundles that the builder took, and no other. It holds each bundle's `objects` and `files`, and nothing else.
+- **From a folder,** the builder writes the archive first, and then the pack that names it. The archive holds the bundles that the builder took, and no other. It holds the record files under each bundle's `objects`, and nothing else. No bundle with a carried file is taken.
 - It is written by the conditions of F3, with entries that are stored and not compressed. The builder sets every field of an entry that differs between systems. So the same bundles give the same bytes.
 - **From an archive,** the builder writes none. The pack names the SHA-256 of the file as it was given. The builder stops unless it takes every bundle in that archive. It also stops unless the file is, byte for byte, the archive that it writes of those bundles. It takes only entries that are stored, and no entry that is packed: so no entry grows when it is read.
 - The builder says, when it writes one, what an archive shows. That is every record of every bundle, whole: each value, each identity id and key, and each time.
-- The builder reads an archive as `unseal.py` reads a package: no path that leaves its folder, no link, and a limit of size.
+- The builder takes an entry of an archive only by its name, which is the name of a record file. So no path leaves the folder. It has a limit of size.
 
 ### Two tests, and what each is called
 

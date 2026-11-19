@@ -28,13 +28,13 @@ The builder is `build.py`. It holds no key, and reads opened bundles only.
 
 ## What a contributor does
 
-Each made-up log gets one reading, one saved comparison with a survey pack, and one more record. It shares the comparison, sealed to the operator's address:
+Each made-up log gets one reading, one saved comparison with a survey pack, and one more record. It shares the comparison, sealed to the operator's address. The command below is for a made-up log only. A person never shares so:
 
     bean share -for <address> -address-words "…" -yes -note "synthetic contributor" -out <new file> -type 'comparison.*'
 
 The share holds the comparison and its reading. It holds no other reading of the log. It also holds the identity's records, and the time of the share with its offset from UTC.
 
-The note is for a made-up log only. On a share of a person it would be false, and it is all that lets a bundle into this builder.
+The note is for a made-up log only. On a share of a person it would be false. It is this builder's only gate against a share of a real person.
 
 `-yes`, address words read from the operator's own output, and one key file for every sender are for made-up logs only. A person never shares so.
 
@@ -49,7 +49,7 @@ It stops without `-synthetic`. With it, the operator says that every contributor
 - It computes each claim again with `tools/compare/reproduce.py`, and the survey pack.
 - It checks its own pack with `tools/pack/check.py`.
 
-Its own rules are in [POOL-PLAN.md](../../docs/POOL-PLAN.md), under "The builder". It prints one line for each identity or folder: taken, or left out and why. A line on a claim that does not compute again holds the value of its reading, as the check of a claim prints it.
+Its own rules are in [POOL-PLAN.md](../../docs/POOL-PLAN.md), under "The builder". It prints at least one line for each identity or folder: taken, or left out and why, with the folder's name. For every problem of a bundle that fails its check, run `tools/second/checkbundle.py <folder>`. A line on a claim that does not compute again holds the value of its reading, as the check of a claim prints it.
 
 An opened bundle is what `tools/second/unseal.py -key <key file> <package> <new folder>` writes. `run.sh` does that for each package.
 
@@ -70,13 +70,13 @@ It writes over nothing.
 
 bean has no record of such a pack. `bean compare` takes it only with `-unknown-pack`, and says so with each result.
 
-bean's own lines under a result are wrong for this pack. It prints "fewer than 100 people" and "in this sample". Those are forty keys of one script. It says to compare the SHA-256 "with the one that its publisher states", and this pack has no publisher. The measure keeps the survey pack's own label.
+bean's own lines under a result are wrong for this pack. It prints "fewer than 100 people" and "in this sample". Those are forty keys of one script. For the cell of one identity, bean prints that identity's value as the median and as the middle half. It says to compare the SHA-256 "with the one that its publisher states", and this pack has no publisher. The measure keeps the survey pack's own label.
 
 ## The test vector
 
 `vector/` holds one archive of 41 made-up bundles, the survey pack that their claims name, and `pool.sha256`.
 
-`make pool` runs the builder on the two files. The pack must have the SHA-256 that `pool.sha256` states. To do it by hand, take the two URLs from the line `URL=` of `run.sh`: they are part of the pack's bytes. That is all that "reproducible" means here: the same program and the same two files give the same bytes.
+`make pool` runs the builder on the two files. The pack must have the SHA-256 that `pool.sha256` states. To do it by hand, take the line `URL=` of `run.sh`, and add `/SYNTHETIC-survey.pack` and `/pool-bundles.zip` to it. The two URLs are part of the pack's bytes. That is all that "reproducible" means here: the same program and the same two files give the same bytes.
 
 **`SYNTHETIC-survey.pack` calls itself the survey's.** It was built from the made-up files in `internal/nhanes/testdata`, with the survey's own builder, which is not changed here. So its title and its publisher are the survey's. Its data is made up. It is here for this test alone.
 
@@ -108,6 +108,8 @@ Forty good packages give one cell of forty identities. Some of the forty logs ha
 | A file among the folders of bundles | It is named, and not read. |
 | Two readings of one measure | The identity is left out. |
 | One reading with claims in two cohorts | The identity is left out. |
+| A reading with a photo, shared with its file | The identity is left out: the bundle holds more than comparisons and their readings. |
+| Files whose names start with a dot, in a good bundle | The bundle is taken. The archive does not hold them. |
 | The same bundle twice | It is taken once. |
 | One claim twice, with two times | Its reading counts once. |
 | A folder that is no bundle, with a line end in its name | It is left out, and its name is written out on one line. |
@@ -120,7 +122,8 @@ The test also holds these.
 - An archive with a path that leaves its folder is refused, and nothing is written outside.
 - A bundle whose records are larger together than its limit is left out. The limit is 1 MiB, and the test holds it with a lower number.
 - When the builder's own check refuses the pack, nothing is written: no archive either.
-- An archive that is damaged or packed is refused. So is one with a link, with one entry twice, with an entry for a folder, with a comment, or with other bytes before it.
+- An archive that is damaged or packed is refused. So is one with a link, with one entry twice, with an entry for a folder, with a comment, or with other bytes before it. So is one of a version that Python's reader does not know.
+- When the pack cannot be written, the archive does not stay behind. A bundle that the check cannot read gets a line. The test holds both only for a user who is not root.
 - A claim in letters that a plain terminal cannot show does not stop the builder.
 - No run of the builder ends in a traceback.
 - One more made-up log compares with the pack, and bean's output says `synthetic pool`.

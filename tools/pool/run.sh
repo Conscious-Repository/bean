@@ -236,6 +236,19 @@ echo stray >"$T/open/stray.txt"
 # make a line of the builder.
 mkdir "$T/open/"$'no-bundle\ntaken     a line that the builder did not write'
 
+# A reading with a photo, shared with its file: the bundle holds a file.
+"$PY" -I -B -c 'import struct, sys, zlib  # an image of one pixel: bean takes no other file as a photo
+c = lambda t, d: struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+open(sys.argv[1], "wb").write(b"\x89PNG\r\n\x1a\n" + c(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 0, 0, 0, 0)) + c(b"IDAT", zlib.compress(b"\x00\x00")) + c(b"IEND", b""))' "$T/photo.png"
+new_log photo; b photo add lab.hdl-cholesterol 66 -unit mg/dL -photo "$T/photo.png" >/dev/null 2>&1 || say "the reading with a photo was not added"
+compare photo female-20-29
+share photo photo -note "synthetic contributor" -files "$(first_claim photo)" "$(b photo ls -json -type lab.hdl-cholesterol | "$PY" -I -B -c 'import json, sys; print(json.loads(sys.stdin.readline())["id"])')"; unseal photo
+[ -n "$(ls "$T/open/photo/files" 2>/dev/null)" ] || say "the bundle of the reading with a photo holds no file"
+
+# Files whose names start with a dot, in a good bundle: the check of a
+# bundle passes over them, and so does the archive.
+echo hidden >"$T/open/c5/objects/.hidden"; mkdir "$T/open/c5/objects/.d"; echo hidden >"$T/open/c5/objects/.d/z"
+
 # The same bundle handed in twice.
 cp -R "$T/open/c3" "$T/open/c3-again"
 
@@ -270,7 +283,7 @@ grep -q '^cell      LBDHDD pool-female-20-29: n 40$' "$T/build.txt" || say "the 
 line '^left out  folder badsig: the bundle fails its check' "a record with a bad signature"
 line 'this tool computes' "a claim with false numbers"
 line 'not signed by the person' "a claim that an agent signed"
-line 'names another pack' "a claim that names another survey pack"
+line 'does not compute again: the pack with SHA-256 [0-9a-f]* is not among' "a claim that names another survey pack"
 [ "$(grep -c "the identity's own key did not sign its reading" "$T/build.txt")" = 1 ] || say "the builder does not name exactly one reading that an agent signed"
 line 'cannot hold the value' "a value that pack/0 cannot hold"
 line '^left out  .*: folder nonote: the note' "a bundle with no note"
@@ -286,7 +299,9 @@ line 'two readings of one measure that count' "two readings of one measure"
 line 'a reading with claims in two cohorts' "claims in two cohorts"
 line '^the same  folder c3-again' "the same bundle handed in twice"
 # The agent's claim fails the check of a claim: the person did not sign it.
-[ "$(grep -c '^left out  .*: its bundle has a claim that does not count, or no claim$' "$T/build.txt")" = 6 ] || say "six identities have a claim that does not count, and the builder names $(grep -c 'a claim that does not count, or no claim$' "$T/build.txt")"
+[ "$(grep -c '^left out  .*: folder [^:]*: a claim of its bundle does not count$' "$T/build.txt")" = 6 ] || say "six identities have a claim that does not count, and the builder names $(grep -c 'a claim of its bundle does not count$' "$T/build.txt")"
+line '^left out  .*: folder tworeadings: two readings' "the folder of an identity with two readings"
+line '^left out  .*: folder photo: it holds more than comparisons' "a reading that carries a file"
 grep -q '^An archive shows every record of every bundle in it, whole' "$T/build.txt" || say "the builder does not say what an archive shows, when it writes one"
 
 "$PY" -I -B "$ROOT/tools/pack/check.py" "$T/pool.pack" >"$T/pc.txt" 2>&1 || say "check.py refuses the pool's pack: $(tail -1 "$T/pc.txt")"
@@ -378,6 +393,8 @@ with zipfile.ZipFile(t + "/link.zip", "w", zipfile.ZIP_STORED) as out:
     for i, (name, content) in enumerate(entries):
         out.writestr(entry(name, 0o120777 if i == 0 else 0o100644), content)
 open(t + "/junk.zip", "wb").write(b"junk before the archive\n" + bytes(data))
+version = bytearray(data); version[data.find(b"PK\x01\x02") + 6] = 90
+open(t + "/version.zip", "wb").write(version)
 import warnings
 warnings.simplefilter("ignore")
 with zipfile.ZipFile(t + "/twice.zip", "w", zipfile.ZIP_STORED) as out:
@@ -401,6 +418,7 @@ refused packed "packed" "not a stored file of a bundle"
 refused link "a link in one entry" "byte for byte"
 refused comment "written with a comment" "byte for byte"
 refused junk "written after other bytes" "byte for byte"
+refused version "of a version that the reader does not know" "the archive cannot be read"
 refused twice "written with one entry twice" "not a stored file of a bundle"
 refused folder "written with an entry for a folder" "not a stored file of a bundle"
 builder -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/no7.pack" -archive "$T/no7.zip" "$T/pool.zip" >"$T/no7.txt" 2>&1 && say "the builder took -archive with an archive"
@@ -457,6 +475,20 @@ builder -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/p
 builder -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/nofolder/x.pack" -archive "$T/never2.zip" "$T/shuffled" >"$T/no12.txt" 2>&1 && say "the builder ran with no folder for its pack"
 grep -q "^STOPPED: -out: the folder of " "$T/no12.txt" || say "the builder does not say that the folder of the pack is missing: $(tail -1 "$T/no12.txt")"
 [ -e "$T/never2.zip" ] && say "the builder wrote an archive for a pack whose folder is not there"
+# The checks below need a user that a mode of a folder stops: not root.
+mkdir "$T/ro"; chmod 555 "$T/ro"
+if ! ( : >"$T/ro/probe" ) 2>/dev/null; then
+  # The pack cannot be written: the archive does not stay behind.
+  builder -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/ro/p.pack" -archive "$T/ro2.zip" "$T/shuffled" >"$T/ro.txt" 2>&1 && say "the builder wrote a pack into a folder that takes none"
+  grep -q "^STOPPED: .*no file is left behind" "$T/ro.txt" || say "the builder does not say that it left no file behind: $(tail -1 "$T/ro.txt")"
+  [ -e "$T/ro2.zip" ] && say "the builder left an archive behind when it could not write the pack"
+  # A bundle whose records cannot be read: it gets a line.
+  mkdir "$T/locked"; cp -R "$T/open/c7" "$T/locked/c7"; chmod 000 "$T/locked/c7/objects"
+  builder -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/locked.pack" -archive "$T/locked.zip" "$T/locked" >"$T/locked.txt" 2>&1 && say "the builder took a bundle that it cannot read"
+  chmod 700 "$T/locked/c7/objects"
+  grep -q "^left out  folder c7: the bundle fails its check" "$T/locked.txt" || say "a bundle that cannot be read has no line: $(tail -1 "$T/locked.txt")"
+fi
+chmod 755 "$T/ro"
 builder -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/no8.pack" -archive "$T/pool.zip" "$T/shuffled" >"$T/no8.txt" 2>&1 && say "the builder wrote over an archive"
 grep -q "^STOPPED: -archive: .* is there already" "$T/no8.txt" || say "the builder does not say that the archive is there already: $(tail -1 "$T/no8.txt")"
 builder -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/one.file" -archive "$T/one.file" "$T/shuffled" >"$T/no5.txt" 2>&1 && say "the builder took one file for the pack and the archive"
@@ -490,5 +522,5 @@ fi
 
 FIRST="the vector's pack has the SHA-256 on record"
 [ -n "${POOL_VECTOR_OUT:-}" ] && FIRST="a new vector is written"
-[ $rc = 0 ] && echo "pool: $FIRST; the path runs with 40 made-up contributors, and each bad input is left out"
+[ $rc = 0 ] && echo "pool: $FIRST; the path runs with 41 made-up contributors, and each bad input is left out"
 exit $rc

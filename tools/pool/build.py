@@ -32,8 +32,8 @@ a bundle or of a claim. Its own rules are these:
   - a bundle is left out when it holds more than comparisons and the
     readings that they are about: another record, or any file that a
     record carries. An archive shows all the records of a bundle;
-  - a claim counts when it names the survey pack that the builder was given,
-    computes again, and the identity's own key signed its reading. The
+  - a claim counts when it computes again with the survey pack that the
+    builder was given, and the identity's own key signed its reading. The
     check of a claim holds that the person signed the claim. A bundle with
     a claim that does not count is left out;
   - a bundle whose records are larger together than 1 MiB is left out;
@@ -147,7 +147,7 @@ def open_archive(data, into):
     with the builder's own bytes holds, in assemble."""
     try:
         z = zipfile.ZipFile(io.BytesIO(data))
-    except (zipfile.BadZipFile, OSError, ValueError) as err:
+    except (zipfile.BadZipFile, NotImplementedError, OSError, ValueError) as err:
         raise Stop("the archive cannot be read: %s" % err)
     with z:
         infos = z.infolist()
@@ -166,11 +166,11 @@ def open_archive(data, into):
                 raise Stop("the archive is damaged at %s: %s" % (safe(info.filename)[:120], err))
             full = os.path.join(into, *info.filename.split("/"))
             os.makedirs(os.path.dirname(full), exist_ok=True)
-            with open(full, "xb") as f:
+            with open(full, "wb") as f:
                 f.write(content)
 
 
-def read_bundle(name, folder, survey_path, survey_sha):
+def read_bundle(name, folder, survey_path):
     """One folder. Returns ("refused", why) for a folder that fails the
     check of a bundle, or ("bundle", facts). facts["why"] says why a bundle
     that passed its check is not taken, when it is not."""
@@ -186,7 +186,7 @@ def read_bundle(name, folder, survey_path, survey_sha):
     if (share.get("context") or {}).get("note") != NOTE:
         got["why"] = "the note of its share is not exactly %r: this builder takes made-up contributors only" % NOTE
         return "bundle", got
-    claims = sorted((r for r in holds if r.get("type") == "comparison.percentile"), key=lambda r: r["id"])
+    claims = [r for r in holds if r.get("type") == "comparison.percentile"]
     about = {c["context"]["reading"] for c in claims if isinstance(c.get("context"), dict) and isinstance(c["context"].get("reading"), str)}
     if any(r.get("type") != "comparison.percentile" and r["id"] not in about for r in holds) or carries_files(folder):
         got["why"] = "it holds more than comparisons and the readings that they are about"
@@ -201,18 +201,15 @@ def read_bundle(name, folder, survey_path, survey_sha):
         inputs.add_record(rel, files[rel])
     for claim in claims:
         short = claim["id"][7:19]
-        ctx = claim.get("context") or {}
-        ref = ctx.get("reference") if isinstance(ctx.get("reference"), dict) else {}
-        if ref.get("pack") != survey_sha:
-            got["notes"].append("claim %s names another pack than the survey pack that the builder was given" % short)
-            continue
         try:
+            # The survey pack is the only pack among the inputs: a claim
+            # that names another pack does not compute again.
             reproduce.check(claim, inputs)
         except (reproduce.Missing, KeyError, TypeError, ValueError, AttributeError, OSError, OverflowError, packcheck.NotPlaced) as err:
             got["notes"].append("claim %s does not compute again: %s" % (short, err))
             continue
-        reading = inputs.records[ctx["reading"]]
-        if reading.get("author") != person or reading.get("subject") != person:
+        ref, reading = claim["context"]["reference"], inputs.records[claim["context"]["reading"]]
+        if reading.get("author") != person:  # the check of a claim holds that the reading is about the person
             got["notes"].append("claim %s: the identity's own key did not sign its reading" % short)
             continue
         value = reading["value"]["n"]
@@ -272,11 +269,11 @@ def assemble(args, source, given, survey, survey_path, survey_sha, survey_bytes)
     by_share, order = {}, []
     for name in sorted(os.listdir(source)):
         folder = os.path.join(source, name)
-        if not os.path.isdir(folder) or os.path.islink(folder):
+        if not os.path.isdir(folder):
             print("not read  %s: it is no folder" % safe(name))
             left += 1
             continue
-        kind, got = read_bundle(name, folder, survey_path, survey_sha)
+        kind, got = read_bundle(name, folder, survey_path)
         if kind == "refused":
             print("left out  folder %s: %s" % (safe(name), safe(got)))
             left += 1
@@ -303,20 +300,25 @@ def assemble(args, source, given, survey, survey_path, survey_sha, survey_bytes)
         why = None
         if len(bundles) > 1:
             why = "two different bundles of one identity: folders %s" % ", ".join(safe(b["name"]) for b in bundles)
-        elif bundles[0]["why"]:
-            why = "folder %s: %s" % (safe(bundles[0]["name"]), bundles[0]["why"])
         else:
-            counted = bundles[0]["counted"]
+            b = bundles[0]
             by_measure, by_reading = {}, {}
-            for measure, cohort, rid, _ in counted:
+            for measure, cohort, rid, _ in b["counted"]:
                 by_measure.setdefault(measure, set()).add(rid)
                 by_reading.setdefault(rid, set()).add(cohort)
-            if bundles[0]["notes"] or not counted:
-                why = "its bundle has a claim that does not count, or no claim"
+            reason = b["why"]
+            if reason:
+                pass
+            elif b["notes"]:
+                reason = "a claim of its bundle does not count"
+            elif not b["counted"]:
+                reason = "its bundle has no claim"
             elif any(len(v) > 1 for v in by_measure.values()):
-                why = "two readings of one measure that count"
+                reason = "two readings of one measure that count"
             elif any(len(v) > 1 for v in by_reading.values()):
-                why = "a reading with claims in two cohorts"
+                reason = "a reading with claims in two cohorts"
+            if reason:
+                why = "folder %s: %s" % (safe(b["name"]), reason)
         if why:
             print("left out  %s: %s" % (words, why))
             left += 1
@@ -365,18 +367,22 @@ def assemble(args, source, given, survey, survey_path, survey_sha, survey_bytes)
         packcheck.parse_pack(data)
     except packcheck.Refused as err:
         raise Stop("the builder made a pack that its own check refuses, and wrote nothing: %s" % err)
-    # The archive first, then the pack that names it.
+    # The archive first, then the pack that names it: both, or neither.
     if not from_archive:
         print(ARCHIVE_SHOWS)
-        with open(args["archive"], "xb") as f:
-            f.write(archive)
+    made = []
+    try:
+        for path, content in ([] if from_archive else [(args["archive"], archive)]) + [(args["out"], data)]:
+            with open(path, "xb") as f:
+                made.append(path)
+                f.write(content)
+    except OSError as err:
+        for path in made:
+            os.remove(path)
+        raise Stop("%s: no file is left behind" % err)
+    if not from_archive:
         print("wrote the archive %s: %d bundles" % (args["archive"], len(taken)))
     print("archive sha256 %s" % archive_sha)
-    try:
-        with open(args["out"], "xb") as f:
-            f.write(data)
-    except OSError as err:
-        raise Stop("-out: %s%s" % (err, "" if from_archive else ". The archive %s stays: delete it" % args["archive"]))
     print("wrote the pack %s" % args["out"])
     print("pack sha256 %s" % hashlib.sha256(data).hexdigest())
     return 0
