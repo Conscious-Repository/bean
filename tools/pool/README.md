@@ -100,8 +100,9 @@ Forty good packages give one cell of forty identities. Some of the forty logs ha
 | A claim that names another survey pack | The same. |
 | One claim that counts, and one that does not, in one bundle | The identity is left out. |
 | A claim whose reading is a list, and no id | The identity is left out, and the builder does not stop. |
+| A claim with no context at all | The same. |
 | A reading that an agent signed, and a claim that an agent signed | The same. |
-| A reading whose value `pack/0` cannot hold | The same. |
+| A reading whose value `pack/0` cannot hold: too large, or too small | The same. |
 | A bundle with no note, and one with another note | The identity is left out, and the line names the folder. |
 | A bundle with one more record than a comparison and its reading | The same. |
 | Two different shares of one identity, and two of which one has no note | The identity is left out. |
