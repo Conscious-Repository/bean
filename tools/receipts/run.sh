@@ -112,20 +112,20 @@ has '^  refused   folder "nobundle": the check of a bundle says "the folder is n
 has '^  taken     folder "agent": 0 records of a source file by .*; 1 more, not signed by the identity.s own key and not counted$' "a statement that an agent signed"
 
 # The counts: an identity counts once for a digest, in however many bundles.
-has "^  dataset HDL_J, SHA-256 $CHANGED: 6 identities state it\$" "the six that state the changed file"
-has "^  dataset HDL_J, SHA-256 $GOOD: 4 identities state it\$" "the four that state the unchanged file"
-has "^  dataset HDL_J, SHA-256 $TABLE: 1 identity states it\$" "the one that states the table's digest"
-has "^  dataset BMX_J, SHA-256 $TABLE2: 1 identity states it\$" "a second dataset"
+has "^  dataset \"HDL_J\", SHA-256 $CHANGED: 6 identities state it\$" "the six that state the changed file"
+has "^  dataset \"HDL_J\", SHA-256 $GOOD: 4 identities state it\$" "the four that state the unchanged file"
+has "^  dataset \"HDL_J\", SHA-256 $TABLE: 1 identity states it\$" "the one that states the table's digest"
+has "^  dataset \"BMX_J\", SHA-256 $TABLE2: 1 identity states it\$" "a second dataset"
 count '^  dataset ' 5 "digests"
 has '^  taken     folder "m1": 1 record of a source file by ' "a share with a note beside its receipt: one record of a source file"
-has '^    This digest is in the table of bean.s code, for HDL_J, and not for DEMO_J\.' "a digest of the table under another dataset's name"
+has '^    This digest is in the table of bean.s code, for HDL_J, and not for "DEMO_J"\.' "a digest of the table under another dataset's name"
 grep -q "$T" "$T/out.txt" && say "a line of the tally names a path of the scratch folder"
 # Lines are in the order of the digests, and not of the counts.
-"$PY" -I -B -c 'import re, sys; d = re.findall(r"^  dataset (\S+), SHA-256 ([0-9a-f]{64})", open(sys.argv[1]).read(), re.M); sys.exit(0 if d == sorted(d) and len(d) == 5 else 1)' "$T/out.txt" \
+"$PY" -I -B -c 'import re, sys; d = re.findall(r"^  dataset \"(\S+)\", SHA-256 ([0-9a-f]{64})", open(sys.argv[1]).read(), re.M); sys.exit(0 if d == sorted(d) and len(d) == 5 else 1)' "$T/out.txt" \
   || say "the lines are not in the order of the datasets and of the digests"
 
 # The two marks.
-count 'this identity states 2 digests for HDL_J' 4 "the two identities that state two digests, each under both"
+count 'this identity states 2 digests for "HDL_J"' 4 "the two identities that state two digests, each under both"
 count 'This digest is in the table of bean.s code, for HDL_J' 2 "the digest of HDL_J in the project's own table"
 count 'This digest is in the table of bean.s code, for BMX_J\.' 1 "the digest of BMX_J in the project's own table"
 count 'A match proves no fetch, and does not show that the digest is right' 3 "what the table's mark is not"

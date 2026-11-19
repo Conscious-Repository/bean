@@ -121,14 +121,15 @@ def tally(source):
         print("  nothing: no record of a source file was taken")
     for dataset, digest in sorted(stated):
         people = stated[(dataset, digest)]
-        print("  dataset %s, SHA-256 %s: %d identit%s" % (dataset, digest, len(people), "y states it" if len(people) == 1 else "ies state it"))
+        # A dataset's name is its signer's word, also when it has the form of one: it is quoted.
+        print("  dataset \"%s\", SHA-256 %s: %d identit%s" % (dataset, digest, len(people), "y states it" if len(people) == 1 else "ies state it"))
         if digest in table:
             print("    This digest is in the table of bean's code, for %s%s. The table is from the project's own fetches of November 2026." % (
-                table[digest], "" if table[digest] == dataset else ", and not for %s" % dataset))
+                table[digest], "" if table[digest] == dataset else ", and not for \"%s\"" % dataset))
             print("    A match proves no fetch, and does not show that the digest is right: a statement that was copied from the table matches too.")
         for person in sorted(people, key=checkbundle.id_words):
             n = len(by_person[(person, dataset)])
-            print("    %s%s" % (checkbundle.id_words(person), "" if n == 1 else "  [this identity states %d digests for %s]" % (n, dataset)))
+            print("    %s%s" % (checkbundle.id_words(person), "" if n == 1 else "  [this identity states %d digests for \"%s\"]" % (n, dataset)))
             for line in sorted(set(people[person])):
                 print("      %s" % line)
     if malformed:
