@@ -81,7 +81,7 @@ It says each time what it does not show:
 
 `run.sh` makes a fixture of made-up identities, and runs the tally on it. Every note in it says `synthetic`.
 
-The fixture is chosen so that nobody learns that the larger count is right. Five identities state a test file with one changed byte. Three state the unchanged test file.
+The fixture is chosen so that nobody learns that the larger count is right. Six identities state a test file with one changed byte. Four state the unchanged test file.
 
 | What is handed in | What must happen |
 |---|---|
@@ -93,10 +93,11 @@ The fixture is chosen so that nobody learns that the larger count is right. Five
 | One identity that states the unchanged file, and carries it | It counts. |
 | One that states a digest of bean's table, with no file | `States only.`, and the mark of the table. |
 | One that states both files, in two bundles | It is listed under each digest, and marked. |
+| One that states both digests in one share, with no file | The same. The tally took one dataset of that share. |
 | One that imports the unchanged file, and states its digest again in a record with no file | It counts once. The second record gets `States only.` |
 | One that shares its record without the file | It counts, with `States only.` |
 | A digest in upper case, one with two more letters, and one that is a number | Malformed, and not counted. |
-| A dataset's name with a space, and one with another character at its end | The same. |
+| A dataset's name with a space, one with another character at its end, and one that is a number | The same. The line of the share says how many of its records are malformed. |
 | A digest of the table under another dataset's name, and one of a second dataset | Each is listed, and the mark says for which dataset the table has it. |
 | A statement that an agent of the identity signed | Not counted, and the line says so. |
 | A bundle whose carried file has other bytes | The bundle is refused whole. |

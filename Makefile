@@ -14,7 +14,7 @@ help:
 	@echo "make second        compare bean with the second verifier and the conformance folders"
 	@echo "make compare       compute every saved comparison again with Python and pandas"
 	@echo "make pack          build a reference pack and check it with bean and with Python, good and with one thing wrong"
-	@echo "make pool          build the pack of a synthetic pool from made-up contributors, and check what the builder leaves out"
+	@echo "make pool          build the pack of a synthetic pool from made-up contributors, check what the builder leaves out, and run the tally of receipts"
 	@echo "make bundles       check share bundles, good and damaged, with bean, with Python and with the page"
 	@echo "make device        check a device's folder with Go and with Python, good and with one thing wrong"
 	@echo "make page          build bean-check.html, the page that checks a bundle in a browser"

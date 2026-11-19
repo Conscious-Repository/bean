@@ -54,8 +54,7 @@ def carried(share, record, digest):
     """True when the share record lists a file for the record with the stated
     SHA-256. The check of the bundle, which ran before, holds that a listed
     file is in the bundle, and computed its SHA-256."""
-    files = (share.get("context") or {}).get("files") or []
-    return any(f.get("record") == record["id"] and f.get("sha256") == digest for f in files)
+    return any(f.get("record") == record["id"] and f.get("sha256") == digest for f in share["context"].get("files") or [])
 
 
 def tally(source):
@@ -63,7 +62,7 @@ def tally(source):
     shares = {}                 # share id: the folder that had it first
     stated = {}                 # (dataset, digest): {person: [line, ...]}
     by_person = {}              # (person, dataset): {digest}
-    malformed = []
+    malformed = set()
     for name in sorted(os.listdir(source)):
         folder = os.path.join(source, name)
         if not os.path.isdir(folder):
@@ -84,22 +83,24 @@ def tally(source):
         words = checkbundle.id_words(person)
         receipts = [r for r in holds if r.get("type") == "reference.file"]
         own = [r for r in receipts if r.get("author") == person]  # the check holds that a listed record is about the person
-        print("  taken     folder %s: %d record%s of a source file by %s%s" % (
-            plain(name), len(own), "" if len(own) == 1 else "s", words,
-            "" if len(own) == len(receipts) else "; %d more that the identity's own key did not sign are not counted" % (len(receipts) - len(own))))
-        good = []
-        for r in sorted(own, key=lambda r: r["id"]):
-            ctx = r.get("context") if isinstance(r.get("context"), dict) else {}
+        good, bad = [], 0
+        for r in own:
+            ctx = r.get("context") if isinstance(r.get("context"), dict) else {}  # a record of another tool can have any context
             dataset, digest = ctx.get("dataset"), ctx.get("sha256")
             if not isinstance(dataset, str) or not isinstance(digest, str) or not DATASET_RE.fullmatch(dataset) or not DIGEST_RE.fullmatch(digest):
-                malformed.append("%s, record %s: dataset \"%s\", SHA-256 \"%s\"" % (words, r["id"][7:19], plain(dataset, 40), plain(digest, 80)))
+                malformed.add("%s, record %s: dataset \"%s\", SHA-256 \"%s\"" % (words, r["id"][7:19], plain(dataset, 40), plain(digest, 80)))
+                bad += 1
                 continue
             good.append((dataset, digest, carried(share, r, digest)))
-        note = (share.get("context") or {}).get("note")
+        print("  taken     folder %s: %d record%s of a source file by %s%s%s" % (
+            plain(name), len(own), "" if len(own) == 1 else "s", words,
+            "" if not bad else "; %d of them malformed, and not counted" % bad,
+            "" if len(own) == len(receipts) else "; %d more that the identity's own key did not sign are not counted" % (len(receipts) - len(own))))
+        note = share["context"].get("note")  # the check holds that a share record has a context
         datasets = len({d for d, _, _ in good})
         for dataset, digest, has_file in good:
             line = "States only." if not has_file else "Carries a file: " + CARRIES
-            if isinstance(note, str) and note:
+            if note:
                 line += "\n        The signer's note on this share, of which the tally took %d dataset%s: \"%s\"" % (datasets, "" if datasets == 1 else "s", plain(note, MAX_NOTE))
             stated.setdefault((dataset, digest), {}).setdefault(person, []).append(line)
             by_person.setdefault((person, dataset), set()).add(digest)

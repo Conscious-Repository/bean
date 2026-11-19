@@ -8,7 +8,7 @@
 # the review, and seals a share to its reader.
 #
 # The fixture is chosen so that nobody learns that the larger count is
-# right: five identities state a file with one changed byte, and three the
+# right: six identities state a file with one changed byte, and four the
 # file as it is.
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -43,7 +43,7 @@ state() {
   local n=$1 dataset=$2 digest=$3; shift 3
   "$PY" -I -B -c 'import json, sys; print(json.dumps({"type": "reference.file", "value": {"n": 1, "unit": "{file}"}, "times": {"observed": None},
     "source": {"system": "nhanes", "adapter": "made-up@0", "ref": None},
-    "context": {"assurance": "unsigned-file", "bytes": 33440, "dataset": sys.argv[1], "sha256": 5 if sys.argv[2] == "a-number" else sys.argv[2]}}))' "$dataset" "$digest" >"$T/state.jsonl"
+    "context": {"assurance": "unsigned-file", "bytes": 33440, "dataset": 5 if sys.argv[1] == "a-number" else sys.argv[1], "sha256": 5 if sys.argv[2] == "a-number" else sys.argv[2]}}))' "$dataset" "$digest" >"$T/state.jsonl"
   b "$n" append "$@" <"$T/state.jsonl" >"$T/append.txt" 2>&1 || say "log $n: the statement was not appended: $(tail -1 "$T/append.txt")"
 }
 
@@ -74,12 +74,15 @@ new_log two; import two "$FILE"; import two "$T/changed/HDL_J.XPT"
 share two two-a "synthetic" -files $(receipts two "$GOOD"); share two two-b "synthetic" -files $(receipts two "$CHANGED")
 # One states a digest in capitals, a dataset's name with a blank, and a
 # digest that is a number and no text.
-new_log bad; state bad HDL_J "$(echo "$GOOD" | tr a-f A-F)"; state bad 'hdl j' "$GOOD"; state bad HDL_J a-number; state bad 'HDL_J!' "$GOOD"; state bad HDL_J "${GOOD}zz"; share bad bad "synthetic" $(b bad ls -json -type reference.file | "$PY" -I -B -c 'import json, sys; print("\n".join(json.loads(l)["id"] for l in sys.stdin))')
+new_log bad; state bad HDL_J "$(echo "$GOOD" | tr a-f A-F)"; state bad 'hdl j' "$GOOD"; state bad HDL_J a-number; state bad 'HDL_J!' "$GOOD"; state bad HDL_J "${GOOD}zz"; state bad a-number "$GOOD"; share bad bad "synthetic" $(b bad ls -json -type reference.file | "$PY" -I -B -c 'import json, sys; print("\n".join(json.loads(l)["id"] for l in sys.stdin))')
 # One imports the unchanged file, and also states its digest in a second
 # record with no file. The file is listed for the first record alone.
 new_log mix; import mix "$FILE"; state mix HDL_J "$GOOD"; share mix mix "synthetic" -files $(receipts mix)
 # One imports the changed file, and shares its record without the file.
 new_log nofile; import nofile "$T/changed/HDL_J.XPT"; share nofile nofile "synthetic" $(receipts nofile)
+# One states two digests for one dataset in one share: the tally took one
+# dataset of that share.
+new_log pair; state pair HDL_J "$GOOD"; state pair HDL_J "$CHANGED"; share pair pair "synthetic: two digests" $(receipts pair)
 # One statement that an agent of the identity signed.
 new_log agent; b agent agent init -label assistant >/dev/null 2>&1; state agent HDL_J "$GOOD" -agent; share agent agent "synthetic" $(receipts agent)
 # One bundle whose carried file is not the file that its record states.
@@ -97,7 +100,8 @@ has() { grep -q -- "$1" "$T/out.txt" || say "the tally has no line for $2"; }
 count() { [ "$(grep -c -- "$1" "$T/out.txt")" = "$2" ] || say "the tally has $(grep -c -- "$1" "$T/out.txt") lines for $3, and not $2"; }
 
 # What it was given.
-count '^  taken ' 12 "bundles that it took"
+count '^  taken ' 13 "bundles that it took"
+has '^  taken     folder bad: 6 records of a source file by .*; 6 of them malformed, and not counted$' "a share whose statements are all malformed"
 has '^  refused   folder broken: ' "a bundle that fails its check"
 has '^  the same  folder m1-again holds the share of folder m1 again' "a share that was handed in twice"
 has '^  not read  stray.txt' "something that is no folder"
@@ -105,8 +109,8 @@ has '^  refused   folder nobundle: the folder is not a bundle' "a folder that is
 has '^  taken     folder agent: 0 records of a source file by .*; 1 more that the identity.s own key did not sign' "a statement that an agent signed"
 
 # The counts: an identity counts once for a digest, in however many bundles.
-has "^  dataset HDL_J, SHA-256 $CHANGED: 5 identities state it\$" "the five that state the changed file"
-has "^  dataset HDL_J, SHA-256 $GOOD: 3 identities state it\$" "the three that state the unchanged file"
+has "^  dataset HDL_J, SHA-256 $CHANGED: 6 identities state it\$" "the six that state the changed file"
+has "^  dataset HDL_J, SHA-256 $GOOD: 4 identities state it\$" "the four that state the unchanged file"
 has "^  dataset HDL_J, SHA-256 $TABLE: 1 identity states it\$" "the one that states the table's digest"
 has "^  dataset BMX_J, SHA-256 $TABLE2: 1 identity states it\$" "a second dataset"
 count '^  dataset ' 5 "digests"
@@ -118,7 +122,7 @@ grep -q "$T" "$T/out.txt" && say "a line of the tally names a path of the scratc
   || say "the lines are not in the order of the datasets and of the digests"
 
 # The two marks.
-count 'this identity states 2 digests for HDL_J' 2 "the identity that states two digests"
+count 'this identity states 2 digests for HDL_J' 4 "the two identities that state two digests, each under both"
 count 'This digest is in the table of bean.s code, for HDL_J' 2 "the digest of HDL_J in the project's own table"
 count 'This digest is in the table of bean.s code, for BMX_J\.' 1 "the digest of BMX_J in the project's own table"
 count 'A match proves no fetch, and does not show that the digest is right' 3 "what the table's mark is not"
@@ -127,7 +131,8 @@ count 'A match proves no fetch, and does not show that the digest is right' 3 "w
 count '^      Carries a file: the share record lists a file for this record whose SHA-256, computed here, equals the stated one' 7 "records with their file: the two same lines of one identity print once"
 # Three have no file: the digest of the table, the record whose file is
 # listed for another record, and the record that was shared without its file.
-count '^      States only\.$' 5 "records with no file"
+count '^      States only\.$' 7 "records with no file"
+has 'took 1 dataset: "synthetic: two digests"$' "one dataset in a share of two digests"
 
 # The note is the signer's word, in quotation marks, and cannot leave them.
 has 'took 1 dataset: "synthetic: fetched https://example.invalid/HDL_J.XPT on 2026-11-09"$' "a note, as the signer's word"
@@ -137,7 +142,7 @@ has 'took 3 datasets: "synthetic: no fetch was made"$' "the number of datasets t
   || say "the tally has a quotation mark that it did not write itself, or a character that is not plain"
 
 # Malformed statements are listed, and not counted.
-count '^  .*, record [0-9a-f]\{12\}: dataset ' 5 "malformed statements"
+count '^  .*, record [0-9a-f]\{12\}: dataset ' 6 "malformed statements"
 
 # What it says of itself, and what it never says.
 has '^This tally counts keys, and a key is free\.$' "what it counts"
@@ -167,6 +172,6 @@ if ! ls "$T/locked/u1/objects" >/dev/null 2>&1; then
 fi
 chmod 700 "$T/locked/u1/objects"
 
-[ $rc = 0 ] && echo "receipts: the tally lists what twelve made-up bundles state, and says what that does not show"
+[ $rc = 0 ] && echo "receipts: the tally lists what thirteen made-up bundles state, and says what that does not show"
 [ -n "${RECEIPTS_SHOW:-}" ] && cat "$T/out.txt"
 exit $rc
