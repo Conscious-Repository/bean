@@ -98,6 +98,7 @@ Forty good packages give one cell of forty identities. Some of the forty logs ha
 | A bundle with a record whose signature is bad | The folder is left out: the bundle fails its check. |
 | A claim with false numbers | The claim is not counted, and its identity is left out. |
 | A claim that names another survey pack | The same. |
+| One claim that counts, and one that does not, in one bundle | The identity is left out. |
 | A claim whose reading is a list, and no id | The identity is left out, and the builder does not stop. |
 | A reading that an agent signed, and a claim that an agent signed | The same. |
 | A reading whose value `pack/0` cannot hold | The same. |

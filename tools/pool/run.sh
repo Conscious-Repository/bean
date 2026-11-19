@@ -162,6 +162,11 @@ share false false -note "synthetic contributor" "$FORGED"; unseal false
 # A claim that names another survey pack.
 new_log otherpack; b otherpack add lab.hdl-cholesterol 53 -unit mg/dL >/dev/null 2>&1; compare otherpack female-20-29 "$T/other.pack"
 share otherpack otherpack -note "synthetic contributor" -type 'comparison.*'; unseal otherpack
+# One claim that counts, and one that names another survey pack: the bundle
+# is left out whole, so that no record rides in on a claim that does not count.
+new_log goodbad; b goodbad add lab.hdl-cholesterol 53 -unit mg/dL >/dev/null 2>&1; compare goodbad female-20-29; compare goodbad female-20-29 "$T/other.pack"
+[ "$(claims goodbad | wc -l | tr -d ' ')" = 2 ] || say "log goodbad does not have two claims"
+share goodbad goodbad -note "synthetic contributor" -type 'comparison.*'; unseal goodbad
 
 # A reading that an agent signed, with a claim of the person about it.
 new_log agentreading; b agentreading agent init -label assistant >/dev/null 2>&1
@@ -281,7 +286,7 @@ line 'two readings of one measure that count' "two readings of one measure"
 line 'a reading with claims in two cohorts' "claims in two cohorts"
 line '^the same  folder c3-again' "the same bundle handed in twice"
 # The agent's claim fails the check of a claim: the person did not sign it.
-[ "$(grep -c '^left out  .*: its bundle has a claim that does not count, or no claim$' "$T/build.txt")" = 5 ] || say "five identities have a claim that does not count, and the builder names $(grep -c 'a claim that does not count, or no claim$' "$T/build.txt")"
+[ "$(grep -c '^left out  .*: its bundle has a claim that does not count, or no claim$' "$T/build.txt")" = 6 ] || say "six identities have a claim that does not count, and the builder names $(grep -c 'a claim that does not count, or no claim$' "$T/build.txt")"
 grep -q '^An archive shows every record of every bundle in it, whole' "$T/build.txt" || say "the builder does not say what an archive shows, when it writes one"
 
 "$PY" -I -B "$ROOT/tools/pack/check.py" "$T/pool.pack" >"$T/pc.txt" 2>&1 || say "check.py refuses the pool's pack: $(tail -1 "$T/pc.txt")"
