@@ -65,12 +65,16 @@ Share
                                 sent you. -key opens a package that is sealed
                                 to your address. -unpack writes a package
                                 that passes into a folder, with its files.
-  reply -to <what you received> [-key <file>] -out <new file> <id> <note> [<id> <note>]...
+  reply -to <what you received> [-key <file>] [-for <address>] -out <new file> <id> <note> [<id> <note>]...
                                 Sign notes about records that someone shared
-                                with you, and seal them for that person.
-  accept [-label <name>] [-words "<eight words>"] [-yes] <reply>
+                                with you, and seal them for that person:
+                                with six words, or with -for to an address
+                                that the person gave you.
+  accept [-label <name>] [-words "<eight words>"] [-yes | -key <file>] <reply>
                                 Check a reply to a share of yours, see who
                                 signed it, and take its notes into your log.
+                                -key opens a reply that is sealed to your
+                                address, and asks on a terminal.
   unpair <name>                 Take your word back from the keys that you
                                 paired under a name: a peer, or an agent.
 
@@ -122,8 +126,8 @@ var syntax = map[string]string{
 	"share":         "share -out <new folder or file> [-seal | -for <address> [-address-words \"<eight words>\"]] [-files] [-note <text>] [-yes] <id>... | -type <type> [-since <time>] [-until <time>]",
 	"address":       "address -out <new key file> | address -key <key file>",
 	"check-bundle":  "check-bundle [-key <key file>] [-unpack <new folder>] <folder, zip file or sealed package>",
-	"reply":         "reply -to <what you received> [-key <key file>] -out <new file> <id> <note> [<id> <note>]...",
-	"accept":        "accept [-label <name>] [-words \"<eight words>\"] [-yes] <reply>",
+	"reply":         "reply -to <what you received> [-key <key file>] [-for <address> [-address-words \"<eight words>\"] [-yes]] -out <new file> <id> <note> [<id> <note>]...",
+	"accept":        "accept [-label <name>] [-words \"<eight words>\"] [-yes | -key <key file>] <reply>",
 	"unpair":        "unpair <name>",
 	"compare":       "compare -sex male|female -age <from>-<to> [-where <DATASET>.<VARIABLE>=<value>|<from>-<to>]... [-unknown-files] [-save] <id>... | -type <type>\n       bean [-dir <folder>] compare -pack <file> [-cohort <cohort> [-unknown-pack] [-save] <id>... | -type <type>]",
 	"mcp":           "mcp [-write] [-blobs] [-label <name>]",

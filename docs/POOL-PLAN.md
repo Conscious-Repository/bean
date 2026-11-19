@@ -1,6 +1,6 @@
 # A demonstration of the pool path, and receipts for a source file: what is decided before it is built
 
-This is for anyone who builds or reviews the demonstration. It says what will be built, in three parts, and what each part may claim. None of it is built yet. DECISIONS 330 has the account.
+This is for anyone who builds or reviews the demonstration. It says what will be built, in three parts, and what each part may claim. None of it is built yet. DECISIONS 331 has the account.
 
 **It is a test of the path with made-up people.** It is not a pool, and it is not a host. bean does not diagnose, and nothing here says whether a value is healthy.
 
@@ -106,7 +106,7 @@ It is `tools/pool/` and `make pool`.
 - **It says what it is, where a reader sees it.** A cohort's id starts with `pool-`. A cohort's text starts with `synthetic pool:`. The title says the same. The source's name, publisher and home say `none: synthetic`.
 - **Its caveats are the builder's own,** for the pack, for each measure and for each cohort. They say what the builder knows. "n counts identity ids, not people." "Whoever ran the builder said that every contributor is made up; the builder cannot check that."
 - **Its measures keep the survey pack's ids, labels, units and `same` lists.**
-- **A cell needs 30 identities.** The builder leaves out a cell of fewer. The test vector puts 30 contributors or more into one cohort for one measure, and one cell is enough for the test.
+- **A cell needs as many identities as `pack/0` asks: 30 today.** The builder reads that number from `tools/pack/check.py`, and keeps no copy of it. It leaves out a cell of fewer. The test vector puts 30 contributors or more into one cohort for one measure, and one cell is enough for the test.
 - **A test holds this much.** No such text names the survey or its publisher: the title, the source's name, publisher and home, and the builder's name. Nor does a caveat of the pack, of a measure or of a cohort.
 - **It names both of its inputs.** `source.files` has two entries: the archive, and the survey pack that the claims name.
 
@@ -285,7 +285,7 @@ Any change to the bean binary. A flag that holds a pack to a SHA-256. A new reco
 
 ## Known weak points
 
-- **It comes before the order to 0.9,** by the author's reading of the owner's request (DECISIONS 330). He can say otherwise. That order slips by about four days.
+- **It comes before the order to 0.9,** by the author's reading of the owner's request (DECISIONS 331). He can say otherwise. That order slips by about four days.
 - **Nothing shows that three parts and their audits fit four days.**
 - **A demonstration can be taken for a pool.** The pool's pack, the pointer and the tally say what they are. The committed survey pack cannot. A recording or a post is outside what bean can mark.
 - **"Reproducible" is one program run twice.** No second builder exists, so a fault of the builder gives the same wrong bytes both times.

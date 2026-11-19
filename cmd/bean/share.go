@@ -163,20 +163,7 @@ func cmdShare(s *core.Store, args []string) {
 	// log. bean does not show the address words here: the person gives the
 	// eight that the reader gave them. -yes never stands in for them.
 	if to != nil {
-		words := *wordsFlag
-		if !given["address-words"] {
-			if !isTerminal(os.Stdin) || !isTerminal(os.Stderr) {
-				fail(errors.New("nothing was written: bean share -for needs the eight address words of the reader's address, and there is no terminal to ask on. Pass them with -address-words. The reader gets them from bean address -key <file>"))
-			}
-			fmt.Fprintln(os.Stderr, "Type the eight address words that the reader gave you, then Enter:")
-			words, _ = stdin.ReadString('\n')
-		}
-		if bundle.CleanAddressWords(words) == "" {
-			fail(errors.New("nothing was written: no address words were given. bean share -for needs the eight address words of the reader's address. The reader gets them from bean address -key <file>"))
-		}
-		if !addressGate(to, words) {
-			fail(errors.New("nothing was written: these are not the address words of this address. If you mistyped a word, run the command again. If not, ask the reader for the address and its words again"))
-		}
+		askAddressWords(to, *wordsFlag, given["address-words"], stdin, shareGate)
 	}
 	// A comparison whose reading is gone must not leave: clean up first.
 	sweepComparisons(s)
@@ -300,7 +287,7 @@ func cmdShare(s *core.Store, args []string) {
 			fail(fmt.Errorf("nothing was shared: %w", err))
 		}
 		stopped() // the last moment: after this the share runs to its end
-		if err := writeForKey(out, data, shareID, func() error { return s.AddSigned(shareID, shareBytes) }, fillFile); err != nil {
+		if err := writeForKey(out, data, shareWritten, shareID, func() error { return s.AddSigned(shareID, shareBytes) }, fillFile); err != nil {
 			fail(err)
 		}
 	} else if *seal {
@@ -712,6 +699,38 @@ func addressGate(to *age.X25519Recipient, words string) bool {
 	return bundle.CleanAddressWords(words) == bundle.AddressWords(to.String())
 }
 
+// gateWords are the words of the gate's lines: the command, and whom the
+// address words came from.
+type gateWords struct {
+	cmd, whom, whose, Whom string
+}
+
+var (
+	shareGate = gateWords{"bean share -for", "the reader", "the reader's", "The reader"}
+	replyGate = gateWords{"bean reply -for", "the person you reply to", "that person's", "That person"}
+)
+
+// askAddressWords is the gate against a wrong address: the person gives the
+// eight address words that they got with the address, by -address-words
+// (given) or on a terminal. bean does not show the words of the address.
+// When the words are missing or not those of the address, it ends the
+// command, and nothing was written.
+func askAddressWords(to *age.X25519Recipient, words string, given bool, stdin *bufio.Reader, g gateWords) {
+	if !given {
+		if !isTerminal(os.Stdin) || !isTerminal(os.Stderr) {
+			fail(fmt.Errorf("nothing was written: %s needs the eight address words of %s address, and there is no terminal to ask on. Pass them with -address-words. %s gets them from bean address -key <file>", g.cmd, g.whose, g.Whom))
+		}
+		fmt.Fprintf(os.Stderr, "Type the eight address words that %s gave you, then Enter:\n", g.whom)
+		words, _ = stdin.ReadString('\n')
+	}
+	if bundle.CleanAddressWords(words) == "" {
+		fail(fmt.Errorf("nothing was written: no address words were given. %s needs the eight address words of %s address. %s gets them from bean address -key <file>", g.cmd, g.whose, g.Whom))
+	}
+	if !addressGate(to, words) {
+		fail(fmt.Errorf("nothing was written: these are not the address words of this address. If you mistyped a word, run the command again. If not, ask %s for the address and its words again", g.whom))
+	}
+}
+
 // sealPackageTo packs files and seals them to a reader's address. bean
 // opens the result once more with the file's own key: passes says whether
 // what came out is what was meant. It does not open the one stanza that is
@@ -731,23 +750,37 @@ func sealPackageTo(name string, files map[string][]byte, to *age.X25519Recipient
 	return data, nil
 }
 
+// written names what writeForKey writes, in the lines that it says: a
+// share or a reply.
+type written struct {
+	none   string // what nothing was: "nothing was shared"
+	record string // the record of the log: "share record"
+	file   string // the file: "the package"
+}
+
+var (
+	shareWritten = written{"nothing was shared", "share record", "the package"}
+	replyWritten = written{"nothing was sent", "reply record", "the reply"}
+)
+
 // writeForKey writes a package that is sealed to a key, in this order: the
-// file, new and empty; the share record, with record; the bytes, with fill.
-// If the file cannot be made, nothing was written. If the record fails, the
-// empty file is removed. After that the log knows of the share, whatever
-// becomes of the file. It says only what it did: a part of such a file can
-// open, so a file that was not written whole is not "nothing".
-func writeForKey(path string, data []byte, id string, record func() error, fill func(*os.File, []byte) error) error {
+// file, new and empty; the record of the log, with record; the bytes, with
+// fill. If the file cannot be made, nothing was written. If the record
+// fails, the empty file is removed. After that the log knows of the
+// package, whatever becomes of the file. It says only what it did: a part
+// of such a file can open, so a file that was not written whole is not
+// "nothing".
+func writeForKey(path string, data []byte, w written, id string, record func() error, fill func(*os.File, []byte) error) error {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
-		return fmt.Errorf("nothing was shared: %w", err)
+		return fmt.Errorf("%s: %w", w.none, err)
 	}
 	if err := record(); err != nil {
 		f.Close()
 		if os.Remove(path) != nil {
-			return fmt.Errorf("nothing was shared: the share record could not be added to your log: %w. The empty file %s could not be removed: delete it", err, path)
+			return fmt.Errorf("%s: the %s could not be added to your log: %w. The empty file %s could not be removed: delete it", w.none, w.record, err, path)
 		}
-		return fmt.Errorf("nothing was shared: the share record could not be added to your log, and the empty file is removed: %w", err)
+		return fmt.Errorf("%s: the %s could not be added to your log, and the empty file is removed: %w", w.none, w.record, err)
 	}
 	err = fill(f, data)
 	if cerr := f.Close(); err == nil {
@@ -756,7 +789,7 @@ func writeForKey(path string, data []byte, id string, record func() error, fill 
 	if err == nil {
 		return nil
 	}
-	what := fmt.Sprintf("the package was not written whole into %s: %s. Your log holds its share record, %s. A part of such a file can open with the reader's key", path, err, id)
+	what := fmt.Sprintf("%s was not written whole into %s: %s. Your log holds its %s, %s. A part of such a file can open with the reader's key", w.file, path, err, w.record, id)
 	if os.Remove(path) != nil {
 		return fmt.Errorf("%s. bean could not remove the file: delete it", what)
 	}
@@ -905,7 +938,11 @@ func cmdCheckBundle(args []string) {
 	if !ok {
 		// A reply is not a bundle, and its reader has another command.
 		if reply.Check(in).OK {
-			fmt.Println("This is a reply to a share, not a bundle: the person it is for reads it with bean accept.")
+			how := "bean accept"
+			if in.Asks == bundle.AsksKey {
+				how = "bean accept -key <their key file>"
+			}
+			fmt.Println("This is a reply to a share, not a bundle: the person it is for reads it with " + how + ".")
 		}
 		os.Exit(1)
 	}

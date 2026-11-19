@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"filippo.io/age"
+
 	"github.com/Conscious-Repository/bean/core"
 	"github.com/Conscious-Repository/bean/internal/bundle"
 	"github.com/Conscious-Repository/bean/internal/reply"
@@ -81,6 +83,17 @@ func readPackage(path string, in *bufio.Reader, keyFile string) bundle.Input {
 	return bundle.FromPackage(path, data, words)
 }
 
+// replyForKeyLines are what bean reply says of a reply that is sealed to
+// an address, before it writes.
+var replyForKeyLines = []string{
+	"The reply is sealed to an address. Whoever holds the key file of that address can open it.",
+	"bean checked only that the address words belong to the address.",
+	"The person you reply to needs a bean that has bean accept -key. An earlier bean does not open it.",
+	"A program that runs as that person opens it with no word typed.",
+	"It stays closed only while the key file stays with that person and the cipher holds. That is so for as long as any copy of the file exists.",
+	"You cannot open this reply again, unless the address is your own. Your log keeps a record that you replied, and not the notes.",
+}
+
 // cmdReply is bean reply: the peer's side.
 func cmdReply(s *core.Store, args []string) {
 	fs := flag.NewFlagSet("reply", flag.ContinueOnError)
@@ -88,6 +101,9 @@ func cmdReply(s *core.Store, args []string) {
 	to := fs.String("to", "", "what you received: a sealed package, or a bundle's folder or zip file")
 	out := fs.String("out", "", "the reply to write: a new file")
 	keyFile := fs.String("key", "", "when what you received is sealed to a key: the key file that opens it")
+	forFlag := fs.String("for", "", "seal the reply to this address, which the person you reply to gave you")
+	wordsFlag := fs.String("address-words", "", "with -for: the eight address words that the person you reply to gave you")
+	yes := fs.Bool("yes", false, "with -for: write without the question")
 	pos, err := parseInterspersed(fs, args)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "A note that starts with - is read as an option. Put -- before the first id.")
@@ -95,11 +111,30 @@ func cmdReply(s *core.Store, args []string) {
 	if err != nil || *to == "" || *out == "" || len(pos) == 0 || len(pos)%2 != 0 {
 		usage()
 	}
-	fs.Visit(func(f *flag.Flag) {
-		if f.Name == "key" && *keyFile == "" {
-			badArg(errors.New("-key names a key file"))
+	// A flag that was given counts, also with an empty value: a script whose
+	// variable is empty must not write a reply with six words in the place
+	// of one that is sealed to an address.
+	given := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { given[f.Name] = true })
+	if given["key"] && *keyFile == "" {
+		badArg(errors.New("-key names a key file"))
+	}
+	// A flag that does nothing reads as a flag that was obeyed.
+	if given["address-words"] && !given["for"] {
+		badArg(errors.New("-address-words goes with -for <address>"))
+	}
+	if given["yes"] && !given["for"] {
+		badArg(errors.New("-yes goes with -for <address>: a reply with six words asks nothing"))
+	}
+	// -for seals the reply to an address that the person you reply to gave
+	// you. bean takes an address from this flag only, never from what you
+	// received.
+	var addr *age.X25519Recipient
+	if given["for"] {
+		if addr, err = bundle.ParseAddress(*forFlag); err != nil {
+			fail(fmt.Errorf("nothing was written: %w", err))
 		}
-	})
+	}
 	if abs, err := filepath.Abs(*out); err == nil && insideLog(abs) {
 		fail(fmt.Errorf("%s is inside your log: a reply goes somewhere else", *out))
 	}
@@ -107,6 +142,11 @@ func cmdReply(s *core.Store, args []string) {
 		fail(fmt.Errorf("%s is there already: a reply is a new file", *out))
 	}
 	stdin := bufio.NewReader(os.Stdin)
+	// The gate against a wrong address, before anything is read or
+	// written. -yes never stands in for the address words.
+	if addr != nil {
+		askAddressWords(addr, *wordsFlag, given["address-words"], stdin, replyGate)
+	}
 	// What was received must pass its check: a note is about a record of a
 	// share that is what its sender signed.
 	got := bundle.Check(readPackage(*to, stdin, *keyFile))
@@ -143,23 +183,42 @@ func cmdReply(s *core.Store, args []string) {
 	// Each pair is a record of the share, by its id or the start of it,
 	// and the text of a note about it. The share itself can be named too.
 	about := append(slices.Clone(got.Listed), got.Share)
-	key := l.Local.Signer.Public()
-	now := s.Now().UTC()
-	files := map[string][]byte{}
-	var noteIDs []any
+	var targets []string
 	for i := 0; i < len(pos); i += 2 {
 		target, err := oneOf(about, pos[i])
 		if err != nil {
 			badArg(err)
 		}
-		text := pos[i+1]
-		if strings.TrimSpace(text) == "" || len(text) > reply.MaxNote {
+		if text := pos[i+1]; strings.TrimSpace(text) == "" || len(text) > reply.MaxNote {
 			badArg(fmt.Errorf("a note is a text of 1 to %d bytes", reply.MaxNote))
 		}
+		targets = append(targets, target)
+	}
+	// A reply to an address cannot be opened again by its writer. bean says
+	// so before it writes, and asks on a terminal.
+	if addr != nil {
+		for _, line := range replyForKeyLines {
+			fmt.Fprintln(os.Stderr, line)
+		}
+		if !*yes {
+			if !isTerminal(os.Stdin) || !isTerminal(os.Stderr) {
+				fail(errors.New("nothing was written: bean reply -for asks before it writes, and there is no terminal to ask on. Read the lines above, then pass -yes"))
+			}
+			fmt.Fprintf(os.Stderr, "Write the reply with %d notes? [y/N] ", len(targets))
+			if !confirmed(stdin) {
+				fail(errors.New("nothing was written: not sent"))
+			}
+		}
+	}
+	key := l.Local.Signer.Public()
+	now := s.Now().UTC()
+	files := map[string][]byte{}
+	var noteIDs []any
+	for i, target := range targets {
 		id, data, err := core.SignRecord(map[string]any{
 			"v": 0.0, "nonce": core.NewNonce(), "type": reply.NoteType,
 			"subject": got.Identity, "author": key, "kid": key,
-			"value":  map[string]any{"s": text},
+			"value":  map[string]any{"s": pos[2*i+1]},
 			"times":  map[string]any{"observed": map[string]any{"start": now.Truncate(time.Minute).Format(time.RFC3339), "precision": "minute"}, "imported": now.Format("2006-01-02T15:04:05Z")},
 			"source": map[string]any{"system": reply.System, "adapter": core.Adapter, "ref": nil},
 			"refs":   []any{map[string]any{"rel": "about", "id": target}},
@@ -171,13 +230,17 @@ func cmdReply(s *core.Store, args []string) {
 		noteIDs = append(noteIDs, id)
 	}
 	// The reply record: your own record of what you sent, and to whom. It
-	// lists the notes and does not hold their text.
+	// lists the notes and does not hold their text, and names no address.
+	seal := bundle.SealPassphrase
+	if addr != nil {
+		seal = bundle.SealRecipient
+	}
 	line := core.Canonical(map[string]any{
 		"type":    reply.Type,
 		"value":   map[string]any{"n": float64(len(noteIDs)), "unit": "{note}"},
 		"times":   map[string]any{"observed": map[string]any{"start": now.Truncate(time.Minute).Format(time.RFC3339), "precision": "minute"}},
 		"source":  map[string]any{"system": reply.System, "adapter": core.Adapter, "ref": nil},
-		"context": map[string]any{"to": got.Identity, "share": got.Share, "notes": noteIDs, "seal": "passphrase"},
+		"context": map[string]any{"to": got.Identity, "share": got.Share, "notes": noteIDs, "seal": seal},
 	})
 	replyID, replyBytes, err := s.SignPartial(line)
 	if err != nil {
@@ -190,13 +253,17 @@ func cmdReply(s *core.Store, args []string) {
 			files[core.PathOf(id)] = r.Bytes
 		}
 	}
-	// Checked, packed and sealed in memory, opened and checked once more as
-	// its reader will, and only then written, as a new file.
+	// Checked, packed and sealed in memory, opened and checked once more,
+	// and only then written, as a new file.
 	if res := reply.Check(bundle.FromFiles(*out, files)); !res.OK {
 		for _, p := range res.Problems {
 			fmt.Fprintln(os.Stderr, "problem: "+safe(p))
 		}
 		fail(errors.New("nothing was written: the reply does not pass its own check"))
+	}
+	if addr != nil {
+		writeReplyTo(s, *out, files, addr, replyID, replyBytes, len(noteIDs), l.ID)
+		return
 	}
 	data, words, err := sealPackage(*out, files, func(in bundle.Input) bool { return reply.Check(in).OK })
 	if err == nil {
@@ -215,13 +282,42 @@ func cmdReply(s *core.Store, args []string) {
 	fmt.Println("The reply is sealed. It opens with these six words:")
 	fmt.Println("  " + words)
 	fmt.Println("They are a secret between you and the person you reply to. Give them by another way than the file, such as a phone call.")
-	fmt.Println("\nYour identity words, which are not a secret:\n  " + core.IDWords(l.ID))
-	fmt.Println("The person sees these words before they accept your notes. Read yours to them, so that they know the notes are yours.")
-	fmt.Printf("They also see the start of this reply's id, %s: tell them, so that they know which reply this is.\n", replyID[7:19])
-	fmt.Println("The reply holds your identity records. They show your identity id and your key, when you made your log, and when you changed a key.")
+	fmt.Print(replyWho(l.ID, replyID))
 	fmt.Println("bean keeps a record that you replied, and not the notes: keep this file and its words if you want to read them again.")
 	fmt.Println("That record names the person's identity id, their share and your notes. It travels when you share all of your records.")
 	fmt.Println("The person takes your notes into their log with: bean accept " + *out)
+}
+
+// replyWho is what bean reply says of who wrote the reply, and which reply
+// it is, for either seal.
+func replyWho(person, replyID string) string {
+	return "\nYour identity words, which are not a secret:\n  " + core.IDWords(person) + "\n" +
+		"The person sees these words before they accept your notes. Read yours to them, so that they know the notes are yours.\n" +
+		fmt.Sprintf("They also see the start of this reply's id, %s: tell them, so that they know which reply this is.\n", replyID[7:19]) +
+		"The reply holds your identity records. They show your identity id and your key, when you made your log, and when you changed a key.\n"
+}
+
+// writeReplyTo seals a reply to an address, opens it once more with the
+// file's own key and checks it, and writes it as a share to an address is
+// written: the file, new and empty; the reply record; the bytes. Such a
+// reply can be opened the moment it is written, so the log never knows less
+// than what left.
+func writeReplyTo(s *core.Store, out string, files map[string][]byte, addr *age.X25519Recipient, replyID string, replyBytes []byte, notes int, person string) {
+	data, err := sealPackageTo(out, files, addr, func(in bundle.Input) bool { return reply.Check(in).OK })
+	if err != nil {
+		fail(fmt.Errorf("nothing was written: %w", err))
+	}
+	if err := writeForKey(out, data, replyWritten, replyID, func() error { return s.AddSigned(replyID, replyBytes) }, fillFile); err != nil {
+		fail(err)
+	}
+	fmt.Printf("wrote %d notes in %s\n", notes, out)
+	fmt.Printf("reply record %s\n", replyID)
+	fmt.Println("The reply is sealed to the address that you gave. Whoever holds the key file of that address can open it.")
+	fmt.Println("You cannot open this reply again, unless the address is your own. bean keeps a record that you replied, and not the notes.")
+	fmt.Print(replyWho(person, replyID))
+	fmt.Println("That record names the person's identity id, their share and your notes. It travels when you share all of your records.")
+	fmt.Println("The person takes your notes into their log with: bean accept -key <their key file> " + out)
+	fmt.Println("A bean that has no bean accept -key does not open it.")
 }
 
 // maxReply is the largest file that bean accept reads.
@@ -256,9 +352,23 @@ func cmdAccept(s *core.Store, args []string) {
 	label := fs.String("label", "", "the name under which this person's notes show in your log")
 	heard := fs.String("words", "", "the identity words that the person read to you")
 	yes := fs.Bool("yes", false, "do not ask: for scripts, with -words")
+	keyFile := fs.String("key", "", "when the reply is sealed to your address: your key file")
 	pos, err := parseInterspersed(fs, args)
 	if err != nil || len(pos) != 1 {
 		usage()
+	}
+	given := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { given[f.Name] = true })
+	keyGiven := given["key"]
+	if keyGiven && *keyFile == "" {
+		badArg(errors.New("-key names a key file"))
+	}
+	// A program that runs as the person and holds the key file opens such a
+	// reply with no word typed. It can make the eight identity words from
+	// the reply itself. So -yes and -words would take a peer's notes into
+	// the log, and name the peer, with no act of the person.
+	if keyGiven && *yes {
+		badArg(errors.New("-yes does not go with -key: a program that holds your key file could take a peer's notes into your log with no act of yours. Run bean accept -key yourself, at a terminal"))
 	}
 	// A script cannot compare words by eye, so it states the words that
 	// the person heard.
@@ -271,12 +381,19 @@ func cmdAccept(s *core.Store, args []string) {
 		fail(fmt.Errorf("%s is not a reply: a reply is one sealed file of at most %d MiB", pos[0], maxReply>>20))
 	}
 	stdin := bufio.NewReader(os.Stdin)
-	in := readPackage(pos[0], stdin, "")
+	in := readPackage(pos[0], stdin, *keyFile)
 	res := reply.Check(in)
 	switch {
-	case in.Asks == bundle.AsksKey:
-		fail(errors.New("this file is sealed to a key. bean accept takes a reply, and this bean seals a reply with words: nothing was taken"))
+	case in.Asks == bundle.AsksKey && !keyGiven:
+		fail(errors.New("this file is sealed to a key. Open it with bean accept -key <your key file>: nothing was taken"))
 	case res.Locked:
+		// For a key, why it did not open: another address, a damaged file,
+		// or a key file that bean does not read.
+		if in.Asks == bundle.AsksKey {
+			for _, p := range res.Problems {
+				fmt.Fprintln(os.Stderr, safe(p))
+			}
+		}
 		fail(errors.New("the reply did not open: nothing was checked, and nothing was taken"))
 	case !res.Unread && !in.Opened:
 		fail(errors.New("this is not a sealed file: a reply is sealed, and nothing was taken"))
@@ -305,6 +422,15 @@ func cmdAccept(s *core.Store, args []string) {
 	share, name := a.share, a.name
 	if *heard != "" && strings.Join(strings.Fields(strings.ToLower(*heard)), " ") != res.Words {
 		fail(errors.New("the identity words of whoever signed this reply are not the words that you gave: nothing was taken"))
+	}
+	// A reply that a key opened shows only that someone knew the address:
+	// an address is public, and the format does not show who sealed.
+	if in.Opened && in.Asks == bundle.AsksKey {
+		fmt.Println("The reply was sealed to your address. Anyone who has your address can seal to it, also an older reply of the signer. bean cannot tell who sealed it.")
+		// It looks one way only, as the check of a share does.
+		if res.Seal != bundle.SealRecipient {
+			fmt.Println("The signer's record does NOT say that this reply was sealed to a key. Someone sealed it again, or another tool sealed it.")
+		}
 	}
 	fmt.Printf("A reply to your share %s, of %s.\n", share.ID[7:19], safe(bundle.When(share)))
 	if n, _ := share.Context["note"].(string); n != "" {
@@ -361,6 +487,9 @@ func cmdAccept(s *core.Store, args []string) {
 	}
 	if !*yes {
 		if !isTerminal(os.Stdin) || !isTerminal(os.Stderr) {
+			if keyGiven {
+				fail(errors.New("nothing was taken: bean accept asks before it writes, and there is no terminal to ask on. -yes does not go with -key: run bean accept -key yourself, at a terminal"))
+			}
 			fail(errors.New("nothing was taken: bean accept asks before it writes, and there is no terminal to ask on. Read the list above, then pass -yes with -words"))
 		}
 		fmt.Fprintf(os.Stderr, "The identity words once more: %s\nTake these %d notes into your log, as notes of %q? [y/N] ", res.Words, len(take), name)
