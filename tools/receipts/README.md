@@ -21,7 +21,7 @@ You run these at your own terminal. An assistant does not run `bean import` on y
 1. Fetch the file with your own tool, from the source's own page.
 2. `bean import nhanes <file>`. bean keeps the file in your log, and signs one record. It prints the SHA-256.
 3. `bean ls -type reference.file` shows the record's id.
-4. `bean share -for <the asker's address> -address-words "…" <id>`. Add `-files` to carry the file as well.
+4. `bean share -for <the asker's address> -address-words "…" -out <new file> <id>`. Add `-files` to carry the file as well.
 
 `bean share -for` is in bean 0.8.0 and later.
 
@@ -65,7 +65,7 @@ It reads opened bundles: one bundle in each folder below the folder that it is g
 
 **Two marks.** An identity that states two digests for one dataset is marked under each. A digest that is in the table of bean's code is marked, with the dataset that the table gives. That table is from the project's own fetches of November 2026. A match proves no fetch, and does not show that the digest is right: a statement that was copied from the table matches too. The mark also says when the table has the digest for another dataset.
 
-**The note** is quoted as the signer's word, cut at 200 characters. Every character but plain ASCII is written out, and so are a quotation mark and a backslash. So a note cannot end its quotation, show as blank, or look like a line of the tally.
+**The note** is quoted as the signer's word, cut at 200 characters. A note or a value that is no text is not put in quotation marks: its signer wrote no such words. Every character but plain ASCII is written out, and so are a quotation mark and a backslash. So a note cannot end its quotation, show as blank, or look like a line of the tally.
 
 It says each time what it does not show:
 

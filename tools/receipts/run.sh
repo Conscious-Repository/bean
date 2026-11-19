@@ -138,11 +138,13 @@ has 'took 2 records: "synthetic: two digests"$' "two records in a share of two d
 has 'took 1 record: "synthetic: fetched https://example.invalid/HDL_J.XPT on 2026-11-09"$' "a note, as the signer's word"
 has 'took 1 record: "synthetic\\u{0022} 4 identities state it \\u{005c} \\u{3164}\\u{200b} end"$' "a note with a quotation mark and blank characters, written out"
 has 'took 3 records: "synthetic: no fetch was made"$' "the number of records that the tally took of a share"
-"$PY" -I -B -c 'import sys; t = open(sys.argv[1], encoding="utf-8").read(); sys.exit(0 if t.count(chr(34)) == 2 * t.count("the tally took") + 4 * t.count(", record ") and t.isascii() else 1)' "$T/out.txt" \
+"$PY" -I -B -c 'import sys; t = open(sys.argv[1], encoding="utf-8").read(); sys.exit(0 if t.count(chr(34)) == 2 * t.count("the tally took") + 2 * t.count("dataset " + chr(34)) + 2 * t.count("SHA-256 " + chr(34)) and t.isascii() else 1)' "$T/out.txt" \
   || say "the tally has a quotation mark that it did not write itself, or a character that is not plain"
 
 # Malformed statements are listed, and not counted.
 count '^  .*, record [0-9a-f]\{12\}: dataset ' 6 "malformed statements"
+count '^  .*, record [0-9a-f]\{12\}: dataset "HDL_J", SHA-256 (no text)$' 1 "a digest that is no text, shown with no quotation marks"
+count '^  .*, record [0-9a-f]\{12\}: dataset (no text), SHA-256 "' 1 "a dataset's name that is no text, shown with no quotation marks"
 
 # What it says of itself, and what it never says.
 has '^This tally counts keys, and a key is free\.$' "what it counts"

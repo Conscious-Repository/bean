@@ -50,6 +50,12 @@ def plain(text, limit=120):
     return out + (" [cut: %d characters in all]" % len(text) if len(text) > limit else "")
 
 
+def quoted(text, limit):
+    """A text of a record in quotation marks, as its signer's word. What is
+    no text gets no quotation marks: its signer wrote no such words."""
+    return '"%s"' % plain(text, limit) if isinstance(text, str) else "(no text)"
+
+
 def carried(share, record, digest):
     """True when the share record lists a file for the record with the stated
     SHA-256. The check of the bundle, which ran before, holds that a listed
@@ -88,7 +94,7 @@ def tally(source):
             ctx = r.get("context") if isinstance(r.get("context"), dict) else {}  # a record of another tool can have any context
             dataset, digest = ctx.get("dataset"), ctx.get("sha256")
             if not isinstance(dataset, str) or not isinstance(digest, str) or not DATASET_RE.fullmatch(dataset) or not DIGEST_RE.fullmatch(digest):
-                malformed.add("%s, record %s: dataset \"%s\", SHA-256 \"%s\"" % (words, r["id"][7:19], plain(dataset, 40), plain(digest, 80)))
+                malformed.add("%s, record %s: dataset %s, SHA-256 %s" % (words, r["id"][7:19], quoted(dataset, 40), quoted(digest, 80)))
                 bad += 1
                 continue
             good.append((dataset, digest, carried(share, r, digest)))
@@ -99,8 +105,8 @@ def tally(source):
         note = share["context"].get("note")  # the check holds that a share record has a context
         for dataset, digest, has_file in good:
             line = "States only." if not has_file else "Carries a file: " + CARRIES
-            if note:
-                line += "\n        The signer's note on this share, of which the tally took %d record%s: \"%s\"" % (len(good), "" if len(good) == 1 else "s", plain(note, MAX_NOTE))
+            if note and isinstance(note, str):  # a note that is no text is not shown, as the check of a bundle shows none
+                line += "\n        The signer's note on this share, of which the tally took %d record%s: %s" % (len(good), "" if len(good) == 1 else "s", quoted(note, MAX_NOTE))
             stated.setdefault((dataset, digest), {}).setdefault(person, []).append(line)
             by_person.setdefault((person, dataset), set()).add(digest)
 
