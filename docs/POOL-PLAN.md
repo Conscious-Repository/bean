@@ -106,7 +106,7 @@ It is `tools/pool/` and `make pool`.
 - **It says what it is, where a reader sees it.** A cohort's id starts with `pool-`. A cohort's text starts with `synthetic pool:`. The title says the same. The source's name, publisher and home say `none: synthetic`.
 - **Its caveats are the builder's own,** for the pack, for each measure and for each cohort. They say what the builder knows. "n counts identity ids, not people." "Whoever ran the builder said that every contributor is made up; the builder cannot check that."
 - **Its measures keep the survey pack's ids, labels, units and `same` lists.**
-- **A cell has no least number of identities** (DECISIONS 333). The builder drops no cell for its size. The test vector has one cell of forty identities, and one of one.
+- **A cell has no least number of identities** (DECISIONS 333). The builder drops no cell for its size. The test vector is to have one cell of forty identities, and one of one.
 - **A test holds this much.** No such text names the survey or its publisher: the title, the source's name, publisher and home, and the builder's name. Nor does a caveat of the pack, of a measure or of a cohort.
 - **It names both of its inputs.** `source.files` has two entries: the archive, and the survey pack that the claims name.
 

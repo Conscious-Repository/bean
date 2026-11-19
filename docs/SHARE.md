@@ -264,7 +264,7 @@ And you should know:
 - **Your identity records say how many records you had at each key change.** A key change lists the ids of the records it seals. The ids are hashes and give no content away, but their number shows.
 - **A correction travels without what it corrects.** A record that replaces an earlier one is shared alone; the earlier one stays home. The check says how many such corrections a bundle holds.
 - **A shared comparison gives its reading away**, with the public files ([COMPARE.md](COMPARE.md)). Its reading is in the bundle anyway.
-- **A reader can build a reference pack from what people share.** A pack lists each value of a cell, and whoever has the pack reads it ([REFERENCE.md](REFERENCE.md)). Ask what a reader will do with your share before you send it.
+- **A reader can build a reference pack from what people share.** A pack lists each value of a cell, yours among them, and whoever has the pack reads it ([REFERENCE.md](REFERENCE.md)). Ask what a reader will do with your share before you send it.
 
 ## A signed reply
 

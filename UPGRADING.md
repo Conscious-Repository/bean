@@ -43,7 +43,7 @@ Do not run `purge` or `gc` on the copies. Only they erase anything.
 A reference pack may have a cell of any number of people. Nothing in a log changes, and no saved comparison reads differently ([docs/REFERENCE.md](docs/REFERENCE.md), DECISIONS 333).
 
 - **A pack with a cell of fewer than 30 people is read.** Until 0.8.1 bean refused the whole pack. A result from such a cell has the caveat of a small cohort, and N shows the number.
-- **Whoever builds such a pack, and whoever reads it, both need 0.8.2.** An earlier bean refuses the pack: `… has an n that is not a whole number from 30 to 2147483647`. So does the `check.py` of an earlier release, and its `reproduce.py` cannot compute a comparison that was saved with such a pack.
+- **Whoever builds such a pack, and whoever reads it, both need 0.8.2.** An earlier bean refuses the pack: `… has an n that is not a whole number from 30 to 2147483647`. The `check.py` of an earlier release refuses it too: `… has an n that is not from 30 to 2147483647`. Its `reproduce.py` cannot compute a comparison that was saved with such a pack.
 - **With only the survey's packs, there is nothing to do.** Update before you open a pack with a small cell.
 - **The survey's packs do not change.** Their builder still leaves out a cell of fewer than 30 people. `bean compare` without `-pack` still gives no number for a cohort of fewer than 30.
 - **One line changes.** For a cohort that a pack has no table for, bean says: `the pack has no table of this measure for this cohort`. It gave a reason before, which was one of several.
