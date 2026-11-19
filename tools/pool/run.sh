@@ -493,6 +493,7 @@ builder -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/n
 grep -q "^STOPPED: -archive: .* is there already" "$T/no8.txt" || say "the builder does not say that the archive is there already: $(tail -1 "$T/no8.txt")"
 builder -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/one.file" -archive "$T/one.file" "$T/shuffled" >"$T/no5.txt" 2>&1 && say "the builder took one file for the pack and the archive"
 [ -e "$T/one.file" ] && say "the builder wrote a file that was named as the pack and as the archive"
+grep -q "^STOPPED: .*no file is left behind" "$T/no5.txt" || say "the builder does not say that it left no file behind: $(tail -1 "$T/no5.txt")"
 builder -synthetic -survey "$T/nothing.pack" -survey-url u -archive-url u -out "$T/no6.pack" "$T/pool.zip" >"$T/no6.txt" 2>&1 && say "the builder ran with no survey pack"
 grep -q "^STOPPED: -survey: " "$T/no6.txt" || say "the builder does not say which file is missing: $(tail -1 "$T/no6.txt")"
 builder -synthetic -survey "$T/open/stray.txt" -survey-url u -archive-url u -out "$T/no9.pack" "$T/pool.zip" >"$T/no9.txt" 2>&1 && say "the builder ran with a survey pack that is no pack"

@@ -239,8 +239,6 @@ def build(args):
         raise Stop("an archive is given: -archive names a new one, and the builder writes none from an archive")
     if not from_archive and not args["archive"]:
         raise Stop("a folder is given: -archive names the new archive that the pack will name")
-    if args["archive"] and os.path.abspath(args["archive"]) == os.path.abspath(args["out"]):
-        raise Stop("-out and -archive name one file: they are two files")
     for flag, new in (("-out", args["out"]), ("-archive", args["archive"])):
         if new and os.path.lexists(new):
             raise Stop("%s: %s is there already: the builder writes over nothing" % (flag, new))
