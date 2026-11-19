@@ -45,15 +45,23 @@ def plain(text, limit=120):
     character but printable ASCII is written out, and so are a quotation
     mark and a backslash. So nothing shows as blank, ends a line, or closes
     a quotation."""
+    return "%s%s" % shown(text, limit)
+
+
+def shown(text, limit):
+    """The text up to its limit, written out safely, and the tally's own
+    mark for what was cut. The two are apart, so that the mark never stands
+    inside a quotation."""
     text = str(text)
     out = "".join(c if " " <= c <= "~" and c not in '"\\' else "\\u{%04x}" % ord(c) for c in text[:limit])
-    return out + (" [cut: %d characters in all]" % len(text) if len(text) > limit else "")
+    return out, " [cut: %d characters in all]" % len(text) if len(text) > limit else ""
 
 
 def quoted(text, limit):
-    """A text of a record in quotation marks, as its signer's word. What is
-    no text gets no quotation marks: its signer wrote no such words."""
-    return '"%s"' % plain(text, limit) if isinstance(text, str) else "(no text)"
+    """A text of a record in quotation marks, as its signer's word. The mark
+    for a cut is the tally's, and stands after the closing mark. What is no
+    text gets no quotation marks: its signer wrote no such words."""
+    return '"%s"%s' % shown(text, limit) if isinstance(text, str) else "(no text)"
 
 
 def carried(share, record, digest):

@@ -20,7 +20,7 @@ You run these at your own terminal. An assistant does not run `bean import` on y
 
 1. Fetch the file with your own tool, from the source's own page.
 2. `bean import nhanes <file>`. bean keeps the file in your log, and signs one record. It prints the SHA-256.
-3. `bean ls -type reference.file` shows the record's id.
+3. `bean ls -type reference.file` lists the record. Its line has two ids: the first is the kept file's, and the second is the record's.
 4. `bean share -for <the asker's address> -address-words "…" -out <new file> <id>`. Add `-files` to carry the file as well.
 
 `bean share -for` is in bean 0.8.0 and later.
@@ -36,7 +36,7 @@ A share has one note, and a tally shows it under each record of the share. So sh
 - Your identity id and your identity records, with the second at which you made your log.
 - The time of the share, with your offset from UTC.
 - The time of each import, and the size of each file.
-- Your note. Every tally of the bundle quotes it. A URL or a day in it travels with the bundle.
+- Your note. A tally of the bundle quotes it. A URL or a day in it travels with the bundle.
 - Your key, and the version of bean and of the importer: each record carries them.
 - A pairing of an agent, with the agent's key and label, when that agent signed a record of the share.
 
@@ -65,7 +65,7 @@ It reads opened bundles: one bundle in each folder below the folder that it is g
 
 **Two marks.** An identity that states two digests for one dataset is marked under each. A digest that is in the table of bean's code is marked, with the dataset that the table gives. That table is from the project's own fetches of November 2026. A match proves no fetch, and does not show that the digest is right: a statement that was copied from the table matches too. The mark also says when the table has the digest for another dataset.
 
-**The note** is quoted as the signer's word, cut at 200 characters. A note or a value that is no text is not put in quotation marks: its signer wrote no such words. Every character but plain ASCII is written out, and so are a quotation mark and a backslash. So a note cannot end its quotation, show as blank, or look like a line of the tally.
+**The note** is quoted as the signer's word, cut at 200 characters. The tally's mark for a cut stands after the closing quotation mark, so a note cannot copy it. A note or a value that is no text is not put in quotation marks: its signer wrote no such words. Every character but plain ASCII is written out, and so are a quotation mark and a backslash. So a note cannot end its quotation, show as blank, or look like a line of the tally.
 
 It says each time what it does not show:
 

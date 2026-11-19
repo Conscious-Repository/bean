@@ -82,7 +82,7 @@ new_log mix; import mix "$FILE"; state mix HDL_J "$GOOD"; share mix mix "synthet
 new_log nofile; import nofile "$T/changed/HDL_J.XPT"; share nofile nofile "synthetic" $(receipts nofile)
 # One states two digests for one dataset in one share: the note of that
 # share stands under both, and says that the tally took two records of it.
-new_log pair; state pair HDL_J "$GOOD"; state pair HDL_J "$CHANGED"; share pair pair "synthetic: two digests" $(receipts pair)
+new_log pair; state pair HDL_J "$GOOD"; state pair HDL_J "$CHANGED"; share pair pair "synthetic: two digests [cut: 9000 characters in all]" $(receipts pair)
 # One statement that an agent of the identity signed.
 new_log agent; b agent agent init -label assistant >/dev/null 2>&1; state agent HDL_J "$GOOD" -agent; share agent agent "synthetic" $(receipts agent)
 # One bundle whose carried file is not the file that its record states.
@@ -132,7 +132,6 @@ count '^      Carries a file: the share record lists a file for this record with
 # Three have no file: the digest of the table, the record whose file is
 # listed for another record, and the record that was shared without its file.
 count '^      States only\.$' 7 "records with no file"
-has 'took 2 records: "synthetic: two digests"$' "two records in a share of two digests"
 
 # The note is the signer's word, in quotation marks, and cannot leave them.
 has 'took 1 record: "synthetic: fetched https://example.invalid/HDL_J.XPT on 2026-11-09"$' "a note, as the signer's word"
@@ -150,7 +149,8 @@ count '^  .*, record [0-9a-f]\{12\}: dataset (no text), SHA-256 "' 1 "a dataset'
 has '^This tally counts keys, and a key is free\.$' "what it counts"
 has '^A statement can be copied with no fetch' "a statement that is copied"
 has 'It cannot show that those are all the bundles' "the bundles that it was not given"
-has 'x \[cut: 310 characters in all\]"$' "a long note, cut"
+has 'x" \[cut: 310 characters in all\]$' "a long note, cut, with the tally's mark after the quotation"
+has 'took 2 records: "synthetic: two digests \[cut: 9000 characters in all\]"$' "a note that copies the tally's mark: it stays inside the quotation"
 grep -q 'x\{200\}' "$T/out.txt" && say "a long note is shown past its limit"
 has '^It does not show that the source served these bytes' "what it does not show"
 # Identity words are free words, so only numbers are looked for here.
