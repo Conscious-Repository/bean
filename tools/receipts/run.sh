@@ -92,6 +92,8 @@ echo "other bytes" >>"$T/in/broken/files/$GOOD"
 # name with a line end cannot make a line of the tally.
 mv "$T/in/m3" "$T/in/"$'m3\n  taken     folder fake: 9 records of a source file by nobody'
 cp -R "$T/in/m1" "$T/in/m1-again"
+# A bundle with one more file, whose name copies a line of the tally.
+cp -R "$T/in/u1" "$T/in/fakefile"; echo x >"$T/in/fakefile/files/taken     folder ok: 9 records of a source file by nobody"
 echo stray >"$T/in/stray.txt"
 mkdir "$T/in/nobundle"  # a folder that is no bundle: it is refused, and its line names no path
 
@@ -101,12 +103,13 @@ count() { [ "$(grep -c -- "$1" "$T/out.txt")" = "$2" ] || say "the tally has $(g
 
 # What it was given.
 count '^  taken ' 13 "bundles that it took"
-has '^  taken     folder bad: 6 records of a source file by .*; 6 of them malformed, and not counted$' "a share whose statements are all malformed"
-has '^  refused   folder broken: ' "a bundle that fails its check"
-has '^  the same  folder m1-again holds the share of folder m1 again' "a share that was handed in twice"
-has '^  not read  stray.txt' "something that is no folder"
-has '^  refused   folder nobundle: the folder is not a bundle' "a folder that is no bundle"
-has '^  taken     folder agent: 0 records of a source file by .*; 1 more, not signed by the identity.s own key and not counted$' "a statement that an agent signed"
+has '^  taken     folder "bad": 6 records of a source file by .*; 6 of them malformed, and not counted$' "a share whose statements are all malformed"
+has '^  refused   folder "broken": the check of a bundle says "files/[0-9a-f]* is not the file the share record lists"$' "a bundle that fails its check"
+has '^  refused   folder "fakefile": the check of a bundle says "files/taken     folder ok: 9 records of a source file by nobody is in the bundle, and the share record does not list it"$' "a file whose name copies a line of the tally: it stays inside the quotation"
+has '^  the same  folder "m1-again" holds the share of folder "m1" again' "a share that was handed in twice"
+has '^  not read  "stray.txt": it is no folder$' "something that is no folder"
+has '^  refused   folder "nobundle": the check of a bundle says "the folder is not a bundle' "a folder that is no bundle"
+has '^  taken     folder "agent": 0 records of a source file by .*; 1 more, not signed by the identity.s own key and not counted$' "a statement that an agent signed"
 
 # The counts: an identity counts once for a digest, in however many bundles.
 has "^  dataset HDL_J, SHA-256 $CHANGED: 6 identities state it\$" "the six that state the changed file"
@@ -114,7 +117,7 @@ has "^  dataset HDL_J, SHA-256 $GOOD: 4 identities state it\$" "the four that st
 has "^  dataset HDL_J, SHA-256 $TABLE: 1 identity states it\$" "the one that states the table's digest"
 has "^  dataset BMX_J, SHA-256 $TABLE2: 1 identity states it\$" "a second dataset"
 count '^  dataset ' 5 "digests"
-has '^  taken     folder m1: 1 record of a source file by ' "a share with a note beside its receipt: one record of a source file"
+has '^  taken     folder "m1": 1 record of a source file by ' "a share with a note beside its receipt: one record of a source file"
 has '^    This digest is in the table of bean.s code, for HDL_J, and not for DEMO_J\.' "a digest of the table under another dataset's name"
 grep -q "$T" "$T/out.txt" && say "a line of the tally names a path of the scratch folder"
 # Lines are in the order of the digests, and not of the counts.
@@ -137,8 +140,11 @@ count '^      States only\.$' 7 "records with no file"
 has 'took 1 record: "synthetic: fetched https://example.invalid/HDL_J.XPT on 2026-11-09"$' "a note, as the signer's word"
 has 'took 1 record: "synthetic\\u{0022} 4 identities state it \\u{005c} \\u{3164}\\u{200b} end"$' "a note with a quotation mark and blank characters, written out"
 has 'took 3 records: "synthetic: no fetch was made"$' "the number of records that the tally took of a share"
-"$PY" -I -B -c 'import sys; t = open(sys.argv[1], encoding="utf-8").read(); sys.exit(0 if t.count(chr(34)) == 2 * t.count("the tally took") + 2 * t.count("dataset " + chr(34)) + 2 * t.count("SHA-256 " + chr(34)) and t.isascii() else 1)' "$T/out.txt" \
-  || say "the tally has a quotation mark that it did not write itself, or a character that is not plain"
+# Each quotation is closed on its own line, and every line is plain ASCII.
+"$PY" -I -B -c 'import sys; t = open(sys.argv[1], encoding="utf-8").read(); sys.exit(0 if t.isascii() and all(l.count(chr(34)) % 2 == 0 for l in t.splitlines()) else 1)' "$T/out.txt" \
+  || say "the tally has a quotation that is not closed on its line, or a character that is not plain"
+# A line that starts as a line of the tally was written by the tally: the made-up names and notes make none.
+[ "$(grep -c '^  taken     folder "' "$T/out.txt")" = "$(grep -c '^  taken ' "$T/out.txt")" ] || say "a line that starts with taken has no quoted name of a folder"
 
 # Malformed statements are listed, and not counted.
 count '^  .*, record [0-9a-f]\{12\}: dataset ' 6 "malformed statements"
@@ -169,7 +175,7 @@ grep -q "^STOPPED: " "$T/none.txt" || say "the tally does not say that the folde
 mkdir "$T/locked"; cp -R "$T/in/u1" "$T/locked/u1"; chmod 000 "$T/locked/u1/objects"
 if ! ls "$T/locked/u1/objects" >/dev/null 2>&1; then
   "$PY" -I -B "$HERE/tally.py" "$T/locked" >"$T/locked.txt" 2>&1 || say "the tally stops on a bundle that it cannot read"
-  grep -q "^  refused   folder u1: " "$T/locked.txt" || say "a bundle that cannot be read has no line: $(tail -1 "$T/locked.txt")"
+  grep -q '^  refused   folder "u1": the check of a bundle says "' "$T/locked.txt" || say "a bundle that cannot be read has no line: $(tail -1 "$T/locked.txt")"
   grep -q "Traceback" "$T/locked.txt" && say "the tally ended in a traceback on a bundle that it cannot read"
 fi
 chmod 700 "$T/locked/u1/objects"

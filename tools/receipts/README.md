@@ -65,7 +65,7 @@ It reads opened bundles: one bundle in each folder below the folder that it is g
 
 **Two marks.** An identity that states two digests for one dataset is marked under each. A digest that is in the table of bean's code is marked, with the dataset that the table gives. That table is from the project's own fetches of November 2026. A match proves no fetch, and does not show that the digest is right: a statement that was copied from the table matches too. The mark also says when the table has the digest for another dataset.
 
-**The note** is quoted as the signer's word, cut at 200 characters. The tally's mark for a cut stands after the closing quotation mark, so a note cannot copy it. A note or a value that is no text is not put in quotation marks: its signer wrote no such words. Every character but plain ASCII is written out, and so are a quotation mark and a backslash. So a note cannot end its quotation, show as blank, or look like a line of the tally.
+**In quotation marks stands only what the tally did not write.** That is a note, a malformed name or digest, a folder's name, and the reason that the check of a bundle gives. Outside them stand only the tally's own words. **The note** is quoted as the signer's word, cut at 200 characters. The tally's mark for a cut stands after the closing quotation mark, so a note cannot copy it. A note or a value that is no text is not put in quotation marks: its signer wrote no such words. Every character but plain ASCII is written out, and so are a quotation mark and a backslash. So a note cannot end its quotation, show as blank, or look like a line of the tally.
 
 It says each time what it does not show:
 
@@ -102,6 +102,7 @@ The fixture is chosen so that nobody learns that the larger count is right. Six 
 | A digest of the table under another dataset's name, and one of a second dataset | Each is listed, and the mark says for which dataset the table has it. |
 | A statement that an agent of the identity signed | Not counted, and the line says so. |
 | A bundle whose carried file has other bytes | The bundle is refused whole. |
+| A bundle with one more file, whose name copies a line of the tally | The same. The name stays inside the quotation of the reason. |
 | A note with a quotation mark, a backslash and blank characters | Each is written out. |
 | A file among the folders | It is named, and not read. |
 

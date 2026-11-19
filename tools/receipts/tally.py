@@ -40,27 +40,22 @@ CARRIES = ("the share record lists a file for this record with the stated SHA-25
            "Nothing shows that it is the file that the signer kept, or a file of the survey.")
 
 
-def plain(text, limit=120):
-    """Any text of a bundle or of a folder's name, safe on one line: every
-    character but printable ASCII is written out, and so are a quotation
-    mark and a backslash. So nothing shows as blank, ends a line, or closes
-    a quotation."""
-    return "%s%s" % shown(text, limit)
-
-
 def shown(text, limit):
-    """The text up to its limit, written out safely, and the tally's own
-    mark for what was cut. The two are apart, so that the mark never stands
-    inside a quotation."""
+    """The text up to its limit, safe on one line, and the tally's own mark
+    for what was cut. Every character but printable ASCII is written out,
+    and so are a quotation mark and a backslash: so nothing shows as blank,
+    ends a line, or closes a quotation. The mark is apart, so that it never
+    stands inside a quotation."""
     text = str(text)
     out = "".join(c if " " <= c <= "~" and c not in '"\\' else "\\u{%04x}" % ord(c) for c in text[:limit])
     return out, " [cut: %d characters in all]" % len(text) if len(text) > limit else ""
 
 
 def quoted(text, limit):
-    """A text of a record in quotation marks, as its signer's word. The mark
+    """A text that the tally did not write, in quotation marks: a text of a
+    record, a folder's name, a reason of the check of a bundle. The mark
     for a cut is the tally's, and stands after the closing mark. What is no
-    text gets no quotation marks: its signer wrote no such words."""
+    text gets no quotation marks: nobody wrote such words."""
     return '"%s"%s' % shown(text, limit) if isinstance(text, str) else "(no text)"
 
 
@@ -80,18 +75,19 @@ def tally(source):
     for name in sorted(os.listdir(source)):
         folder = os.path.join(source, name)
         if not os.path.isdir(folder):
-            print("  not read  %s: it is no folder" % plain(name))
+            print("  not read  %s: it is no folder" % quoted(name, 120))
             continue
         try:
             problems, facts = checkbundle.check(folder)
         except Exception as err:  # whatever goes wrong in the check: the bundle is not one that passed
             problems, facts = ["the bundle cannot be read as one: %s: %s" % (type(err).__name__, err)], None
         if problems:
-            print("  refused   folder %s: %s" % (plain(name), plain(sorted(problems)[0].replace(folder, "the folder"), 300)))
+            # The reason is the check's, and can name a file as its sender named it: so it is quoted.
+            print("  refused   folder %s: the check of a bundle says %s" % (quoted(name, 120), quoted(sorted(problems)[0].replace(folder, "the folder"), 300)))
             continue
         share, person, holds = facts[0], facts[1], facts[7]
         if share["id"] in shares:
-            print("  the same  folder %s holds the share of folder %s again: it is one share" % (plain(name), plain(shares[share["id"]])))
+            print("  the same  folder %s holds the share of folder %s again: it is one share" % (quoted(name, 120), quoted(shares[share["id"]], 120)))
             continue
         shares[share["id"]] = name
         words = checkbundle.id_words(person)
@@ -107,7 +103,7 @@ def tally(source):
                 continue
             good.append((dataset, digest, carried(share, r, digest)))
         print("  taken     folder %s: %d record%s of a source file by %s%s%s" % (
-            plain(name), len(own), "" if len(own) == 1 else "s", words,
+            quoted(name, 120), len(own), "" if len(own) == 1 else "s", words,
             "" if not bad else "; %d of them malformed, and not counted" % bad,
             "" if len(own) == len(receipts) else "; %d more, not signed by the identity's own key and not counted" % (len(receipts) - len(own))))
         note = share["context"].get("note")  # the check holds that a share record has a context
@@ -147,14 +143,14 @@ def tally(source):
 
 
 def main(argv):
-    # Every text of a bundle goes through plain(), so each line is plain ASCII.
+    # Every text that the tally did not write goes through quoted(), so each line is plain ASCII.
     if len(argv) != 2 or argv[1].startswith("-"):
         sys.stderr.write(__doc__)
         return 2
     try:
         return tally(argv[1])
     except OSError as err:
-        print("STOPPED: %s" % plain(err, 300))
+        print("STOPPED: %s" % quoted(str(err), 300))
         return 1
 
 
