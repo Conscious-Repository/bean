@@ -10,7 +10,7 @@
 # reading with it.
 #
 # The host and the relay are one test server of `nak`, which this script
-# starts on localhost and stops at its end. It talks to no other host: it
+# starts on 127.0.0.1 and stops at its end. It talks to no other host: it
 # refuses every URL that is not on that server, it uses no proxy, and it
 # builds bean without a fetch.
 #
@@ -27,8 +27,8 @@ PY=${PY:-python3}
 V=$ROOT/tools/pool/vector
 PORT=${POOL_PORT:-10547}
 case "$PORT" in ''|*[!0-9]*) echo "POOL_PORT is not a port number"; exit 2;; esac
-BASE=http://localhost:$PORT
-RELAY=ws://localhost:$PORT
+BASE=http://127.0.0.1:$PORT
+RELAY=ws://127.0.0.1:$PORT
 MAX=67108864  # no file that is fetched is larger than 64 MiB
 for tool in nak curl go "$PY"; do
   command -v "$tool" >/dev/null 2>&1 || { echo "this trial run needs $tool, and it is not here: README.md says how to go on without nak"; exit 2; }
@@ -48,8 +48,9 @@ size() { "$PY" -I -B -c 'import os, sys; print(os.path.getsize(sys.argv[1]))' "$
 builder() { "$PY" -I -B "$ROOT/tools/pool/build.py" "$@"; }
 # local_only <URL>: the script fetches from its own server, and from no other.
 local_only() { case "$1" in "$BASE"/*) ;; *) stop "a URL is not on this script's own server, and the script fetches no other: $1";; esac; }
-# web <curl arguments>: no proxy, whatever the environment or a curlrc says.
-web() { curl -q -sS --noproxy '*' "$@"; }
+# web <curl arguments>: no proxy, whatever the environment or a curlrc says,
+# and a URL is taken as it is written.
+web() { curl -q -g -sS --noproxy '*' "$@"; }
 # fetch <URL> <new file>: at most 64 MiB, however the host sends them.
 fetch() {
   local_only "$1"
@@ -70,17 +71,17 @@ upload() {
 
 mkdir "$T/bin" "$T/operator" "$T/user"
 # No fetch for the build either: Go takes its modules from this machine.
-(cd "$ROOT" && GOPROXY=off go build -o "$T/bin/" ./cmd/bean) >"$T/build.txt" 2>&1 \
+(cd "$ROOT" && GOPROXY=off GOTOOLCHAIN=local go build -o "$T/bin/" ./cmd/bean) >"$T/build.txt" 2>&1 \
   || stop "bean was not built without a fetch: run \`make build\` once, and then this script again. $(tail -1 "$T/build.txt")"
 export PATH="$T/bin:$PATH"
 
 # ---------- 1. a relay and a file host, on localhost ----------
 web -o /dev/null "$BASE/" 2>/dev/null && stop "something listens on port $PORT already: the script starts its own server, and uses no other. Set POOL_PORT"
-nak serve --blossom --hostname localhost --port "$PORT" >"$T/server.txt" 2>&1 </dev/null &
+nak serve --blossom --hostname 127.0.0.1 --port "$PORT" >"$T/server.txt" 2>&1 </dev/null &
 SERVER=$!
 for _ in 1 2 3 4 5 6 7 8 9 10; do grep -q "relay running" "$T/server.txt" && break; sleep 0.5; done
 grep -q "relay running" "$T/server.txt" || stop "the test server did not start: $(tail -1 "$T/server.txt")"
-echo "1. A test relay and file host run at localhost:$PORT ($(nak --version </dev/null 2>/dev/null)). They stop when this script ends."
+echo "1. A test relay and file host run at 127.0.0.1:$PORT ($(nak --version </dev/null 2>/dev/null)). They stop when this script ends."
 echo "2. Each command that signs gets a key that nak makes for it. No key of a log is used, and no key of this machine."
 
 # ---------- 3. the other user's log ----------
@@ -118,7 +119,14 @@ nak req -k 1063 "$RELAY" >"$U/events.jsonl" 2>"$U/req.err" </dev/null || stop "t
 grep '"content":"synthetic pool:' "$U/events.jsonl" >"$U/event.json"
 [ "$(wc -l <"$U/event.json" | tr -d ' ')" = 1 ] || stop "the relay does not have exactly one pointer of a synthetic pool"
 nak verify <"$U/event.json" >/dev/null 2>&1 || not_reproduced "the pointer's signature does not hold"
-tag() { "$PY" -I -B -c 'import json, sys; print(dict(t[:2] for t in json.load(open(sys.argv[1]))["tags"] if len(t) > 1).get(sys.argv[2], ""))' "$U/event.json" "$1"; }
+# tag <name>: the value of a tag of the pointer. A pointer that has the tag
+# twice, or not at all, names nothing by it.
+tag() {
+  "$PY" -I -B -c 'import json, sys
+found = [t[1] for t in json.load(open(sys.argv[1]))["tags"] if len(t) > 1 and t[0] == sys.argv[2]]
+sys.exit(1) if len(found) != 1 else print(found[0])' "$U/event.json" "$1"
+}
+for name in url x size; do tag "$name" >/dev/null || not_reproduced "the pointer does not have the tag $name exactly once"; done
 fetch "$(tag url)" "$U/pool.pack"
 [ "$(sha "$U/pool.pack")" = "$(tag x)" ] && [ "$(size "$U/pool.pack")" = "$(tag size)" ] || not_reproduced "the host served other bytes than the pointer names"
 "$PY" -I -B "$ROOT/tools/pack/check.py" "$U/pool.pack" >"$U/check.txt" 2>&1 || not_reproduced "the file that the pointer names is not a pack: $(tail -1 "$U/check.txt")"
