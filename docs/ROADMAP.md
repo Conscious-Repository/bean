@@ -352,7 +352,7 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 - **It is built from saved comparisons.** A saved comparison names its reading, its measure and its cohort. `bean share -type 'comparison.*'` sends each with its reading. So the sharer's own bean did the mapping, with a survey pack.
 - **The builder is one program in Python, under `tools/`.** It checks a bundle with `checkbundle.py`, a claim with `reproduce.py`, and its pack with `check.py`. Its rules are its own, and the program is the rule.
 - **The pack's measures are the survey pack's:** ids, labels, units and `same` lists. A cell needs 30 identities, and one cell is enough for the test.
-- **The test's rule is one reading for each identity and measure.** An identity with two readings of one measure, or with two bundles, is left out, and named. That rule is for the test alone.
+- **The test's rule is one reading for each identity and measure.** POOL-PLAN.md states it in full, with each case that is left out. That rule is for the test alone.
 - **The pack says what it is, where a reader sees it.** A cohort's id starts with `pool-`, and its text with `synthetic pool:`. Its caveats are the builder's own, and never name the survey's publisher as the pool's.
 - **The bundles are one archive in this repository, a test vector,** beside the survey pack that their claims name. The pack names both in `source.files`, and anyone builds the pack again. It is used with `-unknown-pack`.
 

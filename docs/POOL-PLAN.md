@@ -93,12 +93,12 @@ It is `tools/pool/` and `make pool`.
 - **It reads opened bundles only,** as a folder or as an archive. So it has one path.
 - **Its inputs are named.** The bundles. The survey pack. A URL for the archive and one for the survey pack, with no default. And a flag `-synthetic`, without which it stops.
 - **It prints the SHA-256 of the survey pack that it was given.**
-- **It checks each bundle** (`checkbundle.py`), and computes each claim again (`reproduce.py`). For that it names the survey pack by its SHA-256, with `-accept-pack`, since bean has no record of that pack. It gives `reproduce.py` a bundle's `objects` and `files`, and nothing else of the folder. It adds no check of a bundle or of a claim. It has one rule of its own: a value that `pack/0` cannot hold is left out, and named.
+- **It checks each bundle** (`checkbundle.py`), and computes each claim again (`reproduce.py`). For that it names the survey pack by its SHA-256, with `-accept-pack`, since bean has no record of that pack. It gives `reproduce.py` a bundle's `objects` and `files`, and nothing else of the folder. It adds no check of a bundle or of a claim. It has one rule of its own: a reading whose value `pack/0` cannot hold is left out, and named.
 - **Whose records count.** A claim and its reading count only when the identity's own key signed both. An agent's record does not count.
 - **The note is a tripwire.** A bundle is left out unless its share's note is exactly `synthetic contributor`. Anyone can write that note. It guards against an accident, and proves nothing.
 - **One reading for each identity and measure.** An identity with two different bundles is left out of the pool. So is an identity with two readings of one measure that count. So is an identity whose reading has claims in two cohorts. This is the test's rule, and the author's choice. What would give more: ROADMAP's rule, which takes the latest reading. ROADMAP keeps its own rule for a real pool, where a person must be able to correct a reading.
-- **One bundle is one bundle.** A bundle is its `objects` and its `files`. Two folders with one share id that pass their check are one bundle, and it is taken once.
-- **What it prints.** One line for each identity: taken, or left out and why. A bundle that fails its check has no identity that can be trusted, so its line names the folder. The builder writes out safely every text that it quotes, so that no text can fake a line.
+- **One bundle is one bundle.** A bundle is its `objects` and its `files`. Two folders with one share id that pass their check, and are the same in `objects` and `files`, are one bundle. It is taken once.
+- **What it prints.** One line for each identity: taken, or left out and why. Each identity that it takes counts as one in its cell. It names each cell that it drops for having fewer than 30. A bundle that fails its check has no identity that can be trusted, so its line names the folder. The builder writes out safely every text that it quotes, so that no text can fake a line.
 
 ### The pack
 
@@ -210,7 +210,7 @@ A person fetches a survey file with their own tool. They run `bean import nhanes
 It is one small Python program. It reads bundles that are open: whoever was sent a sealed one opens it first.
 
 - **What it takes.** It checks each bundle with `checkbundle.py`. A bundle that fails is refused whole, and its line names the folder and not an identity. It takes only `reference.file` records that the identity's own key signed.
-- **Strict forms.** It reads the stated SHA-256 from the record. It takes a digest only as 64 lower-case hex digits, and a dataset's name only by the pattern that bean's importer has. Anything else it calls malformed.
+- **Strict forms.** It reads the stated SHA-256 from the record. It takes a digest only as 64 lower-case hex digits, and a dataset's name only by the pattern that bean's importer has. Anything else it calls malformed, and writes out safely.
 - **One line for each identity and dataset:** the identity's eight words, and the SHA-256 that it states. Then one of the two lines below.
 - **"States only."**
 - **Or:** "the share record lists a file for this record whose SHA-256, computed here, equals the stated one. Nothing shows that it is the file that the signer kept, or a file of the survey." That line is for a record with exactly one stored file, which it names. The tally computes the SHA-256 itself.
@@ -238,7 +238,7 @@ One fixture of made-up identities shows each line and each mark. It is chosen so
 - One states a digest of the project's own table and carries no file. `bean append` wrote that record.
 - One states two digests for one dataset, in two bundles.
 - One states a digest that is malformed.
-- One share has a note with a hidden character.
+- One share has a note with a quotation mark, a backslash, and characters that show as blank. A check of a bundle lets some of those through, so the tally has its own rule for them.
 - One bundle fails its check, and is listed as refused.
 - One identity states one digest in two bundles, and one share is handed in twice. Each counts once.
 
