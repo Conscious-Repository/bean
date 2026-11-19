@@ -34,7 +34,7 @@ The owner set the next aim on 2026-11-18 (DECISIONS 325). Two people share, and 
    - **Step 1 is built,** and released as 0.8.0 (DECISIONS 327): `bean address`, `bean share -for`, and `-key` on `check-bundle` and on `reply -to`. [SHARE.md](SHARE.md) says how to use it and what it costs.
    - **Step 2 is built,** to be released as 0.8.1 (DECISIONS 330): `bean reply -for <address>`, and `bean accept -key`. Without `-for` a reply makes six words.
    - **Decided by the owner (DECISIONS 328):** a key file with a passphrase comes before any package of his goes on a public host.
-5. **A builder of a pool, with synthetic contributors**, under `tools/` (path 4, "A pool"). It is a test of the path, and not a pool. Proposed: it is not in the order to 0.9 below, since it gives a person nothing until a group that can reach 30 exists. The owner chose it (DECISIONS 325), and he decides whether it waits.
+5. **A builder of a pool, with synthetic contributors**, under `tools/` (path 4, "A pool"). It is a test of the path, and not a pool. The owner asked for a demonstration of it on 2026-11-18 (DECISIONS 332). [POOL-PLAN.md](POOL-PLAN.md) says what will be built, and what it may claim. None of it is built yet. It is no step of the loop of 0.9. By the author's reading of that request, it comes before the order below.
 
 **The order to 0.9, and what 1.0 is: a proposal (DECISIONS 328).** The owner asked for a path in stages that leads to his whole loop. The loop is: import, share 1:1, compare with pools or with packs that others host. Device signing comes later. This adds an order to the steps above. It adds two small things: true words on leaving, and a mark of format for a bundle and a reply. A third waits: a flag that takes a SHA-256.
 
@@ -49,7 +49,9 @@ A pack is one file of reference data, and a cell is its table for one measure an
 - What 1.0 promises. His own words: "maybe we should plan to leave this at .9 for a while too until we're positive formats are locked".
 - Whether a key file with a passphrase is built before any package of his goes on a public host: "Yes, before a public host".
 
-**The owner decided the points above. The rest is the author's proposal:** what 0.9 holds, the order, and the rules for 1.0. Reviewers who had not seen the work judged it, one for each paragon, and DECISIONS 328 has the account. Their reviews are not kept. He can change any of it.
+**What the owner asked for after that, on the same day.** In his words: "Over the next four days, prioritize a working end-to-end BEAN demonstration". [POOL-PLAN.md](POOL-PLAN.md) quotes the whole request. The author reads it so: the builder of a pool does not wait, and the order below follows the demonstration.
+
+**The owner decided the points of the list above. The rest is the author's proposal:** what 0.9 holds, the order, and the rules for 1.0. Reviewers who had not seen the work judged it, one for each paragon, and DECISIONS 328 has the account. Their reviews are not kept. He can change any of it.
 
 **0.9 is the loop for two people with a terminal, with the survey's packs.**
 
@@ -62,13 +64,13 @@ A pack is one file of reference data, and a cell is its table for one measure an
 
 **The proposed order.** A step that touches keys or sharing has its own audit. A step with code is a release of its own, with a number below 0.9.
 
-1. **First: publish 0.8.0, with true words on leaving.** One small change comes before the tag. **The change is made (DECISIONS 329). The tag waits for the owner's word.**
+1. **First: publish 0.8.0, with true words on leaving.** One small change comes before the tag. **The change is made (DECISIONS 329), and release 0.8.0 is out.**
    - The README says today that `bean export` writes everything, and SECURITY.md and ARCHITECTURE.md say the like. A reader can take an export for a whole backup.
    - The three documents say: an export holds every record and file that bean could read. It leaves out what you deleted. `manifest.json` lists what it could not write. Those sentences are held to the code before the tag. It holds no key file, no package and no pack. A key file is kept apart, and the 24 words do not bring it back. Nor does an export hold `local/purged-refs.jsonl`, which the README already says to back up, or the other files of `local/` that COMMANDS.md lists.
    - A saved comparison names its pack, and an export does not hold the pack: keep it. An address that your peers hold opens nothing for you once its key file is lost.
    - SHARE.md and SECURITY.md say already what a copy of a key file opens, and that a lost one opens nothing again. The README points to them, and adds one thing: bean does not encrypt a key file, so keep it as any secret key is kept.
    - One case in `tools/smoke.sh` restores from an export, and opens an old package with a key file that was kept apart.
-   - Then a tag and a release with the check page, on the owner's word.
+   - Then a tag and a release with the check page. **Done:** release 0.8.0, on 2026-11-18.
 2. **Second: a reply to an address** ("Seal to a key" in the list above, its second half). Three points are for its design and its audit. **It is built (DECISIONS 330). The merge and the tag wait for the owner's word.** What was decided on each point is after the point, and the audit judged each by name.
    - **A bundle and a reply get a way to say their format.** Today only a record has a version. The mark is a design of its own, on paper. It is ready before the audit of the reply ends, so that the audit can say whether the reply must carry it. It does not hold the reply up. A file with no mark is format 0. A build from before the mark may refuse a file that carries it: then UPGRADING.md says so, and both people update first. If the mark is built, `tools/second` and the vectors change with it.
      - **Decided in the build: the reply does not carry a mark.** It is format 0 of a reply, and release 0.8.0 refuses its seal by name. The mark is a step of its own before the clock of 1.0 starts. The design on paper proposes a member of the signed share record and reply record. Whether it comes before 0.9 is the owner's to decide.
@@ -111,7 +113,7 @@ A pack is one file of reference data, and a cell is its table for one measure an
 **Not in the order to 0.9.**
 
 - **bean holds a pack to a SHA-256 that the person gives.** It is one new flag of `bean compare -pack`, as `reproduce.py` has with `-accept-pack`. A result says: held to the SHA-256 that you gave, and bean cannot tell where you got it. It is built before a pack of a second publisher is announced. `-unknown-pack` does not change with it. Until then, the compare of a SHA-256 for such a pack is the person's own act. 0.9 does not count it as part of the loop.
-- **Proposed: the builder of a pool** (the last entry of the list above). It stays out until the owner answers.
+- **The builder of a pool** (the last entry of the list above). It is no step of the loop of 0.9. The owner asked for a demonstration of it, with made-up people (DECISIONS 332). By the author's reading it comes before this order.
 - **A pack from a pool of real people, a view of more than two people, and device signing.** Each waits for its real case (paths 2, 3 and 4).
 
 **Proposed: 1.0 is the day the formats are locked.** It is no step of work. This plan proposes the rules of that promise, and not its words. Whoever makes the promise writes it on that day.
@@ -207,10 +209,11 @@ A pack is one file of reference data, and a cell is its table for one measure an
 - Who the peer of the first run is, and whether values that were entered by hand are enough for it (DECISIONS 323).
 - Which host takes a package by link, once a key file can be protected.
 - Whether a publisher's real key is used after the rehearsal.
-- Whether a first pool with no step of contribution is enough. His answer began with a contribution.
-- Whether the first host carries the synthetic pool's pack. A pack of made-up people on a real host can mislead.
-- Whether the survey's next pack comes before the builder of a pool. The next pack gives a person more tests. The builder gives none.
-- Whether the builder of a pool waits for a group that can reach 30 (DECISIONS 328). He chose the builder on 2026-11-18, as a proof of the path. All reviews of the order recommend that it waits.
+- Whether the network leg of the demonstration goes on a real host, his own or others' (POOL-PLAN.md). A pack of made-up people on a real host can mislead.
+- Whether bean gets a member for a URL, or an importer for other public files, for receipts (POOL-PLAN.md).
+- Whether the tally of receipts sets apart the identities that he lists as known (POOL-PLAN.md).
+- Whether the author's reading of his request is right: that the demonstration comes before the order to 0.9 (DECISIONS 332).
+- Whether the survey's next pack comes right after the demonstration of the pool path, or after 0.9.
 - Whether the survey's packs are on a host before the run. All reviews recommend it.
 - Whether 1.0 can come while `pack/0` is a draft. The reviews recommend it: 1.0 then names the comparing part as not locked, and does not wait for a second source that nobody has.
 - Whether a review by a person outside the project is a condition of 1.0. The reviews recommend that it is wanted, and is no condition.
@@ -346,21 +349,22 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 
 **A pool: a pack from what people contribute (DECISIONS 325).** A group's own data is a source like any other, and its pack is a pack like any other.
 
-**The first pool is a test of the path.** It holds nothing that the survey's pack lacks, and it tests no mapping. Nobody contributes to it: its bundles are made for the test.
+**The first pool is a test of the path.** It holds nothing that the survey's pack lacks, and it tests no mapping. [POOL-PLAN.md](POOL-PLAN.md) says what will be built, and DECISIONS 332 has the account. None of it is built yet.
 
-- **It is built from saved comparisons.** A saved comparison names its reading, its measure and its cohort. `bean share -type 'comparison.*'` sends each with its reading. So the sharer's own bean did the mapping, with a pack on record.
-- **The builder is one program in Python, under `tools/`.** It checks a bundle with `checkbundle.py`, a claim with `reproduce.py`, and its pack with `check.py`. The rules below are its own, and the program is the rule.
-- **Which claims count.** The builder is given one pack of the survey. For the test, that pack is built from the synthetic files in `internal/nhanes/testdata`. A claim counts when it names that pack. The identity's own key signed the claim and its reading. An agent's record does not count.
-- **One value for each identity and measure.** The builder takes the reading with the latest `times.observed.start`, compared as an instant. It looks only at readings with a claim that counts. A reading in two bundles is one reading. A reading with no such time is not taken. It takes none when two readings share that instant, or when the reading has claims in two cohorts. It counts each such case. The sharer chose which readings to share, and stated their times.
-- **The pack's measures are the survey pack's:** label, unit, `same` list and caveats. A cell needs 30 identities, and one cell is enough for the test.
-- **The pack says what it is, where a reader sees it.** A cohort's id is `pool-` and the survey's id. Its text is `synthetic pool: ` and the survey's text. The title, the source's name and publisher, and the caveats are the builder's own, and say the same. They never name the survey's publisher as the pool's.
-- **The bundles are one archive in this repository, a test vector.** The pack names it in `source.files`, and anyone builds the pack again. It is used with `-unknown-pack`.
+- **A script makes every contributor.** Each seals a share to the operator's address, as a person would to a publisher's. The builder cannot check for whom a share was sealed.
+- **It is built from saved comparisons.** A saved comparison names its reading, its measure and its cohort. `bean share -type 'comparison.*'` sends each with its reading. So the sharer's own bean did the mapping, with a survey pack.
+- **The builder is one program in Python, under `tools/`.** It checks a bundle with `checkbundle.py`, a claim with `reproduce.py`, and its pack with `check.py`. Its rules are its own, and the program is the rule.
+- **The pack's measures are the survey pack's:** ids, labels, units and `same` lists. A cell needs 30 identities, and one cell is enough for the test.
+- **The test's rule is one reading for each identity and measure.** POOL-PLAN.md states it in full, with each case that is left out. That rule is for the test alone.
+- **The pack says what it is, where a reader sees it.** A cohort's id starts with `pool-`, and its text with `synthetic pool:`. Its caveats are the builder's own, and never name the survey's publisher as the pool's.
+- **The bundles are one archive in this repository, a test vector,** beside the survey pack that their claims name. The pack names both in `source.files`, and anyone builds the pack again. It is used with `-unknown-pack`.
 
 **What a pool of real people needs first, on paper.** None of it is built.
 
 - **A pack from data that is not public.** `pack/0` names in `source.files` a file that anyone can fetch. A real pool has none. So this is a decision on the format, and on a publisher's signature (the plan below, step 4, and "Open").
 - **A contribution that the person meant.** A share is not bound to a reader today, so anyone who holds one can pass it on to a pool. A contribution counts only when its share record names the publisher's address. A share record names no address yet (SHARE-PLAN.md). A pool brings that member, with a design of its own.
 - **A pack that is published cannot be taken back.** Whoever fetched it holds a copy.
+- **One value for each identity and measure, and a person can correct it.** The rule of DECISIONS 325 takes the reading with the latest time, among the readings with a claim that counts. A real pool sets its own rule, and says it.
 - **Mapping stays with the one who pools.** The publisher's rule decides which type and unit is which measure. The rule has a version, and its result is the pack's `same` list. bean keeps no table of names, and no reader converts a unit.
 - **A reading that no `same` list has is not pooled.** The publisher counts such readings, and the counts are its list of work.
 - **What a pool's pack may claim.** It says that it is a pool, and that each contributor chose a cohort. Its n counts identities, not people: one person can make many. bean's own line under a result says "in this sample" today, and a pack's n is "the number of people". A pool is not a sample, so both need other words for a pool.
@@ -413,7 +417,7 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 
 **What a server learns.** That someone fetched a file, from which address, and when. For a package it also holds the size and the ciphertext, for as long as it likes. Nobody can make a server delete a file.
 
-**What never goes there.** A record: record files are plain JSON. A request for one cohort, or one that carries a value.
+**What never goes there.** A record of a person: record files are plain JSON. The trial run of POOL-PLAN.md puts made-up records on a test server on one machine. A request for one cohort, or one that carries a value.
 
 **Open.**
 
@@ -448,7 +452,7 @@ He then said that the infrastructure must be right before new capabilities are a
 
 The view of two people side by side needs none of this infrastructure. Its place in the order is in the section "Next".
 
-**The next steps (DECISIONS 325)** are in the section "Next", near the top. They take a first run with a peer, the view of two people, phase 2, and the seal to a reader's key. They name one builder of a pool, which is proposed to wait (DECISIONS 328). The documents of item 2 above do not wait. The other work that follows from phase 1 keeps its order, after the first run with a peer.
+**The next steps (DECISIONS 325)** are in the section "Next", near the top. They take a first run with a peer, the view of two people, phase 2, and the seal to a reader's key. They name one builder of a pool. The owner asked for a demonstration of it (DECISIONS 332), and by the author's reading it comes first. The documents of item 2 above do not wait. The other work that follows from phase 1 keeps its order, after the first run with a peer.
 
 Not planned: a command in bean that fetches from a network, and a view that ranks or scores two people. bean never runs a program that a pack names. A public card of what a person holds is not planned either.
 
