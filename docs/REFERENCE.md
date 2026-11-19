@@ -30,7 +30,7 @@ No service computes a comparison for a person. A request for one cell says "a ma
 
 ## What a comparison supports
 
-A comparison says where a value lies among the values of a cohort in the source's sample. It does not say whether a value is healthy. It does not diagnose, predict or advise. Each result has its n and its caveats. A pack's cell has no least size. N is the number that the pack states. The 30 of [COMPARE.md](COMPARE.md) is the rule of the survey's method, and of the survey's builder. A survey's sample stands for a population, and a percentage that rests on a few of the sample is rough. A pool stands for no one but its contributors.
+A comparison says where a value lies among the values of a cohort in the source's sample. It does not say whether a value is healthy. It does not diagnose, predict or advise. Each result has its n and its caveats. A pack's cell has no least size. N is the number that the pack states. The n and the values of a pack are its builder's word: the format holds n only to the number of distinct values. The 30 of [COMPARE.md](COMPARE.md) is the rule of the survey's method, and of the survey's builder. A survey's sample stands for a population, and a percentage that rests on a few of the sample is rough. A pool stands for no one but its contributors.
 
 ## Try it
 
