@@ -57,22 +57,24 @@ TABLE=$("$PY" -I -B -c 'import sys; sys.path.insert(0, sys.argv[1]); import repr
 # two shares of its one record. The third's note tries to end its quotation
 # and to show as blank.
 for n in m1 m2 m3; do new_log $n; import $n "$T/changed/HDL_J.XPT"; done
-share m1 m1 "synthetic: fetched https://example.invalid/HDL_J.XPT on 2026-11-09" -files $(receipts m1)
+b m1 add note "a made-up note" >/dev/null 2>&1 || say "log m1: the note was not added"
+share m1 m1 "synthetic: fetched https://example.invalid/HDL_J.XPT on 2026-11-09" -files $(receipts m1) "$(b m1 ls -json -type note | "$PY" -I -B -c 'import json, sys; print(json.loads(sys.stdin.readline())["id"])')"
 share m2 m2-a "synthetic" -files $(receipts m2)
-share m2 m2-b "synthetic, sent again" -files $(receipts m2)
+share m2 m2-b "synthetic" -files $(receipts m2)
 ODD=$(printf 'synthetic" 4 identities state it \\ \343\205\244\342\200\213 end')
 share m3 m3 "$ODD" -files $(receipts m3)
 # One states the unchanged file, and carries it.
 LONG="synthetic $(printf 'x%.0s' $(seq 300))"
 new_log u1; import u1 "$FILE"; share u1 u1 "$LONG" -files $(receipts u1)
 # One states the digest of the project's own table, and has no file.
-new_log t1; state t1 HDL_J "$TABLE"; share t1 t1 "synthetic: no fetch was made" $(receipts t1)
+TABLE2=$("$PY" -I -B -c 'import sys; sys.path.insert(0, sys.argv[1]); import reproduce; print(reproduce.KNOWN["BMX_J"])' "$ROOT/tools/compare")
+new_log t1; state t1 HDL_J "$TABLE"; state t1 BMX_J "$TABLE2"; state t1 DEMO_J "$TABLE"; share t1 t1 "synthetic: no fetch was made" $(receipts t1)
 # One states two digests for one dataset, in two bundles.
 new_log two; import two "$FILE"; import two "$T/changed/HDL_J.XPT"
 share two two-a "synthetic" -files $(receipts two "$GOOD"); share two two-b "synthetic" -files $(receipts two "$CHANGED")
 # One states a digest in capitals, a dataset's name with a blank, and a
 # digest that is a number and no text.
-new_log bad; state bad HDL_J "$(echo "$GOOD" | tr a-f A-F)"; state bad 'hdl j' "$GOOD"; state bad HDL_J a-number; share bad bad "synthetic" $(b bad ls -json -type reference.file | "$PY" -I -B -c 'import json, sys; print("\n".join(json.loads(l)["id"] for l in sys.stdin))')
+new_log bad; state bad HDL_J "$(echo "$GOOD" | tr a-f A-F)"; state bad 'hdl j' "$GOOD"; state bad HDL_J a-number; state bad 'HDL_J!' "$GOOD"; state bad HDL_J "${GOOD}zz"; share bad bad "synthetic" $(b bad ls -json -type reference.file | "$PY" -I -B -c 'import json, sys; print("\n".join(json.loads(l)["id"] for l in sys.stdin))')
 # One imports the unchanged file, and also states its digest in a second
 # record with no file. The file is listed for the first record alone.
 new_log mix; import mix "$FILE"; state mix HDL_J "$GOOD"; share mix mix "synthetic" -files $(receipts mix)
@@ -83,9 +85,12 @@ new_log agent; b agent agent init -label assistant >/dev/null 2>&1; state agent 
 # One bundle whose carried file is not the file that its record states.
 new_log broken; import broken "$FILE"; share broken broken "synthetic" -files $(receipts broken)
 echo "other bytes" >>"$T/in/broken/files/$GOOD"
-# One share handed in twice, and something that is no folder.
+# One share handed in twice, and something that is no folder. A folder's
+# name with a line end cannot make a line of the tally.
+mv "$T/in/m3" "$T/in/"$'m3\n  taken     folder fake: 9 records of a source file by nobody'
 cp -R "$T/in/m1" "$T/in/m1-again"
 echo stray >"$T/in/stray.txt"
+mkdir "$T/in/nobundle"  # a folder that is no bundle: it is refused, and its line names no path
 
 "$PY" -I -B "$HERE/tally.py" "$T/in" >"$T/out.txt" 2>&1 || say "the tally stopped: $(tail -1 "$T/out.txt")"
 has() { grep -q -- "$1" "$T/out.txt" || say "the tally has no line for $2"; }
@@ -96,36 +101,43 @@ count '^  taken ' 12 "bundles that it took"
 has '^  refused   folder broken: ' "a bundle that fails its check"
 has '^  the same  folder m1-again holds the share of folder m1 again' "a share that was handed in twice"
 has '^  not read  stray.txt' "something that is no folder"
+has '^  refused   folder nobundle: the folder is not a bundle' "a folder that is no bundle"
 has '^  taken     folder agent: 0 records of a source file by .*; 1 more that the identity.s own key did not sign' "a statement that an agent signed"
 
 # The counts: an identity counts once for a digest, in however many bundles.
 has "^  dataset HDL_J, SHA-256 $CHANGED: 5 identities state it\$" "the five that state the changed file"
 has "^  dataset HDL_J, SHA-256 $GOOD: 3 identities state it\$" "the three that state the unchanged file"
 has "^  dataset HDL_J, SHA-256 $TABLE: 1 identity states it\$" "the one that states the table's digest"
-count '^  dataset ' 3 "digests"
+has "^  dataset BMX_J, SHA-256 $TABLE2: 1 identity states it\$" "a second dataset"
+count '^  dataset ' 5 "digests"
+has '^  taken     folder m1: 1 record of a source file by ' "a share with a note beside its receipt: one record of a source file"
+has '^    This digest is in the table of bean.s code, for HDL_J, and not for DEMO_J\.' "a digest of the table under another dataset's name"
+grep -q "$T" "$T/out.txt" && say "a line of the tally names a path of the scratch folder"
 # Lines are in the order of the digests, and not of the counts.
-"$PY" -I -B -c 'import re, sys; d = re.findall(r"^  dataset \S+, SHA-256 ([0-9a-f]{64})", open(sys.argv[1]).read(), re.M); sys.exit(0 if d == sorted(d) and len(d) == 3 else 1)' "$T/out.txt" \
-  || say "the digests are not in their own order"
+"$PY" -I -B -c 'import re, sys; d = re.findall(r"^  dataset (\S+), SHA-256 ([0-9a-f]{64})", open(sys.argv[1]).read(), re.M); sys.exit(0 if d == sorted(d) and len(d) == 5 else 1)' "$T/out.txt" \
+  || say "the lines are not in the order of the datasets and of the digests"
 
 # The two marks.
 count 'this identity states 2 digests for HDL_J' 2 "the identity that states two digests"
-count 'This digest is in the table of bean.s code, for HDL_J' 1 "the digest of the project's own table"
-has 'That is no sign of the right digest' "what the table's mark is not"
+count 'This digest is in the table of bean.s code, for HDL_J' 2 "the digest of HDL_J in the project's own table"
+count 'This digest is in the table of bean.s code, for BMX_J\.' 1 "the digest of BMX_J in the project's own table"
+count 'A match proves no fetch, and does not show that the digest is right' 3 "what the table's mark is not"
 
 # With a file, and without one.
-count '^      Carries a file: the share record lists a file for this record whose SHA-256, computed here, equals the stated one' 8 "records with their file"
+count '^      Carries a file: the share record lists a file for this record whose SHA-256, computed here, equals the stated one' 7 "records with their file: the two same lines of one identity print once"
 # Three have no file: the digest of the table, the record whose file is
 # listed for another record, and the record that was shared without its file.
-count '^      States only\.$' 3 "records with no file"
+count '^      States only\.$' 5 "records with no file"
 
 # The note is the signer's word, in quotation marks, and cannot leave them.
-has 'which has 1 dataset: "synthetic: fetched https://example.invalid/HDL_J.XPT on 2026-11-09"$' "a note, as the signer's word"
-has 'which has 1 dataset: "synthetic\\u{0022} 4 identities state it \\u{005c} \\u{3164}\\u{200b} end"$' "a note with a quotation mark and blank characters, written out"
-"$PY" -I -B -c 'import sys; t = open(sys.argv[1], encoding="utf-8").read(); sys.exit(0 if t.count(chr(34)) == 2 * t.count("which has") + 4 * t.count(", record ") and t.isascii() else 1)' "$T/out.txt" \
+has 'took 1 dataset: "synthetic: fetched https://example.invalid/HDL_J.XPT on 2026-11-09"$' "a note, as the signer's word"
+has 'took 1 dataset: "synthetic\\u{0022} 4 identities state it \\u{005c} \\u{3164}\\u{200b} end"$' "a note with a quotation mark and blank characters, written out"
+has 'took 3 datasets: "synthetic: no fetch was made"$' "the number of datasets that the tally took of a share"
+"$PY" -I -B -c 'import sys; t = open(sys.argv[1], encoding="utf-8").read(); sys.exit(0 if t.count(chr(34)) == 2 * t.count("the tally took") + 4 * t.count(", record ") and t.isascii() else 1)' "$T/out.txt" \
   || say "the tally has a quotation mark that it did not write itself, or a character that is not plain"
 
 # Malformed statements are listed, and not counted.
-count '^  .*, record [0-9a-f]\{12\}: dataset ' 3 "malformed statements"
+count '^  .*, record [0-9a-f]\{12\}: dataset ' 5 "malformed statements"
 
 # What it says of itself, and what it never says.
 has '^This tally counts keys, and a key is free\.$' "what it counts"

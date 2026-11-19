@@ -37,10 +37,13 @@ A share has one note. So share one dataset in a share that has such a note.
 - The time of the share, with your offset from UTC.
 - The time of each import, and the size of each file.
 - Your note. Every tally of the bundle quotes it. A URL or a day in it travels with the bundle.
+- Your pairing of an agent, when you made one.
 
 The bundle is sealed to the asker's address for its way there. The asker opens it, may show it or pass it on, and cannot give it back.
 
 The import keeps each file in your log. `bean purge` of it is final.
+
+`bean share` shows every record and every field that leaves, and asks, before it writes. Read that list.
 
 You may use an identity that you made for this alone.
 
@@ -48,18 +51,18 @@ You may use an identity that you made for this alone.
 
     python3 tools/receipts/tally.py <folder of opened bundles>
 
-It reads opened bundles: one bundle in each folder below the folder that it is given. Whoever was sent a sealed package opens it first.
+It reads opened bundles: one bundle in each folder below the folder that it is given. Whoever was sent a sealed package opens it first: `bean check-bundle -key <key file> -unpack <new folder> <package>`.
 
 - It checks each bundle with `tools/second/checkbundle.py`. A bundle that fails is refused whole.
 - It takes only records that the identity's own key signed.
 - It takes a SHA-256 only as 64 lower-case hex digits, and a dataset's name only in the form that bean's importer has. Anything else is listed as malformed, and not counted.
 - For each dataset and SHA-256, it lists the identities that state it, by their eight words. An identity counts once, in however many bundles.
-- The lines are in the order of the digests, and not of the counts.
+- The lines are in the order of the datasets and of the digests, and never of the counts.
 - It prints no total over a dataset, and no percentage.
 
 **Two lines for a record.** `States only.` Or that the share record lists a file for this record with the stated SHA-256, and the bundle carries it. The check of the bundle computes that SHA-256 in the same run. Nothing shows that it is the file that the signer kept, or a file of the survey.
 
-**Two marks.** An identity that states two digests for one dataset is marked under each. A digest that is in the table of bean's code is marked, with the dataset that the table gives. That table is from the project's own fetches of November 2026. The mark is no sign of the right digest.
+**Two marks.** An identity that states two digests for one dataset is marked under each. A digest that is in the table of bean's code is marked, with the dataset that the table gives. That table is from the project's own fetches of November 2026. A match proves no fetch, and does not show that the digest is right: a statement that was copied from the table matches too. The mark also says when the table has the digest for another dataset.
 
 **The note** is quoted as the signer's word, cut at 200 characters. Every character but plain ASCII is written out, and so are a quotation mark and a backslash. So a note cannot end its quotation, show as blank, or look like a line of the tally.
 
@@ -83,14 +86,18 @@ The fixture is chosen so that nobody learns that the larger count is right. Five
 | What is handed in | What must happen |
 |---|---|
 | Three identities that state the changed file, and carry it | They count, with two more below. |
-| One of them, in two shares | It counts once. |
+| One of them, in two shares with one note | It counts once, and its line prints once. |
+| One of them shares a note record beside its receipt | The note record is no record of a source file. |
+| One of them, in a folder whose name has a line end | The name is written out on one line. |
 | One share, in two folders | It is one share. |
 | One identity that states the unchanged file, and carries it | It counts. |
 | One that states a digest of bean's table, with no file | `States only.`, and the mark of the table. |
 | One that states both files, in two bundles | It is listed under each digest, and marked. |
 | One that imports the unchanged file, and states its digest again in a record with no file | It counts once. The second record gets `States only.` |
 | One that shares its record without the file | It counts, with `States only.` |
-| A digest in upper case, and a dataset's name with a space | Malformed, and not counted. |
+| A digest in upper case, one with two more letters, and one that is a number | Malformed, and not counted. |
+| A dataset's name with a space, and one with another character at its end | The same. |
+| A digest of the table under another dataset's name, and one of a second dataset | Each is listed, and the mark says for which dataset the table has it. |
 | A statement that an agent of the identity signed | Not counted, and the line says so. |
 | A bundle whose carried file has other bytes | The bundle is refused whole. |
 | A note with a quotation mark, a backslash and blank characters | Each is written out. |

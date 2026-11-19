@@ -215,18 +215,18 @@ A person fetches a survey file with their own tool. They run `bean import nhanes
 
 ### The tally
 
-It is one small Python program. It reads bundles that are open: whoever was sent a sealed one opens it first.
+It is one small Python program. It reads bundles that are open: whoever was sent a sealed one opens it first, with `bean check-bundle -key … -unpack …`.
 
 - **What it takes.** It checks each bundle with `checkbundle.py`. A bundle that fails is refused whole, and its line names the folder and not an identity. It takes only `reference.file` records that the identity's own key signed.
 - **Strict forms.** It reads the stated SHA-256 from the record. It takes a digest only as 64 lower-case hex digits, and a dataset's name only by the pattern that bean's importer has. Anything else it calls malformed, and writes out safely.
-- **One line for each identity and dataset:** the identity's eight words, and the SHA-256 that it states. Then one of the two lines below.
+- **For each dataset and SHA-256, the identities that state it,** each by its eight words. Under each identity, one of the two lines below for each of its records.
 - **"States only."**
 - **Or:** "the share record lists a file for this record whose SHA-256, computed here, equals the stated one. Nothing shows that it is the file that the signer kept, or a file of the survey." That line is for a record that the share record lists a file for, with the stated SHA-256. The check of the bundle computes the file's SHA-256 in the same run, and the tally does not compute it again.
 - **The note of the share,** in quotation marks, as the signer's word, with the number of datasets in that share. The tally cuts it at a stated length. It writes out control characters and line ends, as `bean check-bundle` does. It writes out quotation marks too, which `bean check-bundle` does not. It writes out every character that is not plain ASCII, so none shows as blank.
 - **How it counts.** For each dataset and digest, the identities that state it. That count is printed with the lines of its digest. An identity counts once for a digest, in however many bundles or records. The same share handed in twice is one share.
 - **Two marks.** An identity that states two digests for one dataset is listed under each, and marked, also across bundles. A digest that is in the project's own table is marked with the dataset that the table gives for it.
-- **What the tally says of that second mark.** The table is the one in bean's code, from the project's own fetches of November 2026. The mark is no sign of the right digest. The tally loads the table from `reproduce.py` by its path, and keeps no copy.
-- **Order.** Lines are in the order of the digests, not of the counts.
+- **What the tally says of that second mark.** The table is the one in bean's code, from the project's own fetches of November 2026. A match proves no fetch, and does not show that the digest is right. The mark says so, and says when the table has the digest for another dataset. The tally loads the table from `reproduce.py` by its path, and keeps no copy.
+- **Order.** Lines are in the order of the datasets and of the digests, and never of the counts.
 - **What it was given.** Each run lists the bundles that it was given: taken, or refused with the check's reason. It writes out safely every name of a folder and every reason.
 - **What it never prints of its own:** a total over a dataset, or a percentage. Nor any word that says more than that a key signed a statement.
 

@@ -55,7 +55,7 @@ def carried(share, record, digest):
     SHA-256. The check of the bundle, which ran before, holds that a listed
     file is in the bundle, and computed its SHA-256."""
     files = (share.get("context") or {}).get("files") or []
-    return any(isinstance(f, dict) and f.get("record") == record["id"] and f.get("sha256") == digest for f in files)
+    return any(f.get("record") == record["id"] and f.get("sha256") == digest for f in files)
 
 
 def tally(source):
@@ -71,9 +71,9 @@ def tally(source):
             continue
         try:
             problems, facts = checkbundle.check(folder)
-        except (OSError, KeyError, TypeError, ValueError, AttributeError, IndexError) as err:
+        except Exception as err:  # whatever goes wrong in the check: the bundle is not one that passed
             problems, facts = ["the bundle cannot be read as one: %s: %s" % (type(err).__name__, err)], None
-        if problems or not facts:
+        if problems:
             print("  refused   folder %s: %s" % (plain(name), plain(sorted(problems)[0].replace(folder, "the folder"), 300)))
             continue
         share, person, holds = facts[0], facts[1], facts[7]
@@ -83,9 +83,9 @@ def tally(source):
         shares[share["id"]] = name
         words = checkbundle.id_words(person)
         receipts = [r for r in holds if r.get("type") == "reference.file"]
-        own = [r for r in receipts if r.get("author") == person and r.get("subject") == person]
-        print("  taken     folder %s: %d records of a source file by %s%s" % (
-            plain(name), len(own), words,
+        own = [r for r in receipts if r.get("author") == person]  # the check holds that a listed record is about the person
+        print("  taken     folder %s: %d record%s of a source file by %s%s" % (
+            plain(name), len(own), "" if len(own) == 1 else "s", words,
             "" if len(own) == len(receipts) else "; %d more that the identity's own key did not sign are not counted" % (len(receipts) - len(own))))
         good = []
         for r in sorted(own, key=lambda r: r["id"]):
@@ -100,20 +100,22 @@ def tally(source):
         for dataset, digest, has_file in good:
             line = "States only." if not has_file else "Carries a file: " + CARRIES
             if isinstance(note, str) and note:
-                line += "\n        The signer's note on this share, which has %d dataset%s: \"%s\"" % (datasets, "" if datasets == 1 else "s", plain(note, MAX_NOTE))
+                line += "\n        The signer's note on this share, of which the tally took %d dataset%s: \"%s\"" % (datasets, "" if datasets == 1 else "s", plain(note, MAX_NOTE))
             stated.setdefault((dataset, digest), {}).setdefault(person, []).append(line)
             by_person.setdefault((person, dataset), set()).add(digest)
 
     table = {digest: dataset for dataset, digest in reproduce.KNOWN.items()}
     print()
-    print("What these keys state, in the order of the digests:")
+    print("What these keys state, in the order of the datasets and of the digests:")
     if not stated:
         print("  nothing: no record of a source file was taken")
     for dataset, digest in sorted(stated):
         people = stated[(dataset, digest)]
         print("  dataset %s, SHA-256 %s: %d identit%s" % (dataset, digest, len(people), "y states it" if len(people) == 1 else "ies state it"))
         if digest in table:
-            print("    This digest is in the table of bean's code, for %s. The table is from the project's own fetches of November 2026. That is no sign of the right digest." % table[digest])
+            print("    This digest is in the table of bean's code, for %s%s. The table is from the project's own fetches of November 2026." % (
+                table[digest], "" if table[digest] == dataset else ", and not for %s" % dataset))
+            print("    A match proves no fetch, and does not show that the digest is right: a statement that was copied from the table matches too.")
         for person in sorted(people, key=checkbundle.id_words):
             n = len(by_person[(person, dataset)])
             print("    %s%s" % (checkbundle.id_words(person), "" if n == 1 else "  [this identity states %d digests for %s]" % (n, dataset)))
@@ -131,8 +133,7 @@ def tally(source):
 
 
 def main(argv):
-    for stream in (sys.stdout, sys.stderr):
-        stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+    # Every text of a bundle goes through plain(), so each line is plain ASCII.
     if len(argv) != 2 or argv[1].startswith("-"):
         sys.stderr.write(__doc__)
         return 2
