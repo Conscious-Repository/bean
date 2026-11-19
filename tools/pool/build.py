@@ -30,8 +30,8 @@ a bundle or of a claim. Its own rules are these:
     "synthetic contributor". That is a tripwire against an accident, and no
     proof: anyone can write the note;
   - a bundle is left out when it holds more than comparisons and the
-    readings that they are about: another record, or any file that a
-    record carries. An archive shows all the records of a bundle;
+    readings that they are about: another record, a record that keeps a
+    file, or a file. An archive shows all the records of a bundle;
   - a claim counts when it computes again with the survey pack that the
     builder was given, and the identity's own key signed its reading. The
     check of a claim holds that the person signed the claim. A bundle with
@@ -59,7 +59,6 @@ import shutil
 import sys
 import tempfile
 import zipfile
-import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "second"))
@@ -147,7 +146,7 @@ def open_archive(data, into):
     with the builder's own bytes holds, in assemble."""
     try:
         z = zipfile.ZipFile(io.BytesIO(data))
-    except (zipfile.BadZipFile, NotImplementedError, OSError, ValueError) as err:
+    except Exception as err:  # whatever goes wrong: the file is no archive that can be read
         raise Stop("the archive cannot be read: %s" % err)
     with z:
         infos = z.infolist()
@@ -162,7 +161,7 @@ def open_archive(data, into):
         for info in infos:
             try:
                 content = z.read(info)
-            except (zipfile.BadZipFile, RuntimeError, NotImplementedError, EOFError, zlib.error, OSError, ValueError) as err:
+            except Exception as err:  # whatever goes wrong: the entry is damaged
                 raise Stop("the archive is damaged at %s: %s" % (safe(info.filename)[:120], err))
             full = os.path.join(into, *info.filename.split("/"))
             os.makedirs(os.path.dirname(full), exist_ok=True)
@@ -176,7 +175,7 @@ def read_bundle(name, folder, survey_path):
     that passed its check is not taken, when it is not."""
     try:
         problems, facts = checkbundle.check(folder)
-    except (OSError, KeyError, TypeError, ValueError, AttributeError, IndexError) as err:
+    except Exception as err:  # whatever goes wrong in the check: the bundle is not one that passed
         problems, facts = ["the bundle cannot be read as one: %s: %s" % (type(err).__name__, err)], None
     if problems or not facts:
         # The check names the folder by its path, which says nothing here.
@@ -188,7 +187,7 @@ def read_bundle(name, folder, survey_path):
         return "bundle", got
     claims = [r for r in holds if r.get("type") == "comparison.percentile"]
     about = {c["context"]["reading"] for c in claims if isinstance(c.get("context"), dict) and isinstance(c["context"].get("reading"), str)}
-    if any(r.get("type") != "comparison.percentile" and r["id"] not in about for r in holds) or carries_files(folder):
+    if any(r.get("type") != "comparison.percentile" and r["id"] not in about for r in holds) or any(r.get("blobs") for r in holds) or carries_files(folder):
         got["why"] = "it holds more than comparisons and the readings that they are about"
         return "bundle", got
     files = got["files"] = members(folder)
@@ -205,7 +204,7 @@ def read_bundle(name, folder, survey_path):
             # The survey pack is the only pack among the inputs: a claim
             # that names another pack does not compute again.
             reproduce.check(claim, inputs)
-        except (reproduce.Missing, KeyError, TypeError, ValueError, AttributeError, OSError, OverflowError, packcheck.NotPlaced) as err:
+        except Exception as err:  # whatever goes wrong in the check: the claim does not count
             got["notes"].append("claim %s does not compute again: %s" % (short, err))
             continue
         ref, reading = claim["context"]["reference"], inputs.records[claim["context"]["reading"]]

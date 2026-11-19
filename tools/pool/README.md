@@ -109,6 +109,7 @@ Forty good packages give one cell of forty identities. Some of the forty logs ha
 | Two readings of one measure | The identity is left out. |
 | One reading with claims in two cohorts | The identity is left out. |
 | A reading with a photo, shared with its file | The identity is left out: the bundle holds more than comparisons and their readings. |
+| A reading with a photo, shared without its file | The same: the reading keeps a file. |
 | Files whose names start with a dot, in a good bundle | The bundle is taken. The archive does not hold them. |
 | The same bundle twice | It is taken once. |
 | One claim twice, with two times | Its reading counts once. |

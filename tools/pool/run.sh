@@ -244,6 +244,11 @@ new_log photo; b photo add lab.hdl-cholesterol 66 -unit mg/dL -photo "$T/photo.p
 compare photo female-20-29
 share photo photo -note "synthetic contributor" -files "$(first_claim photo)" "$(b photo ls -json -type lab.hdl-cholesterol | "$PY" -I -B -c 'import json, sys; print(json.loads(sys.stdin.readline())["id"])')"; unseal photo
 [ -n "$(ls "$T/open/photo/files" 2>/dev/null)" ] || say "the bundle of the reading with a photo holds no file"
+# The same without its file: the reading still says that it keeps one.
+new_log photo2; b photo2 add lab.hdl-cholesterol 67 -unit mg/dL -photo "$T/photo.png" >/dev/null 2>&1 || say "the second reading with a photo was not added"
+compare photo2 female-20-29
+share photo2 photo2 -note "synthetic contributor" -type 'comparison.*'; unseal photo2
+[ -z "$(ls "$T/open/photo2/files" 2>/dev/null)" ] || say "the bundle of the second reading with a photo holds a file"
 
 # Files whose names start with a dot, in a good bundle: the check of a
 # bundle passes over them, and so does the archive.
@@ -302,6 +307,7 @@ line '^the same  folder c3-again' "the same bundle handed in twice"
 [ "$(grep -c '^left out  .*: folder [^:]*: a claim of its bundle does not count$' "$T/build.txt")" = 6 ] || say "six identities have a claim that does not count, and the builder names $(grep -c 'a claim of its bundle does not count$' "$T/build.txt")"
 line '^left out  .*: folder tworeadings: two readings' "the folder of an identity with two readings"
 line '^left out  .*: folder photo: it holds more than comparisons' "a reading that carries a file"
+line '^left out  .*: folder photo2: it holds more than comparisons' "a reading that keeps a file, shared without it"
 grep -q '^An archive shows every record of every bundle in it, whole' "$T/build.txt" || say "the builder does not say what an archive shows, when it writes one"
 
 "$PY" -I -B "$ROOT/tools/pack/check.py" "$T/pool.pack" >"$T/pc.txt" 2>&1 || say "check.py refuses the pool's pack: $(tail -1 "$T/pc.txt")"
