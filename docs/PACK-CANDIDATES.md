@@ -2,7 +2,7 @@
 
 This is for the owner, and for anyone who builds a reference pack. It lists public data that a pack could be built from, and what each source allows. [REFERENCE.md](REFERENCE.md) is the format, and [REFERENCE-PLAN.md](REFERENCE-PLAN.md) says what the format cannot hold.
 
-Nothing here is built, and nothing is hosted. No pack was made, and no code changed. The owner asked for this search on 2026-11-19, in these words: "need to find more packs that would be valuable to host". DECISIONS 338 records them, in the pull request of the host plan.
+Nothing here is built, and nothing is hosted. No pack was made, and no code changed. The owner asked for this search on 2026-11-19, in these words: "need to find more packs that would be valuable to host". DECISIONS 338 records them.
 
 A candidate is a distribution in a sample, with its n and its caveats. No candidate says whether a value is healthy, and no pack will.
 
