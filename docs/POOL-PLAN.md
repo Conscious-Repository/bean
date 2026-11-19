@@ -93,10 +93,11 @@ It is `tools/pool/` and `make pool`. **It is built (DECISIONS 332).** [tools/poo
 - **It reads opened bundles only,** as a folder or as an archive. So it has one path.
 - **Its inputs are named.** The bundles. The survey pack. A URL for the archive and one for the survey pack, with no default. And a flag `-synthetic`, without which it stops.
 - **It prints the SHA-256 of the survey pack that it was given.**
-- **It checks each bundle** (`checkbundle.py`), and computes each claim again (`reproduce.py`). For that it names the survey pack by its SHA-256, with `-accept-pack`, since bean has no record of that pack. It gives `reproduce.py` a bundle's `objects` and `files`, and nothing else of the folder. It adds no check of a bundle or of a claim. It has one rule of its own: a reading whose value `pack/0` cannot hold is left out, and named.
+- **It checks each bundle** (`checkbundle.py`), and computes each claim again (`reproduce.py`). bean has no record of the survey pack. So the builder takes a claim only when it names the SHA-256 of the pack that it was given. That is what `-accept-pack` does for a person. It gives the check the records of a bundle's `objects` and the survey pack, and nothing else. It adds no check of a bundle or of a claim. Its own rules are below, and this one: a reading whose value `pack/0` cannot hold is left out, and named.
 - **Whose records count.** A claim and its reading count only when the identity's own key signed both. An agent's record does not count.
 - **The note is a tripwire.** A bundle is left out unless its share's note is exactly `synthetic contributor`. Anyone can write that note. It guards against an accident, and proves nothing.
-- **One reading for each identity and measure.** An identity with two different bundles is left out of the pool. So is an identity with two readings of one measure that count. So is an identity whose reading has claims in two cohorts. This is the test's rule, and the author's choice. What would give more: ROADMAP's rule, which takes the latest reading. ROADMAP keeps its own rule for a real pool, where a person must be able to correct a reading.
+- **Only comparisons and their readings.** A bundle that holds another record, or any file, is left out. An archive shows all that a bundle holds.
+- **One reading for each identity and measure.** An identity with two different bundles that pass their check is left out of the pool, whatever their notes. So is an identity with two readings of one measure that count. So is an identity whose reading has claims in two cohorts. This is the test's rule, and the author's choice. What would give more: ROADMAP's rule, which takes the latest reading. ROADMAP keeps its own rule for a real pool, where a person must be able to correct a reading.
 - **One bundle is one bundle.** A bundle is its `objects` and its `files`. Two folders with one share id that pass their check, and are the same in `objects` and `files`, are one bundle. It is taken once.
 - **What it prints.** One line for each identity: taken, or left out and why. Each identity that it takes counts as one in its cell. It names each cell that it drops for having fewer than 30. A bundle that fails its check has no identity that can be trusted, so its line names the folder. The builder writes out safely every text that it quotes, so that no text can fake a line.
 
@@ -114,7 +115,7 @@ It is `tools/pool/` and `make pool`. **It is built (DECISIONS 332).** [tools/poo
 
 - **From a folder,** the builder writes the archive first, and then the pack that names it. The archive holds the bundles that the builder took, and no other. It holds each bundle's `objects` and `files`, and nothing else.
 - It is written by the conditions of F3, with entries that are stored and not compressed. The builder sets every field of an entry that differs between systems. So the same bundles give the same bytes.
-- **From an archive,** the builder writes none. The pack names the SHA-256 of the file as it was given. The builder stops unless it takes every bundle in that archive.
+- **From an archive,** the builder writes none. The pack names the SHA-256 of the file as it was given. The builder stops unless it takes every bundle in that archive. It also stops unless the file is, byte for byte, the archive that it writes of those bundles. It takes only entries that are stored, and no entry that is packed.
 - The builder says, when it writes one, that an archive shows every value and every identity id in it.
 - The builder reads an archive as `unseal.py` reads a package: no path that leaves its folder, no link, and a limit of size.
 
@@ -122,9 +123,9 @@ It is `tools/pool/` and `make pool`. **It is built (DECISIONS 332).** [tools/poo
 
 **"The pack is what this builder gives from this archive and this survey pack."**
 
-- Three things are committed as a test vector. One archive of forty made-up bundles. The survey pack that their claims name. And the SHA-256 of the pool's pack.
+- Three things are committed as a test vector. One archive of 41 made-up bundles: forty in one cell, and one whose cell is dropped. The survey pack that their claims name. And the SHA-256 of the pool's pack.
 - `make pool` runs the builder on the two committed files, and compares.
-- The survey pack is committed under a name that starts `SYNTHETIC-` and ends `.pack`, with a note beside it. It is the one artefact here that cannot say of itself that it is made up (F5).
+- The survey pack is committed under a name that starts `SYNTHETIC-` and ends `.pack`, and the README beside it says what it is. In the pool's pack its name is `survey.pack`: the builder does not know that a survey pack is made up. It is the one artefact here that cannot say of itself that it is made up (F5).
 - The pool pack names the two files by their URLs in the repository. Those are the repository's own, and no host that anyone is told to use.
 - This is what "reproducible" means here, and no more. The committed files have that one use: they pin the builder.
 
@@ -138,10 +139,16 @@ It is `tools/pool/` and `make pool`. **It is built (DECISIONS 332).** [tools/poo
   - A claim that names another survey pack.
   - A claim that an agent signed, and a reading that an agent signed.
   - A reading whose value `pack/0` cannot hold.
-  - A bundle with no note.
-  - Two different shares of one identity.
+  - A bundle with no note, and one with another note.
+  - A bundle with one more record than a comparison and its reading.
+  - Two different shares of one identity, and two of which one has no note.
+  - Two readings of one measure, and one reading with claims in two cohorts.
+  - A file among the folders of bundles.
 - The damaged one is a sealed package. The others are made as opened folders, since nothing seals a folder that was changed by hand.
 - The same bundle handed in twice must be taken once.
+- Some logs have one value, so that a weight is above one. The cell must hold each distinct value once, with its count.
+- One more good log is alone in another cohort. It is taken, and its cell is dropped and named.
+- An archive that is damaged, packed, or written in another way than the builder writes one, is refused with a line. No run ends in a traceback.
 - The record that was not shared must be in no bundle of the archive.
 - A second build, with the bundles in another order, must give the same bytes.
 - The output of `bean compare` must say `synthetic`.
