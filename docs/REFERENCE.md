@@ -106,7 +106,7 @@ An id is 1 to 64 letters, digits, dots, `-` and `_`, and starts with a letter or
 |---|---|
 | `measure`, `cohort` | The ids of the measure and the cohort. A pair is there once. |
 | `kind` | `weights`. Version 0 has no other kind. |
-| `n` | The number of people: a whole number from 30 to 2147483647. |
+| `n` | The number of people: a whole number up to 2147483647, and not below the number of distinct values. A cell has no least size. |
 | `values` | The distinct values of the cohort, in rising order: one or more. Each is a number from 1e-12 to 1e15. |
 | `weights` | One number from 1e-12 to 1e15 for each value: the weight that the value carries. |
 
@@ -169,7 +169,8 @@ A saved comparison gives the reading's value away to anyone with the pack ([COMP
 
 - **The same files give the same bytes.** Write the object in canonical form. Sort the cells by measure, then by cohort. Add no time and no name of a machine.
 - **Name every source file by its SHA-256.** A reader who fetches the files from the source can then build the pack again.
-- **Leave out a cell of fewer than 30 people.** A reader refuses one.
+- **State your own rule for a small cell.** The format has no least size. The survey's builder leaves out a cell of fewer than 30 people: that is the method of [COMPARE.md](COMPARE.md), for a sample of a survey.
+- **Tell each contributor what a small cell shows.** A cell lists each distinct value. In a small cell each value is one person's, and whoever has the pack reads it.
 - **Take each `same` entry from a real reading.** Use the type and the unit that a real importer or a real report writes. A second name or unit for a quantity is a second entry.
 - **Say what does not carry over.** A caveat is part of the pack. Each comparison shows it, and each saved claim holds it.
 - **Use the weights that the source says to use.** A wrong weight gives a number that looks right.
@@ -201,7 +202,7 @@ One list in bean's code is not how many publishers will be known. A publisher's 
 - values that are not in rising order, or a value that is there twice;
 - a value or a weight that is not a number from 1e-12 to 1e15;
 - a list of weights that is shorter or longer than the list of values;
-- an n below 30, above 2147483647, or below the number of distinct values;
+- an n above 2147483647, or below the number of distinct values;
 - a cell that names a measure or a cohort that the pack does not have, or a cell that is there twice;
 - a type and unit in the `same` lists of two measures, or twice in one, and a measure with an empty `same` list;
 - a source file that is named twice;

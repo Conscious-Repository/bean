@@ -74,7 +74,7 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 		case id == "":
 			c.refused = fmt.Sprintf("the reading is in %q, and the pack takes this type only in %s", unit, strings.Join(units, " or "))
 		case cell == nil:
-			c.refused = fmt.Sprintf("the pack has no table of this measure for this cohort: a cohort of fewer than %d people is left out", pack.MinN)
+			c.refused = "the pack has no table of this measure for this cohort"
 		default:
 			res, err := cell.Place(v)
 			if err != nil {

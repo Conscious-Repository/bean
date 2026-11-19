@@ -354,7 +354,7 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 - **A script makes every contributor.** Each seals a share to the operator's address, as a person would to a publisher's. The builder cannot check for whom a share was sealed.
 - **It is built from saved comparisons.** A saved comparison names its reading, its measure and its cohort. `bean share -type 'comparison.*'` sends each with its reading. So the sharer's own bean did the mapping, with a survey pack.
 - **The builder is one program in Python, under `tools/`.** It checks a bundle with `checkbundle.py`, a claim with `reproduce.py`, and its pack with `check.py`. Its rules are its own, and the program is the rule.
-- **The pack's measures are the survey pack's:** ids, labels, units and `same` lists. A cell needs 30 identities, and one cell is enough for the test.
+- **The pack's measures are the survey pack's:** ids, labels, units and `same` lists. A cell has no least number of identities (DECISIONS 333). One cell is enough for the test.
 - **The test's rule is one reading for each identity and measure.** POOL-PLAN.md states it in full, with each case that is left out. That rule is for the test alone.
 - **The pack says what it is, where a reader sees it.** A cohort's id starts with `pool-`, and its text with `synthetic pool:`. Its caveats are the builder's own, and never name the survey's publisher as the pool's.
 - **The bundles are one archive in this repository, a test vector,** beside the survey pack that their claims name. The pack names both in `source.files`, and anyone builds the pack again. It is used with `-unknown-pack`.
@@ -509,7 +509,7 @@ Not planned: a command in bean that fetches from a network, and a view that rank
   - `view.Safe` shows a space other than U+0020, a combining mark and a few rare blank characters as they are. A value can look blank, struck through, or like another value. It cannot hide a name: the letters are shown.
   - A field of more than 50 different numbers or times shows its count. Many numbers could still spell a message.
 - From the reviews of the plan for reference data (DECISIONS 321):
-  - For a cell that a pack does not have, bean says that a cohort of fewer than 30 people is left out. A pack can leave a cell out for another reason.
+  - For a cell that a pack does not have, bean said that a cohort of fewer than 30 people is left out. A pack can leave a cell out for another reason. Done in 0.8.2: bean gives no reason.
   - For a pack in a format that it does not know, bean says that the file is not a pack of version 0.
   - `bean purge` of the record that keeps a file erases the file, also when a saved comparison is about that record. The same file cannot be kept again on that copy.
   - A pack that is not in canonical form is accepted, as another pack.
