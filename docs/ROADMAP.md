@@ -34,7 +34,7 @@ The owner set the next aim on 2026-11-18 (DECISIONS 325). Two people share, and 
    - **Step 1 is built,** and released as 0.8.0 (DECISIONS 327): `bean address`, `bean share -for`, and `-key` on `check-bundle` and on `reply -to`. [SHARE.md](SHARE.md) says how to use it and what it costs.
    - **Step 2 is built,** to be released as 0.8.1 (DECISIONS 330): `bean reply -for <address>`, and `bean accept -key`. Without `-for` a reply makes six words.
    - **Decided by the owner (DECISIONS 328):** a key file with a passphrase comes before any package of his goes on a public host.
-5. **A builder of a pool, with synthetic contributors**, under `tools/` (path 4, "A pool"). It is a test of the path, and not a pool. The owner asked for a demonstration of it on 2026-11-18 (DECISIONS 332). [POOL-PLAN.md](POOL-PLAN.md) says what will be built, and what it may claim. None of it is built yet. It is no step of the loop of 0.9. By the author's reading of that request, it comes before the order below.
+5. **A builder of a pool, with synthetic contributors**, under `tools/` (path 4, "A pool"). It is a test of the path, and not a pool. The owner asked for a demonstration of it on 2026-11-18 (DECISIONS 332). [POOL-PLAN.md](POOL-PLAN.md) says what is built, and what it may claim. Its first part is built: `make pool` (DECISIONS 334). The network leg and the receipts are not. It is no step of the loop of 0.9. By the author's reading of that request, it comes before the order below.
 
 **The order to 0.9, and what 1.0 is: a proposal (DECISIONS 328).** The owner asked for a path in stages that leads to his whole loop. The loop is: import, share 1:1, compare with pools or with packs that others host. Device signing comes later. This adds an order to the steps above. It adds two small things: true words on leaving, and a mark of format for a bundle and a reply. A third waits: a flag that takes a SHA-256.
 
@@ -351,7 +351,7 @@ No device exists yet, and the hardware is being decided now. bean does not wait 
 
 **A pool: a pack from what people contribute (DECISIONS 325).** A group's own data is a source like any other, and its pack is a pack like any other.
 
-**The first pool is a test of the path.** It holds nothing that the survey's pack lacks, and it tests no mapping. [POOL-PLAN.md](POOL-PLAN.md) says what will be built, and DECISIONS 332 has the account. None of it is built yet.
+**The first pool is a test of the path.** It holds nothing that the survey's pack lacks, and it tests no mapping. [POOL-PLAN.md](POOL-PLAN.md) says what is built, and DECISIONS 332 has the account. The builder and its test are built (DECISIONS 334).
 
 - **A script makes every contributor.** Each seals a share to the operator's address, as a person would to a publisher's. The builder cannot check for whom a share was sealed.
 - **It is built from saved comparisons.** A saved comparison names its reading, its measure and its cohort. `bean share -type 'comparison.*'` sends each with its reading. So the sharer's own bean did the mapping, with a survey pack.

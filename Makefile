@@ -4,16 +4,17 @@
 PY ?= python3
 FUZZTIME ?= 2m
 
-.PHONY: help check build fmt vet test lint vuln prose vectors second compare pack bundles device page dist pagetest example differential demo fuzz smoke
+.PHONY: help check build fmt vet test lint vuln prose vectors second compare pack pool bundles device page dist pagetest example differential demo fuzz smoke
 
 help:
-	@echo "make check         every check a commit needs (fmt vet build test lint vuln prose vectors second compare pack bundles device pagetest example differential demo)"
+	@echo "make check         every check a commit needs (fmt vet build test lint vuln prose vectors second compare pack pool bundles device pagetest example differential demo)"
 	@echo "make test          go test -race -failfast ./..."
 	@echo "make prose         no sentence of a document is longer than 25 words"
 	@echo "make vectors       regenerate vectors/ and check them byte for byte and with Python"
 	@echo "make second        compare bean with the second verifier and the conformance folders"
 	@echo "make compare       compute every saved comparison again with Python and pandas"
 	@echo "make pack          build a reference pack and check it with bean and with Python, good and with one thing wrong"
+	@echo "make pool          build the pack of a synthetic pool from made-up contributors, and check what the builder leaves out"
 	@echo "make bundles       check share bundles, good and damaged, with bean, with Python and with the page"
 	@echo "make device        check a device's folder with Go and with Python, good and with one thing wrong"
 	@echo "make page          build bean-check.html, the page that checks a bundle in a browser"
@@ -24,7 +25,7 @@ help:
 	@echo "make fuzz          run each fuzz target for FUZZTIME (default 2m)"
 	@echo "make smoke         run the end-to-end and adversarial suite, with timings on a large log"
 
-check: fmt vet build test lint vuln prose vectors second compare pack bundles device pagetest example differential demo
+check: fmt vet build test lint vuln prose vectors second compare pack pool bundles device pagetest example differential demo
 
 build:
 	go build ./...
@@ -57,7 +58,7 @@ DOCS = README.md CORE.md SPEC.md SECURITY.md UPGRADING.md CONTRIBUTING.md \
 	docs/PROVIDER-INGESTION.md docs/GOVERNANCE-PROPOSAL.md \
 	cmd/bean/vocabulary.md cmd/bean-import-lab/README.md \
 	cmd/bean-import-apple-health/README.md cmd/bean-import-nhanes/README.md \
-	examples/blood/README.md tools/second/README.md
+	examples/blood/README.md tools/second/README.md tools/pool/README.md
 prose:
 	$(PY) -I tools/checkprose.py $(DOCS)
 
@@ -86,6 +87,13 @@ compare:
 # again, and refuse every pack that bean refuses.
 pack:
 	PY=$(PY) bash tools/pack/run.sh
+
+# The pool path with made-up contributors (docs/POOL-PLAN.md): the builder
+# gives the pack on record from the committed archive, and a fresh run of
+# forty made-up logs gives a pack, with every bad input left out. It is a
+# test of the path, and no pool of people.
+pool:
+	PY=$(PY) bash tools/pool/run.sh
 
 # bean check-bundle and the Python checker, which follows docs/SHARE.md, must
 # give the same verdict on every bundle, good and damaged. The page that
