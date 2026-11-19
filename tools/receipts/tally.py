@@ -17,7 +17,6 @@ that it is given. It checks each with tools/second/checkbundle.py, and a
 bundle that fails is refused whole. It takes only records that the
 identity's own key signed. It exits 0 when it read the folder.
 """
-import hashlib
 import os
 import re
 import sys
@@ -30,8 +29,7 @@ import reproduce  # noqa: E402  (its table of digests, and no copy of it here)
 
 DIGEST_RE = re.compile(r"[0-9a-f]{64}")
 DATASET_RE = re.compile(r"[A-Z][A-Z0-9_]{0,7}")  # as cmd/bean-import-nhanes has it
-MAX_NOTE = 200      # characters of a note that are shown
-MAX_FILE = 1 << 30  # a carried file larger than this is not read
+MAX_NOTE = 200  # characters of a note that are shown
 OF_ITSELF = [
     "This tally counts keys, and a key is free.",
     "A statement can be copied with no fetch: bean's own code holds the digests.",
@@ -53,25 +51,12 @@ def plain(text, limit=120):
 
 
 def carried(folder, share, record, digest):
-    """True when the share record lists exactly one file for the record, the
-    record has exactly that one stored file, and the file in the bundle has
-    the stated SHA-256, computed here."""
-    blobs = record.get("blobs")
-    if not isinstance(blobs, list) or len(blobs) != 1 or not isinstance(blobs[0], dict):
-        return False
-    if (record.get("value") or {}).get("blob") != blobs[0].get("hash"):
-        return False
-    listed = [f for f in (share.get("context") or {}).get("files") or [] if isinstance(f, dict) and f.get("record") == record["id"]]
-    if len(listed) != 1 or listed[0].get("blob") != blobs[0].get("hash") or listed[0].get("sha256") != digest:
-        return False
-    path = os.path.join(folder, "files", digest)
-    if os.path.islink(path) or not os.path.isfile(path) or os.path.getsize(path) > MAX_FILE:
-        return False
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for part in iter(lambda: f.read(1 << 20), b""):
-            h.update(part)
-    return h.hexdigest() == digest
+    """True when the share record lists a file for the record with the stated
+    SHA-256, and the bundle has that file. The check of the bundle, which ran
+    before, computed the file's SHA-256 and held it to the list."""
+    files = (share.get("context") or {}).get("files") or []
+    listed = any(isinstance(f, dict) and f.get("record") == record["id"] and f.get("sha256") == digest for f in files)
+    return listed and os.path.isfile(os.path.join(folder, "files", digest))
 
 
 def tally(source):
@@ -82,7 +67,7 @@ def tally(source):
     malformed = []
     for name in sorted(os.listdir(source)):
         folder = os.path.join(source, name)
-        if not os.path.isdir(folder) or os.path.islink(folder):
+        if not os.path.isdir(folder):
             print("  not read  %s: it is no folder" % plain(name))
             continue
         try:

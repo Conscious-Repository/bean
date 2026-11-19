@@ -57,7 +57,7 @@ It reads opened bundles: one bundle in each folder below the folder that it is g
 - The lines are in the order of the digests, and not of the counts.
 - It prints no total over a dataset, and no percentage.
 
-**Two lines for a record.** `States only.` Or that the bundle carries a file whose SHA-256, computed by the tally, equals the stated one. Nothing shows that it is the file that the signer kept, or a file of the survey.
+**Two lines for a record.** `States only.` Or that the share record lists a file for this record with the stated SHA-256, and the bundle carries it. The check of the bundle computes that SHA-256 in the same run. Nothing shows that it is the file that the signer kept, or a file of the survey.
 
 **Two marks.** An identity that states two digests for one dataset is marked under each. A digest that is in the table of bean's code is marked, with the dataset that the table gives. That table is from the project's own fetches of November 2026. The mark is no sign of the right digest.
 
@@ -72,20 +72,24 @@ It says each time what it does not show:
 
 ## The test
 
-    make receipts
+    make pool
+
+`make pool` runs it after the test of the pool path. `bash tools/receipts/run.sh` runs it alone.
 
 `run.sh` makes a fixture of made-up identities, and runs the tally on it. Every note in it says `synthetic`.
 
-The fixture is chosen so that nobody learns that the larger count is right. Four identities state a test file with one changed byte. Two state the unchanged test file.
+The fixture is chosen so that nobody learns that the larger count is right. Five identities state a test file with one changed byte. Three state the unchanged test file.
 
 | What is handed in | What must happen |
 |---|---|
-| Three identities that state the changed file, and carry it | They count, with a fourth below. |
+| Three identities that state the changed file, and carry it | They count, with two more below. |
 | One of them, in two shares | It counts once. |
 | One share, in two folders | It is one share. |
 | One identity that states the unchanged file, and carries it | It counts. |
 | One that states a digest of bean's table, with no file | `States only.`, and the mark of the table. |
 | One that states both files, in two bundles | It is listed under each digest, and marked. |
+| One that imports the unchanged file, and states its digest again in a record with no file | It counts once. The second record gets `States only.` |
+| One that shares its record without the file | It counts, with `States only.` |
 | A digest in upper case, and a dataset's name with a space | Malformed, and not counted. |
 | A statement that an agent of the identity signed | Not counted, and the line says so. |
 | A bundle whose carried file has other bytes | The bundle is refused whole. |

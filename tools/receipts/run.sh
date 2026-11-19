@@ -8,7 +8,8 @@
 # the review, and seals a share to its reader.
 #
 # The fixture is chosen so that nobody learns that the larger count is
-# right: most identities state a file with one changed byte.
+# right: five identities state a file with one changed byte, and three the
+# file as it is.
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
@@ -70,6 +71,11 @@ new_log two; import two "$FILE"; import two "$T/changed/HDL_J.XPT"
 share two two-a "synthetic" -files $(receipts two "$GOOD"); share two two-b "synthetic" -files $(receipts two "$CHANGED")
 # One states a digest that is malformed, and one a dataset's name that is.
 new_log bad; state bad HDL_J "$(echo "$GOOD" | tr a-f A-F)"; state bad 'hdl j' "$GOOD"; share bad bad "synthetic" $(receipts bad)
+# One imports the unchanged file, and also states its digest in a second
+# record with no file. The file is listed for the first record alone.
+new_log mix; import mix "$FILE"; state mix HDL_J "$GOOD"; share mix mix "synthetic" -files $(receipts mix)
+# One imports the changed file, and shares its record without the file.
+new_log nofile; import nofile "$T/changed/HDL_J.XPT"; share nofile nofile "synthetic" $(receipts nofile)
 # One statement that an agent of the identity signed.
 new_log agent; b agent agent init -label assistant >/dev/null 2>&1; state agent HDL_J "$GOOD" -agent; share agent agent "synthetic" $(receipts agent)
 # One bundle whose carried file is not the file that its record states.
@@ -84,15 +90,15 @@ has() { grep -q -- "$1" "$T/out.txt" || say "the tally has no line for $2"; }
 count() { [ "$(grep -c -- "$1" "$T/out.txt")" = "$2" ] || say "the tally has $(grep -c -- "$1" "$T/out.txt") lines for $3, and not $2"; }
 
 # What it was given.
-count '^  taken ' 10 "bundles that it took"
+count '^  taken ' 12 "bundles that it took"
 has '^  refused   folder broken: ' "a bundle that fails its check"
 has '^  the same  folder m1-again holds the share of folder m1 again' "a share that was handed in twice"
 has '^  not read  stray.txt' "something that is no folder"
 has '^  taken     folder agent: 0 records of a source file by .*; 1 more that the identity.s own key did not sign' "a statement that an agent signed"
 
 # The counts: an identity counts once for a digest, in however many bundles.
-has "^  dataset HDL_J, SHA-256 $CHANGED: 4 identities state it\$" "the four that state the changed file"
-has "^  dataset HDL_J, SHA-256 $GOOD: 2 identities state it\$" "the two that state the unchanged file"
+has "^  dataset HDL_J, SHA-256 $CHANGED: 5 identities state it\$" "the five that state the changed file"
+has "^  dataset HDL_J, SHA-256 $GOOD: 3 identities state it\$" "the three that state the unchanged file"
 has "^  dataset HDL_J, SHA-256 $TABLE: 1 identity states it\$" "the one that states the table's digest"
 count '^  dataset ' 3 "digests"
 # Lines are in the order of the digests, and not of the counts.
@@ -105,8 +111,10 @@ count 'This digest is in the table of bean.s code, for HDL_J' 1 "the digest of t
 has 'That is no sign of the right digest' "what the table's mark is not"
 
 # With a file, and without one.
-count '^      Carries a file: the share record lists a file for this record whose SHA-256, computed here, equals the stated one' 7 "records with their file"
-count '^      States only\.$' 1 "a record with no file"
+count '^      Carries a file: the share record lists a file for this record whose SHA-256, computed here, equals the stated one' 8 "records with their file"
+# Three have no file: the digest of the table, the record whose file is
+# listed for another record, and the record that was shared without its file.
+count '^      States only\.$' 3 "records with no file"
 
 # The note is the signer's word, in quotation marks, and cannot leave them.
 has 'which has 1 dataset: "synthetic: fetched https://example.invalid/HDL_J.XPT on 2026-11-09"$' "a note, as the signer's word"
@@ -133,6 +141,16 @@ grep -q "nothing: no record of a source file was taken" "$T/empty.txt" || say "t
 "$PY" -I -B "$HERE/tally.py" "$T/nothing-here" >"$T/none.txt" 2>&1 && say "the tally ran with no folder"
 grep -q "^STOPPED: " "$T/none.txt" || say "the tally does not say that the folder is missing"
 
-[ $rc = 0 ] && echo "receipts: the tally lists what ten made-up bundles state, and says what that does not show"
+# A bundle that the check cannot read gets a line. This needs a user that
+# a mode of a folder stops: not root.
+mkdir "$T/locked"; cp -R "$T/in/u1" "$T/locked/u1"; chmod 000 "$T/locked/u1/objects"
+if ! ls "$T/locked/u1/objects" >/dev/null 2>&1; then
+  "$PY" -I -B "$HERE/tally.py" "$T/locked" >"$T/locked.txt" 2>&1 || say "the tally stops on a bundle that it cannot read"
+  grep -q "^  refused   folder u1: " "$T/locked.txt" || say "a bundle that cannot be read has no line: $(tail -1 "$T/locked.txt")"
+  grep -q "Traceback" "$T/locked.txt" && say "the tally ended in a traceback on a bundle that it cannot read"
+fi
+chmod 700 "$T/locked/u1/objects"
+
+[ $rc = 0 ] && echo "receipts: the tally lists what twelve made-up bundles state, and says what that does not show"
 [ -n "${RECEIPTS_SHOW:-}" ] && cat "$T/out.txt"
 exit $rc
