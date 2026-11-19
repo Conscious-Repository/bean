@@ -30,8 +30,9 @@ a bundle or of a claim. Its own rules are these:
     "synthetic contributor". That is a tripwire against an accident, and no
     proof: anyone can write the note;
   - a bundle is left out when it holds more than comparisons and the
-    readings that they are about: another record, a record that keeps a
-    file, or a file. An archive shows all the records of a bundle;
+    readings that they are about: another record, or a record that keeps
+    a file. The check of a bundle holds that a carried file is the file of
+    such a record. An archive shows all the records of a bundle;
   - a claim counts when it computes again with the survey pack that the
     builder was given, and the identity's own key signed its reading. The
     check of a claim holds that the person signed the claim. A bundle with
@@ -116,12 +117,6 @@ def members(folder):
     return out
 
 
-def carries_files(folder):
-    """True when the bundle has a file under files/. Nothing of it is read."""
-    base = os.path.join(folder, "files")
-    return os.path.isdir(base) and any(not n.startswith(".") for n in os.listdir(base))
-
-
 def archive_bytes(bundles):
     """One zip file of the bundles, the same bytes for the same bundles:
     entries in one order, stored and not compressed, with fixed times,
@@ -186,7 +181,7 @@ def read_bundle(name, folder, survey_path):
         return "bundle", got
     claims = [r for r in holds if r.get("type") == "comparison.percentile"]
     about = {c["context"]["reading"] for c in claims if isinstance(c.get("context"), dict) and isinstance(c["context"].get("reading"), str)}
-    if any(r.get("type") != "comparison.percentile" and r["id"] not in about for r in holds) or any(r.get("blobs") for r in holds) or carries_files(folder):
+    if any(r.get("type") != "comparison.percentile" and r["id"] not in about for r in holds) or any(r.get("blobs") for r in holds):
         got["why"] = "it holds more than comparisons and the readings that they are about"
         return "bundle", got
     files = got["files"] = members(folder)
@@ -302,9 +297,9 @@ def assemble(args, source, given, survey, survey_path, survey_sha, survey_bytes)
             for measure, cohort, rid, _ in b["counted"]:
                 by_measure.setdefault(measure, set()).add(rid)
                 by_reading.setdefault(rid, set()).add(cohort)
-            reason = b["why"]
-            if reason:
-                pass
+            reason = None
+            if b["why"]:
+                reason = b["why"]
             elif b["notes"]:
                 reason = "a claim of its bundle does not count"
             elif not b["counted"]:
