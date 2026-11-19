@@ -24,7 +24,7 @@ The port is 10547. Set `POOL_PORT` for another.
 - It builds bean with Go into a scratch folder. The build fetches nothing: when a module is not on the machine, the script stops and says so. Go's own build cache stays, as after any build.
 - It starts one server of `nak` on 127.0.0.1, at the port. It stops it at its end, also when you stop the script with Ctrl-C.
 - It removes its scratch folder at its end. Nothing else stays.
-- It uses no proxy, whatever your environment says. It sends no file and no event to another machine.
+- It uses no proxy, whatever your environment says: it clears the proxy variables for `nak`, and tells `curl` to use none. It sends no file and no event to another machine.
 
 ## What it does
 
@@ -61,7 +61,7 @@ Then what it cannot show:
 - One operator ran the host and the relay, so the two agree by one hand.
 - Nothing shows who made the keys in the archive.
 
-Then which of bean's own words above are wrong for this pack.
+When the two files are the vector's, it says that the vector's contributors are made up, and which of bean's own words above are wrong for this pack. When they are not, it says that this run tells nothing of the contributors.
 
 When a check of steps 6 to 8 does not match, it prints `NOT reproduced`, and stops. A pointer that has a tag twice names nothing, and is such a mismatch.
 

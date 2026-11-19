@@ -37,6 +37,10 @@ done
 # machine when it is not. So it is cleared here, and set for one command
 # at a time.
 unset NOSTR_SECRET_KEY BEAN_DIR
+# No proxy, for nak and for the build as for curl: with a proxy in the
+# environment, an upload of nak goes through it.
+unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
+export NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost
 
 T=$(mktemp -d)
 SERVER=
@@ -171,12 +175,15 @@ echo "- The host served the bytes that the pointer named: its SHA-256 and its si
 echo "- The pack is what this builder gives from the archive and the survey pack that the host served."
 if cmp -s "$U/pool-bundles.zip" "$V/pool-bundles.zip" && cmp -s "$U/survey.pack" "$V/SYNTHETIC-survey.pack"; then
   echo "- Those two files are the same bytes as the two files of the test vector in this repository."
+  echo "What it cannot show:"
+  echo "- One operator ran the host and the relay, so the two agree by one hand."
+  echo "- Nothing shows who made the keys in the archive. The vector's contributors are made up."
+  echo "Some of bean's own words above are wrong for this pack:"
+  echo "- \"people\" and \"sample\": n counts the keys of one script."
+  echo "- \"the one that its publisher states\": this pack has no publisher."
 else
   echo "- Those two files are NOT the files of the test vector in this repository: the pack was built again from other files than the vector's."
+  echo "What it cannot show:"
+  echo "- One operator ran the host and the relay, so the two agree by one hand."
+  echo "- Nothing shows who made the keys in the archive, or whether a contributor is made up. This run says nothing of them."
 fi
-echo "What it cannot show:"
-echo "- One operator ran the host and the relay, so the two agree by one hand."
-echo "- Nothing shows who made the keys in the archive. Every contributor here is made up."
-echo "Some of bean's own words above are wrong for this pack:"
-echo "- \"people\" and \"sample\": n counts the keys of one script."
-echo "- \"the one that its publisher states\": this pack has no publisher."
