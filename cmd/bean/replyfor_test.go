@@ -228,6 +228,40 @@ func TestReplyForOnATerminal(t *testing.T) {
 	}
 }
 
+// TestReplyForAsksOnlyWhereSeen: standard input is a terminal, and
+// standard error is not. The question would go where the person does not
+// see it, so bean reply -for and bean accept -key ask nothing, and write
+// nothing. This runs bean on a terminal that Python makes.
+func TestReplyForAsksOnlyWhereSeen(t *testing.T) {
+	ben, ana, pkg, words, ids := replyLogs(t)
+	key, address, aw := newAddress(t, "ben.key")
+	// The package unpacked, so that no prompt for its six words is needed.
+	folder := filepath.Join(t.TempDir(), "unpacked")
+	if _, errs, code := run(t, ana, words+"\n", "check-bundle", "-unpack", folder, pkg); code != 0 {
+		t.Fatalf("unpack: %s", errs)
+	}
+	errFile := filepath.Join(t.TempDir(), "stderr.txt")
+	t.Setenv("BEAN_TEST_STDERR", errFile)
+	out := filepath.Join(t.TempDir(), "r.bean")
+	seen, code := onTerminal(t, ana, nil, "reply", "-to", folder, "-for", address, "-address-words", aw, "-out", out, ids[0], "A note.")
+	said, _ := os.ReadFile(errFile)
+	if _, err := os.Stat(out); code != 1 || err == nil || !strings.Contains(string(said), "there is no terminal to ask on") {
+		t.Errorf("reply -for with standard error elsewhere: %d\n%s\n%s", code, seen, said)
+	}
+	// A reply to accept, written with -yes.
+	t.Setenv("BEAN_TEST_STDERR", "")
+	if _, errs, code := run(t, ana, "", "reply", "-to", folder, "-for", address, "-address-words", aw, "-yes", "-out", out, ids[0], "A note."); code != 0 {
+		t.Fatalf("reply -for -yes: %s", errs)
+	}
+	os.Remove(errFile)
+	t.Setenv("BEAN_TEST_STDERR", errFile)
+	seen, code = onTerminal(t, ben, nil, "accept", "-key", key, "-label", "Ana", out)
+	said, _ = os.ReadFile(errFile)
+	if code != 1 || notes(t, ben) != 0 || !strings.Contains(string(said), "there is no terminal to ask on") {
+		t.Errorf("accept -key with standard error elsewhere: %d\n%s\n%s", code, seen, said)
+	}
+}
+
 // TestWriteReplyForKey: the lines of writeForKey for a reply name a reply.
 func TestWriteReplyForKey(t *testing.T) {
 	const id = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"

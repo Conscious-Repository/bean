@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -308,11 +307,6 @@ func writeReplyTo(s *core.Store, out string, files map[string][]byte, addr *age.
 	if err != nil {
 		fail(fmt.Errorf("nothing was written: %w", err))
 	}
-	// From here a signal waits: a reply in place with no reply record in
-	// the log is a disclosure that the log does not know.
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, importSignals...)
-	defer signal.Stop(sig)
 	if err := writeForKey(out, data, replyWritten, replyID, func() error { return s.AddSigned(replyID, replyBytes) }, fillFile); err != nil {
 		fail(err)
 	}
@@ -363,17 +357,18 @@ func cmdAccept(s *core.Store, args []string) {
 	if err != nil || len(pos) != 1 {
 		usage()
 	}
-	keyGiven := false
-	fs.Visit(func(f *flag.Flag) { keyGiven = keyGiven || f.Name == "key" })
+	given := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { given[f.Name] = true })
+	keyGiven := given["key"]
 	if keyGiven && *keyFile == "" {
 		badArg(errors.New("-key names a key file"))
 	}
 	// A program that runs as the person and holds the key file opens such a
 	// reply with no word typed. It can make the eight identity words from
-	// the reply itself. So -yes and -words would take a peer's notes, and
-	// name the peer, with no act of the person.
+	// the reply itself. So -yes and -words would take a peer's notes into
+	// the log, and name the peer, with no act of the person.
 	if keyGiven && *yes {
-		badArg(errors.New("-yes does not go with -key: a program that holds your key file could take a peer's notes with no act of yours. Run bean accept -key yourself, at a terminal"))
+		badArg(errors.New("-yes does not go with -key: a program that holds your key file could take a peer's notes into your log with no act of yours. Run bean accept -key yourself, at a terminal"))
 	}
 	// A script cannot compare words by eye, so it states the words that
 	// the person heard.

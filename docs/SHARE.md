@@ -353,9 +353,10 @@ bean accept -key ~/keys/bean-ben.key -label Ana reply-to-ben.bean
 
 - **`bean accept -key <your key file>` opens the reply.** Its checks are those of any reply.
 - **What a key shows.** bean says first: the reply was sealed to your address. Anyone who has your address can seal to it, also an older reply of the signer. bean cannot tell who sealed it. The reply's id, which you compare by voice, tells you which reply it is.
-- **A reply that someone sealed again.** When the replier's record does not say `recipient`, bean says so. That check looks one way only, as for a share.
-- **`-yes` does not go with `-key`.** `bean accept -key` asks on a terminal, and takes nothing without one. A program that runs as you and holds the key file opens such a reply with no word typed. It can make the eight identity words from the reply itself, so `-words` is no check for it.
-- **What that rule does not do.** A program that makes a terminal of its own can answer the question. The rule stops the flag that a script would use. It is no wall. A key file with a passphrase is the gate that is planned ([SHARE-PLAN.md](SHARE-PLAN.md)).
+- **A reply that someone sealed again.** When the replier's record does not say `recipient`, bean says so. That check looks one way only, as for a share. A reply whose record says `recipient`, and that opened with six words, is not marked. A record that says `recipient` shows what the replier wrote, and not for which address.
+- **`-yes` does not go with `-key`.** `bean accept -key` asks on a terminal, and takes nothing into your log without one. A program that runs as you and holds the key file opens such a reply with no word typed. It can make the eight identity words from the reply itself, so `-words` is no check for it.
+- **What that rule does not do.** It guards your log, and not what such a program reads. Without a terminal, `bean accept -key` still lists the notes. The `age` tool opens the file with the key. A program that makes a terminal of its own can answer the question. The rule stops the flag that a script would use, and it is no wall.
+- **What that rule costs.** A person who hands the work to an assistant runs `bean accept -key` themselves. A key file with a passphrase is the gate that is planned ([SHARE-PLAN.md](SHARE-PLAN.md)).
 - **Without `-key`,** bean says that the file is sealed to a key, and how to open it. With another key, bean says that it was sealed to another address, or changed on the way.
 - **An earlier bean does not take it.** [UPGRADING.md](../UPGRADING.md) says what release 0.8.0 prints. Both people update first.
 
