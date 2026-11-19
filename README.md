@@ -225,7 +225,7 @@ DATE              READING                VALUE      PERCENTILE  LOWER  SAME  MID
 ```
 
 - It says where a value lies in a sample, and how many people the sample has. It does not say whether a value is healthy, and it does not advise.
-- Every number comes with its caveats and with how many people it rests on. A cohort of fewer than 30 people gives no number.
+- Every number comes with its caveats and with how many people it rests on. With the survey's own files, a cohort of fewer than 30 people gives no number. A pack has no least size for a cell.
 - `-save` keeps a result as a signed record that names each file by its SHA-256, the cohort and the method. Anyone can compute it again without bean: `tools/compare/reproduce.py` does, in Python.
 - Nineteen blood tests today: total and HDL cholesterol, hemoglobin A1c, the blood count, six tests of the biochemistry profile, and ferritin. Each test needs its own file, and a rule on BMI needs `BMX_J`: the loop above fetches all eight, about 9 MB. [COMPARE.md](docs/COMPARE.md) lists the type names and units to use when you type a reading by hand.
 

@@ -213,6 +213,8 @@ A pack is one file of reference data, and a cell is its table for one measure an
 - Whether bean gets a member for a URL, or an importer for other public files, for receipts (POOL-PLAN.md).
 - Whether the tally of receipts sets apart the identities that he lists as known (POOL-PLAN.md).
 - Whether the author's reading of his request is right: that the demonstration comes before the order to 0.9 (DECISIONS 332).
+- Whether the survey method's own floor of 30 goes as well (DECISIONS 333). The author kept it: the packs on record are built by it.
+- Whether a result from a very small cell gets words of its own (DECISIONS 333). Today a cell of one person prints a median, a middle half, and the caveat of a cohort under 100.
 - Whether the survey's next pack comes right after the demonstration of the pool path, or after 0.9.
 - Whether the survey's packs are on a host before the run. All reviews recommend it.
 - Whether 1.0 can come while `pack/0` is a draft. The reviews recommend it: 1.0 then names the comparing part as not locked, and does not wait for a second source that nobody has.
