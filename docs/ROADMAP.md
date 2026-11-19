@@ -100,6 +100,7 @@ A pack is one file of reference data, and a cell is its table for one measure an
 - It gives a person a real file to fetch.
 - The SHA-256 of each pack is also in the project's repository. The owner controls both places. A second person who states the digests from their own connection is a true second place.
 - All reviews of this order recommend it before the run. The owner decides.
+- The owner said on 2026-11-19 that a server of his own can run the file host and the relay. [HOST-PLAN.md](HOST-PLAN.md) is a draft plan in stages (DECISIONS 337). No review has judged it, and nothing is set up.
 
 **A key file with a passphrase is in no step of this order.** No step puts a package on a public host, so no step needs it. The owner's rule stands.
 
@@ -153,7 +154,7 @@ A pack is one file of reference data, and a cell is its table for one measure an
 - A relay with a pointer to each pack, because the owner asked for it (DECISIONS 318). Nothing depends on it.
 - A pointer is a Nostr event of kind 1063, which exists. bean invents no kind.
 - The logs hold no network address of a person, and are kept for a week at most. That is the publisher's word: nobody can check it.
-- A document of the setup, in this repository, before the first pack is announced. It names each program with its version, the rule for uploads, and the tags of a pointer. It holds no key. A second publisher can copy it.
+- A document of the setup, in this repository, before the first pack is announced. [HOST-PLAN.md](HOST-PLAN.md) holds its start: what a trial run on one machine showed, and what is not known. It names each program with its version, the rule for uploads, and the tags of a pointer. It holds no key. A second publisher can copy it.
 - For the packs, the host and the relay are programs that exist.
 
 **What a pointer may claim.** It is a hint for finding a pack.
@@ -205,7 +206,7 @@ A pack is one file of reference data, and a cell is its table for one measure an
 - **Where the code lives.** Proposed: what runs offline is in this repository, and what listens on a network is not. Formats, checks, builders and the document of a setup are here. A publisher's network address, terms and keys are its own. No key is in any repository.
 - **How many spellings of one quantity are reconciled.** Proposed: the one who pools does it, in a pack's `same` list (path 4, "A pool"). bean keeps no table of names.
 - Whether the first run goes on six words, if the reply to an address is not merged when the peer is ready.
-- Where the first publisher's server runs, and under which network address.
+- Under which network address the first publisher's server runs. He said on 2026-11-19 that it runs on a server of his own. Which programs run there, and who holds its keys ([HOST-PLAN.md](HOST-PLAN.md)).
 - Who the peer of the first run is, and whether values that were entered by hand are enough for it (DECISIONS 323).
 - Which host takes a package by link, once a key file can be protected.
 - Whether a publisher's real key is used after the rehearsal.
