@@ -94,12 +94,12 @@ A pack is one file of reference data, and a cell is its table for one measure an
    - A peer shows under a name only when the person accepted a reply of theirs before. If not, the view shows eight identity words and a key.
 5. **Fifth: 0.9.** Its status is written on that day, from what is true then. From here the version stays at 0.9 until the owner says that the formats are locked.
 
-**Proposed, beside the order: the survey's packs on a host** (phase 2 of the section "Order"). It is the owner's own act, with no code in bean, and no step waits for it.
+**Beside the order, and before the first run: the survey's packs on a host** (phase 2 of the section "Order"). It is the owner's own act, with no code in bean. The owner decided on 2026-11-19 that it comes before the first run with a peer (DECISIONS 339). No other step waits for it.
 
 - It keeps the rules of "A first publisher hosts" below: a document of the setup, and a rehearsal with a throwaway identity.
 - It gives a person a real file to fetch.
 - The SHA-256 of each pack is also in the project's repository. The owner controls both places. A second person who states the digests from their own connection is a true second place.
-- All reviews of this order recommend it before the run. The owner decides.
+- All reviews of this order recommended it before the run, and the owner decided so.
 - The owner said on 2026-11-19: "we have a server in the lab we can host a relay + blossom on". [HOST-PLAN.md](HOST-PLAN.md) is a plan on paper in stages (DECISIONS 337). The author proposes it as that rehearsal, with keys that are thrown away. Nothing is set up. He gave the word to host the survey's packs on 2026-11-16 (DECISIONS 314).
 
 **A key file with a passphrase is in no step of this order.** No step puts a package on a public host, so no step needs it. The owner's rule stands.
@@ -217,7 +217,6 @@ A pack is one file of reference data, and a cell is its table for one measure an
 - Whether the survey method's own floor of 30 goes as well (DECISIONS 333). The author kept it: the packs on record are built by it.
 - Whether a result from a very small cell gets words of its own (DECISIONS 333). Today a cell of one person prints a median, a middle half, and the caveat of a cohort under 100.
 - Whether the survey's next pack comes right after the demonstration of the pool path, or after 0.9.
-- Whether the survey's packs are on a host before the run. All reviews recommend it. His answer of 2026-11-19 can be read two ways, and the author asked (DECISIONS 338).
 - Whether 1.0 can come while `pack/0` is a draft. The reviews recommend it: 1.0 then names the comparing part as not locked, and does not wait for a second source that nobody has.
 - Whether a review by a person outside the project is a condition of 1.0. The reviews recommend that it is wanted, and is no condition.
 - Whether bean ever keeps a package or a pack with the log, so that an export holds it. For a pack, that is item 7 of the work in the section "Order".
