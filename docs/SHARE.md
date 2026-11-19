@@ -125,7 +125,7 @@ $ bean check-bundle -key ~/keys/bean-reader.key for-ana.bean
 - **Without bean.** `age -d -i <key file> for-ana.bean > bundle.zip` opens a package, and `bean check-bundle bundle.zip` or `checkbundle.py` then checks it. `tools/second/unseal.py -key <key file> for-ana.bean <new folder>` opens one too, and shares no code with bean. On these ways nothing says what a key shows: anyone who has your address can seal to it.
 - **The check page does not open such a package.** It says that the file is sealed to a key, and that it cannot open it. A forged page that took a key would open every package of that key.
 - **An earlier bean does not open it.** [UPGRADING.md](../UPGRADING.md) says what release 0.7.2 prints. Both people update first.
-- **A reply still makes six words.** `bean reply` seals with words, also when the share came sealed to an address. `bean accept` on a file that is sealed to a key says so.
+- **A reply can go to an address too.** `bean reply -for <address>` seals it to an address that the sender gave you ([below](#a-reply-to-an-address)). Without `-for`, a reply makes six words, also when the share came sealed to your address.
 
 **What bean says when a package and a key do not go together.**
 
@@ -135,7 +135,7 @@ $ bean check-bundle -key ~/keys/bean-reader.key for-ana.bean
 | `-key` with a package that is sealed with words | It is sealed with words. `-key` is not used: give the six words. Then bean asks for them. |
 | `-key` with a folder or a plain zip file | It is not sealed. `-key` is not used. Then bean checks it. |
 | The key does not open it | It was sealed to another address, or it was changed on the way. bean cannot tell which. `bean address -key <file>` shows the address of a key file. |
-| `bean accept` on a file that is sealed to a key | `bean accept` takes a reply, and this bean seals a reply with words. |
+| `bean accept` on a file that is sealed to a key, and no `-key` | It is sealed to a key. Open it with `bean accept -key <your key file>`. |
 
 **When to choose which seal.**
 
@@ -283,12 +283,12 @@ bean accept -label Ana reply-to-ben.bean
 
 - `-to` is what they received. It must pass its check, so a sealed package asks for its six words. A package that is sealed to their address opens with `-key <file>`.
 - Then come pairs: a record of the share, and the text of a note about it. Name the record by its id from the check, or by the first 6 or more hex digits. The id of the share record names the share as a whole.
-- bean writes one sealed file and prints six words that open it. The reader sends the file one way and gives you the words another, as you did.
+- bean writes one sealed file and prints six words that open it. The reader sends the file one way and gives you the words another, as you did. With `-for`, bean seals it to your address instead ([below](#a-reply-to-an-address)).
 - bean also prints the reader's identity words and the start of the reply's id. They tell you both.
 - The reader's log keeps a `reply` record: to whom, to which share, and the ids of the notes. It does not hold the notes. The reader keeps the file and its words to read them again.
 - **What a reply shows of the reader.** It holds their identity records, as a share holds yours. They show the reader's identity id and key, when they made their log, and when they changed a key.
 
-**Your side.** `bean accept` asks for the six words and checks the reply. Then it shows:
+**Your side.** `bean accept` asks for the six words and checks the reply. A reply that is sealed to your address opens with `-key <your key file>`. Then it shows:
 
 - the share that it answers, with your note on that share;
 - the start of the reply's id, and the key that signed it;
@@ -299,7 +299,7 @@ bean accept -label Ana reply-to-ben.bean
 Ask the reader two things: whether they sent a reply whose id starts so, and to read their identity words. If either is not the same, do not accept. Then bean asks before it writes.
 
 - **`-label` is the name under which this person's notes show.** The first reply of an identity needs it. A later reply needs none. A name belongs to one identity: bean does not rename one, and does not give one name to two. A name has 1 to 64 characters: the letters a to z, digits, single spaces, and `. ' _ - @`. It does not start with the word `peer`, and no agent has it. Capital letters make no second name: `ana` is `Ana`. So one name cannot read as two, or as another person's.
-- **`-yes` is for scripts, and needs `-words`.** A script cannot compare words by eye, so it states the eight words that you heard. bean takes nothing when they are not the signer's. Without a terminal and without `-yes` it takes nothing.
+- **`-yes` is for scripts, and needs `-words`.** A script cannot compare words by eye, so it states the eight words that you heard. bean takes nothing when they are not the signer's. Without a terminal and without `-yes` it takes nothing. `-yes` does not go with `-key` ([below](#a-reply-to-an-address)).
 - **What goes into your log.** The notes, and one record of your own that pairs the reader's key with the name. That record holds the reader's identity id and how far their chain of keys had got. The reader's identity records and their reply record stay out.
 - **Where you see them.** `bean ls` shows a note in quotation marks, with `[peer Ana]`. `bean show <id>` lists the notes about a record.
 - **A note is a record about you.** It stays through a change of your key, it is in an export, and you can share it on. A reader of that share sees `[peer Ana]`, the reader's key, and your record of the name with their identity id.
@@ -318,13 +318,55 @@ Ask the reader two things: whether they sent a reply whose id starts so, and to 
 - **One name on two copies.** bean gives one name to one person. Two copies of your log can each give it to another person before they sync. Then each shows with the start of its identity id, as `[peer Ana #3fa9c1]`. `bean unpair Ana` takes the name back from both. To unpair one, give its key: `bean ls -all -json -type agent.pair` shows the key of each pairing. The notes that it signed stay in your log, and show as an unpaired key's. `bean purge <id>` deletes one: every record in your log is about you, and yours to delete. A note that you deleted is not taken again.
 - **What the reader's own log says.** Their `reply` record names your identity id, the id of your share and the ids of the notes. It travels if they share that record, as when they share all of their records.
 
+### A reply to an address
+
+The reader can seal the reply to an address of yours, so that no six words are read out. You make a key file once with `bean address`. You give its address by one channel, and its address words by another ([above](#seal-it-to-a-readers-address)).
+
+```
+# the reader
+bean reply -to for-ana.bean -for age1... -address-words "table nothing ..." -out reply-to-ben.bean 3fa9c1 "Looks fine to me."
+
+# you, at your own terminal
+bean accept -key ~/keys/bean-ben.key -label Ana reply-to-ben.bean
+```
+
+**The reader's side.**
+
+- **`-for <address>` seals the reply to that address.** bean takes an address from this flag only. It reads no address from a package, and a share carries none.
+- **Take the address from the sender, by a second channel.** A note of a share is the signer's text. Whoever holds any key of the signer, also a retired one, can write a note that names an address of their own.
+- **The gate is that of `bean share -for`.** bean asks for the eight address words that the sender gave you, or takes `-address-words`. `-yes` never stands in for them. The gate runs before bean opens what you received. When the words are wrong, nothing is written.
+- **Before it writes, bean says what this seal means:**
+  - The reply is sealed to an address. Whoever holds the key file of that address can open it.
+  - bean checked only that the address words belong to the address.
+  - The person you reply to needs a bean that has `bean accept -key`. An earlier bean does not open it.
+  - A program that runs as that person opens it with no word typed.
+  - It stays closed only while the key file stays with that person and the cipher holds. That is so for as long as any copy of the file exists.
+  - You cannot open this reply again, unless the address is your own. Your log keeps a record that you replied, and not the notes.
+- **Then it asks, on a terminal.** `-yes` writes without the question. Without a terminal and without `-yes`, nothing is written. `-yes` and `-address-words` go with `-for` only.
+- **It prints no six words.** It prints your identity words and the start of the reply's id, as for any reply.
+- **The order of work is that of a share to an address.** bean seals in memory, and opens the result with the file's own key. It checks what came out. It makes the file, new and empty. It adds the `reply` record. Then it writes the bytes.
+- **When the file cannot be written whole,** bean says what it did, as for a share. It names the path and the id of the reply record, and says that a part of such a file can open.
+- **Your `reply` record says `"seal": "recipient"`.** It names no address. A reply with six words says `"seal": "passphrase"`.
+- **Reply before you delete a key that you made for one sender.** `-to` needs the key to open the package. Or unpack the package first, and reply to the folder.
+
+**Your side.**
+
+- **`bean accept -key <your key file>` opens the reply.** Its checks are those of any reply.
+- **What a key shows.** bean says first: the reply was sealed to your address. Anyone who has your address can seal to it, also an older reply of the signer. bean cannot tell who sealed it. The reply's id, which you compare by voice, tells you which reply it is.
+- **A reply that someone sealed again.** When the replier's record does not say `recipient`, bean says so. That check looks one way only, as for a share. A reply whose record says `recipient`, and that opened with six words, is not marked. A record that says `recipient` shows what the replier wrote, and not for which address.
+- **`-yes` does not go with `-key`.** `bean accept -key` asks on a terminal, and takes nothing into your log without one. A program that runs as you and holds the key file opens such a reply with no word typed. It can make the eight identity words from the reply itself, so `-words` is no check for it.
+- **What that rule does not do.** It guards your log, and not what such a program reads. Without a terminal, `bean accept -key` still lists the notes. The `age` tool opens the file with the key. A program that makes a terminal of its own can answer the question. The rule stops the flag that a script would use, and it is no wall.
+- **What that rule costs.** A person who hands the work to an assistant runs `bean accept -key` themselves. A key file with a passphrase is the gate that is planned ([SHARE-PLAN.md](SHARE-PLAN.md)).
+- **Without `-key`,** bean says that the file is sealed to a key, and how to open it. With another key, bean says that it was sealed to another address, or changed on the way.
+- **An earlier bean does not take it.** [UPGRADING.md](../UPGRADING.md) says what release 0.8.0 prints. Both people update first.
+
 ### The reply, exactly
 
-A reply is a sealed package like a share: record files under `objects/`, packed and encrypted with six words. A check passes when all of these hold.
+A reply is a sealed package like a share: record files under `objects/`, packed and encrypted with six words or to an address. A check passes when all of these hold.
 
 1. It holds records and nothing else: no file under `files/`, and no other name beside `objects`. A name that starts with a dot is not read, as in a bundle. Every record file passes the checks of a log, of this format and no newer. One warning is expected: a note is about a person whose identity records are not in the reply.
 2. It holds exactly one record of type `reply`, with `source.system` `bean-reply`. A person signed it about themselves, with the last key of their identity's chain. That key is the reply's key. The chain is whole and not frozen.
-3. The `reply` record's `context` has `to`, the identity id that the reply is for: not the replier's own. It has `share`, the id of the share record. It has `notes`, the ids of the notes, each once: from 1 to 200. `value.n` is their count.
+3. The `reply` record's `context` has `to`, the identity id that the reply is for: not the replier's own. It has `share`, the id of the share record. It has `notes`, the ids of the notes, each once: from 1 to 200. `value.n` is their count. `bean reply` also writes `seal` there: `"passphrase"` or `"recipient"`, as in a share record. No rule reads it, and `bean accept -key` reads it once.
 4. Every other record is an identity record on that person's chain, or a note that the `reply` record lists. Every listed note is there.
 5. A note has the type `note`. Its `author` and its `kid` are the reply's key. Its `subject` is `to`. Its `value` is `{"s": text}`: a text of 1 to 4000 bytes in UTF-8. At least one character of it is not white space, by Unicode's `White_Space` property. It has one ref, `about` one record, and no `context` and no file.
 6. A note's `source.system` is `bean-reply`, and its `source.ref` is null. It states one time, the time it was written. Its `times.observed` is null, or has a `start` in the minute of `times.imported` and no `end`.
