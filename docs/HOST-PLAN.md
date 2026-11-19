@@ -188,13 +188,19 @@ No stage needs a change to bean. No other step of ROADMAP waits for this plan. T
 
 ## The owner's to decide
 
-- Which name under the publisher's domain. It shows where the lab is. How long the name is held, and who renews it.
-- Which programs run. Who does each act on the server, who patches it, and who makes each key.
-- Whether each key is thrown away, as the author proposes. Whether a real key is used after this rehearsal, and the policy for it.
-- Whether the relay uses the name of the file host.
-- Who the person outside the lab is, who tries and fetches at stages 2, 3 and 4.
+DECISIONS 338 has his answers of 2026-11-19. Each line below says what is decided, what the author proposes, and what is open. A proposal is no decision.
+
+- **The address.** Decided: a name under the publisher's own domain. Open: which name, how long it is held, and who renews it.
+- **The relay.** Proposed: `nostr-rs-relay`, with no second program beside it.
+- **The file host.** Proposed: a public program, so that a second publisher can get it. Open: which one.
+- **Who acts.** Proposed: the owner, or a person whom he names, does each act on the server. An assistant writes the settings and the commands as files, and he reads them first. Open: who patches the server.
+- **The person outside the lab,** who tries and fetches at stages 2, 3 and 4. Proposed: the peer of the first run, who states what they fetched as receipts.
+- **The keys.** Proposed: each is thrown away for this publication. A kept key is the next step, after the design for a lost key.
+- **A pack of made-up people on this host.** He said: maybe. Proposed: never on a public address. A test server that only the lab's network reaches does the same for a demonstration.
+- **The order with the first run with a peer.** Open. The reviews of ROADMAP's order recommend the host first. The author recommends the run first, with a pack sent by hand.
+- **More packs.** He wants more packs that are worth a host. A search for sources is proposed as work of its own.
+- Whether the relay uses the name of the file host. Proposed: yes.
 - How the server is kept apart from the lab's other machines. The limits of size and of rate.
-- Whether the packs are on the host before the first run with a peer.
 - Where the packs are announced, and how long the host stays up.
 - A second host.
 

@@ -206,18 +206,18 @@ A pack is one file of reference data, and a cell is its table for one measure an
 - **Where the code lives.** Proposed: what runs offline is in this repository, and what listens on a network is not. Formats, checks, builders and the document of a setup are here. A publisher's network address, terms and keys are its own. No key is in any repository.
 - **How many spellings of one quantity are reconciled.** Proposed: the one who pools does it, in a pack's `same` list (path 4, "A pool"). bean keeps no table of names.
 - Whether the first run goes on six words, if the reply to an address is not merged when the peer is ready.
-- Under which network address the first publisher's server runs. He said on 2026-11-19: "we have a server in the lab". Which programs run there, and who acts on it ([HOST-PLAN.md](HOST-PLAN.md)).
+- Which name the first publisher's server runs under. He said on 2026-11-19 that it is a name under the publisher's own domain (DECISIONS 338). Which programs run there, and who acts on it: [HOST-PLAN.md](HOST-PLAN.md) lists what is decided, proposed and open.
 - Who the peer of the first run is, and whether values that were entered by hand are enough for it (DECISIONS 323).
 - Which host takes a package by link, once a key file can be protected.
-- Whether a publisher's real key is used after the rehearsal.
-- Whether the network leg of the demonstration goes on a real host, his own or others' (POOL-PLAN.md). A pack of made-up people on a real host can mislead.
+- Whether a publisher's real key is used after the rehearsal. DECISIONS 338 has the author's proposal: yes, as the next step, after the design for a lost key.
+- Whether the network leg of the demonstration goes on a real host, his own or others' (POOL-PLAN.md). A pack of made-up people on a real host can mislead. He said "maybe" on 2026-11-19, and DECISIONS 338 has the author's answer.
 - Whether bean gets a member for a URL, or an importer for other public files, for receipts (POOL-PLAN.md).
 - Whether the tally of receipts sets apart the identities that he lists as known (POOL-PLAN.md).
 - Whether the author's reading of his request is right: that the demonstration comes before the order to 0.9 (DECISIONS 332).
 - Whether the survey method's own floor of 30 goes as well (DECISIONS 333). The author kept it: the packs on record are built by it.
 - Whether a result from a very small cell gets words of its own (DECISIONS 333). Today a cell of one person prints a median, a middle half, and the caveat of a cohort under 100.
 - Whether the survey's next pack comes right after the demonstration of the pool path, or after 0.9.
-- Whether the survey's packs are on a host before the run. All reviews recommend it.
+- Whether the survey's packs are on a host before the run. All reviews recommend it. His answer of 2026-11-19 can be read two ways, and the author asked (DECISIONS 338).
 - Whether 1.0 can come while `pack/0` is a draft. The reviews recommend it: 1.0 then names the comparing part as not locked, and does not wait for a second source that nobody has.
 - Whether a review by a person outside the project is a condition of 1.0. The reviews recommend that it is wanted, and is no condition.
 - Whether bean ever keeps a package or a pack with the log, so that an export holds it. For a pack, that is item 7 of the work in the section "Order".
