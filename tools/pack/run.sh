@@ -203,7 +203,7 @@ os.mkdir(out)
 good = json.load(open(src))
 def cell(p): return p["cells"][0]
 def first(d): return d[sorted(d)[0]]
-def many(p): return next(c for c in p["cells"] if len(c["values"]) > 40)  # so that n stays above 30
+def many(p): return next(c for c in p["cells"] if len(c["values"]) > 40)  # a cell with many values: n below their number is what is tried
 cases = {
     "format": lambda p: p.update(bean="pack/1"),
     "member-more": lambda p: p.update(signature="x"),

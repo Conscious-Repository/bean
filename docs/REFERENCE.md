@@ -21,6 +21,7 @@ NHANES and cholesterol are one case. Nothing in the format knows a survey, a blo
 |---|---|---|
 | The source | Publishes data about many people, such as a survey. | Nothing. |
 | The builder | Builds a pack from the source's files, with a program that anyone can run. | Nothing. |
+| Whoever pools | Builds a pack from what people contribute to it. | Each contributor's values. And whoever holds that pack reads each value in it. |
 | A host | Serves the pack's bytes: a web server, a relay, a friend's disk. | That someone fetched the pack. |
 | The person | Fetches the pack whole and compares on their own machine. | |
 | A reader | Gets a shared comparison and computes it again from the pack. | What the person shared. |
@@ -29,7 +30,7 @@ No service computes a comparison for a person. A request for one cell says "a ma
 
 ## What a comparison supports
 
-A comparison says where a value lies among the values of a cohort in the source's sample. It does not say whether a value is healthy. It does not diagnose, predict or advise. Each result has its n and its caveats, and bean gives no number for a cohort of fewer than 30 people.
+A comparison says where a value lies among the values of a cohort in the source's sample. It does not say whether a value is healthy. It does not diagnose, predict or advise. Each result has its n and its caveats. A pack's cell has no least size: N shows how few people a number rests on. The 30 of [COMPARE.md](COMPARE.md) is the rule of the survey's method, and of the survey's builder.
 
 ## Try it
 
@@ -106,7 +107,7 @@ An id is 1 to 64 letters, digits, dots, `-` and `_`, and starts with a letter or
 |---|---|
 | `measure`, `cohort` | The ids of the measure and the cohort. A pair is there once. |
 | `kind` | `weights`. Version 0 has no other kind. |
-| `n` | The number of people: a whole number up to 2147483647, and not below the number of distinct values. A cell has no least size. |
+| `n` | The number of people: a whole number from 1 to 2147483647, and not below the number of distinct values. A cell has no other least size. |
 | `values` | The distinct values of the cohort, in rising order: one or more. Each is a number from 1e-12 to 1e15. |
 | `weights` | One number from 1e-12 to 1e15 for each value: the weight that the value carries. |
 
@@ -170,7 +171,7 @@ A saved comparison gives the reading's value away to anyone with the pack ([COMP
 - **The same files give the same bytes.** Write the object in canonical form. Sort the cells by measure, then by cohort. Add no time and no name of a machine.
 - **Name every source file by its SHA-256.** A reader who fetches the files from the source can then build the pack again.
 - **State your own rule for a small cell.** The format has no least size. The survey's builder leaves out a cell of fewer than 30 people: that is the method of [COMPARE.md](COMPARE.md), for a sample of a survey.
-- **Tell each contributor what a small cell shows.** A cell lists each distinct value. In a small cell each value is one person's, and whoever has the pack reads it.
+- **Tell each contributor what a cell shows, before they contribute.** A cell lists each distinct value with its weight, beside the cohort's text. A value with a weight of one is one person's, in a cell of any size, and whoever has the pack reads it. Two packs that differ by one contributor show that person's value. bean cannot check that a builder said so. [ROADMAP.md](ROADMAP.md), under "A pool", lists what a real pool needs first.
 - **Take each `same` entry from a real reading.** Use the type and the unit that a real importer or a real report writes. A second name or unit for a quantity is a second entry.
 - **Say what does not carry over.** A caveat is part of the pack. Each comparison shows it, and each saved claim holds it.
 - **Use the weights that the source says to use.** A wrong weight gives a number that looks right.
@@ -202,7 +203,7 @@ One list in bean's code is not how many publishers will be known. A publisher's 
 - values that are not in rising order, or a value that is there twice;
 - a value or a weight that is not a number from 1e-12 to 1e15;
 - a list of weights that is shorter or longer than the list of values;
-- an n above 2147483647, or below the number of distinct values;
+- an n below 1, above 2147483647, or below the number of distinct values;
 - a cell that names a measure or a cohort that the pack does not have, or a cell that is there twice;
 - a type and unit in the `same` lists of two measures, or twice in one, and a measure with an empty `same` list;
 - a source file that is named twice;

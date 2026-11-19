@@ -38,8 +38,8 @@ const (
 )
 
 // SmallN is the size below which a result is qualified as coming from a
-// small cohort. A cell has no least size: its n is not below the number of
-// its distinct values, and a cell has one value or more.
+// small cohort. A cell has no least size but one person: its n is not
+// below the number of its distinct values, and a cell has one value or more.
 const SmallN = 100
 
 // MinNumber and MaxNumber bound each value and each weight. Inside them no
@@ -361,8 +361,8 @@ func Read(data []byte) (*Pack, error) {
 		switch {
 		case len(cell.Values) == 0 || len(cell.Values) != len(cell.Weights):
 			r.fail("%s does not have one weight for each value", where)
-		case !isNumber || n != math.Trunc(n) || n > MaxN:
-			r.fail("%s has an n that is not a whole number up to %d", where, MaxN)
+		case !isNumber || n != math.Trunc(n) || n < 1 || n > MaxN:
+			r.fail("%s has an n that is not a whole number from 1 to %d", where, MaxN)
 		case int(n) < len(cell.Values):
 			r.fail("%s has more distinct values than people", where)
 		}

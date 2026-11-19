@@ -356,8 +356,8 @@ def check_pack(p):
             if not MIN_NUMBER <= x <= MAX_NUMBER:
                 raise Refused("%s: weight %d is not from 1e-12 to 1e15" % (w, j))
         n = whole(c["n"], w + " n", 0)
-        if n > MAX_N:
-            raise Refused("%s has an n above %d" % (w, MAX_N))
+        if n < 1 or n > MAX_N:
+            raise Refused("%s has an n that is not from 1 to %d" % (w, MAX_N))
         if n < len(values):
             raise Refused("%s has an n below the number of distinct values" % w)
     return p
