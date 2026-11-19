@@ -138,8 +138,11 @@ import json, sys
 r = json.loads(sys.stdin.readline())
 c = r["context"]
 exec(sys.argv[1])
-print(json.dumps({"type": r["type"], "value": r["value"], "times": {"observed": r["times"]["observed"]},
-                  "refs": r["refs"], "source": dict(r["source"], ref=None), "context": c}))' "$change" >"$T/forged.jsonl"
+d = {"type": r["type"], "value": r["value"], "times": {"observed": r["times"]["observed"]},
+     "refs": r["refs"], "source": dict(r["source"], ref=None), "context": c}
+if c is None:
+    del d["context"]  # a claim with no context at all
+print(json.dumps(d))' "$change" >"$T/forged.jsonl"
   b "$n" append "$@" <"$T/forged.jsonl" >"$T/append.txt" 2>&1 || { say "log $n: the forged claim was not appended: $(tail -1 "$T/append.txt")"; return; }
 }
 # The id of the claim that is not the first one that was saved.
@@ -219,6 +222,18 @@ LISTCLAIM=$(claims listreading | "$PY" -I -B -c 'import json, sys; print([r["id"
 [ -n "$LISTCLAIM" ] || say "the claim whose reading is a list was not made"
 share listreading listreading -note "synthetic contributor" "$LISTCLAIM"; unseal listreading
 
+# A claim whose context is nothing: it gets a line, and does not stop the
+# builder.
+new_log nocontext; b nocontext add lab.hdl-cholesterol 65 -unit mg/dL >/dev/null 2>&1; compare nocontext female-20-29
+forge nocontext 'c = None'
+NOCONTEXT=$(claims nocontext | "$PY" -I -B -c 'import json, sys; print([r["id"] for r in map(json.loads, sys.stdin) if not r.get("context")][0])' 2>/dev/null)
+[ -n "$NOCONTEXT" ] || say "the claim with no context was not made"
+share nocontext nocontext -note "synthetic contributor" "$NOCONTEXT"; unseal nocontext
+
+# A reading whose value is below what the format holds.
+new_log toosmall; b toosmall add lab.hdl-cholesterol 0.0000000000001 -unit mg/dL >/dev/null 2>&1; compare toosmall female-20-29
+share toosmall toosmall -note "synthetic contributor" -type 'comparison.*'; unseal toosmall
+
 # Two shares of one identity, of which one has no note: the identity has
 # two different bundles, whatever their notes.
 new_log mixed; b mixed add lab.hdl-cholesterol 62 -unit mg/dL >/dev/null 2>&1; compare mixed female-20-29
@@ -253,6 +268,7 @@ share photo2 photo2 -note "synthetic contributor" -type 'comparison.*'; unseal p
 # Files whose names start with a dot, in a good bundle: the check of a
 # bundle passes over them, and so does the archive.
 echo hidden >"$T/open/c5/objects/.hidden"; mkdir "$T/open/c5/objects/.d"; echo hidden >"$T/open/c5/objects/.d/z"
+mkdir "$T/open/c5/files"; echo hidden >"$T/open/c5/files/.hidden"
 
 # The same bundle handed in twice.
 cp -R "$T/open/c3" "$T/open/c3-again"
@@ -304,10 +320,12 @@ line 'two readings of one measure that count' "two readings of one measure"
 line 'a reading with claims in two cohorts' "claims in two cohorts"
 line '^the same  folder c3-again' "the same bundle handed in twice"
 # The agent's claim fails the check of a claim: the person did not sign it.
-[ "$(grep -c '^left out  .*: folder [^:]*: a claim of its bundle does not count$' "$T/build.txt")" = 6 ] || say "six identities have a claim that does not count, and the builder names $(grep -c 'a claim of its bundle does not count$' "$T/build.txt")"
+[ "$(grep -c '^left out  .*: folder [^:]*: a claim of its bundle does not count$' "$T/build.txt")" = 7 ] || say "seven identities have a claim that does not count, and the builder names $(grep -c 'a claim of its bundle does not count$' "$T/build.txt")"
 line '^left out  .*: folder tworeadings: two readings' "the folder of an identity with two readings"
 line '^left out  .*: folder photo: it holds more than comparisons' "a reading that carries a file"
 line '^left out  .*: folder photo2: it holds more than comparisons' "a reading that keeps a file, shared without it"
+line '^left out  .*: folder nocontext: ' "a claim with no context"
+grep '^left out\|^not read\|^not counted' "$T/build.txt" | grep -q "$T" && say "a line on what is left out names a path of the scratch folder"
 grep -q '^An archive shows every record of every bundle in it, whole' "$T/build.txt" || say "the builder does not say what an archive shows, when it writes one"
 
 "$PY" -I -B "$ROOT/tools/pack/check.py" "$T/pool.pack" >"$T/pc.txt" 2>&1 || say "check.py refuses the pool's pack: $(tail -1 "$T/pc.txt")"
@@ -502,6 +520,8 @@ builder -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/o
 grep -q "^STOPPED: .*no file is left behind" "$T/no5.txt" || say "the builder does not say that it left no file behind: $(tail -1 "$T/no5.txt")"
 builder -synthetic -survey "$T/nothing.pack" -survey-url u -archive-url u -out "$T/no6.pack" "$T/pool.zip" >"$T/no6.txt" 2>&1 && say "the builder ran with no survey pack"
 grep -q "^STOPPED: -survey: " "$T/no6.txt" || say "the builder does not say which file is missing: $(tail -1 "$T/no6.txt")"
+builder -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/no13.pack" -archive "$T/no13.zip" "$T/nothing-here" >"$T/no13.txt" 2>&1 && say "the builder ran on a folder that is not there"
+grep -q "^STOPPED: " "$T/no13.txt" || say "the builder does not stop with a line on a folder that is not there: $(tail -1 "$T/no13.txt")"
 builder -synthetic -survey "$T/open/stray.txt" -survey-url u -archive-url u -out "$T/no9.pack" "$T/pool.zip" >"$T/no9.txt" 2>&1 && say "the builder ran with a survey pack that is no pack"
 grep -q "^STOPPED: -survey: the file is not a pack" "$T/no9.txt" || say "the builder does not say that the survey pack is no pack: $(tail -1 "$T/no9.txt")"
 builder -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/no10.pack" "$T/open/stray.txt" >"$T/no10.txt" 2>&1 && say "the builder read a file that is no archive"

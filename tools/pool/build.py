@@ -105,8 +105,8 @@ def members(folder):
     bundle: bytes}, or None when they are larger together than MAX_BUNDLE."""
     out, size = {}, 0
     for here, dirs, names in os.walk(os.path.join(folder, "objects")):
-        dirs[:] = sorted(d for d in dirs if not d.startswith("."))
-        for name in sorted(n for n in names if not n.startswith(".")):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for name in [n for n in names if not n.startswith(".")]:
             full = os.path.join(here, name)
             size += os.path.getsize(full)
             if size > MAX_BUNDLE:
@@ -131,7 +131,6 @@ def archive_bytes(bundles):
         for sid in sorted(bundles):
             for rel in sorted(bundles[sid]):
                 info = zipfile.ZipInfo("%s/%s" % (sid, rel), ZIP_TIME)
-                info.compress_type = zipfile.ZIP_STORED
                 info.create_system = 3
                 info.external_attr = 0o100644 << 16
                 z.writestr(info, bundles[sid][rel])
@@ -177,7 +176,7 @@ def read_bundle(name, folder, survey_path):
         problems, facts = checkbundle.check(folder)
     except Exception as err:  # whatever goes wrong in the check: the bundle is not one that passed
         problems, facts = ["the bundle cannot be read as one: %s: %s" % (type(err).__name__, err)], None
-    if problems or not facts:
+    if problems:
         # The check names the folder by its path, which says nothing here.
         return "refused", "the bundle fails its check: %s" % sorted(problems)[0].replace(folder, "the folder")
     share, person, holds = facts[0], facts[1], facts[7]
@@ -235,7 +234,7 @@ def build(args):
     source = args["input"]
     from_archive = os.path.isfile(source)
     if from_archive and args["archive"]:
-        raise Stop("an archive is given: -archive names a new one, and the builder writes none from an archive")
+        raise Stop("the input is a file: -archive names a new archive, and the builder writes none when it reads one")
     if not from_archive and not args["archive"]:
         raise Stop("a folder is given: -archive names the new archive that the pack will name")
     for flag, new in (("-out", args["out"]), ("-archive", args["archive"])):
@@ -322,7 +321,7 @@ def assemble(args, source, given, survey, survey_path, survey_sha, survey_bytes)
             continue
         b = bundles[0]
         taken[b["share"]] = b["files"]
-        for measure, cohort, _, value in sorted(set(b["counted"])):
+        for measure, cohort, _, value in set(b["counted"]):
             cells.setdefault((measure, cohort), []).append(value)
         print("taken     %s: %d of its readings" % (words, len(set(r for _, _, r, _ in b["counted"]))))
 
@@ -358,7 +357,7 @@ def assemble(args, source, given, survey, survey_path, survey_sha, survey_bytes)
         distinct = sorted(set(values))
         pack["cells"].append({"measure": measure, "cohort": COHORT_ID + cohort, "kind": "weights", "n": len(values),
                               "values": distinct, "weights": [values.count(v) for v in distinct]})
-        print("cell      %s %s%s: n %d" % (safe(measure), COHORT_ID, safe(cohort), len(values)))
+        print("cell      %s %s%s: n %d" % (measure, COHORT_ID, cohort, len(values)))
     data = (rebuild_nhanes.canonical(pack) + "\n").encode("utf-8")
     try:
         packcheck.parse_pack(data)
