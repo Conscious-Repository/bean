@@ -50,13 +50,12 @@ def plain(text, limit=120):
     return out + (" [cut: %d characters in all]" % len(text) if len(text) > limit else "")
 
 
-def carried(folder, share, record, digest):
+def carried(share, record, digest):
     """True when the share record lists a file for the record with the stated
-    SHA-256, and the bundle has that file. The check of the bundle, which ran
-    before, computed the file's SHA-256 and held it to the list."""
+    SHA-256. The check of the bundle, which ran before, holds that a listed
+    file is in the bundle, and computed its SHA-256."""
     files = (share.get("context") or {}).get("files") or []
-    listed = any(isinstance(f, dict) and f.get("record") == record["id"] and f.get("sha256") == digest for f in files)
-    return listed and os.path.isfile(os.path.join(folder, "files", digest))
+    return any(isinstance(f, dict) and f.get("record") == record["id"] and f.get("sha256") == digest for f in files)
 
 
 def tally(source):
@@ -95,7 +94,7 @@ def tally(source):
             if not isinstance(dataset, str) or not isinstance(digest, str) or not DATASET_RE.fullmatch(dataset) or not DIGEST_RE.fullmatch(digest):
                 malformed.append("%s, record %s: dataset \"%s\", SHA-256 \"%s\"" % (words, r["id"][7:19], plain(dataset, 40), plain(digest, 80)))
                 continue
-            good.append((dataset, digest, carried(folder, share, r, digest)))
+            good.append((dataset, digest, carried(share, r, digest)))
         note = (share.get("context") or {}).get("note")
         datasets = len({d for d, _, _ in good})
         for dataset, digest, has_file in good:
@@ -137,9 +136,6 @@ def main(argv):
     if len(argv) != 2 or argv[1].startswith("-"):
         sys.stderr.write(__doc__)
         return 2
-    if not os.path.isdir(argv[1]):
-        print("STOPPED: %s is no folder" % plain(argv[1], 300))
-        return 1
     try:
         return tally(argv[1])
     except OSError as err:

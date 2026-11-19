@@ -58,7 +58,7 @@ DOCS = README.md CORE.md SPEC.md SECURITY.md UPGRADING.md CONTRIBUTING.md \
 	docs/PROVIDER-INGESTION.md docs/GOVERNANCE-PROPOSAL.md \
 	cmd/bean/vocabulary.md cmd/bean-import-lab/README.md \
 	cmd/bean-import-apple-health/README.md cmd/bean-import-nhanes/README.md \
-	examples/blood/README.md examples/pool/README.md tools/second/README.md tools/pool/README.md
+	examples/blood/README.md examples/pool/README.md tools/second/README.md tools/pool/README.md tools/receipts/README.md
 prose:
 	$(PY) -I tools/checkprose.py $(DOCS)
 
@@ -91,9 +91,11 @@ pack:
 # The pool path with made-up contributors (docs/POOL-PLAN.md): the builder
 # gives the pack on record from the committed archive, and a fresh run of
 # forty made-up logs gives a pack, with every bad input left out. It is a
-# test of the path, and no pool of people.
+# test of the path, and no pool of people. Then the tally of receipts for
+# a source file, on its fixture of made-up identities.
 pool:
 	PY=$(PY) bash tools/pool/run.sh
+	PY=$(PY) bash tools/receipts/run.sh
 
 # bean check-bundle and the Python checker, which follows docs/SHARE.md, must
 # give the same verdict on every bundle, good and damaged. The page that

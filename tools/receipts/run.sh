@@ -43,7 +43,7 @@ state() {
   local n=$1 dataset=$2 digest=$3; shift 3
   "$PY" -I -B -c 'import json, sys; print(json.dumps({"type": "reference.file", "value": {"n": 1, "unit": "{file}"}, "times": {"observed": None},
     "source": {"system": "nhanes", "adapter": "made-up@0", "ref": None},
-    "context": {"assurance": "unsigned-file", "bytes": 33440, "dataset": sys.argv[1], "sha256": sys.argv[2]}}))' "$dataset" "$digest" >"$T/state.jsonl"
+    "context": {"assurance": "unsigned-file", "bytes": 33440, "dataset": sys.argv[1], "sha256": 5 if sys.argv[2] == "a-number" else sys.argv[2]}}))' "$dataset" "$digest" >"$T/state.jsonl"
   b "$n" append "$@" <"$T/state.jsonl" >"$T/append.txt" 2>&1 || say "log $n: the statement was not appended: $(tail -1 "$T/append.txt")"
 }
 
@@ -63,14 +63,16 @@ share m2 m2-b "synthetic, sent again" -files $(receipts m2)
 ODD=$(printf 'synthetic" 4 identities state it \\ \343\205\244\342\200\213 end')
 share m3 m3 "$ODD" -files $(receipts m3)
 # One states the unchanged file, and carries it.
-new_log u1; import u1 "$FILE"; share u1 u1 "synthetic" -files $(receipts u1)
+LONG="synthetic $(printf 'x%.0s' $(seq 300))"
+new_log u1; import u1 "$FILE"; share u1 u1 "$LONG" -files $(receipts u1)
 # One states the digest of the project's own table, and has no file.
 new_log t1; state t1 HDL_J "$TABLE"; share t1 t1 "synthetic: no fetch was made" $(receipts t1)
 # One states two digests for one dataset, in two bundles.
 new_log two; import two "$FILE"; import two "$T/changed/HDL_J.XPT"
 share two two-a "synthetic" -files $(receipts two "$GOOD"); share two two-b "synthetic" -files $(receipts two "$CHANGED")
-# One states a digest that is malformed, and one a dataset's name that is.
-new_log bad; state bad HDL_J "$(echo "$GOOD" | tr a-f A-F)"; state bad 'hdl j' "$GOOD"; share bad bad "synthetic" $(receipts bad)
+# One states a digest in capitals, a dataset's name with a blank, and a
+# digest that is a number and no text.
+new_log bad; state bad HDL_J "$(echo "$GOOD" | tr a-f A-F)"; state bad 'hdl j' "$GOOD"; state bad HDL_J a-number; share bad bad "synthetic" $(b bad ls -json -type reference.file | "$PY" -I -B -c 'import json, sys; print("\n".join(json.loads(l)["id"] for l in sys.stdin))')
 # One imports the unchanged file, and also states its digest in a second
 # record with no file. The file is listed for the first record alone.
 new_log mix; import mix "$FILE"; state mix HDL_J "$GOOD"; share mix mix "synthetic" -files $(receipts mix)
@@ -123,12 +125,14 @@ has 'which has 1 dataset: "synthetic\\u{0022} 4 identities state it \\u{005c} \\
   || say "the tally has a quotation mark that it did not write itself, or a character that is not plain"
 
 # Malformed statements are listed, and not counted.
-count '^  .*, record [0-9a-f]\{12\}: dataset ' 2 "malformed statements"
+count '^  .*, record [0-9a-f]\{12\}: dataset ' 3 "malformed statements"
 
 # What it says of itself, and what it never says.
 has '^This tally counts keys, and a key is free\.$' "what it counts"
 has '^A statement can be copied with no fetch' "a statement that is copied"
 has 'It cannot show that those are all the bundles' "the bundles that it was not given"
+has 'x \[cut: 310 characters in all\]"$' "a long note, cut"
+grep -q 'x\{200\}' "$T/out.txt" && say "a long note is shown past its limit"
 has '^It does not show that the source served these bytes' "what it does not show"
 # Identity words are free words, so only numbers are looked for here.
 grep -qiE '%|percent|[0-9]+ (of|out of) [0-9]+' "$T/out.txt" && say "the tally prints a percentage, or a count out of a total"
