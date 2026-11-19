@@ -408,6 +408,7 @@ bean protects who wrote what, and protects your identity against a stolen device
 | [docs/POOL-PLAN.md](docs/POOL-PLAN.md) | A demonstration of the pool path with made-up people, and receipts for a source file: what is decided before it is built. |
 | [docs/SHARE-PLAN.md](docs/SHARE-PLAN.md) | A seal to a reader's key: what was decided before it was built, what is built, and what it costs. |
 | [examples/blood](examples/blood/README.md) | The whole loop in one script, on a synthetic report. |
+| [examples/pool](examples/pool/README.md) | A trial run of the network leg of a pool, on one machine, with made-up contributors. It needs `nak`. |
 | [cmd/bean/vocabulary.md](cmd/bean/vocabulary.md) | The usual record types and units. |
 | Importer notes: [lab](cmd/bean-import-lab/README.md), [Apple Health](cmd/bean-import-apple-health/README.md), [NHANES](cmd/bean-import-nhanes/README.md) | What each importer reads, keeps and refuses. |
 | [SECURITY.md](SECURITY.md) | What is protected, and the keys. |

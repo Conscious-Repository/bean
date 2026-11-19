@@ -1,6 +1,6 @@
 # A demonstration of the pool path, and receipts for a source file: what is decided before it is built
 
-This is for anyone who builds or reviews the demonstration. It says what is built, in three parts, and what each part may claim. Part 1 is built. Parts 2 and 3 are not. DECISIONS 332 has the account.
+This is for anyone who builds or reviews the demonstration. It says what is built, in three parts, and what each part may claim. Parts 1 and 2 are built. Part 3 is not. DECISIONS 332 has the account.
 
 **It is a test of the path with made-up people.** It is not a pool, and it is not a host. bean does not diagnose, and nothing here says whether a value is healthy.
 
@@ -159,7 +159,7 @@ It is `tools/pool/` and `make pool`. **It is built (DECISIONS 334).** [tools/poo
 
 ## Part 2: a trial run of the network leg, on one machine
 
-It is `examples/pool/`: a short script and a README. It is not in CI. A person runs it, and nothing in bean depends on it.
+It is `examples/pool/`: a short script and a README. **It is built (DECISIONS 335).** It is not in CI. A person runs it, and nothing in bean depends on it.
 
 **One machine, and no real host: that is the author's choice.** The owner wrote "hosts it on Blossom". The reason is caution, and no more: a pack that is published cannot be taken back. He can order either of two things. One is a host that he names. The other is a relay and a Blossom server that others run, with a throwaway key and the same `synthetic pool:` words.
 
