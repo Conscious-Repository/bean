@@ -147,7 +147,7 @@ The setup document names each setting that changes after the trial: where each k
 - **A second place for the digests.** A second person fetches the survey's files from their own connection, and sends receipts ([tools/receipts](../tools/receipts/README.md)). They build each pack, and state its SHA-256. That needs no server. Until then one hand holds the host, the relay and this repository.
 - **A second host,** and who keeps a copy of the survey's files for the day that their host is gone. ROADMAP has both under "Phase 2".
 
-No stage needs a change to bean. No other step of ROADMAP waits for this plan. The first run with a peer needs no server. The reviews of ROADMAP's order recommend the host before that run. The owner decides.
+No stage needs a change to bean. The first run with a peer needs no server. The owner decided all the same that the host comes first (DECISIONS 339). By the author's reading that run waits for stage 3, where a person can fetch a pack. No other step of ROADMAP waits for this plan.
 
 ## The setup, as far as it is known
 
@@ -197,7 +197,7 @@ DECISIONS 338 has his answers of 2026-11-19. Each line below says what is decide
 - **The person outside the lab,** who tries and fetches at stages 2, 3 and 4. Proposed: the peer of the first run, who states what they fetched as receipts.
 - **The keys.** Proposed: each is thrown away for this publication. A kept key is the next step, after the design for a lost key.
 - **A pack of made-up people on this host.** He said: maybe. Proposed: never on a public address. A test server that only the lab's network reaches does the same for a demonstration.
-- **The order with the first run with a peer.** Open. The reviews of ROADMAP's order recommend the host first. The author recommends the run first, with a pack sent by hand.
+- **The order with the first run with a peer.** Decided: the host first (DECISIONS 339). Open: whether the run waits for the pointers of stage 4 too.
 - **More packs.** He wants more packs that are worth a host. A search for sources is proposed as work of its own.
 - Whether the relay uses the name of the file host. Proposed: yes.
 - How the server is kept apart from the lab's other machines. The limits of size and of rate.
