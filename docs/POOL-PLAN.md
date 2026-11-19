@@ -165,13 +165,13 @@ It is `examples/pool/`: a short script and a README. **It is built (DECISIONS 33
 
 ### The steps
 
-1. **A relay and a file host.** `nak serve --blossom` on localhost, on a stated port. The script starts it, refuses any host but localhost, and stops it at its end.
+1. **A relay and a file host.** `nak serve --blossom` on 127.0.0.1, on a stated port. The script starts it, refuses any host but that one, and stops it at its end. It uses no proxy, and builds bean without a fetch.
 2. **Keys.** The script clears `NOSTR_SECRET_KEY` first, and sets it for one command at a time. `nak key generate` makes a new key for each upload, and one for the pointer. Every command that signs gets such a key. So no key of a log is used, and `nak` never signs with the machine's key (F9).
 3. **One log, for step 9.** The script makes it in a scratch folder of its own, with a made-up reading. It is the other user's log, and no comparison is saved in it.
 4. **Upload.** The script uploads the archive and the survey pack with `nak blossom upload`. They are the two committed files. Then it runs the builder on them, with the URLs that the host gave the two, and uploads the pack.
-5. **A pointer.** The script publishes one event of kind 1063 for the pack. Its content starts `synthetic pool:`. A key that was made for the relay signs it, and the script checks that the event carries that key.
-6. **Find and fetch.** Another user finds the event with `nak req -k 1063`, and fetches the pack with `curl`. They compute its SHA-256 and compare it with the one in the event. That shows that the host served what the pointer named, and no more.
-7. **The other two files.** They fetch the archive and the survey pack from the URLs that the pack names. They hold each to the SHA-256 that the pack states.
+5. **A pointer.** The script publishes one event of kind 1063 for the pack. Its content starts `synthetic pool:`. A key that was made for the pointer signs it, and the script checks that the event carries that key.
+6. **Find and fetch.** Another user finds the event with `nak req -k 1063`, and fetches the pack with `curl`. They hold it to the SHA-256 and the size of the event, each of which the event must name once. That shows that the host served what the pointer named, and no more.
+7. **The other two files.** They fetch the archive and the survey pack from the URLs that the pack names. They hold each to the SHA-256 and the size that the pack states.
 8. **Build again.** They build the pack from the archive and the survey pack, with the builder, and with the two URLs as the fetched pack names them. They compare the SHA-256 with the file that they fetched. This is the step that checks something.
 9. **Compare.** They run `bean compare -pack … -unknown-pack`.
 
