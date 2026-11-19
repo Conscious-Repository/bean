@@ -58,7 +58,7 @@ DOCS = README.md CORE.md SPEC.md SECURITY.md UPGRADING.md CONTRIBUTING.md \
 	docs/PROVIDER-INGESTION.md docs/GOVERNANCE-PROPOSAL.md \
 	cmd/bean/vocabulary.md cmd/bean-import-lab/README.md \
 	cmd/bean-import-apple-health/README.md cmd/bean-import-nhanes/README.md \
-	examples/blood/README.md tools/second/README.md tools/pool/README.md
+	examples/blood/README.md examples/pool/README.md tools/second/README.md tools/pool/README.md
 prose:
 	$(PY) -I tools/checkprose.py $(DOCS)
 
