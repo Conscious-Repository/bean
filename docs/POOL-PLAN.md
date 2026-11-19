@@ -1,6 +1,6 @@
 # A demonstration of the pool path, and receipts for a source file: what is decided before it is built
 
-This is for anyone who builds or reviews the demonstration. It says what will be built, in three parts, and what each part may claim. None of it is built yet. DECISIONS 331 has the account.
+This is for anyone who builds or reviews the demonstration. It says what is built, in three parts, and what each part may claim. Part 1 is built. Parts 2 and 3 are not. DECISIONS 331 has the account.
 
 **It is a test of the path with made-up people.** It is not a pool, and it is not a host. bean does not diagnose, and nothing here says whether a value is healthy.
 
@@ -75,7 +75,7 @@ Each fact was checked in the code. A reviewer, or the author, ran each one with 
 
 ## Part 1: the pool path, offline and in CI
 
-It is `tools/pool/` and `make pool`.
+It is `tools/pool/` and `make pool`. **It is built (DECISIONS 332).** [tools/pool/README.md](../tools/pool/README.md) says how to run it.
 
 **Two words.** The operator is whoever runs the test: here, a script. The operator makes an address with `bean address -out` and holds its key file. The builder is one Python program, and holds no key.
 
