@@ -422,6 +422,8 @@ bean protects who wrote what, and protects your identity against a stolen device
 | [docs/PROVIDER-INGESTION.md](docs/PROVIDER-INGESTION.md) | How data from a provider gets in, one source at a time. |
 | [docs/GOVERNANCE-PROPOSAL.md](docs/GOVERNANCE-PROPOSAL.md) | A proposal for who decides changes to the protocol. Not decided. |
 | [tools/second/README.md](tools/second/README.md) | The second verifier, in Python, written from the documents alone. |
+| [tools/pool/README.md](tools/pool/README.md) | A synthetic pool: a builder of a pack from made-up contributors, and its test. |
+| [tools/receipts/README.md](tools/receipts/README.md) | Receipts for a source file: what to do when you are asked for one, and a tally of what keys state. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Build, test and change the code. |
 
 ## License

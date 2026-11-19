@@ -1,6 +1,6 @@
 # A demonstration of the pool path, and receipts for a source file: what is decided before it is built
 
-This is for anyone who builds or reviews the demonstration. It says what is built, in three parts, and what each part may claim. Parts 1 and 2 are built. Part 3 is not. DECISIONS 332 has the account.
+This is for anyone who builds or reviews the demonstration. It says what is built, in three parts, and what each part may claim. All three parts are built. DECISIONS 332 has the account.
 
 **It is a test of the path with made-up people.** It is not a pool, and it is not a host. bean does not diagnose, and nothing here says whether a value is healthy.
 
@@ -155,7 +155,7 @@ It is `tools/pool/` and `make pool`. **It is built (DECISIONS 334).** [tools/poo
 - The output of `bean compare` must say `synthetic`.
 - This second test pins no digest: new keys give a new pack each time (F6).
 
-**Wiring.** `make pool` joins `make check`, and the list of targets in `.github/workflows/ci.yml`. When part 3 is built, it runs the tally on its fixture as well. New documents join `DOCS` in the Makefile.
+**Wiring.** `make pool` joins `make check`, and the list of targets in `.github/workflows/ci.yml`. It runs the tally of part 3 on its fixture as well. New documents join `DOCS` in the Makefile.
 
 ## Part 2: a trial run of the network leg, on one machine
 
@@ -201,7 +201,7 @@ On any mismatch it prints `NOT reproduced`, and stops.
 
 ## Part 3: receipts for a source file
 
-It is `tools/receipts/`, and documents.
+It is `tools/receipts/`, and documents. **It is built (DECISIONS 336).** [tools/receipts/README.md](../tools/receipts/README.md) is the page for a person who is asked for a receipt.
 
 ### A receipt is the record that exists
 
@@ -211,22 +211,22 @@ A person fetches a survey file with their own tool. They run `bean import nhanes
 
 **A receipt exists only for a file that `bean import nhanes` takes.** Those are the files of one cycle of one survey. The owner asked for public datasets, "e.g., from the CDC". For any other file there is no command. What would give it: a new importer, or a new record type. Each is a change to bean's core that he can order.
 
-**The URL and the time of a download** are the signer's word, as the time of the import is. bean fetched nothing, so it cannot check either. A person who wants to state them writes `-note "fetched <URL> on <day>"` when they share. They share one dataset then, since a share has one note. This is the author's choice. It is less than the owner asked for: bean records neither. What would give it: a fetch in bean, or a member for a URL. Each changes the core or the record format.
+**The URL and the time of a download** are the signer's word, as the time of the import is. bean fetched nothing, so it cannot check either. A person who wants to state them writes `-note "fetched <URL> on <day>"` when they share. They share one record then, since a share has one note. This is the author's choice. It is less than the owner asked for: bean records neither. What would give it: a fetch in bean, or a member for a URL. Each changes the core or the record format.
 
 ### The tally
 
-It is one small Python program. It reads bundles that are open: whoever was sent a sealed one opens it first.
+It is one small Python program. It reads bundles that are open: whoever was sent a sealed one opens it first, with `bean check-bundle -key … -unpack …`.
 
 - **What it takes.** It checks each bundle with `checkbundle.py`. A bundle that fails is refused whole, and its line names the folder and not an identity. It takes only `reference.file` records that the identity's own key signed.
 - **Strict forms.** It reads the stated SHA-256 from the record. It takes a digest only as 64 lower-case hex digits, and a dataset's name only by the pattern that bean's importer has. Anything else it calls malformed, and writes out safely.
-- **One line for each identity and dataset:** the identity's eight words, and the SHA-256 that it states. Then one of the two lines below.
+- **For each dataset and SHA-256, the identities that state it,** each by its eight words. Under each identity, one of the two lines below for each of its records.
 - **"States only."**
-- **Or:** "the share record lists a file for this record whose SHA-256, computed here, equals the stated one. Nothing shows that it is the file that the signer kept, or a file of the survey." That line is for a record with exactly one stored file, which it names. The tally computes the SHA-256 itself.
-- **The note of the share,** in quotation marks, as the signer's word, with the number of datasets in that share. The tally cuts it at a stated length. It writes out control characters and line ends, as `bean check-bundle` does. It writes out quotation marks too, which `bean check-bundle` does not, and every character that shows as blank.
+- **Or:** "the share record lists a file for this record with the stated SHA-256. The check of the bundle computed it from the file, in this run. Nothing shows that it is the file that the signer kept, or a file of the survey." That line is for a record that the share record lists a file for, with the stated SHA-256. The check of the bundle computes the file's SHA-256 in the same run, and the tally does not compute it again.
+- **The note of the share,** in quotation marks, as the signer's word, with the number of records that the tally took of that share. The tally cuts it at a stated length. It writes out control characters and line ends, as `bean check-bundle` does. It writes out quotation marks too, which `bean check-bundle` does not. It writes out every character that is not plain ASCII, so none shows as blank.
 - **How it counts.** For each dataset and digest, the identities that state it. That count is printed with the lines of its digest. An identity counts once for a digest, in however many bundles or records. The same share handed in twice is one share.
 - **Two marks.** An identity that states two digests for one dataset is listed under each, and marked, also across bundles. A digest that is in the project's own table is marked with the dataset that the table gives for it.
-- **What the tally says of that second mark.** The table is the one in bean's code, from the project's own fetches of November 2026. The mark is no sign of the right digest. The tally loads the table from `reproduce.py` by its path, and keeps no copy.
-- **Order.** Lines are in the order of the digests, not of the counts.
+- **What the tally says of that second mark.** The table is the one in bean's code, from the project's own fetches of November 2026. A match proves no fetch, and does not show that the digest is right. The mark says so, and says when the table has the digest for another dataset. The tally loads the table from `reproduce.py` by its path, and keeps no copy.
+- **Order.** Lines are in the order of the datasets and of the digests, and never of the counts.
 - **What it was given.** Each run lists the bundles that it was given: taken, or refused with the check's reason. It writes out safely every name of a folder and every reason.
 - **What it never prints of its own:** a total over a dataset, or a percentage. Nor any word that says more than that a key signed a statement.
 
@@ -241,13 +241,15 @@ It is one small Python program. It reads bundles that are open: whoever was sent
 
 One fixture of made-up identities shows each line and each mark. It is chosen so that nobody learns that the larger count is right. Every note in it says `synthetic`.
 
-- Most state a testdata file with a changed byte, and carry it.
+- Most state a testdata file with a changed byte. Three of them carry it, one in two shares, and one shares its record without the file.
 - One states the unchanged testdata file, and carries it.
+- One imports the unchanged file, and states its digest again in a record with no file. The file is listed for the first record alone.
 - One states a digest of the project's own table and carries no file. `bean append` wrote that record.
 - One states two digests for one dataset, in two bundles.
-- One states a digest that is malformed.
+- One states a digest in capitals, a dataset's name with a blank, and a digest that is a number.
+- One statement is signed by an agent of the identity, and is not counted.
 - One share has a note with a quotation mark, a backslash, and characters that show as blank. A check of a bundle lets some of those through, so the tally has its own rule for them.
-- One bundle fails its check, and is listed as refused.
+- One bundle fails its check, and is listed as refused: its carried file has other bytes. One note is longer than the limit, and is cut.
 - One identity states one digest in two bundles, and one share is handed in twice. Each counts once.
 
 ### What the documents tell a person who is asked for a receipt
