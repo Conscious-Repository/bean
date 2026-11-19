@@ -76,11 +76,13 @@ upload() {
 mkdir "$T/bin" "$T/operator" "$T/user"
 # No fetch for the build either: Go takes its modules from this machine.
 (cd "$ROOT" && GOPROXY=off GOTOOLCHAIN=local go build -o "$T/bin/" ./cmd/bean) >"$T/build.txt" 2>&1 \
-  || stop "bean was not built without a fetch: run \`make build\` once, and then this script again. $(tail -1 "$T/build.txt")"
+  || stop "bean was not built without a fetch. Build it once yourself (\`make build\`: that step may fetch), and then run this script again. $(tail -1 "$T/build.txt")"
 export PATH="$T/bin:$PATH"
 
 # ---------- 1. a relay and a file host, on localhost ----------
-web -o /dev/null "$BASE/" 2>/dev/null && stop "something listens on port $PORT already: the script starts its own server, and uses no other. Set POOL_PORT"
+# Only "nothing answers" means that the port is free: curl's exit code 7.
+web --max-time 5 -o /dev/null "$BASE/" 2>/dev/null
+[ $? = 7 ] || stop "something listens on port $PORT already: the script starts its own server, and uses no other. Set POOL_PORT"
 nak serve --blossom --hostname 127.0.0.1 --port "$PORT" >"$T/server.txt" 2>&1 </dev/null &
 SERVER=$!
 for _ in 1 2 3 4 5 6 7 8 9 10; do grep -q "relay running" "$T/server.txt" && break; sleep 0.5; done
@@ -124,12 +126,14 @@ grep '"content":"synthetic pool:' "$U/events.jsonl" >"$U/event.json"
 [ "$(wc -l <"$U/event.json" | tr -d ' ')" = 1 ] || stop "the relay does not have exactly one pointer of a synthetic pool"
 nak verify <"$U/event.json" >/dev/null 2>&1 || not_reproduced "the pointer's signature does not hold"
 # tag <name>: the value of a tag of the pointer. A pointer that has the tag
-# twice, or not at all, names nothing by it. Nor does a value with a blank
-# or a line end at its end: the shell would cut that before it is compared.
+# twice, or not at all, names nothing by it. Nor does a value in another
+# form than a URL, a SHA-256 or a number has: the shell would drop some
+# characters before the value is compared.
 tag() {
-  "$PY" -I -B -c 'import json, sys
+  "$PY" -I -B -c 'import json, re, sys
+form = {"url": "[!-~]+", "x": "[0-9a-f]{64}", "size": "[0-9]+"}[sys.argv[2]]
 found = [t[1] for t in json.load(open(sys.argv[1]))["tags"] if len(t) > 1 and t[0] == sys.argv[2]]
-if len(found) != 1 or found[0] != found[0].strip():
+if len(found) != 1 or not isinstance(found[0], str) or not re.fullmatch(form, found[0]):
     sys.exit(1)
 print(found[0])' "$U/event.json" "$1"
 }
@@ -186,4 +190,5 @@ else
   echo "What it cannot show:"
   echo "- One operator ran the host and the relay, so the two agree by one hand."
   echo "- Nothing shows who made the keys in the archive, or whether a contributor is made up. This run says nothing of them."
+  echo "- The pack's own title and caveats above are its builder's words. This run did not check them."
 fi
