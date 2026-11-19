@@ -39,6 +39,7 @@ we have a server in the lab we can host a relay + blossom on
 - **The first data on a publisher's host is those two packs** (DECISIONS 325).
 - **No package of his goes on a public host** before a key file can have a passphrase (DECISIONS 328).
 - **No publisher is special, and the documents name none** (DECISIONS 318).
+- **The address is a name under the publisher's own domain** (DECISIONS 338). Which name is open.
 
 **By the reviews of DECISIONS 313 and 317, and by ROADMAP.**
 
@@ -156,9 +157,14 @@ No stage needs a change to bean. No other step of ROADMAP waits for this plan. T
 - **A pointer:** one event of kind 1063. Its tags are `url`, `m` with `application/json`, `x` with the SHA-256, and `size`. The trial's reader refuses a pointer that has `url`, `x` or `size` twice.
 - **With no key, `nak` signs with a default key of the machine.** Each command that signs gets its key in `NOSTR_SECRET_KEY`.
 
+**Read in the settings of two public programs, and not tried.**
+
+- **`nostr-rs-relay`** has a list of the keys that may publish, and a list of the kinds that it takes. So it may hold the relay's rule alone.
+- **`blossom-server`** removes a file that none of its rules keeps. A setup with it needs a rule that keeps the two packs for good.
+
 **Not known.**
 
-- The programs, their versions, and whether each can hold the rules above.
+- Which programs run, their versions, and whether each can hold the rules above.
 - How the logs are held to a week, and to no network address.
 - Limits of size and of rate, and who patches the server.
 
@@ -182,7 +188,7 @@ No stage needs a change to bean. No other step of ROADMAP waits for this plan. T
 
 ## The owner's to decide
 
-- The network address. It shows where the lab is. How long the name is held, and who renews it.
+- Which name under the publisher's domain. It shows where the lab is. How long the name is held, and who renews it.
 - Which programs run. Who does each act on the server, who patches it, and who makes each key.
 - Whether each key is thrown away, as the author proposes. Whether a real key is used after this rehearsal, and the policy for it.
 - Whether the relay uses the name of the file host.
