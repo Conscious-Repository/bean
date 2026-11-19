@@ -80,8 +80,8 @@ new_log bad; state bad HDL_J "$(echo "$GOOD" | tr a-f A-F)"; state bad 'hdl j' "
 new_log mix; import mix "$FILE"; state mix HDL_J "$GOOD"; share mix mix "synthetic" -files $(receipts mix)
 # One imports the changed file, and shares its record without the file.
 new_log nofile; import nofile "$T/changed/HDL_J.XPT"; share nofile nofile "synthetic" $(receipts nofile)
-# One states two digests for one dataset in one share: the tally took one
-# dataset of that share.
+# One states two digests for one dataset in one share: the note of that
+# share stands under both, and says that the tally took two records of it.
 new_log pair; state pair HDL_J "$GOOD"; state pair HDL_J "$CHANGED"; share pair pair "synthetic: two digests" $(receipts pair)
 # One statement that an agent of the identity signed.
 new_log agent; b agent agent init -label assistant >/dev/null 2>&1; state agent HDL_J "$GOOD" -agent; share agent agent "synthetic" $(receipts agent)
@@ -106,7 +106,7 @@ has '^  refused   folder broken: ' "a bundle that fails its check"
 has '^  the same  folder m1-again holds the share of folder m1 again' "a share that was handed in twice"
 has '^  not read  stray.txt' "something that is no folder"
 has '^  refused   folder nobundle: the folder is not a bundle' "a folder that is no bundle"
-has '^  taken     folder agent: 0 records of a source file by .*; 1 more that the identity.s own key did not sign' "a statement that an agent signed"
+has '^  taken     folder agent: 0 records of a source file by .*; 1 more, not signed by the identity.s own key and not counted$' "a statement that an agent signed"
 
 # The counts: an identity counts once for a digest, in however many bundles.
 has "^  dataset HDL_J, SHA-256 $CHANGED: 6 identities state it\$" "the six that state the changed file"
@@ -128,16 +128,16 @@ count 'This digest is in the table of bean.s code, for BMX_J\.' 1 "the digest of
 count 'A match proves no fetch, and does not show that the digest is right' 3 "what the table's mark is not"
 
 # With a file, and without one.
-count '^      Carries a file: the share record lists a file for this record whose SHA-256, computed here, equals the stated one' 7 "records with their file: the two same lines of one identity print once"
+count '^      Carries a file: the share record lists a file for this record with the stated SHA-256\. The check of the bundle computed it from the file, in this run\.' 7 "records with their file: the two same lines of one identity print once"
 # Three have no file: the digest of the table, the record whose file is
 # listed for another record, and the record that was shared without its file.
 count '^      States only\.$' 7 "records with no file"
-has 'took 1 dataset: "synthetic: two digests"$' "one dataset in a share of two digests"
+has 'took 2 records: "synthetic: two digests"$' "two records in a share of two digests"
 
 # The note is the signer's word, in quotation marks, and cannot leave them.
-has 'took 1 dataset: "synthetic: fetched https://example.invalid/HDL_J.XPT on 2026-11-09"$' "a note, as the signer's word"
-has 'took 1 dataset: "synthetic\\u{0022} 4 identities state it \\u{005c} \\u{3164}\\u{200b} end"$' "a note with a quotation mark and blank characters, written out"
-has 'took 3 datasets: "synthetic: no fetch was made"$' "the number of datasets that the tally took of a share"
+has 'took 1 record: "synthetic: fetched https://example.invalid/HDL_J.XPT on 2026-11-09"$' "a note, as the signer's word"
+has 'took 1 record: "synthetic\\u{0022} 4 identities state it \\u{005c} \\u{3164}\\u{200b} end"$' "a note with a quotation mark and blank characters, written out"
+has 'took 3 records: "synthetic: no fetch was made"$' "the number of records that the tally took of a share"
 "$PY" -I -B -c 'import sys; t = open(sys.argv[1], encoding="utf-8").read(); sys.exit(0 if t.count(chr(34)) == 2 * t.count("the tally took") + 4 * t.count(", record ") and t.isascii() else 1)' "$T/out.txt" \
   || say "the tally has a quotation mark that it did not write itself, or a character that is not plain"
 

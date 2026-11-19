@@ -36,7 +36,7 @@ OF_ITSELF = [
     "It shows what these keys state, in the bundles that it was given. It cannot show that those are all the bundles.",
     "It does not show that the source served these bytes, and nothing about whether the data is true.",
 ]
-CARRIES = ("the share record lists a file for this record whose SHA-256, computed here, equals the stated one. "
+CARRIES = ("the share record lists a file for this record with the stated SHA-256. The check of the bundle computed it from the file, in this run. "
            "Nothing shows that it is the file that the signer kept, or a file of the survey.")
 
 
@@ -95,13 +95,12 @@ def tally(source):
         print("  taken     folder %s: %d record%s of a source file by %s%s%s" % (
             plain(name), len(own), "" if len(own) == 1 else "s", words,
             "" if not bad else "; %d of them malformed, and not counted" % bad,
-            "" if len(own) == len(receipts) else "; %d more that the identity's own key did not sign are not counted" % (len(receipts) - len(own))))
+            "" if len(own) == len(receipts) else "; %d more, not signed by the identity's own key and not counted" % (len(receipts) - len(own))))
         note = share["context"].get("note")  # the check holds that a share record has a context
-        datasets = len({d for d, _, _ in good})
         for dataset, digest, has_file in good:
             line = "States only." if not has_file else "Carries a file: " + CARRIES
             if note:
-                line += "\n        The signer's note on this share, of which the tally took %d dataset%s: \"%s\"" % (datasets, "" if datasets == 1 else "s", plain(note, MAX_NOTE))
+                line += "\n        The signer's note on this share, of which the tally took %d record%s: \"%s\"" % (len(good), "" if len(good) == 1 else "s", plain(note, MAX_NOTE))
             stated.setdefault((dataset, digest), {}).setdefault(person, []).append(line)
             by_person.setdefault((person, dataset), set()).add(digest)
 

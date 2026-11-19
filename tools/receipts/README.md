@@ -29,7 +29,7 @@ To state where and when you fetched it, add a note:
 
     -note "fetched <URL> on <day>"
 
-A share has one note. So share one dataset in a share that has such a note.
+A share has one note, and a tally shows it under each record of the share. So share one record in a share that has such a note.
 
 **What the bundle shows of you.**
 
@@ -37,7 +37,8 @@ A share has one note. So share one dataset in a share that has such a note.
 - The time of the share, with your offset from UTC.
 - The time of each import, and the size of each file.
 - Your note. Every tally of the bundle quotes it. A URL or a day in it travels with the bundle.
-- Your pairing of an agent, when you made one.
+- Your key, and the version of bean and of the importer: each record carries them.
+- A pairing of an agent, with the agent's key and label, when that agent signed a record of the share.
 
 The bundle is sealed to the asker's address for its way there. The asker opens it, may show it or pass it on, and cannot give it back.
 
@@ -60,7 +61,7 @@ It reads opened bundles: one bundle in each folder below the folder that it is g
 - The lines are in the order of the datasets and of the digests, and never of the counts.
 - It prints no total over a dataset, and no percentage.
 
-**Two lines for a record.** `States only.` Or that the share record lists a file for this record with the stated SHA-256, and the bundle carries it. The check of the bundle computes that SHA-256 in the same run. Nothing shows that it is the file that the signer kept, or a file of the survey.
+**Two lines for a record.** `States only.` Or that the share record lists a file for this record with the stated SHA-256. The tally computes no SHA-256 itself: the check of the bundle computes it from the file, in the same run. Nothing shows that it is the file that the signer kept, or a file of the survey.
 
 **Two marks.** An identity that states two digests for one dataset is marked under each. A digest that is in the table of bean's code is marked, with the dataset that the table gives. That table is from the project's own fetches of November 2026. A match proves no fetch, and does not show that the digest is right: a statement that was copied from the table matches too. The mark also says when the table has the digest for another dataset.
 
@@ -93,7 +94,7 @@ The fixture is chosen so that nobody learns that the larger count is right. Six 
 | One identity that states the unchanged file, and carries it | It counts. |
 | One that states a digest of bean's table, with no file | `States only.`, and the mark of the table. |
 | One that states both files, in two bundles | It is listed under each digest, and marked. |
-| One that states both digests in one share, with no file | The same. The tally took one dataset of that share. |
+| One that states both digests in one share, with no file | The same. The note stands under both, and says that the tally took two records of that share. |
 | One that imports the unchanged file, and states its digest again in a record with no file | It counts once. The second record gets `States only.` |
 | One that shares its record without the file | It counts, with `States only.` |
 | A digest in upper case, one with two more letters, and one that is a number | Malformed, and not counted. |
