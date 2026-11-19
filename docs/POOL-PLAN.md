@@ -1,6 +1,6 @@
 # A demonstration of the pool path, and receipts for a source file: what is decided before it is built
 
-This is for anyone who builds or reviews the demonstration. It says what will be built, in three parts, and what each part may claim. None of it is built yet. DECISIONS 331 has the account.
+This is for anyone who builds or reviews the demonstration. It says what will be built, in three parts, and what each part may claim. None of it is built yet. DECISIONS 332 has the account.
 
 **It is a test of the path with made-up people.** It is not a pool, and it is not a host. bean does not diagnose, and nothing here says whether a value is healthy.
 
@@ -285,7 +285,7 @@ Any change to the bean binary. A flag that holds a pack to a SHA-256. A new reco
 
 ## Known weak points
 
-- **It comes before the order to 0.9,** by the author's reading of the owner's request (DECISIONS 331). He can say otherwise. That order slips by about four days.
+- **It comes before the order to 0.9,** by the author's reading of the owner's request (DECISIONS 332). He can say otherwise. That order slips by about four days.
 - **Nothing shows that three parts and their audits fit four days.**
 - **A demonstration can be taken for a pool.** The pool's pack, the pointer and the tally say what they are. The committed survey pack cannot. A recording or a post is outside what bean can mark.
 - **"Reproducible" is one program run twice.** No second builder exists, so a fault of the builder gives the same wrong bytes both times.
