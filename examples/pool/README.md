@@ -8,6 +8,8 @@ One script plays two people, on this machine only. It is a test of the path, and
 
 [POOL-PLAN.md](../../docs/POOL-PLAN.md) says what this is for, and what it may claim. It is not in CI, and nothing in bean depends on it.
 
+**The pack is of made-up people. Do not put it on a real host or relay.** Sign with no key of your log, and with no key of your machine.
+
 bean does not diagnose. Nothing here says whether a value is healthy.
 
 ## What it needs
@@ -44,7 +46,7 @@ The other user's part reads the relay, the host and this repository. It reads no
 
 Every command that signs gets a key that `nak key generate` made for that one command. When `nak` prints no key, the script stops and signs nothing. One key signs the pointer, and the script checks that the event carries it.
 
-No key of a log signs for the relay or the host. With no key, `nak` signs with a default key of your machine. So the script clears `NOSTR_SECRET_KEY` first, and sets it for one command at a time.
+No key of a log signs for the relay or the host. With no key, `nak` signs with a default key of your machine: its help says so, and the author saw it. So the script clears `NOSTR_SECRET_KEY` first, and sets it for one command at a time.
 
 ## What it prints
 
@@ -63,7 +65,7 @@ Then which of bean's own words above are wrong for this pack.
 
 When a check of steps 6 to 8 does not match, it prints `NOT reproduced`, and stops. A pointer that has a tag twice names nothing, and is such a mismatch.
 
-It prints `STOPPED` when a step could not run, and says which. One case is a URL that is not on its own server: it fetches from no other host. In both cases nothing was published. Read the line, and run the script again.
+It prints `STOPPED` when a step could not run, and says which. One case is a URL that is not on its own server: it fetches from no other host. In both cases nothing left this machine. The test relay may hold the pointer by then, and it is gone when the script ends. Read the line. It names the step, and the script can be run again.
 
 ## What ties the files to the test vector
 
@@ -79,7 +81,7 @@ bean also says to compare the SHA-256 "with the one that its publisher states". 
 
 - It is not the document of a first setup that DECISIONS 325 asks for. That one is still owed before a first pack is announced.
 - `nak serve` is a test server. It keeps everything in memory, and all of it is gone when the script ends.
-- It publishes nothing. The script sends no file and no event to another machine.
+- It publishes to its own test server, and to nothing else. The script sends no file and no event to another machine.
 
 ## What else serves
 

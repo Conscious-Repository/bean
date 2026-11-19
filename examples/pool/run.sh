@@ -120,13 +120,16 @@ grep '"content":"synthetic pool:' "$U/events.jsonl" >"$U/event.json"
 [ "$(wc -l <"$U/event.json" | tr -d ' ')" = 1 ] || stop "the relay does not have exactly one pointer of a synthetic pool"
 nak verify <"$U/event.json" >/dev/null 2>&1 || not_reproduced "the pointer's signature does not hold"
 # tag <name>: the value of a tag of the pointer. A pointer that has the tag
-# twice, or not at all, names nothing by it.
+# twice, or not at all, names nothing by it. Nor does a value with a blank
+# or a line end at its end: the shell would cut that before it is compared.
 tag() {
   "$PY" -I -B -c 'import json, sys
 found = [t[1] for t in json.load(open(sys.argv[1]))["tags"] if len(t) > 1 and t[0] == sys.argv[2]]
-sys.exit(1) if len(found) != 1 else print(found[0])' "$U/event.json" "$1"
+if len(found) != 1 or found[0] != found[0].strip():
+    sys.exit(1)
+print(found[0])' "$U/event.json" "$1"
 }
-for name in url x size; do tag "$name" >/dev/null || not_reproduced "the pointer does not have the tag $name exactly once"; done
+for name in url x size; do tag "$name" >/dev/null || not_reproduced "the pointer does not name its $name once, as plain text"; done
 fetch "$(tag url)" "$U/pool.pack"
 [ "$(sha "$U/pool.pack")" = "$(tag x)" ] && [ "$(size "$U/pool.pack")" = "$(tag size)" ] || not_reproduced "the host served other bytes than the pointer names"
 "$PY" -I -B "$ROOT/tools/pack/check.py" "$U/pool.pack" >"$U/check.txt" 2>&1 || not_reproduced "the file that the pointer names is not a pack: $(tail -1 "$U/check.txt")"
