@@ -21,10 +21,10 @@ The port is 10547. Set `POOL_PORT` for another.
 
 ## What it runs on your machine, and what stays
 
-- It builds bean with Go into a scratch folder. The build fetches nothing: when a module is not on the machine, the script stops and says so. Go's own build cache stays, as after any build.
+- It builds bean with Go into a scratch folder. The build fetches nothing: when a module is not on the machine, the script stops and says so. A build that you then run yourself may fetch. Go's own build cache stays, as after any build.
 - It starts one server of `nak` on 127.0.0.1, at the port. It stops it at its end, also when you stop the script with Ctrl-C.
 - It removes its scratch folder at its end. Nothing else stays.
-- It uses no proxy, whatever your environment says. It sends no file and no event to another machine.
+- It uses no proxy, whatever your environment says: it clears the proxy variables for `nak`, and tells `curl` to use none. It sends no file and no event to another machine.
 
 ## What it does
 
@@ -61,11 +61,11 @@ Then what it cannot show:
 - One operator ran the host and the relay, so the two agree by one hand.
 - Nothing shows who made the keys in the archive.
 
-Then which of bean's own words above are wrong for this pack.
+When the two files are the vector's, it says that the vector's contributors are made up. It also says which of bean's own words above are wrong for this pack. When they are not, it says that this run tells nothing of the contributors.
 
 When a check of steps 6 to 8 does not match, it prints `NOT reproduced`, and stops. A pointer that has a tag twice names nothing, and is such a mismatch.
 
-It prints `STOPPED` when a step could not run, and says which. One case is a URL that is not on its own server: it fetches from no other host. In both cases nothing left this machine. The test relay may hold the pointer by then, and it is gone when the script ends. Read the line. It names the step, and the script can be run again.
+It prints `STOPPED` when a step could not run, and says which. One case is a URL that is not on its own server: it fetches from no other host. After `NOT reproduced` and after `STOPPED`, nothing left this machine. The test relay may hold the pointer by then, and it is gone when the script ends. Read the line: it names what did not hold. Then run the script again.
 
 ## What ties the files to the test vector
 
@@ -85,7 +85,7 @@ bean also says to compare the SHA-256 "with the one that its publisher states". 
 
 ## What else serves
 
-Finding the event needs a Nostr client, and `curl` is none. Fetching and building again need only the bytes and a SHA-256: any file host or a disk serves them. A file and its SHA-256 on a page is a full publication.
+Finding the event needs a Nostr client, and `curl` is none. Fetching and building again need only the bytes and a SHA-256: any file host or a disk serves them. For a real pack, a file and its SHA-256 on a page is a full publication.
 
 ## Without `nak`
 
