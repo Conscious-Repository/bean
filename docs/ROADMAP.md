@@ -100,7 +100,7 @@ A pack is one file of reference data, and a cell is its table for one measure an
 - It gives a person a real file to fetch.
 - The SHA-256 of each pack is also in the project's repository. The owner controls both places. A second person who states the digests from their own connection is a true second place.
 - All reviews of this order recommend it before the run. The owner decides.
-- The owner said on 2026-11-19: "we have a server in the lab we can host a relay + blossom on". [HOST-PLAN.md](HOST-PLAN.md) is a plan on paper in stages (DECISIONS 337). The author proposes it as that rehearsal, with keys that are thrown away. Nothing is set up. His word to host under the survey's terms is still owed (DECISIONS 313).
+- The owner said on 2026-11-19: "we have a server in the lab we can host a relay + blossom on". [HOST-PLAN.md](HOST-PLAN.md) is a plan on paper in stages (DECISIONS 337). The author proposes it as that rehearsal, with keys that are thrown away. Nothing is set up. No entry records his word to host under the survey's terms (DECISIONS 313).
 
 **A key file with a passphrase is in no step of this order.** No step puts a package on a public host, so no step needs it. The owner's rule stands.
 

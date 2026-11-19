@@ -4,7 +4,7 @@ This is for anyone who sets up, or reviews, a publisher's first host. Nothing of
 
 **It changes nothing in bean.** bean fetches nothing. It signs no upload and no pointer. A host and a relay are programs that exist. A publisher's network address, terms and keys are its own, and none is in this repository.
 
-**A host is a convenience, and never a gate.** A file and its SHA-256 on a page is a full publication ([REFERENCE.md](REFERENCE.md)). Any web server does that, and it is the cheapest way. A file host of the Blossom kind and a relay are additions. The owner wants the relay (DECISIONS 318), and named both for the lab's server. A person can also build each pack from the survey's files, with no host at all. That way stays.
+**A host is a convenience, and never a gate.** A file and its SHA-256 on a page is a full publication ([REFERENCE.md](REFERENCE.md)). Any web server does that, and it is the cheapest way. A file host of the Blossom kind and a relay are additions. The owner wants the relay (DECISIONS 318), and said that the lab's server can host both. A person can also build each pack from the survey's files, with no host at all. That way stays.
 
 **bean does not diagnose.** A pack says where a value lies in a sample, and not whether it is healthy.
 
@@ -34,8 +34,8 @@ we have a server in the lab we can host a relay + blossom on
 
 **By the owner.**
 
-- **A relay is in the first setup** (DECISIONS 318). The reviews said that a file host is enough to begin. He wants the relay and its pointers tried from the start. Nothing depends on the relay.
-- **The word to host is his, and no entry records that he gave it** (DECISIONS 313). The terms of the survey limit how its data is used, and say nothing on handing it on. No pack goes on a public address before that word.
+- **A relay is in the first setup** (DECISIONS 318). The reviews said that a file host is enough to begin. He wants the relay and its pointers tried from the start. In this plan the relay is in the trial of stage 2, and opens at stage 4. Nothing depends on the relay.
+- **The word to host is his, and no entry records that he gave it** (DECISIONS 313). The terms of the survey limit how its data is used, and say nothing on handing it on. So in this plan no pack goes on the server before that word.
 - **No package of his goes on a public host** before a key file can have a passphrase (DECISIONS 328).
 - **No publisher is special, and the documents name none** (DECISIONS 318).
 
@@ -85,11 +85,11 @@ No secret key of bean and no secret Nostr key of a person is on the server. A pe
 
 - **The upload key** is made at stage 3 for the two uploads, and is not kept after them. A program that takes uploads without a key needs none.
 - **The pointer key** is made at stage 4 for the two pointers, and is not kept after them. It is the throwaway identity of ROADMAP's rule.
-- **The trial of stage 2 has keys of its own.** They are not kept after it.
+- **The trial of stage 2 has keys of its own, and so has each try that must be refused.** They are made the same way, and are not kept.
 - **Each key is made as `examples/pool/run.sh` makes one:** by a command, into a variable of a shell, and into no file. Other users of a machine can see a key that a command gets. So the signer uses a machine that is theirs alone.
 - **Nobody can show that a key is gone.** A copy from before can sign again, on any relay. So a key of this plan means nothing to a reader.
 - **The cost: with the key gone, nobody can ask a relay to delete a pointer.** Whoever holds the relay removes the event there, and a copy elsewhere stays. A host that moves gets new pointers, under a new key.
-- **DECISIONS 313 calls a note under a throwaway key a test, and no more.** A pointer that is announced is more: it is public, and it stays.
+- **DECISIONS 313 calls a note under a throwaway key a test, and no more.** A pointer on an open relay is more: it is public, and it stays.
 
 ## The stages
 
@@ -98,14 +98,33 @@ The author proposes this gate. Each stage starts on the owner's word at that tim
 Without that word, an assistant does nothing on the server or on the lab's network. It does none of these for this plan:
 
 - install a program, or run a command that listens on a network;
-- open a port, or change a firewall or a name;
+- open a port, change a firewall, or register or change a name;
+- put the setup document into a repository;
 - ask for a certificate;
 - upload a file, sign, or make a key.
 
 1. **Build the two packs.** This needs no server. A person fetches the survey's files first: at most 21 MB, and [COMPARE.md](COMPARE.md) says from where. Then `bean-pack-nhanes -out <new file> <the survey's files>`: six files for the first pack, and those six with two more for the second. REFERENCE.md names them. `bean compare -pack <file>` must print that bean has the pack on record. `shasum -a 256 <file>` must give the SHA-256 in REFERENCE.md.
-2. **Choose the programs, and try them closed.** First the owner says how the server is kept apart from the lab's other machines. One file host, one relay, and what serves TLS before them. The programs listen only inside the lab's network. The server must have no public name, and no certificate from a public authority. TLS is tried with a certificate that the lab makes itself. A person tries from outside the lab, and nothing must answer. Each rule above is tried with files of random bytes, and no pack goes on the server yet. The person who does the trial writes the setup down as it is made, in a new document beside this one. It names each program, its version, and its settings. Then whoever holds the server removes the trial's files and events, and the trial's keys are not kept.
-3. **Open the file host.** The setup document is in this repository, with no key, no publisher's name, and no address inside the lab. When the program takes uploads by key, the public half of the upload key goes into the settings on the server. It does not go into this repository. The two packs go up while the server is still closed: a closed server hands nothing on. Then uploads are closed: the public half leaves the settings, and the key is not kept. A person inside the lab tries an upload of random bytes, and the host must refuse it. All of that can be undone. What follows is a publication, cannot be taken back, and needs the owner's word to host (above). The server gets its name, its public certificate, and an open port for the file host. To get a certificate, a port can have to be open first. The relay stays closed. A person outside the lab fetches each pack, and compares its SHA-256 with REFERENCE.md. They also try an upload of random bytes, and the host must refuse it. A check that fails stops the stage, and the owner decides what is next.
-4. **One pointer for each pack, and the relay opens.** The content of a pointer says plainly what the pack is, and the owner reads it before it is signed. The public half of the pointer key goes into the relay's settings. The `url` of a pointer is the address from which the person outside fetched the pack at stage 3. The two events go to the relay while it is still closed. Then the relay takes no event: the public half leaves its settings, and the key is not kept. A person inside the lab tries to publish an event under another key, and the relay must refuse it. Then the relay's port opens for reading. A person outside the lab reads each pointer from the relay, checks its signature, and fetches the pack by its `url`. They try the same, and the relay must refuse it. A check that fails stops the stage. Whoever holds the relay removes the events there, and the owner decides what is next. To announce the packs is an act of its own, and waits for its own word. The owner says where: a reader has no other way to find the address. The announcement names the address of the file host and of the relay, each SHA-256, and no key.
+2. **Choose the programs, and try them closed.** First the owner says how the server is kept apart from the lab's other machines. One file host, one relay, and what serves TLS before them. The programs listen only inside the lab's network. The server must have no public name, and no certificate from a public authority. TLS is tried with a certificate that the lab makes itself. A person tries from outside the lab, and nothing must answer. Each rule above is tried with files of random bytes, and no pack goes on the server yet. The person who does the trial writes the setup down as it is made, in a new document. It starts from the part below on what is known. It names each program, its version, and its settings. It stays out of every repository until stage 3. Then whoever holds the server removes the trial's files and events, and the trial's keys are not kept.
+3. **Open the file host.** This stage needs the owner's word to host (above). That is a word of its own, beside the word that starts the stage. In this order:
+   1. When the program takes uploads by key, the public half of the upload key goes into the settings on the server. It goes into no repository.
+   2. The two packs go up while the server is still closed.
+   3. Uploads are closed, and the public half leaves the settings. A person inside the lab tries an upload of random bytes with another key, and one with the upload key when there is one. The host must refuse each. Then the upload key is not kept.
+   4. The setup document goes into this repository. It holds no key, no publisher's name, and no address inside the lab.
+   5. The server gets its name, its public certificate, and an open port for the file host. To get a certificate, a port can have to be open first. The relay stays closed.
+   6. A person outside the lab fetches each pack, and compares its SHA-256 with REFERENCE.md. They try an upload of random bytes, and the host must refuse it.
+
+   The first three acts can be undone: whoever holds the server removes the files. The others are a publication, and cannot be taken back. A check that fails stops the stage, and the owner decides what is next.
+4. **One pointer for each pack, and the relay opens.** In this order:
+   1. The owner reads the content of each pointer before it is signed. It says plainly what the pack is. Its `url` is the address from which the person outside fetched the pack at stage 3.
+   2. The public half of the pointer key goes into the relay's settings. The two events go to the relay while it is still closed.
+   3. The relay takes no more events, and the public half leaves its settings. A person inside the lab tries to publish an event under the pointer key, and one under another key. The relay must refuse both. Then the pointer key is not kept.
+   4. The relay's port opens for reading. From here the pointers are public.
+   5. A person outside the lab reads each pointer from the relay, checks its signature, and fetches the pack by its `url`. They try to publish an event under a key of their own, and the relay must refuse it.
+   6. To announce the packs is an act of its own, and waits for its own word. The owner says where, and it is no document of this repository. A reader has no other way to find the address. The announcement names the address of the file host and of the relay, each SHA-256, and no key.
+
+   The first three acts can be undone: whoever holds the relay removes the events. After the port opens, a copy can be elsewhere. A check that fails stops the stage, and the owner decides what is next.
+
+A try from outside is one try from one network. It is a sample, and no proof.
 
 The setup document names each setting that changes after the trial: the two keys that may write, and the files that the host takes. It holds no key.
 
@@ -141,7 +160,7 @@ No stage needs a change to bean. No other step of ROADMAP waits for this plan. T
 - **The file host, and what serves TLS before it:** the network address and the time of each fetch, and which of the two packs.
 - **The network of the lab:** the address and the time of each fetch. The size of an answer can show which pack.
 - **The relay:** the network address of whoever asks, and what they ask for.
-- **Whoever answers for the name, and the reader's own network:** that a reader asked for the name.
+- **Whoever answers for the name, and the reader's own network:** that a reader asked for the name. The reader's network also sees the size of the answer.
 - **The public logs of certificates:** the name, for good.
 - **Anyone:** where the server is, and from that a guess at the publisher.
 - **A reader can show less.** They take the file from a person who has it, and check its SHA-256. Or they build the pack from the survey's files.
@@ -160,7 +179,7 @@ No stage needs a change to bean. No other step of ROADMAP waits for this plan. T
 - The network address. It shows where the lab is. How long the name is held, and who renews it.
 - Which programs run. Who does each act on the server, who patches it, and who makes each key.
 - Whether each key is thrown away, as the author proposes.
-- Who the person outside the lab is, who fetches each pack at stage 3.
+- Who the person outside the lab is, who tries and fetches at stages 2, 3 and 4.
 - How the server is kept apart from the lab's other machines. The limits of size and of rate.
 - Whether the packs are on the host before the first run with a peer.
 - Where the packs are announced, and how long the host stays up.
