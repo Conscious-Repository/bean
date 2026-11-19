@@ -42,8 +42,10 @@ a bundle or of a claim. Its own rules are these:
     different bundles that pass their check is left out, whatever their
     notes. So is an identity with two readings of one measure that count,
     and one whose reading has claims in two cohorts;
-  - two folders with one share id are one bundle, and it is taken once;
-  - a cell of fewer identities than pack/0 asks is left out.
+  - two folders with one share id are one bundle, and it is taken once.
+
+A cell has no least number of identities (DECISIONS 333): a cell of one
+identity is that identity's value, and the pack shows it.
 
 It prints one line for each identity or folder. A line on a claim that does
 not compute again holds the value of its reading. It exits 0 when it wrote
@@ -85,8 +87,7 @@ PACK_CAVEATS = [
 ]
 MEASURE_CAVEATS = ["each value is the reading of one identity id, as that identity signed it"]
 COHORT_CAVEATS = ["each identity chose this cohort; the builder cannot check that it belongs to it"]
-ARCHIVE_SHOWS = ("An archive shows every record of every bundle in it, whole: each value, each identity id and key, and each time. "
-                 "A bundle whose cell is dropped is in it as well.")
+ARCHIVE_SHOWS = "An archive shows every record of every bundle in it, whole: each value, each identity id and key, and each time."
 
 MAX_ARCHIVE = 64 << 20   # an archive is not larger than this, and its entries together are not
 MAX_BUNDLE = 1 << 20     # the records of one bundle together are not larger than this
@@ -329,14 +330,8 @@ def assemble(args, source, given, survey, survey_path, survey_sha, survey_bytes)
     if from_archive and left:
         raise Stop("the archive holds something that the builder does not take: a pack is built from an archive only when all of it is taken")
 
-    kept = {}
-    for (measure, cohort), values in sorted(cells.items()):
-        if len(values) < packcheck.MIN_N:
-            print("dropped   cell %s %s%s: %d identities, fewer than %d" % (safe(measure), COHORT_ID, safe(cohort), len(values), packcheck.MIN_N))
-        else:
-            kept[(measure, cohort)] = values
-    if not kept:
-        raise Stop("no cell has %d identities or more: no pack is written" % packcheck.MIN_N)
+    if not cells:
+        raise Stop("no identity is taken: no pack is written")
 
     archive = archive_bytes(taken)
     if len(archive) > MAX_ARCHIVE:
@@ -356,7 +351,7 @@ def assemble(args, source, given, survey, survey_path, survey_sha, survey_bytes)
         "caveats": list(PACK_CAVEATS),
         "measures": {}, "cohorts": {}, "cells": [],
     }
-    for (measure, cohort), values in sorted(kept.items()):
+    for (measure, cohort), values in sorted(cells.items()):
         m = survey["measures"][measure]
         pack["measures"][measure] = {"label": m["label"], "unit": m["unit"], "caveats": list(MEASURE_CAVEATS),
                                      "same": [{"type": s["type"], "unit": s["unit"]} for s in m["same"]]}

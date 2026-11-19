@@ -53,7 +53,7 @@ Its own rules are in [POOL-PLAN.md](../../docs/POOL-PLAN.md), under "The builder
 
 An opened bundle is what `tools/second/unseal.py -key <key file> <package> <new folder>` writes. `run.sh` does that for each package.
 
-**An archive shows every record of every bundle in it, whole:** each value, each identity id and key, and each time. A bundle whose cell is dropped is in it as well. The builder says so before it writes one.
+**An archive shows every record of every bundle in it, whole:** each value, each identity id and key, and each time. The builder says so before it writes one.
 
 Of a bundle that it takes, the builder reads the record files under `objects/`. The archive holds those, and nothing else of the folder. It does not hold the `README.txt` that bean writes into a bundle, or a file whose name starts with a dot.
 
@@ -90,7 +90,7 @@ That writes the three files into the new folder. Copy them over those of `vector
 
 ## What the test hands in, and what must happen
 
-Forty good packages give one cell of forty identities. Some of the forty logs have one value, so the cell has weights above one. One more good package is alone in another cohort: it is taken, and its cell is dropped and named. Beside them:
+Forty good packages give one cell of forty identities. Some of the forty logs have one value, so the cell has weights above one. One more good package is alone in another cohort: it is taken, and its cell has one identity. A cell has no least number of them. Beside them:
 
 | What is handed in | What must happen |
 |---|---|

@@ -100,7 +100,7 @@ for i in $(seq 1 40); do
 done
 
 # One more good contributor, alone in another cohort: it is taken, and its
-# cell is dropped, since a cell needs more identities than one.
+# cell has one identity. A cell has no least number of them (DECISIONS 333).
 new_log 41; b 41 add lab.hdl-cholesterol 50 -unit mg/dL >/dev/null 2>&1; compare 41 male-20-29 || say "log 41: no comparison was saved"
 
 # The bad ones. Each is a log of its own, so that its identity is in no
@@ -252,15 +252,15 @@ sys.stdout.flush()
 sys.exit(code)
 PYEOF
 grep -q "^taken" "$T/uni.txt" && say "a text of a claim with a line end made a line of the builder"
-grep -q "does not compute again" "$T/uni.txt" && grep -q "^STOPPED: no cell" "$T/uni.txt" || say "the builder stops on a text that a plain terminal cannot show: $(tail -1 "$T/uni.txt")"
+grep -q "does not compute again" "$T/uni.txt" && grep -q "^STOPPED: no identity is taken" "$T/uni.txt" || say "the builder stops on a text that a plain terminal cannot show: $(tail -1 "$T/uni.txt")"
 
 builder -synthetic -survey "$T/syn.pack" -survey-url https://example.invalid/survey.pack -archive-url https://example.invalid/pool-bundles.zip \
   -out "$T/pool.pack" -archive "$T/pool.zip" "$T/open" >"$T/build.txt" 2>&1 || say "the builder wrote no pack: $(tail -1 "$T/build.txt")"
 line() { grep -q "$1" "$T/build.txt" || say "the builder has no line for $2"; }
 grep -q "^survey pack sha256 $SURVEY\$" "$T/build.txt" || say "the builder does not print the SHA-256 of the survey pack"
 [ "$(grep -c '^taken ' "$T/build.txt")" = 41 ] || say "the builder took $(grep -c '^taken ' "$T/build.txt") identities, and 41 are good"
-grep -q '^dropped   cell LBDHDD pool-male-20-29: 1 identities' "$T/build.txt" || say "the builder does not drop, and name, a cell of one identity"
-grep -q 'pool-male-20-29' "$T/pool.pack" && say "the pack holds a cohort whose cell was dropped"
+grep -q '^cell      LBDHDD pool-male-20-29: n 1$' "$T/build.txt" || say "the cell of one identity, whose claim is there twice, does not have n 1"
+grep -q '"cohort":"pool-male-20-29","kind":"weights","measure":"LBDHDD","n":1,"values":\[50\],"weights":\[1\]' "$T/pool.pack" || say "the pack does not hold the cell of one identity"
 grep -q '^cell      LBDHDD pool-female-20-29: n 40$' "$T/build.txt" || say "the cell does not hold the forty good identities"
 line '^left out  folder badsig: the bundle fails its check' "a record with a bad signature"
 line 'this tool computes' "a claim with false numbers"

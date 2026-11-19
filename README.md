@@ -404,6 +404,7 @@ bean protects who wrote what, and protects your identity against a stolen device
 | [docs/REFERENCE.md](docs/REFERENCE.md) | Reference packs: public data as one file, its format, who hosts what, and the checks. |
 | [docs/REFERENCE-PLAN.md](docs/REFERENCE-PLAN.md) | What is decided for reference data before more is built, with the facts that were measured. |
 | [docs/SHARE.md](docs/SHARE.md) | Share chosen records as a bundle anyone can check: what goes in, limits, format. |
+| [docs/FIRST-RUN.md](docs/FIRST-RUN.md) | One page for two people: a first exchange with no six words read out. |
 | [docs/POOL-PLAN.md](docs/POOL-PLAN.md) | A demonstration of the pool path with made-up people, and receipts for a source file: what is decided before it is built. |
 | [docs/SHARE-PLAN.md](docs/SHARE-PLAN.md) | A seal to a reader's key: what was decided before it was built, what is built, and what it costs. |
 | [examples/blood](examples/blood/README.md) | The whole loop in one script, on a synthetic report. |

@@ -37,12 +37,10 @@ const (
 	MethodVersion = "1"
 )
 
-// MinN is the smallest cohort a cell may hold, and SmallN the size below
-// which a result is qualified as coming from a small cohort.
-const (
-	MinN   = 30
-	SmallN = 100
-)
+// SmallN is the size below which a result is qualified as coming from a
+// small cohort. A cell has no least size: its n is not below the number of
+// its distinct values, and a cell has one value or more.
+const SmallN = 100
 
 // MinNumber and MaxNumber bound each value and each weight. Inside them no
 // sum of the method overflows or underflows.
@@ -363,8 +361,8 @@ func Read(data []byte) (*Pack, error) {
 		switch {
 		case len(cell.Values) == 0 || len(cell.Values) != len(cell.Weights):
 			r.fail("%s does not have one weight for each value", where)
-		case !isNumber || n != math.Trunc(n) || n < MinN || n > MaxN:
-			r.fail("%s has an n that is not a whole number from %d to %d", where, MinN, MaxN)
+		case !isNumber || n != math.Trunc(n) || n > MaxN:
+			r.fail("%s has an n that is not a whole number up to %d", where, MaxN)
 		case int(n) < len(cell.Values):
 			r.fail("%s has more distinct values than people", where)
 		}
@@ -419,8 +417,8 @@ func (p *Pack) MeasureFor(typ, unit string) (id string, units []string) {
 	return id, units
 }
 
-// Cell returns the cell of a measure in a cohort, or nil: the pack's
-// builder leaves out a cell of fewer than MinN people.
+// Cell returns the cell of a measure in a cohort, or nil: a pack need not
+// have a cell for each pair.
 func (p *Pack) Cell(measure, cohort string) *Cell {
 	for i := range p.Cells {
 		if p.Cells[i].Measure == measure && p.Cells[i].Cohort == cohort {

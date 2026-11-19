@@ -38,6 +38,16 @@ Do not run `purge` or `gc` on the copies. Only they erase anything.
 
 ## Changes
 
+### 0.8.2 (2026-11-19)
+
+A reference pack may have a cell of any number of people. Nothing in a log changes, and no saved comparison reads differently ([docs/REFERENCE.md](docs/REFERENCE.md), DECISIONS 333).
+
+- **A pack with a cell of fewer than 30 people is read.** Until 0.8.1 bean refused the whole pack. A result from such a cell has the caveat of a small cohort, and N shows the number.
+- **Both people update first.** An earlier bean refuses such a pack: `… has an n that is not a whole number from 30 to 2147483647`. So it cannot check a comparison that was saved with one.
+- **The survey's packs do not change.** Their builder still leaves out a cell of fewer than 30 people. `bean compare` without `-pack` still gives no number for a cohort of fewer than 30.
+- **One line changes.** For a cohort that a pack has no table for, bean says: `the pack has no table of this measure for this cohort`. It gave a reason before, which was one of several.
+- **`tools/pack/check.py` reads the same packs.** Its line for an n that is too large is new: `… has an n above 2147483647`.
+
 ### 0.8.1 (2026-11-18)
 
 A reply can be sealed to the address of the person who shared. Nothing in a log changes. `bean share` and a reply with six words are as before ([docs/SHARE.md](docs/SHARE.md#a-reply-to-an-address), DECISIONS 330).

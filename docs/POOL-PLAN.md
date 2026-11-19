@@ -1,6 +1,6 @@
 # A demonstration of the pool path, and receipts for a source file: what is decided before it is built
 
-This is for anyone who builds or reviews the demonstration. It says what is built, in three parts, and what each part may claim. Part 1 is built. Parts 2 and 3 are not. DECISIONS 331 has the account.
+This is for anyone who builds or reviews the demonstration. It says what is built, in three parts, and what each part may claim. Part 1 is built. Parts 2 and 3 are not. DECISIONS 332 has the account.
 
 **It is a test of the path with made-up people.** It is not a pool, and it is not a host. bean does not diagnose, and nothing here says whether a value is healthy.
 
@@ -75,7 +75,7 @@ Each fact was checked in the code. A reviewer, or the author, ran each one with 
 
 ## Part 1: the pool path, offline and in CI
 
-It is `tools/pool/` and `make pool`. **It is built (DECISIONS 332).** [tools/pool/README.md](../tools/pool/README.md) says how to run it.
+It is `tools/pool/` and `make pool`. **It is built (DECISIONS 334).** [tools/pool/README.md](../tools/pool/README.md) says how to run it.
 
 **Two words.** The operator is whoever runs the test: here, a script. The operator makes an address with `bean address -out` and holds its key file. The builder is one Python program, and holds no key.
 
@@ -100,7 +100,7 @@ It is `tools/pool/` and `make pool`. **It is built (DECISIONS 332).** [tools/poo
 - **Every claim of a bundle counts, or the bundle is left out.** So no record rides into the archive on a claim that does not count. A bundle whose records are larger together than 1 MiB is left out too.
 - **One reading for each identity and measure.** An identity with two different bundles that pass their check is left out of the pool, whatever their notes. So is an identity with two readings of one measure that count. So is an identity whose reading has claims in two cohorts. This is the test's rule, and the author's choice. What would give more: ROADMAP's rule, which takes the latest reading. ROADMAP keeps its own rule for a real pool, where a person must be able to correct a reading.
 - **One bundle is one bundle.** A bundle is its `objects` and its `files`. Two folders with one share id that pass their check are one bundle, and it is taken once. They hold the same records and files: the share record lists each one, and the check holds the list.
-- **What it prints.** One line for each identity: taken, or left out and why. Each identity that it takes counts as one in its cell. It names each cell that it drops for having fewer than 30. A bundle that fails its check has no identity that can be trusted, so its line names the folder. The builder writes out safely every text that it quotes, so that no text can fake a line.
+- **What it prints.** One line for each identity: taken, or left out and why. Each identity that it takes counts as one in its cell. A bundle that fails its check has no identity that can be trusted, so its line names the folder. The builder writes out safely every text that it quotes, so that no text can fake a line.
 
 ### The pack
 
@@ -108,7 +108,7 @@ It is `tools/pool/` and `make pool`. **It is built (DECISIONS 332).** [tools/poo
 - **It says what it is, where a reader sees it.** A cohort's id starts with `pool-`. A cohort's text starts with `synthetic pool:`. The title says the same. The source's name, publisher and home say `none: synthetic`.
 - **Its caveats are the builder's own,** for the pack, for each measure and for each cohort. They say what the builder knows. "n counts identity ids, not people." "Whoever ran the builder said that every contributor is made up; the builder cannot check that."
 - **Its measures keep the survey pack's ids, labels, units and `same` lists.**
-- **A cell needs as many identities as `pack/0` asks: 30 today.** The builder reads that number from `tools/pack/check.py`, and keeps no copy of it. It leaves out a cell of fewer. The test vector puts 30 contributors or more into one cohort for one measure, and one cell is enough for the test.
+- **A cell has no least number of identities** (DECISIONS 333). The builder drops no cell for its size. The test vector has one cell of forty identities, and one of one.
 - **A test holds this much.** No such text names the survey or its publisher: the title, the source's name, publisher and home, and the builder's name. Nor does a caveat of the pack, of a measure or of a cohort.
 - **It names both of its inputs.** `source.files` has two entries: the archive, and the survey pack that the claims name.
 
@@ -117,14 +117,14 @@ It is `tools/pool/` and `make pool`. **It is built (DECISIONS 332).** [tools/poo
 - **From a folder,** the builder writes the archive first, and then the pack that names it. The archive holds the bundles that the builder took, and no other. It holds each bundle's `objects` and `files`, and nothing else.
 - It is written by the conditions of F3, with entries that are stored and not compressed. The builder sets every field of an entry that differs between systems. So the same bundles give the same bytes.
 - **From an archive,** the builder writes none. The pack names the SHA-256 of the file as it was given. The builder stops unless it takes every bundle in that archive. It also stops unless the file is, byte for byte, the archive that it writes of those bundles. It takes only entries that are stored, and no entry that is packed: so no entry grows when it is read.
-- The builder says, when it writes one, what an archive shows. That is every record of every bundle, whole: each value, each identity id and key, and each time. A bundle whose cell is dropped is in it too.
+- The builder says, when it writes one, what an archive shows. That is every record of every bundle, whole: each value, each identity id and key, and each time.
 - The builder reads an archive as `unseal.py` reads a package: no path that leaves its folder, no link, and a limit of size.
 
 ### Two tests, and what each is called
 
 **"The pack is what this builder gives from this archive and this survey pack."**
 
-- Three things are committed as a test vector. One archive of 41 made-up bundles: forty in one cell, and one whose cell is dropped. The survey pack that their claims name. And the SHA-256 of the pool's pack.
+- Three things are committed as a test vector. One archive of 41 made-up bundles: forty in one cell, and one in a cell of its own. The survey pack that their claims name. And the SHA-256 of the pool's pack.
 - `make pool` runs the builder on the two committed files, and compares.
 - The survey pack is committed under a name that starts `SYNTHETIC-` and ends `.pack`, and the README beside it says what it is. In the pool's pack its name is `survey.pack`: the builder does not know that a survey pack is made up. It is the one artefact here that cannot say of itself that it is made up (F5).
 - The pool pack names the two files by their URLs in the repository. Those are the repository's own, and no host that anyone is told to use.
@@ -148,7 +148,7 @@ It is `tools/pool/` and `make pool`. **It is built (DECISIONS 332).** [tools/poo
 - The damaged one is a sealed package. The others are made as opened folders, since nothing seals a folder that was changed by hand.
 - The same bundle handed in twice must be taken once.
 - Some logs have one value, so that a weight is above one. The cell must hold each distinct value once, with its count.
-- One more good log is alone in another cohort. It is taken, and its cell is dropped and named.
+- One more good log is alone in another cohort. It is taken, and its cell has one identity.
 - An archive that is damaged, packed, or written in another way than the builder writes one, is refused with a line. No run ends in a traceback.
 - The record that was not shared must be in no bundle of the archive.
 - A second build, with the bundles in another order, must give the same bytes.
@@ -293,7 +293,7 @@ Any change to the bean binary. A flag that holds a pack to a SHA-256. A new reco
 
 ## Known weak points
 
-- **It comes before the order to 0.9,** by the author's reading of the owner's request (DECISIONS 331). He can say otherwise. That order slips by about four days.
+- **It comes before the order to 0.9,** by the author's reading of the owner's request (DECISIONS 332). He can say otherwise. That order slips by about four days.
 - **Nothing shows that three parts and their audits fit four days.**
 - **A demonstration can be taken for a pool.** The pool's pack, the pointer and the tally say what they are. The committed survey pack cannot. A recording or a post is outside what bean can mark.
 - **One identity can be put out of the test's pool by a replay.** The builder leaves out an identity with two different bundles. So whoever holds another share of that identity can hand it in. That is the test's rule. A real pool needs a share that is bound to its reader, and a rule for a correction.
