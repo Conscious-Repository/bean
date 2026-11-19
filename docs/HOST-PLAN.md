@@ -20,7 +20,7 @@ we have a server in the lab we can host a relay + blossom on
 
 ## What is true today
 
-**H1. The steps ran on one machine.** `examples/pool/run.sh` uploads a file, publishes an event of kind 1063, finds it, and fetches the file. It uses the test server of `nak` 0.22.3. That server keeps everything in memory, and is no host. The trial tried none of the rules below.
+**H1. The steps ran on one machine.** `examples/pool/run.sh` uploads a file, publishes an event of kind 1063, finds it, and fetches the file. It uses the test server of `nak` 0.22.3. That server keeps everything in memory, and is no host. Of the rules below, the trial tried only the first.
 
 **H2. No real file host and no real relay has run for this project.** No program is chosen. So no rule below is tried against a real program.
 
@@ -45,7 +45,7 @@ we have a server in the lab we can host a relay + blossom on
 - **A publisher's own key waits.** First a design says how a reader knows the publisher when a key is lost. The policy for that key is the owner's to decide, and it is open. This plan makes no such key.
 - **A rehearsal with a throwaway identity comes before any real key.** Whether a real key is used after it is the owner's to decide.
 
-**The author proposes this plan as that rehearsal:** each key of it is thrown away. It is a publication all the same: the packs are the real ones, and what it makes public cannot be taken back.
+**The author proposes this plan as that rehearsal:** each key of it is thrown away. It is a publication all the same: the packs are the real ones, and what it makes public cannot be taken back. It rehearses the host, the relay and the pointers. It rehearses no bean identity of a publisher, no recovery words and no successor.
 
 ## What goes on the host
 
@@ -84,8 +84,8 @@ The author proposes this part, and the owner decides.
 
 No secret key of bean and no secret Nostr key of a person is on the server. A person signs on another machine. The server has secrets of its own: the key of the TLS certificate, and what asks for that certificate. Whether a program makes a key of its own is not known.
 
-- **The upload key** is made at stage 3 for the two uploads, and is not kept after them. A program that takes uploads without a key needs none.
-- **The pointer key** is made at stage 4 for the two pointers, and is not kept after them. It is the throwaway identity of ROADMAP's rule.
+- **The upload key** is made at stage 3 for the two uploads, and is not kept after the last try with it. A program that takes uploads without a key needs none.
+- **The pointer key** is made at stage 4 for the two pointers, and is not kept after the last try with it. It is the throwaway identity of ROADMAP's rule.
 - **The trial of stage 2 has keys of its own, and so has each try that must be refused.** They are made the same way, and are not kept.
 - **Each key is made as `examples/pool/run.sh` makes one:** by a command, into a variable of a shell, and into no file. Other users of a machine can see a key that a command gets. So the signer uses a machine that is theirs alone.
 - **Nobody can show that a key is gone.** A copy from before can sign again, on any relay. So a key of this plan means nothing to a reader.
@@ -121,7 +121,7 @@ Without that word, an assistant does nothing on the server or on the lab's netwo
    1. The owner reads the content of each pointer before it is signed. It says plainly what the pack is. Its `url` is the address from which the person outside fetched the pack at stage 3.
    2. A person makes the pointer key. Its public half goes into the relay's settings.
    3. The person signs the two events, and sends them to the relay while it is still closed.
-   4. The relay takes no more events, and the public half leaves its settings. A person inside the lab reads each event from the relay. They check its signature, its `url`, and its `x` against REFERENCE.md.
+   4. The relay takes no more events, and the public half leaves its settings. A person inside the lab reads each event from the relay. They check its signature, its `url` and its `size`, and its `x` against REFERENCE.md.
    5. That person tries to publish an event under the pointer key, and one under another key. The relay must refuse both. Then the pointer key is not kept.
    6. **The owner's word, a second time.** Then the relay's port opens for reading. From here the pointers are public.
    7. A person outside the lab reads each pointer from the relay, checks its signature, and fetches the pack by its `url`. They try to publish an event under a key of their own, and the relay must refuse it.
@@ -133,7 +133,7 @@ The author proposes that the relay uses the name and the certificate of the file
 
 A try from outside is one try from one network. It is a sample, and no proof.
 
-The setup document names each setting that changes after the trial: the two keys that may write, and the files that the host takes. It holds no key.
+The setup document names each setting that changes after the trial: where each key that may write goes, and the files that the host takes. It holds no key.
 
 **What cannot be taken back, by stage.**
 
