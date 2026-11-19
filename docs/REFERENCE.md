@@ -30,7 +30,7 @@ No service computes a comparison for a person. A request for one cell says "a ma
 
 ## What a comparison supports
 
-A comparison says where a value lies among the values of a cohort in the source's sample. It does not say whether a value is healthy. It does not diagnose, predict or advise. Each result has its n and its caveats. A pack's cell has no least size: N shows how few people a number rests on. The 30 of [COMPARE.md](COMPARE.md) is the rule of the survey's method, and of the survey's builder.
+A comparison says where a value lies among the values of a cohort in the source's sample. It does not say whether a value is healthy. It does not diagnose, predict or advise. Each result has its n and its caveats. A pack's cell has no least size. N is the number that the pack states. The 30 of [COMPARE.md](COMPARE.md) is the rule of the survey's method, and of the survey's builder. A survey's sample stands for a population, and a share that rests on a few of the sample is rough.
 
 ## Try it
 
@@ -107,7 +107,7 @@ An id is 1 to 64 letters, digits, dots, `-` and `_`, and starts with a letter or
 |---|---|
 | `measure`, `cohort` | The ids of the measure and the cohort. A pair is there once. |
 | `kind` | `weights`. Version 0 has no other kind. |
-| `n` | The number of people: a whole number from 1 to 2147483647, and not below the number of distinct values. A cell has no other least size. |
+| `n` | The number of people: a whole number from 1 to 2147483647, and not below the number of distinct values. |
 | `values` | The distinct values of the cohort, in rising order: one or more. Each is a number from 1e-12 to 1e15. |
 | `weights` | One number from 1e-12 to 1e15 for each value: the weight that the value carries. |
 
@@ -171,7 +171,7 @@ A saved comparison gives the reading's value away to anyone with the pack ([COMP
 - **The same files give the same bytes.** Write the object in canonical form. Sort the cells by measure, then by cohort. Add no time and no name of a machine.
 - **Name every source file by its SHA-256.** A reader who fetches the files from the source can then build the pack again.
 - **State your own rule for a small cell.** The format has no least size. The survey's builder leaves out a cell of fewer than 30 people: that is the method of [COMPARE.md](COMPARE.md), for a sample of a survey.
-- **Tell each contributor what a cell shows, before they contribute.** A cell lists each distinct value with its weight, beside the cohort's text. A value with a weight of one is one person's, in a cell of any size, and whoever has the pack reads it. Two packs that differ by one contributor show that person's value. bean cannot check that a builder said so. [ROADMAP.md](ROADMAP.md), under "A pool", lists what a real pool needs first.
+- **Tell each contributor what a cell shows, before they contribute.** A cell lists each distinct value with its weight, beside the cohort's text. Each listed value is the value of one contributor or more, in a cell of any size, and whoever has the pack reads it. `bean compare` prints a cell's median and its middle half: in a cell of one, that is the one value. Two packs that differ by one contributor show that person's value. bean cannot check that a builder said so. [ROADMAP.md](ROADMAP.md), under "A pool", lists what a real pool needs first.
 - **Take each `same` entry from a real reading.** Use the type and the unit that a real importer or a real report writes. A second name or unit for a quantity is a second entry.
 - **Say what does not carry over.** A caveat is part of the pack. Each comparison shows it, and each saved claim holds it.
 - **Use the weights that the source says to use.** A wrong weight gives a number that looks right.

@@ -44,10 +44,10 @@ A reference pack may have a cell of any number of people. Nothing in a log chang
 
 - **A pack with a cell of fewer than 30 people is read.** Until 0.8.1 bean refused the whole pack. A result from such a cell has the caveat of a small cohort, and N shows the number.
 - **Whoever builds such a pack, and whoever reads it, both need 0.8.2.** An earlier bean refuses the pack: `… has an n that is not a whole number from 30 to 2147483647`. So does the `check.py` of an earlier release, and its `reproduce.py` cannot compute a comparison that was saved with such a pack.
-- **With only the survey's packs, there is nothing to do.**
+- **With only the survey's packs, there is nothing to do.** Update before you open a pack with a small cell.
 - **The survey's packs do not change.** Their builder still leaves out a cell of fewer than 30 people. `bean compare` without `-pack` still gives no number for a cohort of fewer than 30.
 - **One line changes.** For a cohort that a pack has no table for, bean says: `the pack has no table of this measure for this cohort`. It gave a reason before, which was one of several.
-- **`tools/pack/check.py` reads the same packs.** Its line for an n that the format does not take is now: `… has an n that is not from 1 to 2147483647`.
+- **`tools/pack/check.py` reads the same packs.** Its line for an n that the format does not take is now: `… has an n that is not a whole number from 1 to 2147483647`.
 
 ### 0.8.1 (2026-11-18)
 
