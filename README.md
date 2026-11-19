@@ -406,6 +406,7 @@ bean protects who wrote what, and protects your identity against a stolen device
 | [docs/SHARE.md](docs/SHARE.md) | Share chosen records as a bundle anyone can check: what goes in, limits, format. |
 | [docs/FIRST-RUN.md](docs/FIRST-RUN.md) | One page for two people: a first exchange with no six words read out. |
 | [docs/POOL-PLAN.md](docs/POOL-PLAN.md) | A demonstration of the pool path with made-up people, and receipts for a source file: what is decided before it is built. |
+| [docs/HOST-PLAN.md](docs/HOST-PLAN.md) | A first host for the survey's packs: a plan on paper in stages, and what is not known yet. Nothing of it is set up. |
 | [docs/SHARE-PLAN.md](docs/SHARE-PLAN.md) | A seal to a reader's key: what was decided before it was built, what is built, and what it costs. |
 | [examples/blood](examples/blood/README.md) | The whole loop in one script, on a synthetic report. |
 | [examples/pool](examples/pool/README.md) | A trial run of the network leg of a pool, on one machine, with made-up contributors. It needs `nak`. |

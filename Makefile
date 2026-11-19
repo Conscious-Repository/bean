@@ -52,7 +52,7 @@ vuln:
 # it that can be counted: a sentence has at most 25 words. DECISIONS.md is a
 # dated log and is not rewritten.
 DOCS = README.md CORE.md SPEC.md SECURITY.md UPGRADING.md CONTRIBUTING.md \
-	docs/COMMANDS.md docs/ARCHITECTURE.md docs/ONBOARDING.md docs/SHARE.md docs/SHARE-PLAN.md docs/POOL-PLAN.md docs/FIRST-RUN.md docs/COMPARE.md \
+	docs/COMMANDS.md docs/ARCHITECTURE.md docs/ONBOARDING.md docs/SHARE.md docs/SHARE-PLAN.md docs/POOL-PLAN.md docs/HOST-PLAN.md docs/FIRST-RUN.md docs/COMPARE.md \
 	docs/IMPORTERS.md docs/ROADMAP.md docs/EXTENSIONS.md docs/DEVICE.md \
 	docs/REFERENCE.md docs/REFERENCE-PLAN.md docs/PACK-CANDIDATES.md \
 	docs/PROVIDER-INGESTION.md docs/GOVERNANCE-PROPOSAL.md \

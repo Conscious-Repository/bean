@@ -100,6 +100,7 @@ A pack is one file of reference data, and a cell is its table for one measure an
 - It gives a person a real file to fetch.
 - The SHA-256 of each pack is also in the project's repository. The owner controls both places. A second person who states the digests from their own connection is a true second place.
 - All reviews of this order recommend it before the run. The owner decides.
+- The owner said on 2026-11-19: "we have a server in the lab we can host a relay + blossom on". [HOST-PLAN.md](HOST-PLAN.md) is a plan on paper in stages (DECISIONS 337). The author proposes it as that rehearsal, with keys that are thrown away. Nothing is set up. He gave the word to host the survey's packs on 2026-11-16 (DECISIONS 314).
 
 **A key file with a passphrase is in no step of this order.** No step puts a package on a public host, so no step needs it. The owner's rule stands.
 
@@ -149,11 +150,11 @@ A pack is one file of reference data, and a cell is its table for one measure an
 
 - A file host that serves a file under its SHA-256. A file and its SHA-256 on a page is a full publication.
 - The two packs of the survey.
-- A rehearsal with a throwaway identity, before any real key.
+- A rehearsal with a throwaway identity, before any real key. It is a publication all the same: a fetched file and an event cannot be taken back.
 - A relay with a pointer to each pack, because the owner asked for it (DECISIONS 318). Nothing depends on it.
 - A pointer is a Nostr event of kind 1063, which exists. bean invents no kind.
 - The logs hold no network address of a person, and are kept for a week at most. That is the publisher's word: nobody can check it.
-- A document of the setup, in this repository, before the first pack is announced. It names each program with its version, the rule for uploads, and the tags of a pointer. It holds no key. A second publisher can copy it.
+- A document of the setup, in this repository, before the first pack is announced. [HOST-PLAN.md](HOST-PLAN.md) holds its start: what a trial run on one machine showed, and what is not known. It names each program with its version, the rule for uploads, and the tags of a pointer. It holds no key. A second publisher can copy it.
 - For the packs, the host and the relay are programs that exist.
 
 **What a pointer may claim.** It is a hint for finding a pack.
@@ -205,18 +206,18 @@ A pack is one file of reference data, and a cell is its table for one measure an
 - **Where the code lives.** Proposed: what runs offline is in this repository, and what listens on a network is not. Formats, checks, builders and the document of a setup are here. A publisher's network address, terms and keys are its own. No key is in any repository.
 - **How many spellings of one quantity are reconciled.** Proposed: the one who pools does it, in a pack's `same` list (path 4, "A pool"). bean keeps no table of names.
 - Whether the first run goes on six words, if the reply to an address is not merged when the peer is ready.
-- Where the first publisher's server runs, and under which network address.
+- Which name the first publisher's server runs under. He said on 2026-11-19 that it is a name under the publisher's own domain (DECISIONS 338). Which programs run there, and who acts on it: [HOST-PLAN.md](HOST-PLAN.md) lists what is decided, proposed and open.
 - Who the peer of the first run is, and whether values that were entered by hand are enough for it (DECISIONS 323).
 - Which host takes a package by link, once a key file can be protected.
-- Whether a publisher's real key is used after the rehearsal.
-- Whether the network leg of the demonstration goes on a real host, his own or others' (POOL-PLAN.md). A pack of made-up people on a real host can mislead.
+- Whether a publisher's real key is used after the rehearsal. DECISIONS 338 has the author's proposal: yes, as the next step, after the design for a lost key.
+- Whether the network leg of the demonstration goes on a real host, his own or others' (POOL-PLAN.md). A pack of made-up people on a real host can mislead. He said "maybe" on 2026-11-19, and DECISIONS 338 has the author's answer.
 - Whether bean gets a member for a URL, or an importer for other public files, for receipts (POOL-PLAN.md).
 - Whether the tally of receipts sets apart the identities that he lists as known (POOL-PLAN.md).
 - Whether the author's reading of his request is right: that the demonstration comes before the order to 0.9 (DECISIONS 332).
 - Whether the survey method's own floor of 30 goes as well (DECISIONS 333). The author kept it: the packs on record are built by it.
 - Whether a result from a very small cell gets words of its own (DECISIONS 333). Today a cell of one person prints a median, a middle half, and the caveat of a cohort under 100.
 - Whether the survey's next pack comes right after the demonstration of the pool path, or after 0.9.
-- Whether the survey's packs are on a host before the run. All reviews recommend it.
+- Whether the survey's packs are on a host before the run. All reviews recommend it. His answer of 2026-11-19 can be read two ways, and the author asked (DECISIONS 338).
 - Whether 1.0 can come while `pack/0` is a draft. The reviews recommend it: 1.0 then names the comparing part as not locked, and does not wait for a second source that nobody has.
 - Whether a review by a person outside the project is a condition of 1.0. The reviews recommend that it is wanted, and is no condition.
 - Whether bean ever keeps a package or a pack with the log, so that an export holds it. For a pack, that is item 7 of the work in the section "Order".
