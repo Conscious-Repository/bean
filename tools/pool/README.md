@@ -32,7 +32,9 @@ Each made-up log gets one reading, one saved comparison with a survey pack, and 
 
     bean share -for <address> -address-words "…" -yes -note "synthetic contributor" -out <new file> -type 'comparison.*'
 
-The share holds the comparison and its reading. It holds no other reading of the log.
+The share holds the comparison and its reading. It holds no other reading of the log. It also holds the identity's records, and the time of the share with its offset from UTC.
+
+The note is for a made-up log only. On a share of a person it would be false, and it is all that lets a bundle into this builder.
 
 `-yes`, address words read from the operator's own output, and one key file for every sender are for made-up logs only. A person never shares so.
 
@@ -51,7 +53,9 @@ Its own rules are in [POOL-PLAN.md](../../docs/POOL-PLAN.md), under "The builder
 
 An opened bundle is what `tools/second/unseal.py -key <key file> <package> <new folder>` writes. `run.sh` does that for each package.
 
-**An archive shows every record of every bundle in it:** each value and each identity id. The builder says so before it writes one.
+**An archive shows every record of every bundle in it, whole:** each value, each identity id and key, and each time. A bundle whose cell is dropped is in it as well. The builder says so before it writes one.
+
+Of a bundle that it takes, the builder reads the record files under `objects/`. The archive holds those, and nothing else of the folder. It does not hold the `README.txt` that bean writes into a bundle, or a file whose name starts with a dot.
 
 From a folder it writes the archive first, and then the pack that names it. From an archive it writes no archive. It stops unless it takes every bundle in that archive, and unless the file is the archive that it writes of them, byte for byte.
 
@@ -66,13 +70,13 @@ It writes over nothing.
 
 bean has no record of such a pack. `bean compare` takes it only with `-unknown-pack`, and says so with each result.
 
-bean's own lines under a result are wrong for this pack. It prints "fewer than 100 people" and "in this sample". Those are forty keys of one script.
+bean's own lines under a result are wrong for this pack. It prints "fewer than 100 people" and "in this sample". Those are forty keys of one script. It says to compare the SHA-256 "with the one that its publisher states", and this pack has no publisher. The measure keeps the survey pack's own label.
 
 ## The test vector
 
 `vector/` holds one archive of 41 made-up bundles, the survey pack that their claims name, and `pool.sha256`.
 
-`make pool` runs the builder on the two files. The pack must have the SHA-256 that `pool.sha256` states. That is all that "reproducible" means here: the same program and the same two files give the same bytes.
+`make pool` runs the builder on the two files. The pack must have the SHA-256 that `pool.sha256` states. To do it by hand, take the two URLs from the line `URL=` of `run.sh`: they are part of the pack's bytes. That is all that "reproducible" means here: the same program and the same two files give the same bytes.
 
 **`SYNTHETIC-survey.pack` calls itself the survey's.** It was built from the made-up files in `internal/nhanes/testdata`, with the survey's own builder, which is not changed here. So its title and its publisher are the survey's. Its data is made up. It is here for this test alone.
 
@@ -94,6 +98,7 @@ Forty good packages give one cell of forty identities. Some of the forty logs ha
 | A bundle with a record whose signature is bad | The folder is left out: the bundle fails its check. |
 | A claim with false numbers | The claim is not counted, and its identity is left out. |
 | A claim that names another survey pack | The same. |
+| A claim whose reading is a list, and no id | The identity is left out, and the builder does not stop. |
 | A reading that an agent signed, and a claim that an agent signed | The same. |
 | A reading whose value `pack/0` cannot hold | The same. |
 | A bundle with no note, and one with another note | The identity is left out, and the line names the folder. |
@@ -103,6 +108,8 @@ Forty good packages give one cell of forty identities. Some of the forty logs ha
 | Two readings of one measure | The identity is left out. |
 | One reading with claims in two cohorts | The identity is left out. |
 | The same bundle twice | It is taken once. |
+| One claim twice, with two times | Its reading counts once. |
+| A folder that is no bundle, with a line end in its name | It is left out, and its name is written out on one line. |
 
 The test also holds these.
 
@@ -110,6 +117,8 @@ The test also holds these.
 - The same bundles in another order give the same archive and the same pack.
 - The archive alone, with the survey pack, gives the same pack again.
 - An archive with a path that leaves its folder is refused, and nothing is written outside.
+- A bundle whose records are larger together than its limit is left out. The limit is 1 MiB, and the test holds it with a lower number.
+- When the builder's own check refuses the pack, nothing is written: no archive either.
 - An archive that is damaged or packed is refused. So is one with a link, with one entry twice, with an entry for a folder, with a comment, or with other bytes before it.
 - A claim in letters that a plain terminal cannot show does not stop the builder.
 - No run of the builder ends in a traceback.
@@ -120,4 +129,5 @@ The test also holds these.
 - That a contributor is a person. A key is free, and one script made every key here.
 - That a share was meant for the operator. Nothing binds a share to its reader, and the builder reads opened folders.
 - That the builder is right. One program builds the pack twice, and no second builder exists.
-- That the two limits of an archive hold: its size, and the number of its entries. No test reaches them.
+- That a contributor stays in. Whoever holds another share of an identity can hand it in, and that identity is then left out.
+- That the limit of an archive's size holds at its real number, 64 MiB. The test holds it with a lower number.

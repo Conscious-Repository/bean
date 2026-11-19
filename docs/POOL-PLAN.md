@@ -81,10 +81,10 @@ It is `tools/pool/` and `make pool`. **It is built (DECISIONS 332).** [tools/poo
 
 ### The script of contributors
 
-- It makes forty logs in a scratch folder of its own. It does not use the caller's `BEAN_DIR`.
+- It makes its logs in a scratch folder of its own: forty for one cell, one for another, and one for each bad input. It does not use the caller's `BEAN_DIR`.
 - Each log gets one reading, a saved comparison with the survey pack, and one more record that is not shared.
 - Each log shares once: `bean share -for <address> -address-words "…" -yes -note "synthetic contributor" -out <new file> -type 'comparison.*'`.
-- Its header says what is for made-up logs only: `-yes`, address words read from the operator's own output, and one key file for forty senders.
+- Its header says what is for made-up logs only: `-yes`, address words read from the operator's own output, and one key file for every sender.
 - It opens each package with the key file (`unseal.py`). A package that does not open is named and left out. That line is the script's.
 - What it hands on is a folder of opened bundles. From there on, nothing can tell a share that was meant for the operator from one that was passed on.
 
@@ -96,9 +96,10 @@ It is `tools/pool/` and `make pool`. **It is built (DECISIONS 332).** [tools/poo
 - **It checks each bundle** (`checkbundle.py`), and computes each claim again (`reproduce.py`). bean has no record of the survey pack. So the builder takes a claim only when it names the SHA-256 of the pack that it was given. That is what `-accept-pack` does for a person. It gives the check the records of a bundle's `objects` and the survey pack, and nothing else. It adds no check of a bundle or of a claim. Its own rules are below, and this one: a reading whose value `pack/0` cannot hold is left out, and named.
 - **Whose records count.** A claim and its reading count only when the identity's own key signed both. An agent's record does not count.
 - **The note is a tripwire.** A bundle is left out unless its share's note is exactly `synthetic contributor`. Anyone can write that note. It guards against an accident, and proves nothing.
-- **Only comparisons and their readings.** A bundle that holds another record, or any file, is left out. An archive shows all that a bundle holds.
+- **Only comparisons and their readings.** A bundle that holds another record, or a file that a record carries, is left out. An archive holds the records of a bundle, and nothing else of its folder: not the `README.txt` that bean writes there.
+- **Every claim of a bundle counts, or the bundle is left out.** So no record rides into the archive on a claim that does not count. A bundle whose records are larger together than 1 MiB is left out too.
 - **One reading for each identity and measure.** An identity with two different bundles that pass their check is left out of the pool, whatever their notes. So is an identity with two readings of one measure that count. So is an identity whose reading has claims in two cohorts. This is the test's rule, and the author's choice. What would give more: ROADMAP's rule, which takes the latest reading. ROADMAP keeps its own rule for a real pool, where a person must be able to correct a reading.
-- **One bundle is one bundle.** A bundle is its `objects` and its `files`. Two folders with one share id that pass their check, and are the same in `objects` and `files`, are one bundle. It is taken once.
+- **One bundle is one bundle.** A bundle is its `objects` and its `files`. Two folders with one share id that pass their check are one bundle, and it is taken once. They hold the same records and files: the share record lists each one, and the check holds the list.
 - **What it prints.** One line for each identity: taken, or left out and why. Each identity that it takes counts as one in its cell. It names each cell that it drops for having fewer than 30. A bundle that fails its check has no identity that can be trusted, so its line names the folder. The builder writes out safely every text that it quotes, so that no text can fake a line.
 
 ### The pack
@@ -115,8 +116,8 @@ It is `tools/pool/` and `make pool`. **It is built (DECISIONS 332).** [tools/poo
 
 - **From a folder,** the builder writes the archive first, and then the pack that names it. The archive holds the bundles that the builder took, and no other. It holds each bundle's `objects` and `files`, and nothing else.
 - It is written by the conditions of F3, with entries that are stored and not compressed. The builder sets every field of an entry that differs between systems. So the same bundles give the same bytes.
-- **From an archive,** the builder writes none. The pack names the SHA-256 of the file as it was given. The builder stops unless it takes every bundle in that archive. It also stops unless the file is, byte for byte, the archive that it writes of those bundles. It takes only entries that are stored, and no entry that is packed.
-- The builder says, when it writes one, that an archive shows every value and every identity id in it.
+- **From an archive,** the builder writes none. The pack names the SHA-256 of the file as it was given. The builder stops unless it takes every bundle in that archive. It also stops unless the file is, byte for byte, the archive that it writes of those bundles. It takes only entries that are stored, and no entry that is packed: so no entry grows when it is read.
+- The builder says, when it writes one, what an archive shows. That is every record of every bundle, whole: each value, each identity id and key, and each time. A bundle whose cell is dropped is in it too.
 - The builder reads an archive as `unseal.py` reads a package: no path that leaves its folder, no link, and a limit of size.
 
 ### Two tests, and what each is called
@@ -152,9 +153,9 @@ It is `tools/pool/` and `make pool`. **It is built (DECISIONS 332).** [tools/poo
 - The record that was not shared must be in no bundle of the archive.
 - A second build, with the bundles in another order, must give the same bytes.
 - The output of `bean compare` must say `synthetic`.
-- It pins no digest: new keys give a new pack each time (F6).
+- This second test pins no digest: new keys give a new pack each time (F6).
 
-**Wiring.** `make pool` joins `make check`, and the list of targets in `.github/workflows/ci.yml`. It runs the tally of Part 3 on its fixture as well. New documents join `DOCS` in the Makefile.
+**Wiring.** `make pool` joins `make check`, and the list of targets in `.github/workflows/ci.yml`. When part 3 is built, it runs the tally on its fixture as well. New documents join `DOCS` in the Makefile.
 
 ## Part 2: a trial run of the network leg, on one machine
 
@@ -295,6 +296,8 @@ Any change to the bean binary. A flag that holds a pack to a SHA-256. A new reco
 - **It comes before the order to 0.9,** by the author's reading of the owner's request (DECISIONS 331). He can say otherwise. That order slips by about four days.
 - **Nothing shows that three parts and their audits fit four days.**
 - **A demonstration can be taken for a pool.** The pool's pack, the pointer and the tally say what they are. The committed survey pack cannot. A recording or a post is outside what bean can mark.
+- **One identity can be put out of the test's pool by a replay.** The builder leaves out an identity with two different bundles. So whoever holds another share of that identity can hand it in. That is the test's rule. A real pool needs a share that is bound to its reader, and a rule for a correction.
+- **Keys are free, so many made-up identities can fill an archive to its limit.** The builder then stops, and writes nothing.
 - **"Reproducible" is one program run twice.** No second builder exists, so a fault of the builder gives the same wrong bytes both times.
 - **The pinned SHA-256 holds two URLs of the repository.** It changes if the repository moves, and whenever the builder's rule changes.
 - **The note `synthetic contributor` and the flag `-synthetic` are words.** A careless or dishonest person can put a real share into a public archive with them.

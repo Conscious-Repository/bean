@@ -102,7 +102,6 @@ done
 # One more good contributor, alone in another cohort: it is taken, and its
 # cell is dropped, since a cell needs more identities than one.
 new_log 41; b 41 add lab.hdl-cholesterol 50 -unit mg/dL >/dev/null 2>&1; compare 41 male-20-29 || say "log 41: no comparison was saved"
-share 41 c41 -note "synthetic contributor" -type 'comparison.*'; unseal c41 || say "the package of log 41 did not open"
 
 # The bad ones. Each is a log of its own, so that its identity is in no
 # good bundle.
@@ -147,6 +146,12 @@ print(json.dumps({"type": r["type"], "value": r["value"], "times": {"observed": 
 second_claim() { claims "$1" | "$PY" -I -B -c 'import json, sys; ids = [json.loads(l)["id"] for l in sys.stdin]; print(ids[-1] if len(ids) > 1 else "")'; }
 first_claim() { claims "$1" | "$PY" -I -B -c 'import json, sys; print(json.loads(sys.stdin.readline())["id"])'; }
 
+# Log 41 has its claim twice, with two times: bean deletes a claim that is
+# saved twice with one time. Its reading counts once.
+forge 41 'r["times"]["observed"] = dict(r["times"]["observed"], start="2026-11-09T12:01:00Z")'
+[ "$(claims 41 | wc -l | tr -d ' ')" = 2 ] || say "log 41 does not have its claim twice"
+share 41 c41 -note "synthetic contributor" -type 'comparison.*'; unseal c41 || say "the package of log 41 did not open"
+
 new_log false; b false add lab.hdl-cholesterol 52 -unit mg/dL >/dev/null 2>&1; compare false female-20-29
 TRUE=$(first_claim false)
 forge false 'c["result"]["percentile"] = 99.9; r["value"]["n"] = 99.9'
@@ -180,6 +185,9 @@ share toolarge toolarge -note "synthetic contributor" -type 'comparison.*'; unse
 # A bundle with no note, and one with another note.
 new_log nonote; b nonote add lab.hdl-cholesterol 56 -unit mg/dL >/dev/null 2>&1; compare nonote female-20-29
 share nonote nonote -type 'comparison.*'; unseal nonote
+# The same in a folder whose name starts with a dot: it is read, and named.
+new_log dotted; b dotted add lab.hdl-cholesterol 56 -unit mg/dL >/dev/null 2>&1; compare dotted female-20-29
+share dotted .dotted -type 'comparison.*'; unseal .dotted
 new_log othernote; b othernote add lab.hdl-cholesterol 57 -unit mg/dL >/dev/null 2>&1; compare othernote female-20-29
 share othernote othernote -note "synthetic contributor, and more" -type 'comparison.*'; unseal othernote
 
@@ -198,6 +206,14 @@ new_log twocohorts; b twocohorts add lab.hdl-cholesterol 61 -unit mg/dL >/dev/nu
 compare twocohorts female-20-29; compare twocohorts male-20-29
 share twocohorts twocohorts -note "synthetic contributor" -type 'comparison.*'; unseal twocohorts
 
+# A claim whose reading is a list, and no id: it gets a line, and does not
+# stop the builder.
+new_log listreading; b listreading add lab.hdl-cholesterol 65 -unit mg/dL >/dev/null 2>&1; compare listreading female-20-29
+forge listreading 'c["reading"] = ["x"]'
+LISTCLAIM=$(claims listreading | "$PY" -I -B -c 'import json, sys; print([r["id"] for r in map(json.loads, sys.stdin) if isinstance(r["context"]["reading"], list)][0])' 2>/dev/null)
+[ -n "$LISTCLAIM" ] || say "the claim whose reading is a list was not made"
+share listreading listreading -note "synthetic contributor" "$LISTCLAIM"; unseal listreading
+
 # Two shares of one identity, of which one has no note: the identity has
 # two different bundles, whatever their notes.
 new_log mixed; b mixed add lab.hdl-cholesterol 62 -unit mg/dL >/dev/null 2>&1; compare mixed female-20-29
@@ -211,6 +227,9 @@ share extra extra -note "synthetic contributor" "$(first_claim extra)" "$(b extr
 
 # Something in the folder of bundles that is no folder.
 echo stray >"$T/open/stray.txt"
+# A folder that is no bundle, with a line end in its name: the name cannot
+# make a line of the builder.
+mkdir "$T/open/"$'no-bundle\ntaken     a line that the builder did not write'
 
 # The same bundle handed in twice.
 cp -R "$T/open/c3" "$T/open/c3-again"
@@ -219,7 +238,7 @@ cp -R "$T/open/c3" "$T/open/c3-again"
 # run, and the builder must print it and not stop on it.
 mkdir "$T/uni"
 new_log unicode; b unicode add lab.hdl-cholesterol 64 -unit mg/dL >/dev/null 2>&1; compare unicode female-20-29
-forge unicode 'c["reference"]["measure"] = "\u540d\u524d"'
+forge unicode 'c["reference"]["measure"] = "\u540d\u524d\ntaken     a line that the builder did not write"'
 UNI=$(claims unicode | "$PY" -I -B -c 'import json, sys; print([r["id"] for r in map(json.loads, sys.stdin) if r["context"]["reference"]["measure"] != "LBDHDD"][0])' 2>/dev/null)
 share unicode unicode -note "synthetic contributor" "$UNI"
 "$PY" -I -B "$ROOT/tools/second/unseal.py" -key "$T/operator.key" "$T/in/unicode.bean" "$T/uni/unicode" >/dev/null 2>&1 || say "the package with the claim in other letters did not open"
@@ -232,6 +251,7 @@ code = build.main(["build.py"] + sys.argv[2:])
 sys.stdout.flush()
 sys.exit(code)
 PYEOF
+grep -q "^taken" "$T/uni.txt" && say "a text of a claim with a line end made a line of the builder"
 grep -q "does not compute again" "$T/uni.txt" && grep -q "^STOPPED: no cell" "$T/uni.txt" || say "the builder stops on a text that a plain terminal cannot show: $(tail -1 "$T/uni.txt")"
 
 builder -synthetic -survey "$T/syn.pack" -survey-url https://example.invalid/survey.pack -archive-url https://example.invalid/pool-bundles.zip \
@@ -249,15 +269,20 @@ line 'names another pack' "a claim that names another survey pack"
 [ "$(grep -c "the identity's own key did not sign its reading" "$T/build.txt")" = 1 ] || say "the builder does not name exactly one reading that an agent signed"
 line 'cannot hold the value' "a value that pack/0 cannot hold"
 line '^left out  .*: folder nonote: the note' "a bundle with no note"
+line '^left out  .*: folder \.dotted: the note' "a bundle in a folder whose name starts with a dot"
 line '^left out  .*: folder othernote: the note' "a bundle with another note"
 line 'holds more than comparisons' "a bundle with another record"
+line '^left out  .*: folder listreading: it holds more' "a claim whose reading is no id"
 line '^not read  stray.txt' "a file among the folders"
+line '^left out  folder no-bundle\\x0ataken ' "a folder with a line end in its name, written out"
 [ "$(grep -c 'two different bundles of one identity' "$T/build.txt")" = 2 ] || say "the builder does not leave out both identities that have two bundles"
+line 'two different bundles of one identity: folders mixed-a, mixed-b$' "the two folders of one identity, by their names"
 line 'two readings of one measure that count' "two readings of one measure"
 line 'a reading with claims in two cohorts' "claims in two cohorts"
 line '^the same  folder c3-again' "the same bundle handed in twice"
 # The agent's claim fails the check of a claim: the person did not sign it.
-[ "$(grep -c '^left out  .*: no claim that counts$' "$T/build.txt")" = 5 ] || say "five identities have no claim that counts, and the builder names $(grep -c 'no claim that counts$' "$T/build.txt")"
+[ "$(grep -c '^left out  .*: its bundle has a claim that does not count, or no claim$' "$T/build.txt")" = 5 ] || say "five identities have a claim that does not count, and the builder names $(grep -c 'a claim that does not count, or no claim$' "$T/build.txt")"
+grep -q '^An archive shows every record of every bundle in it, whole' "$T/build.txt" || say "the builder does not say what an archive shows, when it writes one"
 
 "$PY" -I -B "$ROOT/tools/pack/check.py" "$T/pool.pack" >"$T/pc.txt" 2>&1 || say "check.py refuses the pool's pack: $(tail -1 "$T/pc.txt")"
 names_no_survey "$T/pool.pack" || say "the pool's pack names the survey"
@@ -274,14 +299,15 @@ ok = cell["n"] == 40 and cell["values"] == distinct and cell["weights"] == [valu
 sys.exit(0 if ok else 1)
 PYEOF
 
-# The archive holds the 41 bundles that were taken, and no other. The
-# record that was not shared is in no bundle.
+# The archive holds the 41 bundles that were taken, and no other: 42
+# claims, since log 41 has its claim twice. The record that was not shared
+# is in no bundle.
 "$PY" -I -B - "$T/pool.zip" <<'PYEOF' || say "the archive is not the 41 bundles that were taken"
 import json, sys, zipfile
 z = zipfile.ZipFile(sys.argv[1])
 tops = {n.split("/")[0] for n in z.namelist()}
 types = [json.loads(z.read(n))["type"] for n in z.namelist() if "/objects/" in n]
-ok = len(tops) == 41 and "weight" not in types and types.count("comparison.percentile") == 41 and all(i.compress_type == 0 for i in z.infolist())
+ok = len(tops) == 41 and "weight" not in types and types.count("comparison.percentile") == 42 and all(i.compress_type == 0 for i in z.infolist())
 sys.exit(0 if ok else 1)
 PYEOF
 
@@ -305,6 +331,7 @@ cmp -s "$T/pool.pack" "$T/pool3.pack" || say "the archive gives another pack tha
 
 # What the builder refuses to do.
 builder -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/no.pack" "$T/pool.zip" >"$T/no.txt" 2>&1 && say "the builder ran without -synthetic"
+grep -q "Do not run it on shares of real people" "$T/no.txt" || say "without -synthetic the builder does not say what it is not for"
 builder -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/pool.pack" "$T/pool.zip" >/dev/null 2>&1 && say "the builder wrote over a pack"
 builder -synthetic -survey "$T/other.pack" -survey-url u -archive-url u -out "$T/no2.pack" "$T/pool.zip" >"$T/no2.txt" 2>&1 && say "the builder wrote a pack from an archive whose claims name another survey pack"
 grep -q "all of it is taken" "$T/no2.txt" || say "the builder does not say that it takes an archive whole or not at all"
@@ -314,6 +341,7 @@ mkdir "$T/tmp"
 TMPDIR="$T/tmp" builder -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/no3.pack" "$T/escape.zip" >"$T/no3.txt" 2>&1 && say "the builder read an archive with a path that leaves its folder"
 grep -q "not a stored file of a bundle" "$T/no3.txt" || say "the builder does not refuse an entry that leaves the folder for what it is: $(tail -1 "$T/no3.txt")"
 [ -e "$T/tmp/escape" ] && say "an entry of an archive was written outside its folder"
+[ -z "$(ls -A "$T/tmp")" ] || say "the builder left its scratch folder behind"
 # An archive that is damaged, packed, or not written as the builder writes
 # one, is refused with a line, and never with a traceback.
 "$PY" -I -B - "$T/pool.zip" "$T" <<'PYEOF' || say "the hostile archives were not made"
@@ -365,7 +393,7 @@ refused() {
 }
 refused flipped "damaged" "damaged at"
 refused packed "packed" "not a stored file of a bundle"
-refused link "a link in one entry" "not a stored file of a bundle"
+refused link "a link in one entry" "byte for byte"
 refused comment "written with a comment" "byte for byte"
 refused junk "written after other bytes" "byte for byte"
 refused twice "written with one entry twice" "not a stored file of a bundle"
@@ -373,13 +401,69 @@ refused folder "written with an entry for a folder" "not a stored file of a bund
 builder -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/no7.pack" -archive "$T/no7.zip" "$T/pool.zip" >"$T/no7.txt" 2>&1 && say "the builder took -archive with an archive"
 [ -e "$T/no7.zip" ] || [ -e "$T/no7.pack" ] && say "the builder wrote a file when it was given an archive and -archive"
 
+# The limits of size, held with a low limit so that the test needs no
+# large file. small <NAME=number> <arguments of the builder>
+small() {
+  "$PY" -I -B - "$HERE" "$@" <<'PYEOF'
+import sys
+sys.path.insert(0, sys.argv[1])
+import build
+setattr(build, *[int(x) if x.isdigit() else x for x in sys.argv[2].split("=")])
+sys.exit(build.main(["build.py"] + sys.argv[3:]))
+PYEOF
+}
+small MAX_ARCHIVE=1000 -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/big1.pack" "$T/pool.zip" >"$T/big1.txt" 2>&1 && say "the builder read an archive that is larger than the limit"
+grep -q "^STOPPED: the archive is larger than an archive can be" "$T/big1.txt" || say "an archive over the limit is not refused for what it is: $(tail -1 "$T/big1.txt")"
+small MAX_ARCHIVE=20000 -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/big2.pack" -archive "$T/big2.zip" "$T/shuffled" >"$T/big2.txt" 2>&1 && say "the builder wrote an archive that is larger than the limit"
+grep -q "^STOPPED: the archive of these bundles is larger" "$T/big2.txt" || say "bundles over the limit are not refused for what they are: $(tail -1 "$T/big2.txt")"
+[ -e "$T/big2.zip" ] || [ -e "$T/big2.pack" ] && say "the builder wrote something for bundles over the limit"
+# A bundle whose records are larger together than the limit of a bundle.
+small MAX_BUNDLE=1000 -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/big3.pack" -archive "$T/big3.zip" "$T/shuffled" >"$T/big3.txt" 2>&1 && say "the builder took bundles that are larger than the limit of a bundle"
+grep -q "its records are larger together than a bundle of this pool can be" "$T/big3.txt" || say "a bundle over the limit is not left out for what it is: $(tail -1 "$T/big3.txt")"
+# A pack that the builder's own check refuses: nothing is written, also no
+# archive. A URL that ends in a blank makes one.
+builder -synthetic -survey "$T/syn.pack" -survey-url "https://example.invalid/s " -archive-url u -out "$T/own.pack" -archive "$T/own.zip" "$T/shuffled" >"$T/own.txt" 2>&1 && say "the builder wrote a pack that its own check refuses"
+grep -q "^STOPPED: the builder made a pack that its own check refuses" "$T/own.txt" || say "the builder does not say that its own check refused the pack: $(tail -1 "$T/own.txt")"
+[ -e "$T/own.zip" ] || [ -e "$T/own.pack" ] && say "the builder wrote a file beside a pack that its own check refuses"
+# One small file, named by six entries: together they are over a limit
+# that the file itself is under.
+"$PY" -I -B - "$T/six.zip" <<'PYEOF' || say "the archive with six entries for one file was not made"
+import io, struct, sys, zipfile
+name = "a" * 64 + "/objects/bb/" + "b" * 62 + ".json"
+buf = io.BytesIO()
+with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:
+    z.writestr(zipfile.ZipInfo(name, (1980, 1, 1, 0, 0, 0)), b"x" * 100000)
+data = buf.getvalue()
+size, start = struct.unpack("<II", data[-10:-2])
+entry = data[start:start + size]
+more = b"".join(entry.replace(name.encode(), (c + name[1:]).encode()) for c in "cdef0")
+end = bytearray(data[-22:])
+end[8:12] = struct.pack("<HH", 6, 6)
+end[12:16] = struct.pack("<I", size * 6)
+open(sys.argv[1], "wb").write(data[:start] + entry + more + bytes(end))
+assert len(zipfile.ZipFile(sys.argv[1]).infolist()) == 6
+PYEOF
+small MAX_ARCHIVE=300000 -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/six.pack" "$T/six.zip" >"$T/six.txt" 2>&1 && say "the builder read an archive whose entries are larger together than the limit"
+grep -q "^STOPPED: the archive holds more than an archive can" "$T/six.txt" || say "entries over the limit are not refused for what they are: $(tail -1 "$T/six.txt")"
+
 # Nothing is written when the pack is there already: not the archive either.
 builder -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/pool.pack" -archive "$T/never.zip" "$T/shuffled" >"$T/no4.txt" 2>&1 && say "the builder wrote over a pack, from a folder"
 [ -e "$T/never.zip" ] && say "the builder wrote an archive for a pack that it could not write"
+builder -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/nofolder/x.pack" -archive "$T/never2.zip" "$T/shuffled" >"$T/no12.txt" 2>&1 && say "the builder ran with no folder for its pack"
+grep -q "^STOPPED: -out: the folder of " "$T/no12.txt" || say "the builder does not say that the folder of the pack is missing: $(tail -1 "$T/no12.txt")"
+[ -e "$T/never2.zip" ] && say "the builder wrote an archive for a pack whose folder is not there"
+builder -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/no8.pack" -archive "$T/pool.zip" "$T/shuffled" >"$T/no8.txt" 2>&1 && say "the builder wrote over an archive"
+grep -q "^STOPPED: -archive: .* is there already" "$T/no8.txt" || say "the builder does not say that the archive is there already: $(tail -1 "$T/no8.txt")"
 builder -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/one.file" -archive "$T/one.file" "$T/shuffled" >"$T/no5.txt" 2>&1 && say "the builder took one file for the pack and the archive"
 [ -e "$T/one.file" ] && say "the builder wrote a file that was named as the pack and as the archive"
 builder -synthetic -survey "$T/nothing.pack" -survey-url u -archive-url u -out "$T/no6.pack" "$T/pool.zip" >"$T/no6.txt" 2>&1 && say "the builder ran with no survey pack"
 grep -q "^STOPPED: -survey: " "$T/no6.txt" || say "the builder does not say which file is missing: $(tail -1 "$T/no6.txt")"
+builder -synthetic -survey "$T/open/stray.txt" -survey-url u -archive-url u -out "$T/no9.pack" "$T/pool.zip" >"$T/no9.txt" 2>&1 && say "the builder ran with a survey pack that is no pack"
+grep -q "^STOPPED: -survey: the file is not a pack" "$T/no9.txt" || say "the builder does not say that the survey pack is no pack: $(tail -1 "$T/no9.txt")"
+builder -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/no10.pack" "$T/open/stray.txt" >"$T/no10.txt" 2>&1 && say "the builder read a file that is no archive"
+grep -q "^STOPPED: the archive cannot be read" "$T/no10.txt" || say "the builder does not say that a file is no archive: $(tail -1 "$T/no10.txt")"
+builder -synthetic -survey "$T/syn.pack" -survey-url u -archive-url u -out "$T/no11.pack" "$T/shuffled" >"$T/no11.txt" 2>&1 && say "the builder ran on a folder with no -archive"
+grep -q "^STOPPED: a folder is given" "$T/no11.txt" || say "the builder does not ask for -archive with a folder: $(tail -1 "$T/no11.txt")"
 grep -l "Traceback" "$T"/*.txt >/dev/null 2>&1 && say "a run of the builder ended in a traceback: $(grep -l Traceback "$T"/*.txt | head -1)"
 [ -e "$T/no.pack" ] || [ -e "$T/no2.pack" ] || [ -e "$T/no3.pack" ] && say "a refused run left a pack"
 
