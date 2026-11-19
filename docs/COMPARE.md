@@ -113,7 +113,7 @@ bean compare -sex male -age 30-39 -where DR1TOT_J.DR1TPROT=90-160 -where DR1TOT_
 
 The codes and labels are from CDC's documentation of each file (`<NAME>.htm` next to the `.xpt`), read on 2026-11-09. Any other numeric variable of these three files works the same way: read its codes there first. A code such as 7 for "refused" is a value like any other to a range. Rules on other files are refused until bean has their sample weight on record.
 
-Every rule shrinks the cohort. Sex and a ten-year age range leave about 340 people. Add ethnicity and BMI and about 40 are left. Below 30 bean gives no number and N shows how many there were; below 100 the row says `small cohort`. The 30 is this method's rule. A survey's sample stands for a population, and a share that rests on a few of the sample is rough. The number is a usual rule of thumb for that, and no measurement. A pack has no such rule ([REFERENCE.md](REFERENCE.md)): its builder states its own. Widen a range before you trust a narrow cohort.
+Every rule shrinks the cohort. Sex and a ten-year age range leave about 340 people. Add ethnicity and BMI and about 40 are left. Below 30 bean gives no number and N shows how many there were; below 100 the row says `small cohort`. The 30 is this method's rule. A survey's sample stands for a population, and a percentage that rests on a few of the sample is rough. The number is a usual rule of thumb for that, and no measurement. A pack has no such rule ([REFERENCE.md](REFERENCE.md)): its builder states its own. Widen a range before you trust a narrow cohort.
 
 ## What a result means
 
