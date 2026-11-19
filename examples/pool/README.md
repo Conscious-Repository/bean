@@ -61,7 +61,7 @@ Then what it cannot show:
 - One operator ran the host and the relay, so the two agree by one hand.
 - Nothing shows who made the keys in the archive.
 
-When the two files are the vector's, it says that the vector's contributors are made up, and which of bean's own words above are wrong for this pack. When they are not, it says that this run tells nothing of the contributors.
+When the two files are the vector's, it says that the vector's contributors are made up. It also says which of bean's own words above are wrong for this pack. When they are not, it says that this run tells nothing of the contributors.
 
 When a check of steps 6 to 8 does not match, it prints `NOT reproduced`, and stops. A pointer that has a tag twice names nothing, and is such a mismatch.
 
