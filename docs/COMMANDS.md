@@ -198,22 +198,26 @@ Checks a bundle, shows what it holds when it passes, and changes nothing in it. 
 
 A reader with no terminal runs the same check in a browser. `make page` builds `bean-check.html`, one file that reads a bundle's folder or a zip file of it and sends nothing ([SHARE.md](SHARE.md)).
 
-### `reply -to <what you received> [-key <file>] -out <new file> <id> <note> [<id> <note>]...`
+### `reply -to <what you received> [-key <file>] [-for <address> [-address-words "<eight words>"] [-yes]] -out <new file> <id> <note> [<id> <note>]...`
 
 Signs notes about records that someone shared with you, and seals them for that person. [SHARE.md](SHARE.md) ("A signed reply") says what a reply holds and what it shows.
 
 - `-to` is a sealed package, or a bundle's folder or zip file. It must pass `check-bundle`. For a sealed package bean asks for its six words on standard input. A package that is sealed to your address opens with `-key <file>`. Then bean first says what a key shows, and what to ask the signer.
 - Each `<id>` names a record of that share: its id from the check, or the first 6 or more hex digits. The id of the share record names the share itself. Each `<note>` is a text of 1 to 4000 bytes. Put `--` before the first id when a note starts with `-`.
 - It needs your own log and key: a note is signed with your key, about the other person.
-- It writes one new file, sealed with six words, and prints the words and your identity words. That is so also when the share came sealed to your address. Your log gets a `reply` record: to whom, to which share, how many notes. The notes are in the file only.
+- Without `-for`, it writes one new file, sealed with six words, and prints the words and your identity words. That is so also when the share came sealed to your address. Your log gets a `reply` record: to whom, to which share, how many notes. The notes are in the file only.
+- `-for <address>` seals the reply to an address that the person you reply to gave you. bean takes an address from this flag only. It asks for that person's eight address words before it opens what you received, or takes `-address-words`. `-yes` never stands in for them.
+- With `-for`, bean says before it writes that you cannot open the reply again, and what such a seal means. On a terminal it then asks `Write the reply with <n> notes? [y/N]`. `-yes` skips that. Without a terminal and without `-yes` it writes nothing. `-address-words` and `-yes` go with `-for` only.
+- With `-for` it prints no six words. It makes the file new and empty, then adds the `reply` record, which says `"seal": "recipient"`, then writes the bytes.
 
-### `accept [-label <name>] [-words "<eight words>"] [-yes] <reply>`
+### `accept [-label <name>] [-words "<eight words>"] [-yes | -key <file>] <reply>`
 
-Checks a reply to a share of yours and takes its notes into your log. It asks for the six words. A file that is sealed to a key is not a reply of this bean, and bean says so. Then it shows the share, the eight identity words of whoever signed, and each note with the record that it is about. Then it asks.
+Checks a reply to a share of yours and takes its notes into your log. It asks for the six words. A reply that is sealed to your address opens with `-key <file>`, your key file. Then bean first says that anyone who has your address can seal to it. Without `-key`, bean says that the file is sealed to a key. Then it shows the share, the eight identity words of whoever signed, and each note with the record that it is about. Then it asks.
 
 - `-label` is the name under which this person's notes show. The first reply of an identity needs it. An identity keeps its name, and a name belongs to one identity. A name has 1 to 64 characters: the letters a to z, digits, single spaces, and `. ' _ - @`. It does not start with the word `peer`. The label of an agent follows the same rule, and is not the name of a peer.
 - `-words` are the identity words that the person read to you. When they are not the signer's, nothing is taken.
 - `-yes` skips the question, for scripts, and needs `-words`. Without a terminal and without `-yes` nothing is taken.
+- `-yes` does not go with `-key`: exit 2. A program that holds your key file could make the identity words from the reply itself. So `accept -key` asks on a terminal, and takes nothing without one.
 - It takes notes about records of that share and nothing else. A reply that holds anything more is refused whole. So is a reply for another person, or of a key that you unpaired.
 - It refuses a reply that shows its identity's chain of keys shorter than you have seen it, or with another history. That is how a retired key shows itself.
 - It adds the notes and one `agent.pair` record of yours that says the key is a peer's, with the name. A note that you deleted is not taken again.

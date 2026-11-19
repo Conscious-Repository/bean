@@ -14,7 +14,7 @@ Three things are still missing. Two people cannot see their records side by side
 
 The owner set the next aim on 2026-11-18 (DECISIONS 325). Two people share, and see their records side by side. A person compares with a group, from a pack that a publisher hosts. Three reviews, one for each paragon, judged the plan in laps. They changed its order and added rules.
 
-**The design for a seal to a reader's key went on beside the view of two people, by the owner's word.** He chose that seal as the way a package travels. Its first step is built (DECISIONS 327). The owner decided on 2026-11-18 that a reply to an address comes before the first run with a peer (DECISIONS 328). The order below says what happens if it is late.
+**The design for a seal to a reader's key went on beside the view of two people, by the owner's word.** He chose that seal as the way a package travels. Its first step is built (DECISIONS 327), and its second (DECISIONS 330). The owner decided on 2026-11-18 that a reply to an address comes before the first run with a peer (DECISIONS 328). The order below says what happens if it is late.
 
 **What does not change.** The core, the record format and `pack/0`. bean fetches nothing. No health record goes to a relay, and no service computes a comparison.
 
@@ -31,8 +31,8 @@ The owner set the next aim on 2026-11-18 (DECISIONS 325). Two people share, and 
    - What does an earlier bean say about such a package? The answer of today is below.
    - Does the check page open with a key, and does it make one?
 4. **Seal to a key**, in the two steps of SHARE-PLAN.md, each with its own audit. The address is a recipient of the `age` format, so bean invents nothing.
-   - **Step 1 is built** on `main`, to be released as 0.8.0 (DECISIONS 327): `bean address`, `bean share -for`, and `-key` on `check-bundle` and on `reply -to`. [SHARE.md](SHARE.md) says how to use it and what it costs.
-   - **Step 2 is not built:** a reply to an address, and `bean accept -key`. Until then a reply makes six words.
+   - **Step 1 is built,** and released as 0.8.0 (DECISIONS 327): `bean address`, `bean share -for`, and `-key` on `check-bundle` and on `reply -to`. [SHARE.md](SHARE.md) says how to use it and what it costs.
+   - **Step 2 is built,** to be released as 0.8.1 (DECISIONS 330): `bean reply -for <address>`, and `bean accept -key`. Without `-for` a reply makes six words.
    - **Decided by the owner (DECISIONS 328):** a key file with a passphrase comes before any package of his goes on a public host.
 5. **A builder of a pool, with synthetic contributors**, under `tools/` (path 4, "A pool"). It is a test of the path, and not a pool. Proposed: it is not in the order to 0.9 below, since it gives a person nothing until a group that can reach 30 exists. The owner chose it (DECISIONS 325), and he decides whether it waits.
 
@@ -69,10 +69,13 @@ A pack is one file of reference data, and a cell is its table for one measure an
    - SHARE.md and SECURITY.md say already what a copy of a key file opens, and that a lost one opens nothing again. The README points to them, and adds one thing: bean does not encrypt a key file, so keep it as any secret key is kept.
    - One case in `tools/smoke.sh` restores from an export, and opens an old package with a key file that was kept apart.
    - Then a tag and a release with the check page, on the owner's word.
-2. **Second: a reply to an address** ("Seal to a key" in the list above, its second half). Three points are for its design and its audit.
+2. **Second: a reply to an address** ("Seal to a key" in the list above, its second half). Three points are for its design and its audit. **It is built (DECISIONS 330). The merge and the tag wait for the owner's word.** What was decided on each point is after the point, and the audit judged each by name.
    - **A bundle and a reply get a way to say their format.** Today only a record has a version. The mark is a design of its own, on paper. It is ready before the audit of the reply ends, so that the audit can say whether the reply must carry it. It does not hold the reply up. A file with no mark is format 0. A build from before the mark may refuse a file that carries it: then UPGRADING.md says so, and both people update first. If the mark is built, `tools/second` and the vectors change with it.
+     - **Decided in the build: the reply does not carry a mark.** It is format 0 of a reply, and release 0.8.0 refuses its seal by name. The mark is a step of its own before the clock of 1.0 starts. The design on paper proposes a member of the signed share record and reply record. Whether it comes before 0.9 is the owner's to decide.
    - **The gate of `bean accept -key`.** With `-yes` and `-words`, a program that runs as the person and holds the key file takes a peer's notes. It can make the eight words from the reply itself. The reviews of this order recommend that `-yes` does not work with `-key`. The audit decides.
+     - **Decided in the build: `-yes` does not go with `-key`.** It is a usage error. `bean accept -key` asks on a terminal, and a program that makes a terminal of its own still answers it.
    - **Where a reply goes.** Only to an address that the sender gave by a second channel, never to one that a package carries.
+     - **Built so:** bean takes an address from `-for` only, behind the gate of the address words, and reads none from a package.
 3. **Third: the first real run with a peer** (the first entry of the list above). Its round trip needs no six words. It needs identity words once, and address words.
    - Both people update first.
    - The two compare identity words by voice once. Each gives the other an address, and its address words by a second channel.
@@ -265,7 +268,7 @@ A pack is one file of reference data, and a cell is its table for one measure an
 
 - The first peers are people who already know and trust each other (the owner, 2026-11-11). So steps 1 to 3 come first, and step 4 waits.
 - A reply from a reader who has only a browser. The page would make a key for that reader and sign with it. A key that the page makes is later (SHARE-PLAN.md).
-- A peer's notes in the peer's own log. Today the peer keeps the reply file and its words. Their log holds only a record that they replied.
+- A peer's notes in the peer's own log. Today the peer keeps the reply file and its words. Their log holds only a record that they replied. A peer who replies to an address cannot open the reply again.
 - A reply to a reply. Today a note is about a record of a share, and the owner answers with a new share.
 - Who runs the place where cards live: nobody (people pass addresses by hand), an open network, or AION?
 - A spelling that no pack has waits for a pack (REFERENCE-PLAN decision 4). A table of names waits for a real case (DECISIONS 323).

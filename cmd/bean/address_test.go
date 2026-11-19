@@ -549,9 +549,13 @@ func TestShareFor(t *testing.T) {
 	if lines, ok := checkBundle(unpacked); !ok {
 		t.Errorf("the unpacked folder does not pass:\n%s", strings.Join(lines, "\n"))
 	}
-	// bean accept takes a reply, and this bean seals a reply with words.
-	if stdout, errs, code := run(t, f.log, "", "accept", "-label", "Ana", f.pkg); code != 1 || strings.Contains(errs, prompt) || !strings.Contains(errs, "bean accept takes a reply, and this bean seals a reply with words") {
+	// bean accept asks for no words for a file that is sealed to a key, and
+	// says how to open it. With the key, a share is not a reply.
+	if stdout, errs, code := run(t, f.log, "", "accept", "-label", "Ana", f.pkg); code != 1 || strings.Contains(errs, prompt) || !strings.Contains(errs, "Open it with bean accept -key <your key file>") {
 		t.Errorf("accept on a package that is sealed to a key: %d\n%s\n%s", code, stdout, errs)
+	}
+	if stdout, errs, code := run(t, f.log, "", "accept", "-key", f.key, "-label", "Ana", f.pkg); code != 1 || !strings.Contains(errs, "this is a share, not a reply") {
+		t.Errorf("accept -key on a share: %d\n%s\n%s", code, stdout, errs)
 	}
 
 	// The one check of what the signer signed about the seal. Someone seals
@@ -645,7 +649,7 @@ func TestWriteForKey(t *testing.T) {
 	path := filepath.Join(dir, "p.bean")
 	// The good case, and what each step sees.
 	var order []string
-	err := writeForKey(path, data, id, func() error {
+	err := writeForKey(path, data, shareWritten, id, func() error {
 		got, err := os.ReadFile(path)
 		if err != nil || len(got) != 0 {
 			t.Errorf("when the record is added, the file is not there and empty: %v, %d bytes", err, len(got))
@@ -661,7 +665,7 @@ func TestWriteForKey(t *testing.T) {
 	}
 	// A file that is there already: nothing is written, and no record.
 	recorded := false
-	err = writeForKey(path, []byte("other"), id, func() error { recorded = true; return nil }, fillFile)
+	err = writeForKey(path, []byte("other"), shareWritten, id, func() error { recorded = true; return nil }, fillFile)
 	if got, _ := os.ReadFile(path); err == nil || !strings.HasPrefix(err.Error(), "nothing was shared: ") || recorded || !bytes.Equal(got, data) {
 		t.Errorf("onto a file that is there: %v, recorded %v", err, recorded)
 	}
@@ -669,7 +673,7 @@ func TestWriteForKey(t *testing.T) {
 	// of the package was written.
 	path = filepath.Join(dir, "q.bean")
 	filled := false
-	err = writeForKey(path, data, id, func() error { return errors.New("disk full") }, func(*os.File, []byte) error { filled = true; return nil })
+	err = writeForKey(path, data, shareWritten, id, func() error { return errors.New("disk full") }, func(*os.File, []byte) error { filled = true; return nil })
 	if _, serr := os.Stat(path); err == nil || !strings.Contains(err.Error(), "nothing was shared: the share record could not be added to your log, and the empty file is removed: disk full") || filled || serr == nil {
 		t.Errorf("the record fails: %v, filled %v, the file is there: %v", err, filled, serr == nil)
 	}
@@ -679,7 +683,7 @@ func TestWriteForKey(t *testing.T) {
 		f.Write(d[:5])
 		return errors.New("no space left")
 	}
-	err = writeForKey(path, data, id, func() error { return nil }, part)
+	err = writeForKey(path, data, shareWritten, id, func() error { return nil }, part)
 	if err == nil {
 		t.Fatal("a file that was not written whole is not an error")
 	}
@@ -704,7 +708,7 @@ func TestWriteForKey(t *testing.T) {
 	os.Mkdir(locked, 0o700)
 	defer os.Chmod(locked, 0o700)
 	path = filepath.Join(locked, "r.bean")
-	err = writeForKey(path, data, id, func() error { return nil }, func(f *os.File, d []byte) error {
+	err = writeForKey(path, data, shareWritten, id, func() error { return nil }, func(f *os.File, d []byte) error {
 		f.Write(d[:5])
 		os.Chmod(locked, 0o500)
 		return errors.New("no space left")
@@ -727,7 +731,7 @@ func TestWriteForKey(t *testing.T) {
 	// The same for the empty file, when the record fails.
 	os.Chmod(locked, 0o700)
 	path = filepath.Join(locked, "s.bean")
-	err = writeForKey(path, data, id, func() error { os.Chmod(locked, 0o500); return errors.New("disk full") }, fillFile)
+	err = writeForKey(path, data, shareWritten, id, func() error { os.Chmod(locked, 0o500); return errors.New("disk full") }, fillFile)
 	if err == nil || !strings.Contains(err.Error(), "could not be removed: delete it") || strings.Contains(err.Error(), "is removed") {
 		t.Errorf("the record fails, and the empty file stays: %v", err)
 	}
@@ -755,26 +759,18 @@ func TestSealPackageTo(t *testing.T) {
 	}
 }
 
-// TestShareForOnATerminal: with a terminal and no -address-words, bean
-// asks for the address words before it shows the review, also with -yes.
-// The review says what a seal to an address means, before it asks. This
-// runs bean on a terminal that Python makes.
-func TestShareForOnATerminal(t *testing.T) {
+// onTerminal runs bean in the log on a terminal that Python makes, and
+// answers each prompt in turn. It returns what bean wrote on the terminal,
+// and its exit code. The test is skipped when there is no python3.
+func onTerminal(t *testing.T, log string, answers [][2]string, args ...string) (string, int) {
+	t.Helper()
 	python, err := exec.LookPath("python3")
 	if err != nil {
 		t.Skip("python3 is needed, to give bean a terminal")
 	}
-	log, where := t.TempDir(), t.TempDir()
-	run(t, log, "", "init")
-	id, _, _ := run(t, log, "", "add", "weight", "81.2", "-unit", "kg")
-	id = strings.TrimSpace(id)
-	_, address, words := newAddress(t, "reader.key")
-	// onTerminal runs bean on a terminal, and answers each prompt in turn.
-	onTerminal := func(answers [][2]string, args ...string) (string, int) {
-		t.Helper()
-		// A prompt that the test does not expect gets no answer: after 20
-		// seconds bean is stopped, and the run counts as failed (exit 124).
-		const script = `
+	// A prompt that the test does not expect gets no answer: after 20
+	// seconds bean is stopped, and the run counts as failed (exit 124).
+	const script = `
 import os, pty, select, signal, sys, time
 n = int(sys.argv[1])
 answers = [(sys.argv[2 + 2 * i].encode(), sys.argv[3 + 2 * i].encode()) for i in range(n)]
@@ -807,26 +803,41 @@ sys.stdout.buffer.write(seen)
 _, status = os.waitpid(pid, 0)
 sys.exit(124 if late else os.waitstatus_to_exitcode(status))
 `
-		argv := []string{"-I", "-c", script, fmt.Sprint(len(answers))}
-		for _, a := range answers {
-			argv = append(argv, a[0], a[1])
-		}
-		cmd := exec.Command(python, append(append(argv, os.Args[0]), args...)...)
-		cmd.Env = append(os.Environ(), "BEAN_TEST_MAIN=1", "BEAN_DIR="+log, "BEAN_NOW=", "GORACE=atexit_sleep_ms=0")
-		out, err := cmd.Output()
-		code := 0
-		if ee, ok := err.(*exec.ExitError); ok {
-			code = ee.ExitCode()
-		} else if err != nil {
-			t.Fatal(err)
-		}
-		return strings.ReplaceAll(string(out), "\r\n", "\n"), code
+	argv := []string{"-I", "-c", script, fmt.Sprint(len(answers))}
+	for _, a := range answers {
+		argv = append(argv, a[0], a[1])
+	}
+	cmd := exec.Command(python, append(append(argv, os.Args[0]), args...)...)
+	cmd.Env = append(os.Environ(), "BEAN_TEST_MAIN=1", "BEAN_DIR="+log, "BEAN_NOW=", "GORACE=atexit_sleep_ms=0")
+	out, err := cmd.Output()
+	code := 0
+	if ee, ok := err.(*exec.ExitError); ok {
+		code = ee.ExitCode()
+	} else if err != nil {
+		t.Fatal(err)
+	}
+	return strings.ReplaceAll(string(out), "\r\n", "\n"), code
+}
+
+// TestShareForOnATerminal: with a terminal and no -address-words, bean
+// asks for the address words before it shows the review, also with -yes.
+// The review says what a seal to an address means, before it asks. This
+// runs bean on a terminal that Python makes.
+func TestShareForOnATerminal(t *testing.T) {
+	log, where := t.TempDir(), t.TempDir()
+	run(t, log, "", "init")
+	id, _, _ := run(t, log, "", "add", "weight", "81.2", "-unit", "kg")
+	id = strings.TrimSpace(id)
+	_, address, words := newAddress(t, "reader.key")
+	onTerm := func(answers [][2]string, args ...string) (string, int) {
+		t.Helper()
+		return onTerminal(t, log, answers, args...)
 	}
 	const gate, ask = "Type the eight address words that the reader gave you, then Enter:", "? [y/N] "
 	// Wrong words at the prompt: nothing is shown of the review, and
 	// nothing is written.
 	out := filepath.Join(where, "p.bean")
-	seen, code := onTerminal([][2]string{{gate, "abandon ability able about above absent absorb abstract"}}, "share", "-for", address, "-out", out, id)
+	seen, code := onTerm([][2]string{{gate, "abandon ability able about above absent absorb abstract"}}, "share", "-for", address, "-out", out, id)
 	if code != 1 || !strings.Contains(seen, "these are not the address words of this address") || strings.Contains(seen, "To share, into") || shares(t, log) != 0 {
 		t.Fatalf("wrong words on a terminal: %d\n%s", code, seen)
 	}
@@ -834,7 +845,7 @@ sys.exit(124 if late else os.waitstatus_to_exitcode(status))
 		t.Errorf("bean shows the address words at the gate:\n%s", seen)
 	}
 	// The words, then the review with its lines, then the answer.
-	seen, code = onTerminal([][2]string{{gate, words}, {ask, "y"}}, "share", "-for", address, "-out", out, id)
+	seen, code = onTerm([][2]string{{gate, words}, {ask, "y"}}, "share", "-for", address, "-out", out, id)
 	if code != 0 || shares(t, log) != 1 {
 		t.Fatalf("share -for on a terminal: %d\n%s", code, seen)
 	}
@@ -848,7 +859,7 @@ sys.exit(124 if late else os.waitstatus_to_exitcode(status))
 		}
 	}
 	// A share with six words has none of these lines.
-	seen, _ = onTerminal([][2]string{{ask, "n"}}, "share", "-seal", "-out", filepath.Join(where, "w.bean"), id)
+	seen, _ = onTerm([][2]string{{ask, "n"}}, "share", "-seal", "-out", filepath.Join(where, "w.bean"), id)
 	for _, line := range forKeyLines {
 		if strings.Contains(seen, line) {
 			t.Errorf("the review of a share with six words says: %s", line)
@@ -863,7 +874,7 @@ sys.exit(124 if late else os.waitstatus_to_exitcode(status))
 	errFile := filepath.Join(where, "stderr.txt")
 	t.Setenv("BEAN_TEST_STDERR", errFile)
 	out3 := filepath.Join(where, "r.bean")
-	seen, code = onTerminal([][2]string{{gate, words}}, "share", "-yes", "-for", address, "-out", out3, id)
+	seen, code = onTerm([][2]string{{gate, words}}, "share", "-yes", "-for", address, "-out", out3, id)
 	t.Setenv("BEAN_TEST_STDERR", "")
 	said, _ := os.ReadFile(errFile)
 	if _, err := os.Stat(out3); code != 1 || err == nil || !strings.Contains(string(said), "needs the eight address words") || strings.Contains(string(said), gate) {
@@ -871,11 +882,11 @@ sys.exit(124 if late else os.waitstatus_to_exitcode(status))
 	}
 	// -yes skips the review, and never the address words.
 	out2 := filepath.Join(where, "q.bean")
-	seen, code = onTerminal([][2]string{{gate, "abandon ability able about above absent absorb abstract"}}, "share", "-yes", "-for", address, "-out", out2, id)
+	seen, code = onTerm([][2]string{{gate, "abandon ability able about above absent absorb abstract"}}, "share", "-yes", "-for", address, "-out", out2, id)
 	if _, err := os.Stat(out2); code != 1 || err == nil || shares(t, log) != 1 {
 		t.Errorf("-yes with wrong words on a terminal: %d\n%s", code, seen)
 	}
-	seen, code = onTerminal([][2]string{{gate, words}}, "share", "-yes", "-for", address, "-out", out2, id)
+	seen, code = onTerm([][2]string{{gate, words}}, "share", "-yes", "-for", address, "-out", out2, id)
 	if _, err := os.Stat(out2); code != 0 || err != nil || strings.Contains(seen, "To share, into") {
 		t.Errorf("-yes with the words on a terminal: %d\n%s", code, seen)
 	}
