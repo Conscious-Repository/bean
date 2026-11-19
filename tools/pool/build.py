@@ -30,8 +30,9 @@ a bundle or of a claim. Its own rules are these:
     "synthetic contributor". That is a tripwire against an accident, and no
     proof: anyone can write the note;
   - a bundle is left out when it holds more than comparisons and the
-    readings that they are about: another record, or any file that a
-    record carries. An archive shows all the records of a bundle;
+    readings that they are about: another record, or a record that keeps
+    a file. The check of a bundle holds that a carried file is the file of
+    such a record. An archive shows all the records of a bundle;
   - a claim counts when it computes again with the survey pack that the
     builder was given, and the identity's own key signed its reading. The
     check of a claim holds that the person signed the claim. A bundle with
@@ -59,7 +60,6 @@ import shutil
 import sys
 import tempfile
 import zipfile
-import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "second"))
@@ -106,8 +106,8 @@ def members(folder):
     bundle: bytes}, or None when they are larger together than MAX_BUNDLE."""
     out, size = {}, 0
     for here, dirs, names in os.walk(os.path.join(folder, "objects")):
-        dirs[:] = sorted(d for d in dirs if not d.startswith("."))
-        for name in sorted(n for n in names if not n.startswith(".")):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for name in [n for n in names if not n.startswith(".")]:
             full = os.path.join(here, name)
             size += os.path.getsize(full)
             if size > MAX_BUNDLE:
@@ -115,12 +115,6 @@ def members(folder):
             with open(full, "rb") as f:
                 out[os.path.relpath(full, folder).replace(os.sep, "/")] = f.read()
     return out
-
-
-def carries_files(folder):
-    """True when the bundle has a file under files/. Nothing of it is read."""
-    base = os.path.join(folder, "files")
-    return os.path.isdir(base) and any(not n.startswith(".") for n in os.listdir(base))
 
 
 def archive_bytes(bundles):
@@ -132,7 +126,6 @@ def archive_bytes(bundles):
         for sid in sorted(bundles):
             for rel in sorted(bundles[sid]):
                 info = zipfile.ZipInfo("%s/%s" % (sid, rel), ZIP_TIME)
-                info.compress_type = zipfile.ZIP_STORED
                 info.create_system = 3
                 info.external_attr = 0o100644 << 16
                 z.writestr(info, bundles[sid][rel])
@@ -147,7 +140,7 @@ def open_archive(data, into):
     with the builder's own bytes holds, in assemble."""
     try:
         z = zipfile.ZipFile(io.BytesIO(data))
-    except (zipfile.BadZipFile, NotImplementedError, OSError, ValueError) as err:
+    except Exception as err:  # whatever goes wrong: the file is no archive that can be read
         raise Stop("the archive cannot be read: %s" % err)
     with z:
         infos = z.infolist()
@@ -162,7 +155,7 @@ def open_archive(data, into):
         for info in infos:
             try:
                 content = z.read(info)
-            except (zipfile.BadZipFile, RuntimeError, NotImplementedError, EOFError, zlib.error, OSError, ValueError) as err:
+            except Exception as err:  # whatever goes wrong: the entry is damaged
                 raise Stop("the archive is damaged at %s: %s" % (safe(info.filename)[:120], err))
             full = os.path.join(into, *info.filename.split("/"))
             os.makedirs(os.path.dirname(full), exist_ok=True)
@@ -176,9 +169,9 @@ def read_bundle(name, folder, survey_path):
     that passed its check is not taken, when it is not."""
     try:
         problems, facts = checkbundle.check(folder)
-    except (OSError, KeyError, TypeError, ValueError, AttributeError, IndexError) as err:
+    except Exception as err:  # whatever goes wrong in the check: the bundle is not one that passed
         problems, facts = ["the bundle cannot be read as one: %s: %s" % (type(err).__name__, err)], None
-    if problems or not facts:
+    if problems:
         # The check names the folder by its path, which says nothing here.
         return "refused", "the bundle fails its check: %s" % sorted(problems)[0].replace(folder, "the folder")
     share, person, holds = facts[0], facts[1], facts[7]
@@ -188,7 +181,7 @@ def read_bundle(name, folder, survey_path):
         return "bundle", got
     claims = [r for r in holds if r.get("type") == "comparison.percentile"]
     about = {c["context"]["reading"] for c in claims if isinstance(c.get("context"), dict) and isinstance(c["context"].get("reading"), str)}
-    if any(r.get("type") != "comparison.percentile" and r["id"] not in about for r in holds) or carries_files(folder):
+    if any(r.get("type") != "comparison.percentile" and r["id"] not in about for r in holds) or any(r.get("blobs") for r in holds):
         got["why"] = "it holds more than comparisons and the readings that they are about"
         return "bundle", got
     files = got["files"] = members(folder)
@@ -205,7 +198,7 @@ def read_bundle(name, folder, survey_path):
             # The survey pack is the only pack among the inputs: a claim
             # that names another pack does not compute again.
             reproduce.check(claim, inputs)
-        except (reproduce.Missing, KeyError, TypeError, ValueError, AttributeError, OSError, OverflowError, packcheck.NotPlaced) as err:
+        except Exception as err:  # whatever goes wrong in the check: the claim does not count
             got["notes"].append("claim %s does not compute again: %s" % (short, err))
             continue
         ref, reading = claim["context"]["reference"], inputs.records[claim["context"]["reading"]]
@@ -236,7 +229,7 @@ def build(args):
     source = args["input"]
     from_archive = os.path.isfile(source)
     if from_archive and args["archive"]:
-        raise Stop("an archive is given: -archive names a new one, and the builder writes none from an archive")
+        raise Stop("the input is a file: -archive names a new archive, and the builder writes none when it reads one")
     if not from_archive and not args["archive"]:
         raise Stop("a folder is given: -archive names the new archive that the pack will name")
     for flag, new in (("-out", args["out"]), ("-archive", args["archive"])):
@@ -304,9 +297,9 @@ def assemble(args, source, given, survey, survey_path, survey_sha, survey_bytes)
             for measure, cohort, rid, _ in b["counted"]:
                 by_measure.setdefault(measure, set()).add(rid)
                 by_reading.setdefault(rid, set()).add(cohort)
-            reason = b["why"]
-            if reason:
-                pass
+            reason = None
+            if b["why"]:
+                reason = b["why"]
             elif b["notes"]:
                 reason = "a claim of its bundle does not count"
             elif not b["counted"]:
@@ -323,7 +316,7 @@ def assemble(args, source, given, survey, survey_path, survey_sha, survey_bytes)
             continue
         b = bundles[0]
         taken[b["share"]] = b["files"]
-        for measure, cohort, _, value in sorted(set(b["counted"])):
+        for measure, cohort, _, value in set(b["counted"]):
             cells.setdefault((measure, cohort), []).append(value)
         print("taken     %s: %d of its readings" % (words, len(set(r for _, _, r, _ in b["counted"]))))
 
@@ -359,7 +352,7 @@ def assemble(args, source, given, survey, survey_path, survey_sha, survey_bytes)
         distinct = sorted(set(values))
         pack["cells"].append({"measure": measure, "cohort": COHORT_ID + cohort, "kind": "weights", "n": len(values),
                               "values": distinct, "weights": [values.count(v) for v in distinct]})
-        print("cell      %s %s%s: n %d" % (safe(measure), COHORT_ID, safe(cohort), len(values)))
+        print("cell      %s %s%s: n %d" % (measure, COHORT_ID, cohort, len(values)))
     data = (rebuild_nhanes.canonical(pack) + "\n").encode("utf-8")
     try:
         packcheck.parse_pack(data)
