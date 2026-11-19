@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+# run.sh: the tally of receipts on a fixture of made-up identities
+# (docs/POOL-PLAN.md, part 3). It makes the fixture new each time, in a
+# scratch folder of its own, and never reads the caller's log.
+#
+# Every identity here is made up, and every note says `synthetic`. `-yes`
+# and a plain folder for a share are for made-up logs only: a person reads
+# the review, and seals a share to its reader.
+#
+# The fixture is chosen so that nobody learns that the larger count is
+# right: most identities state a file with one changed byte.
+set -u
+HERE=$(cd "$(dirname "$0")" && pwd)
+ROOT=$(cd "$HERE/../.." && pwd)
+PY=${PY:-python3}
+FILE=$ROOT/internal/nhanes/testdata/HDL_J.XPT
+T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
+(cd "$ROOT" && go build -o "$T/bin/" ./cmd/bean ./cmd/bean-import-nhanes) || { echo "build failed"; exit 1; }
+export PATH="$T/bin:$PATH" BEAN_NOW=2026-11-09T12:00:00Z
+unset BEAN_DIR
+rc=0
+say() { echo "FAIL: $*"; rc=1; }
+sha() { "$PY" -I -B -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$1"; }
+mkdir "$T/logs" "$T/in" "$T/changed"
+b() { local n=$1; shift; bean -dir "$T/logs/$n" "$@"; }
+new_log() { mkdir "$T/logs/$1" && b "$1" init </dev/null >/dev/null 2>&1 || { echo "init of log $1 failed"; exit 1; }; }
+import() { b "$1" import nhanes -yes "$2" >/dev/null 2>&1 || say "log $1: the import of $2 failed"; }
+# receipts <log> [SHA-256]: the ids of its records of a source file, or of
+# those that state the SHA-256.
+receipts() {
+  b "$1" ls -json -type reference.file | "$PY" -I -B -c 'import json, sys
+print("\n".join(r["id"] for r in map(json.loads, sys.stdin) if len(sys.argv) < 2 or r["context"]["sha256"] == sys.argv[1]))' ${2:+"$2"}
+}
+# share <log> <name of the folder> <note> <ids or flags ...>
+share() {
+  local n=$1 name=$2 note=$3; shift 3
+  b "$n" share -yes -note "$note" -out "$T/in/$name" "$@" </dev/null >/dev/null 2>&1 || say "log $n: the share $name was not made"
+}
+# state <log> <dataset> <SHA-256> [-agent]: a record of a source file with
+# no file at all. bean append writes it: a record proves no fetch.
+state() {
+  local n=$1 dataset=$2 digest=$3; shift 3
+  "$PY" -I -B -c 'import json, sys; print(json.dumps({"type": "reference.file", "value": {"n": 1, "unit": "{file}"}, "times": {"observed": None},
+    "source": {"system": "nhanes", "adapter": "made-up@0", "ref": None},
+    "context": {"assurance": "unsigned-file", "bytes": 33440, "dataset": sys.argv[1], "sha256": sys.argv[2]}}))' "$dataset" "$digest" >"$T/state.jsonl"
+  b "$n" append "$@" <"$T/state.jsonl" >"$T/append.txt" 2>&1 || say "log $n: the statement was not appended: $(tail -1 "$T/append.txt")"
+}
+
+# The test file with one changed byte, under its own name. The byte is in
+# the last value of the last row: the file ends with eight spaces.
+"$PY" -I -B -c 'import sys; d = bytearray(open(sys.argv[1], "rb").read()); d[-9] ^= 1; open(sys.argv[2], "wb").write(d)' "$FILE" "$T/changed/HDL_J.XPT"
+GOOD=$(sha "$FILE"); CHANGED=$(sha "$T/changed/HDL_J.XPT")
+TABLE=$("$PY" -I -B -c 'import sys; sys.path.insert(0, sys.argv[1]); import reproduce; print(reproduce.KNOWN["HDL_J"])' "$ROOT/tools/compare")
+
+# Three identities state the changed file, and carry it. The second sends
+# two shares of its one record. The third's note tries to end its quotation
+# and to show as blank.
+for n in m1 m2 m3; do new_log $n; import $n "$T/changed/HDL_J.XPT"; done
+share m1 m1 "synthetic: fetched https://example.invalid/HDL_J.XPT on 2026-11-09" -files $(receipts m1)
+share m2 m2-a "synthetic" -files $(receipts m2)
+share m2 m2-b "synthetic, sent again" -files $(receipts m2)
+ODD=$(printf 'synthetic" 4 identities state it \\ \343\205\244\342\200\213 end')
+share m3 m3 "$ODD" -files $(receipts m3)
+# One states the unchanged file, and carries it.
+new_log u1; import u1 "$FILE"; share u1 u1 "synthetic" -files $(receipts u1)
+# One states the digest of the project's own table, and has no file.
+new_log t1; state t1 HDL_J "$TABLE"; share t1 t1 "synthetic: no fetch was made" $(receipts t1)
+# One states two digests for one dataset, in two bundles.
+new_log two; import two "$FILE"; import two "$T/changed/HDL_J.XPT"
+share two two-a "synthetic" -files $(receipts two "$GOOD"); share two two-b "synthetic" -files $(receipts two "$CHANGED")
+# One states a digest that is malformed, and one a dataset's name that is.
+new_log bad; state bad HDL_J "$(echo "$GOOD" | tr a-f A-F)"; state bad 'hdl j' "$GOOD"; share bad bad "synthetic" $(receipts bad)
+# One statement that an agent of the identity signed.
+new_log agent; b agent agent init -label assistant >/dev/null 2>&1; state agent HDL_J "$GOOD" -agent; share agent agent "synthetic" $(receipts agent)
+# One bundle whose carried file is not the file that its record states.
+new_log broken; import broken "$FILE"; share broken broken "synthetic" -files $(receipts broken)
+echo "other bytes" >>"$T/in/broken/files/$GOOD"
+# One share handed in twice, and something that is no folder.
+cp -R "$T/in/m1" "$T/in/m1-again"
+echo stray >"$T/in/stray.txt"
+
+"$PY" -I -B "$HERE/tally.py" "$T/in" >"$T/out.txt" 2>&1 || say "the tally stopped: $(tail -1 "$T/out.txt")"
+has() { grep -q -- "$1" "$T/out.txt" || say "the tally has no line for $2"; }
+count() { [ "$(grep -c -- "$1" "$T/out.txt")" = "$2" ] || say "the tally has $(grep -c -- "$1" "$T/out.txt") lines for $3, and not $2"; }
+
+# What it was given.
+count '^  taken ' 10 "bundles that it took"
+has '^  refused   folder broken: ' "a bundle that fails its check"
+has '^  the same  folder m1-again holds the share of folder m1 again' "a share that was handed in twice"
+has '^  not read  stray.txt' "something that is no folder"
+has '^  taken     folder agent: 0 records of a source file by .*; 1 more that the identity.s own key did not sign' "a statement that an agent signed"
+
+# The counts: an identity counts once for a digest, in however many bundles.
+has "^  dataset HDL_J, SHA-256 $CHANGED: 4 identities state it\$" "the four that state the changed file"
+has "^  dataset HDL_J, SHA-256 $GOOD: 2 identities state it\$" "the two that state the unchanged file"
+has "^  dataset HDL_J, SHA-256 $TABLE: 1 identity states it\$" "the one that states the table's digest"
+count '^  dataset ' 3 "digests"
+# Lines are in the order of the digests, and not of the counts.
+"$PY" -I -B -c 'import re, sys; d = re.findall(r"^  dataset \S+, SHA-256 ([0-9a-f]{64})", open(sys.argv[1]).read(), re.M); sys.exit(0 if d == sorted(d) and len(d) == 3 else 1)' "$T/out.txt" \
+  || say "the digests are not in their own order"
+
+# The two marks.
+count 'this identity states 2 digests for HDL_J' 2 "the identity that states two digests"
+count 'This digest is in the table of bean.s code, for HDL_J' 1 "the digest of the project's own table"
+has 'That is no sign of the right digest' "what the table's mark is not"
+
+# With a file, and without one.
+count '^      Carries a file: the share record lists a file for this record whose SHA-256, computed here, equals the stated one' 7 "records with their file"
+count '^      States only\.$' 1 "a record with no file"
+
+# The note is the signer's word, in quotation marks, and cannot leave them.
+has 'which has 1 dataset: "synthetic: fetched https://example.invalid/HDL_J.XPT on 2026-11-09"$' "a note, as the signer's word"
+has 'which has 1 dataset: "synthetic\\u{0022} 4 identities state it \\u{005c} \\u{3164}\\u{200b} end"$' "a note with a quotation mark and blank characters, written out"
+"$PY" -I -B -c 'import sys; t = open(sys.argv[1], encoding="utf-8").read(); sys.exit(0 if t.count(chr(34)) == 2 * t.count("which has") + 4 * t.count(", record ") and t.isascii() else 1)' "$T/out.txt" \
+  || say "the tally has a quotation mark that it did not write itself, or a character that is not plain"
+
+# Malformed statements are listed, and not counted.
+count '^  .*, record [0-9a-f]\{12\}: dataset ' 2 "malformed statements"
+
+# What it says of itself, and what it never says.
+has '^This tally counts keys, and a key is free\.$' "what it counts"
+has '^A statement can be copied with no fetch' "a statement that is copied"
+has 'It cannot show that those are all the bundles' "the bundles that it was not given"
+has '^It does not show that the source served these bytes' "what it does not show"
+# Identity words are free words, so only numbers are looked for here.
+grep -qiE '%|percent|[0-9]+ (of|out of) [0-9]+' "$T/out.txt" && say "the tally prints a percentage, or a count out of a total"
+grep -q "Traceback" "$T/out.txt" && say "the tally ended in a traceback"
+
+# Nothing to read, and no folder.
+mkdir "$T/empty"
+"$PY" -I -B "$HERE/tally.py" "$T/empty" >"$T/empty.txt" 2>&1 || say "the tally stops on a folder with no bundle"
+grep -q "nothing: no record of a source file was taken" "$T/empty.txt" || say "the tally does not say that it took nothing"
+"$PY" -I -B "$HERE/tally.py" "$T/nothing-here" >"$T/none.txt" 2>&1 && say "the tally ran with no folder"
+grep -q "^STOPPED: " "$T/none.txt" || say "the tally does not say that the folder is missing"
+
+[ $rc = 0 ] && echo "receipts: the tally lists what ten made-up bundles state, and says what that does not show"
+[ -n "${RECEIPTS_SHOW:-}" ] && cat "$T/out.txt"
+exit $rc
