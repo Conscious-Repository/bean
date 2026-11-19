@@ -76,7 +76,7 @@ A pack is one file of reference data, and a cell is its table for one measure an
      - **Decided in the build: `-yes` does not go with `-key`.** It is a usage error. `bean accept -key` asks on a terminal, and a program that makes a terminal of its own still answers it.
    - **Where a reply goes.** Only to an address that the sender gave by a second channel, never to one that a package carries.
      - **Built so:** bean takes an address from `-for` only, behind the gate of the address words, and reads none from a package.
-3. **Third: the first real run with a peer** (the first entry of the list above). Its round trip needs no six words. It needs identity words once, and address words.
+3. **Third: the first real run with a peer** (the first entry of the list above). [FIRST-RUN.md](FIRST-RUN.md) is its sheet, one page for the two people. Its round trip needs no six words. It needs identity words once, and address words.
    - Both people update first.
    - The two compare identity words by voice once. Each gives the other an address, and its address words by a second channel.
    - The packages go by a channel that the two already use. No package of the owner's goes on a public host until a key file can be protected.
