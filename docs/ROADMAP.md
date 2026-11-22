@@ -8,20 +8,20 @@ A person can keep a log, and import lab reports, Apple Health and CSV files. The
 
 **bean is in use.** A second person keeps a log with it, and the owner keeps his own. So `main` is a release, whether or not it has a tag (DECISIONS 310). A log that an earlier build wrote must read the same in a later build, or [UPGRADING.md](../UPGRADING.md) says what changes.
 
-Three things are still missing. Two people cannot see their records side by side. A device cannot sign what it captures. Only one public source has been built into a pack. They are in the four paths below.
+Two things are still missing. A device cannot sign what it captures. Only one public source has been built into a pack. They are in the four paths below.
 
 ## Next: a first run with a peer, a seal to a reader's key, and a first pool (2026-11-18)
 
-The owner set the next aim on 2026-11-18 (DECISIONS 325). Two people share, and see their records side by side. A person compares with a group, from a pack that a publisher hosts. Three reviews, one for each paragon, judged the plan in laps. They changed its order and added rules.
+The owner set the next aim on 2026-11-18 (DECISIONS 325). Two people share. A person compares with a group, from a pack that a publisher hosts. On 2026-11-21 the owner dropped the view of two people side by side (DECISIONS 342). Three reviews, one for each paragon, judged the plan in laps. They changed its order and added rules.
 
-**The design for a seal to a reader's key went on beside the view of two people, by the owner's word.** He chose that seal as the way a package travels. Its first step is built (DECISIONS 327), and its second (DECISIONS 330). The owner decided on 2026-11-18 that a reply to an address comes before the first run with a peer (DECISIONS 328). The order below says what happens if it is late.
+**The design for a seal to a reader's key started at once, by the owner's word.** He chose that seal as the way a package travels. Its first step is built (DECISIONS 327), and its second (DECISIONS 330). The owner decided on 2026-11-18 that a reply to an address comes before the first run with a peer (DECISIONS 328). The order below says what happens if it is late.
 
 **What does not change.** The core, the record format and `pack/0`. bean fetches nothing. No health record goes to a relay, and no service computes a comparison.
 
 **The steps in bean.** Their order is below, under "The order to 0.9". This list keeps the numbers by which other sections name the steps. A step that touches a key or a share has its own audit and its own release.
 
 1. **A first run with a real peer.** The rules are below. By the owner's word, a reply to an address is built before it.
-2. **Two people side by side** (path 2, step 3). The view shows readings and notes, and no photo. The first run shows what it must hold.
+2. **Dropped: two people side by side** (DECISIONS 342). Once a package checks, `bean check-bundle` shows the peer's records. bean shows no merged view. The number stays, so that the other steps keep theirs.
 3. **A design for sealing to a reader's key, with its own audit** (path 1, step 2). **Done on paper:** [SHARE-PLAN.md](SHARE-PLAN.md) (DECISIONS 326). It answers these questions.
    - Where is a reader's key kept, and which copies of a log hold it?
    - How does a sender know that an address is the reader's? A second channel must confirm it before a package is sealed.
@@ -44,7 +44,7 @@ A pack is one file of reference data, and a cell is its table for one measure an
 
 - What "a user uploads data" means: "Import into own log".
 - Who walks the loop at 1.0: "People with a terminal".
-- What "compare against pools of user data" is at 1.0: "Side by side, two people".
+- What "compare against pools of user data" is at 1.0: "Side by side, two people". **Changed since.** The 30 that this answer rested on is gone (DECISIONS 333). On 2026-11-21 the owner dropped the view (DECISIONS 342).
 - When a reply to an address is built: "Before the first run".
 - What 1.0 promises. His own words: "maybe we should plan to leave this at .9 for a while too until we're positive formats are locked".
 - Whether a key file with a passphrase is built before any package of his goes on a public host: "Yes, before a public host".
@@ -53,12 +53,11 @@ A pack is one file of reference data, and a cell is its table for one measure an
 
 **The owner decided the points of the list above. The rest is the author's proposal:** what 0.9 holds, the order, and the rules for 1.0. Reviewers who had not seen the work judged it, one for each paragon, and DECISIONS 328 has the account. Their reviews are not kept. He can change any of it.
 
-**0.9 is the loop for two people with a terminal, with the survey's packs.**
+**0.9 is the loop for people with a terminal: import, share 1:1 and get an answer, and compare with a pack** (DECISIONS 342).
 
 1. Import into your own log.
 2. Share 1:1 and get an answer: with six words, or with identity words and address words.
-3. Compare with a pack of the survey, which bean has on record. A person builds it with `bean-pack-nhanes` from the survey's files, which [COMPARE.md](COMPARE.md) lists. Or they fetch it, when the packs are on a host.
-4. Set your records next to one peer's. bean computes nothing across the two.
+3. Compare with a pack of the survey, which bean has on record. A person builds it with `bean-pack-nhanes` from the survey's files, which [COMPARE.md](COMPARE.md) lists. Or they fetch it, when the packs are on a host. A pack of a small pool of peers is read the same way, since a cell has no least number (DECISIONS 333).
 
 **0.9 is not the owner's whole loop, and its status says so first.** No pool exists, and no other entity hosts a pack.
 
@@ -85,14 +84,7 @@ A pack is one file of reference data, and a cell is its table for one measure an
    - Each person runs at their own terminal every command that prints a health value. An assistant helps as ONBOARDING.md says: it sees exit codes and counts, and no value.
    - The run is timed from the install on.
    - If the reply to an address is not merged when the peer is ready, the owner says whether the run goes on six words.
-4. **Fourth: side by side, for two people** ("Two people side by side" in the list above). It follows the rules of DECISIONS 323 (b) and (c), and no more: rows next to rows. The run shapes it. These points are for its design and its audit.
-   - The view takes a package as an argument, as `bean check-bundle` does. It keeps nothing.
-   - A peer's row is the signer's word, checked against no lab and no device. It shows what the bundle carries: who signed, and whether the record names a file. It shows the source in quotation marks, as the signer named it. A row of the peer and a row of the person are marked apart. A shared row means the same type and the same unit, as each signer wrote them. It does not mean the same measurement. The view shows each text of a peer safely, and says that a share is chosen records and no whole history.
-   - A row that an agent of the peer signed says so. The peer chose to share it, and that is all that stands behind it.
-   - The record format has no mark for "entered by hand", and this step adds none. The view says of no row that it is from a lab.
-   - The time of a share is the signer's claim. bean cannot tell whether a key is still current.
-   - A peer shows under a name only when the person accepted a reply of theirs before. If not, the view shows eight identity words and a key.
-5. **Fifth: 0.9.** Its status is written on that day, from what is true then. From here the version stays at 0.9 until the owner says that the formats are locked.
+4. **Fourth: 0.9.** Its status is written on that day, from what is true then. From here the version stays at 0.9 until the owner says that the formats are locked.
 
 **Beside the order, and before the first run: the survey's packs on a host** (phase 2 of the section "Order"). It is the owner's own act, with no code in bean. The owner decided on 2026-11-19 that it comes before the first run with a peer (DECISIONS 339). No other step waits for it.
 
@@ -115,7 +107,7 @@ A pack is one file of reference data, and a cell is its table for one measure an
 
 - **bean holds a pack to a SHA-256 that the person gives.** It is one new flag of `bean compare -pack`, as `reproduce.py` has with `-accept-pack`. A result says: held to the SHA-256 that you gave, and bean cannot tell where you got it. It is built before a pack of a second publisher is announced. `-unknown-pack` does not change with it. Until then, the compare of a SHA-256 for such a pack is the person's own act. 0.9 does not count it as part of the loop.
 - **The builder of a pool** (the last entry of the list above). It is no step of the loop of 0.9. The owner asked for a demonstration of it, with made-up people (DECISIONS 332). By the author's reading it comes before this order.
-- **A pack from a pool of real people, a view of more than two people, and device signing.** Each waits for its real case (paths 2, 3 and 4).
+- **A pack from a pool of real people, and device signing.** Each waits for its real case (paths 4 and 3).
 
 **Proposed: 1.0 is the day the formats are locked.** It is no step of work. This plan proposes the rules of that promise, and not its words. Whoever makes the promise writes it on that day.
 
@@ -196,7 +188,6 @@ A pack is one file of reference data, and a cell is its table for one measure an
 
 **Known and left.**
 
-- Two people who name one thing with two types are not lined up (DECISIONS 323).
 - The review before a share does not warn of what a photo's file can hold. That is a small change, with its own audit.
 - The second user's reports hold no reading (DECISIONS 306). As the peer of the run, he would enter values by hand.
 - A reading that no pack takes waits for a pack. Only a publisher can add it.
@@ -254,14 +245,11 @@ A pack is one file of reference data, and a cell is its table for one measure an
 
 1. **One person to one person.** Path 1 is this step. A person sends a sealed package, such as a biopsy report with their notes, to a peer they already know. The peer checks it and reads it.
 2. **A reply that the owner can keep. Done:** `bean reply` and `bean accept` ([SHARE.md](SHARE.md), DECISIONS 290). A peer who runs bean signs notes about the records that they received, and sends them back sealed. The owner compares the peer's identity words and the reply's id, and takes the notes into their log under a name. A note is text about one shared record, and a reply that holds anything else is refused. The log remembers how far a peer's chain of keys had got, so a retired key takes nothing later. `bean unpair` takes a name back.
-3. **Side by side.** bean shows the records of two people next to each other, each with its signer and its caveats. It computes nothing across them. The rules are in DECISIONS 323. The steps:
-   1. The view. It reads the person's log and one bundle that checks. Its command is not named yet. Readings with the same type and printed unit share a row. A pack that the person names adds other spellings.
-   2. The checks of `bean accept` for a bundle, so that a peer shows under their name.
-   3. One run with a real peer. It comes before the view (the order in the section "Next"). Each has readings: from a report in a layout that bean reads, or entered by hand (DECISIONS 325). The second user's reports wait for the reader of unknown layouts (smaller open paths).
+3. **Side by side. Dropped by the owner on 2026-11-21 (DECISIONS 342).** Once a package checks, `bean check-bundle` shows the peer's records, with who signed each. bean shows no merged view. The first run with a peer stays: it is step 1 of the section "Next". The number stays, so that "path 2, step 4" still names finding each other.
 4. **Finding each other.** A person publishes a short card: a condition, what they look for, and a reader address. It holds no measurement. Others answer with a sealed package. Where cards live is not decided.
-5. **A statistic over a group.** A group wants its own distribution, and no member wants to show their values. This is the one step that needs computing on hidden values. It waits for a real group, and for steps 1 to 4.
+5. **A statistic over a group.** A group wants its own distribution, and no member wants to show their values. This is the one step that needs computing on hidden values. It waits for a real group, and for steps 1, 2 and 4.
 
-**On homomorphic encryption.** Steps 1 to 4 need none: each person shows chosen records to chosen people. Step 5 is where it applies. For a small group, a simpler method than full homomorphic encryption may do. Each member splits their value into shares, and only the sum is opened. The choice waits for a real group and a real question.
+**On homomorphic encryption.** Steps 1, 2 and 4 need none: each person shows chosen records to chosen people. Step 5 is where it applies. For a small group, a simpler method than full homomorphic encryption may do. Each member splits their value into shares, and only the sum is opened. The choice waits for a real group and a real question.
 
 **Risks to design for.**
 
@@ -271,7 +259,7 @@ A pack is one file of reference data, and a cell is its table for one measure an
 
 **Open.**
 
-- The first peers are people who already know and trust each other (the owner, 2026-11-11). So steps 1 to 3 come first, and step 4 waits.
+- The first peers are people who already know and trust each other (the owner, 2026-11-11). So steps 1 and 2 come first, and step 4 waits.
 - A reply from a reader who has only a browser. The page would make a key for that reader and sign with it. A key that the page makes is later (SHARE-PLAN.md).
 - A peer's notes in the peer's own log. Today the peer keeps the reply file and its words. Their log holds only a record that they replied. A peer who replies to an address cannot open the reply again.
 - A reply to a reply. Today a note is about a record of a share, and the owner answers with a new share.
@@ -452,9 +440,7 @@ He then said that the infrastructure must be right before new capabilities are a
 
 **Phase 3: when a second party exists.** The person's own list of packs (DECISIONS 308). And a person takes in the record of a peer or a publisher who keeps a pack.
 
-The view of two people side by side needs none of this infrastructure. Its place in the order is in the section "Next".
-
-**The next steps (DECISIONS 325)** are in the section "Next", near the top. They take a first run with a peer, the view of two people, phase 2, and the seal to a reader's key. They name one builder of a pool. The owner asked for a demonstration of it (DECISIONS 332), and by the author's reading it comes first. The documents of item 2 above do not wait. The other work that follows from phase 1 keeps its order, after the first run with a peer.
+**The next steps (DECISIONS 325)** are in the section "Next", near the top. They take a first run with a peer, phase 2, and the seal to a reader's key. They name one builder of a pool. The owner asked for a demonstration of it (DECISIONS 332), and by the author's reading it comes first. The documents of item 2 above do not wait. The other work that follows from phase 1 keeps its order, after the first run with a peer.
 
 Not planned: a command in bean that fetches from a network, and a view that ranks or scores two people. bean never runs a program that a pack names. A public card of what a person holds is not planned either.
 
