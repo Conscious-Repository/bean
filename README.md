@@ -13,7 +13,7 @@ $ bean ls -since 2026-10-01
 
 This repository is the reference implementation of the **bean** protocol: [CORE.md](CORE.md) in short, [SPEC.md](SPEC.md) in full. The command is `bean`.
 
-> **Status: pre-release.** The record format is a draft. It freezes at `v` 0 after two weeks of real use with no change to [CORE.md](CORE.md). Until then, keep your source files (PDFs, exports), so that you can import them again if the format changes.
+> **Status: pre-release.** The record format is a draft. It locks at `v` 0 only when the owner says so, at 1.0 ([CORE.md](CORE.md) section 6). Until then, keep your source files (PDFs, exports), so that you can import them again if the format changes.
 
 New here: [docs/ONBOARDING.md](docs/ONBOARDING.md) goes from install to an imported lab report, an AI assistant, a backup and a tested exit. It has rules to give an AI that helps you.
 
@@ -416,7 +416,8 @@ bean protects who wrote what, and protects your identity against a stolen device
 | [CORE.md](CORE.md) | The protocol, in short. |
 | [UPGRADING.md](UPGRADING.md) | Changes that alter results for an existing log. |
 | [SPEC.md](SPEC.md) | The full protocol: every rule, error and conformance test. |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | The open paths: what comes next, in what order, and what is not decided. |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | The open paths: what comes now, next and later, and what is not planned. |
+| [docs/KNOWN-GAPS.md](docs/KNOWN-GAPS.md) | Known limits and gaps, said out loud. |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Every design decision, numbered, with the reason. |
 | [docs/DEVICE.md](docs/DEVICE.md) | For the people who build an instrument: what a device signs and how it hands it over. A draft. |
 | [docs/EXTENSIONS.md](docs/EXTENSIONS.md) | Two draft extensions that no code implements yet: computed results and device capture. |

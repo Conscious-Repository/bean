@@ -2,7 +2,7 @@
 
 This is for anyone who builds on bean's reference data: a publisher of a pack, or the writer of a tool. [REFERENCE.md](REFERENCE.md) is the format that exists. This document says what changes next, what does not, and why. Nothing in it is built yet.
 
-It is phase 1 of the order in [ROADMAP.md](ROADMAP.md). That phase decides on paper what is in logs and shared files for good once it is used. Six drafts were written, and reviewers who had not seen the work judged each, in six laps. They sat in five seats: Linus, Satoshi, buildtall, a publisher from outside, and the writer of a second reader. DECISIONS 321 has the account.
+It is phase 1 of the order of DECISIONS 317. That phase decides on paper what is in logs and shared files for good once it is used. Six drafts were written, and reviewers who had not seen the work judged each, in six laps. They sat in five seats: Linus, Satoshi, buildtall, a publisher from outside, and the writer of a second reader. DECISIONS 321 has the account.
 
 **The main result is a refusal.** A format, a signed claim and a record type are costs that every reader carries for ever. So nothing new is frozen without a real case. Each thing that waits is written down with the case that would start it.
 
@@ -76,7 +76,7 @@ Two drafts of a `pack/1` were written and attacked. This is what became of each 
 - Zero as a value. A reading of 0 gets a number only where the cell holds a 0.
 - A detection limit as two members of a cell: the limit, and the weight of the people below it.
 - The step in which the source records a value.
-- Before a freeze: vectors for every rule, and two readers that share no code and agree on every vector. Also one real pack, built by two programs that share no code.
+- Before the lock: vectors for every rule, and two readers that share no code and agree on every vector. Also one real pack, built by two programs that share no code.
 
 **What the next version of the method and its claim could hold.**
 
@@ -279,7 +279,7 @@ Where bean falls short of the rule, said in the same place.
 5. **The next pack**, in `pack/0`, by version 2 of the rule. It holds the tests of decision 2 that pass, and each `same` entry that a real report shows. A white cell share is added only when a real report prints it in the survey's step, and none may pass. The file of C-reactive protein, `HSCRP_J`, gets a digest on record first. COMPARE.md and the tests no longer say that a test with a mark is left out. The pack is on record in the release that first builds it.
 6. **The fasting tests**, after a decision of their own: they need a weight for each test, which the method does not have.
 7. **Keeping a pack**, in three steps: compare by SHA-256, a share that carries the pack, and a check that computes a shared comparison again.
-8. **A first publisher hosts** (ROADMAP, phase 2). This needs nothing from bean and can start at any time. The owner gave the word for the survey's packs (DECISIONS 314). bean prints the SHA-256 of each pack that it reads, and a person compares it with the one that the publisher states. A flag that refuses other bytes was drafted and cut: it does what `sha256sum` does. It is added when people ask.
+8. **A first publisher hosts** ([HOST-PLAN.md](HOST-PLAN.md)). This needs nothing from bean and can start at any time. The owner gave the word for the survey's packs (DECISIONS 314). bean prints the SHA-256 of each pack that it reads, and a person compares it with the one that the publisher states. A flag that refuses other bytes was drafted and cut: it does what `sha256sum` does. It is added when people ask.
 
 ## What breaks, and what happens then
 

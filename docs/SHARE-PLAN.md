@@ -4,7 +4,7 @@ This is for anyone who builds or reviews the next way to seal a package. [SHARE.
 
 **Step 1 is built** (release 0.8.0, DECISIONS 327). **Step 2 is built** (release 0.8.1, DECISIONS 330). SHARE.md now describes both. The sections "Step 1 as built" and "Step 2 as built" below say where each build adds to this plan. What is under "Later" is not built. The rest of this document stands as it was decided: where it says "will", read it as the plan.
 
-It is step 3 of the section "Next" in [ROADMAP.md](ROADMAP.md). Six drafts were written. Reviewers who had not seen the work judged each, one for each paragon. DECISIONS 326 has the account.
+It was step 3 of the path of DECISIONS 325. Six drafts were written. Reviewers who had not seen the work judged each, one for each paragon. DECISIONS 326 has the account.
 
 **bean is not a diagnosing tool.** Nothing here says whether a value is healthy.
 
@@ -202,10 +202,10 @@ It has its own audit. It may be in the same release as step 1.
 
 ### Step 2 as built
 
-The build follows the plan above. ROADMAP.md names three points for its design and its audit, and these answers are the author's, judged by the audit.
+The build follows the plan above. ROADMAP.md named three points for its design and its audit, and these answers are the author's, judged by the audit.
 
 - **The gate of `bean accept -key`.** `-yes` does not go with `-key`: it is a usage error, before anything is read. It guards the log, and not what a program reads. With six words, a program that runs as the person cannot open a reply. With a key file on the disk it can, and it can make the eight identity words from the reply itself. So `-yes` with `-words` would take a peer's notes with no act of the person. `bean accept -key` asks on a terminal, and takes nothing without one. A program that makes a terminal of its own answers it, as 326 (c) says of a terminal rule: the documents say so.
-- **A mark of format.** The reply does not carry one. It is format 0 of a reply, with the same six rules. Only its seal differs, and release 0.8.0 refuses that seal by name. The mark is a step of its own, before the clock of 1.0 starts.
+- **A mark of format.** The reply does not carry one. It is format 0 of a reply, with the same six rules. Only its seal differs, and release 0.8.0 refuses that seal by name. The mark is a step of its own, before the formats lock (DECISIONS 343).
 - **Where a reply goes.** Only to the address that `-for` names, behind the gate. bean reads no address from a package.
 
 It adds these points, which the plan left open.

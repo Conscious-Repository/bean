@@ -68,7 +68,7 @@ Each fact was checked in the code. A reviewer, or the author, ran each one with 
 ## Rules that stay
 
 - bean fetches nothing (DECISIONS 286, 328).
-- A pointer is a hint, and never a second place for a SHA-256 (ROADMAP, "What a pointer may claim").
+- A pointer is a hint, and never a second place for a SHA-256 (DECISIONS 325, [HOST-PLAN.md](HOST-PLAN.md)).
 - A reason that a signer declares is the signer's word (DECISIONS 317).
 - 0.9's status says first that no pool exists, and that no other entity hosts a pack (DECISIONS 328).
 - A line that a tool prints claims only what the tool checked.

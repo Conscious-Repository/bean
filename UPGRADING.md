@@ -38,7 +38,7 @@ Do not run `purge` or `gc` on the copies. Only they erase anything.
 
 ## Changes
 
-### 0.8.2 (2026-11-19)
+### 0.8.2 (2026-11-21)
 
 A reference pack may have a cell of any number of people. Nothing in a log changes, and no saved comparison reads differently ([docs/REFERENCE.md](docs/REFERENCE.md), DECISIONS 333).
 

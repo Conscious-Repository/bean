@@ -16,7 +16,7 @@ The owner asked for this plan on 2026-11-19, and said where it can run:
 we have a server in the lab we can host a relay + blossom on
 ```
 
-[ROADMAP.md](ROADMAP.md) has the rules, under "A first publisher hosts" and "Phase 2". This plan puts them in an order.
+This is the one plan for a first host. It holds the rules, and puts them in an order. [ROADMAP.md](ROADMAP.md), "Now", says what waits for it.
 
 ## What is true today
 
@@ -41,7 +41,7 @@ we have a server in the lab we can host a relay + blossom on
 - **No publisher is special, and the documents name none** (DECISIONS 318).
 - **The address is a name under the publisher's own domain** (DECISIONS 338). Which name is open.
 
-**By the reviews of DECISIONS 313 and 317, and by ROADMAP.**
+**By the reviews of DECISIONS 313 and 317.**
 
 - **A publisher's own key waits.** First a design says how a reader knows the publisher when a key is lost. The policy for that key is the owner's to decide, and it is open. This plan makes no such key.
 - **A rehearsal with a throwaway identity comes before any real key.** Whether a real key is used after it is the owner's to decide.
@@ -62,7 +62,7 @@ The rules below keep other files off the file host. The relay is different: the 
 
 ## The rules of the host
 
-The first three are ROADMAP's. The author proposes the others.
+The first three come from the reviews of DECISIONS 313 and 317. The author proposes the others.
 
 - The file host serves a file under its SHA-256.
 - The logs hold no network address of a person, and are kept for a week at most. That is the publisher's word: nobody can check it.
@@ -86,7 +86,7 @@ The author proposes this part, and the owner decides.
 No secret key of bean and no secret Nostr key of a person is on the server. A person signs on another machine. The server has secrets of its own: the key of the TLS certificate, and what asks for that certificate. Whether a program makes a key of its own is not known.
 
 - **The upload key** is made at stage 3 for the two uploads, and is not kept after the last try with it. A program that takes uploads without a key needs none.
-- **The pointer key** is made at stage 4 for the two pointers, and is not kept after the last try with it. It is the throwaway identity of ROADMAP's rule.
+- **The pointer key** is made at stage 4 for the two pointers, and is not kept after the last try with it. It is the throwaway identity of the rule above.
 - **The trial of stage 2 has keys of its own, and so has each try that must be refused.** They are made the same way, and are not kept.
 - **Each key is made as `examples/pool/run.sh` makes one:** by a command, into a variable of a shell, and into no file. Other users of a machine can see a key that a command gets. So the signer uses a machine that is theirs alone.
 - **Nobody can show that a key is gone.** A copy from before can sign again, on any relay. So a key of this plan means nothing to a reader.
@@ -145,9 +145,9 @@ The setup document names each setting that changes after the trial: where each k
 
 - **A publisher's own key.** It waits for the design and the policy that are named above. So does the sealed copy of its recovery words, for which the owner named a second person (DECISIONS 318).
 - **A second place for the digests.** A second person fetches the survey's files from their own connection, and sends receipts ([tools/receipts](../tools/receipts/README.md)). They build each pack, and state its SHA-256. That needs no server. Until then one hand holds the host, the relay and this repository.
-- **A second host,** and who keeps a copy of the survey's files for the day that their host is gone. ROADMAP has both under "Phase 2".
+- **A second host,** and who keeps a copy of the survey's files for the day that their host is gone. ROADMAP has both under "Later".
 
-No stage needs a change to bean. The first run with a peer needs no server. The owner decided all the same that the host comes first (DECISIONS 339). By the author's reading that run waits for stage 3, where a person can fetch a pack. No other step of ROADMAP waits for this plan.
+No stage needs a change to bean. The owner decided that the host comes first (DECISIONS 339). The proof of concept in ROADMAP, "Now", fetches a pack from the host, so it waits for stage 3. No other step of ROADMAP waits for this plan.
 
 ## The setup, as far as it is known
 
@@ -203,7 +203,7 @@ DECISIONS 338 has his answers of 2026-11-19. Each line below says what is decide
 - How the server is kept apart from the lab's other machines. The limits of size and of rate.
 - Where the packs are announced, and how long the host stays up.
 - A second host.
-- **A package between two peers on this host.** Not in this plan. ROADMAP.md, "The week ahead", says what it needs first (DECISIONS 341).
+- **A package between two peers on this host.** Not in this plan. DECISIONS 341 says what it needs first.
 - **What the setup document names.** Proposed: only what was run, as it was run. A public program that nobody tried is named as one that was read and not tried.
 
 ## Known weak points
@@ -213,7 +213,7 @@ DECISIONS 338 has his answers of 2026-11-19. Each line below says what is decide
 - **What is published stays published.** A pack, a name and a pointer cannot be called back. With the pointer key gone, nobody can ask another relay to delete a copy.
 - **A server in a lab has no promise of being up.** When it is down, each pointer leads nowhere. The packs can still be built from the survey's files.
 - **A name can pass to a stranger.** It lapses, or another takes it, or whoever answers for it turns. Each pointer keeps its `url` for good. The stranger sees each fetch, can get a certificate, and can serve other bytes. A reader who compares the SHA-256 with REFERENCE.md can tell whether the bytes are the ones that this repository names.
-- **The survey's files are on the survey's own host.** Nobody here keeps a copy for the day that it is gone (ROADMAP, "Phase 2").
+- **The survey's files are on the survey's own host.** Nobody here keeps a copy for the day that it is gone (ROADMAP, "Later").
 - **A host on a network can be attacked.** It serves two files. Closed uploads and a closed relay keep its surface small. The setup document names its programs and versions, and an attacker reads that too.
 - **Whoever holds the server can open uploads again.** Closed is a setting, and no proof.
 - **The rules of the logs are a word.** Nobody outside can check them. They name the logs of the file host, of the relay, and of what serves TLS. What the lab's own network keeps is not said here.
