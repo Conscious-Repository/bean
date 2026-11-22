@@ -1,0 +1,20 @@
+{
+	admin off
+	auto_https disable_redirects
+	persist_config off
+}
+
+http://127.0.0.1:8080 {
+	bind 127.0.0.1
+	@pack {
+		method GET HEAD
+		path /10555d6769421d4305cbcd4ff14960d8b966ddd829a50581a9584a60a84d29e2 /5cae07db64295d565ffae7c251c17fdb9f043dc0638868557275f8b0b0311efa
+	}
+	handle @pack {
+		root * .
+		file_server
+	}
+	handle {
+		respond 404
+	}
+}

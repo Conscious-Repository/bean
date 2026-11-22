@@ -140,7 +140,7 @@ func TestRefuses(t *testing.T) {
 		"a member missing":           func(top map[string]any) { delete(top, "caveats") },
 		"no title":                   func(top map[string]any) { top["title"] = "" },
 		"a title with a line end":    func(top map[string]any) { top["title"] = "a\nb" },
-		"a title that reorders text": func(top map[string]any) { top["title"] = "a‮b" },
+		"a title that reorders text": func(top map[string]any) { top["title"] = "a\u202eb" },
 		"a title with a space after": func(top map[string]any) { top["title"] = "a " },
 		"no source file":             func(top map[string]any) { top["source"].(map[string]any)["files"] = []any{} },
 		"a digest in upper case": func(top map[string]any) {

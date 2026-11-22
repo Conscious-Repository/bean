@@ -58,7 +58,7 @@ DOCS = README.md CORE.md SPEC.md SECURITY.md UPGRADING.md CONTRIBUTING.md \
 	docs/PROVIDER-INGESTION.md docs/GOVERNANCE-PROPOSAL.md \
 	cmd/bean/vocabulary.md cmd/bean-import-lab/README.md \
 	cmd/bean-import-apple-health/README.md cmd/bean-import-nhanes/README.md \
-	examples/blood/README.md examples/pool/README.md tools/second/README.md tools/pool/README.md tools/receipts/README.md
+	examples/blood/README.md examples/pack-host/README.md examples/pool/README.md tools/second/README.md tools/pool/README.md tools/receipts/README.md
 prose:
 	$(PY) -I tools/checkprose.py $(DOCS)
 
@@ -87,6 +87,7 @@ compare:
 # again, and refuse every pack that bean refuses.
 pack:
 	PY=$(PY) bash tools/pack/run.sh
+	$(PY) -I examples/pack-host/test_check.py
 
 # The pool path with made-up contributors (docs/POOL-PLAN.md): the builder
 # gives the pack on record from the committed archive, and a fresh run of
