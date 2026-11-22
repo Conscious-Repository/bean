@@ -13,7 +13,7 @@ $ bean ls -since 2026-10-01
 
 This repository is the reference implementation of the **bean** protocol: [CORE.md](CORE.md) in short, [SPEC.md](SPEC.md) in full. The command is `bean`.
 
-> **Status: pre-release.** The record format is a draft. It locks at `v` 0 only when the owner says so, at 1.0 ([CORE.md](CORE.md) section 6). Until then, keep your source files (PDFs, exports), so that you can import them again if the format changes.
+> **Status: pre-release.** The record format is a draft. It locks at `v` 0 only on the maintainers' word (today, Benjamin Anderson), at 1.0 ([CORE.md](CORE.md) section 6). Until then, keep your source files (PDFs, exports), so that you can import them again if the format changes.
 
 New here: [docs/ONBOARDING.md](docs/ONBOARDING.md) goes from install to an imported lab report, an AI assistant, a backup and a tested exit. It has rules to give an AI that helps you.
 

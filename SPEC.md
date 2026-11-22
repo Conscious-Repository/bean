@@ -11,8 +11,11 @@ Name: bean.
 This specification uses Simplified Technical English (ASD-STE100).
 The key words MUST, MUST NOT, REQUIRED, SHOULD, SHOULD NOT and MAY have the meanings in RFC 2119 and RFC 8174.
 Text marked DEFAULT is a decision that can change until the formats lock (8.1).
-An implementation MUST follow a DEFAULT until the specification changes it.
-A DEFAULT about the reference CLI never locks: section 12, the hold length (7.6), the test clock and what a command prints.
+Every DEFAULT in sections 1 to 8 locks with the record format, except the hold length (7.6).
+The hold length and the DEFAULTs of section 9 (importers) and section 12 (CLI) never lock.
+They bind only the reference implementation, and are no MUST for another implementation.
+The DEFAULT for random nonces of a hardware P-256 signer (4.5) stays open until a device signs ([docs/ROADMAP.md](docs/ROADMAP.md), "Next").
+An implementation MUST follow every other DEFAULT until the specification changes it.
 [CORE.md](CORE.md) is a short summary of the rules that two implementations must agree on.
 
 ## Contents
@@ -925,7 +928,7 @@ A write MUST NOT return an id for a record that the verifier of the same folder 
 ### 8.1 Known versions
 
 This specification defines record version `v` = 0.
-The record format locks at `v` = 0, on the owner's word (CORE.md section 6). After the lock, no rule for a `v` 0 record changes.
+The record format locks at `v` = 0, on the maintainers' word (CORE.md section 6). After the lock, no rule for a `v` 0 record changes.
 A later change that alters the validity of an existing record needs a new `v` (8.4). That version MUST say how it treats `v` 0 records, and an identity with records of both versions.
 A verifier knows a version only if it implements every rule of that version.
 
@@ -1489,7 +1492,7 @@ Hand-built AES-SIV code MUST also pass the RFC 4493 and RFC 5297 Appendix A vect
 
 ## Appendix: defaults and open items
 
-Each item has a DEFAULT in the text, or is open. A DEFAULT can change until the formats lock (CORE.md section 6). A DEFAULT about the reference CLI never locks.
+Each item has a DEFAULT in the text, or is open. A DEFAULT can change until the formats lock (CORE.md section 6). Which DEFAULTs lock is set by section, at the start of this text.
 
 Decided:
 
@@ -1499,7 +1502,7 @@ Decided:
 4. The hold before erasure is 7 days (7.6). The hold controls `gc`. A timer does not erase anything. The hold is CLI behaviour, and does not lock.
 5. One host holds the signing key. Other devices use bare device keys (Extension 2). Devices do not share a signing key.
 6. Measurement uncertainty is `context.uncertainty` (9.9).
-7. The record format locks at `v` = 0, on the owner's word (8.1).
+7. The record format locks at `v` = 0, on the maintainers' word (8.1).
 
 Defaults:
 
