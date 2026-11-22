@@ -228,7 +228,7 @@ A page cannot prove itself: a forged page prints whatever its maker likes, and a
 
 Read a bundle with `check-bundle`, not by pointing `-dir` at it: a bundle is someone else's records, not your log. If you did, no harm is done: bean leaves a `local` folder there, which the check names and does not read.
 
-A bundle does not go into your own log. `bean sync` refuses it: sync is for copies of your own log, and it would mix the sender's records into yours for good. To set someone's numbers next to yours, read their bundle with `check-bundle` and your own with `bean ls` or `bean compare`. There is no merged view yet.
+A bundle does not go into your own log. `bean sync` refuses it: sync is for copies of your own log, and it would mix the sender's records into yours for good. To set someone's numbers next to yours, read their bundle with `check-bundle` and your own with `bean ls` or `bean compare`. bean has no merged view, and none is planned (DECISIONS 342).
 
 ## What the reader can and cannot tell
 
