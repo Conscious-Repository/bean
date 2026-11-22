@@ -10,11 +10,11 @@ This file is the one place for open paths: what bean does now, what comes next, 
 
 **What it needs.**
 
-1. **The owner's four answers** to stage 2 of [HOST-PLAN.md](HOST-PLAN.md) (DECISIONS 341). Each has HOST-PLAN's proposal, if it has one, so one line can answer them.
-   - How the server is kept apart from the lab's other machines. HOST-PLAN has no proposal yet.
-   - Its name. Decided: a name under the publisher's own domain (DECISIONS 338). Open: which name.
+1. **The owner's four answers** to stage 2 of [HOST-PLAN.md](HOST-PLAN.md) (DECISIONS 341). Each has a proposed answer, so that one reply can answer all four.
+   - How the server is kept apart from the lab's other machines. Proposed: a separate machine or network segment, with only the file host's port open.
+   - Its name. Decided: a name under the publisher's own domain (DECISIONS 338). Proposed: `packs.` before that domain.
    - Who acts on it. Proposed: the owner, or a person whom he names, and an assistant only writes the commands as files.
-   - Which file host program. Proposed: a public program, so that a second publisher can get it. Open: which one.
+   - Which file host program. Proposed: `blossom-server`, a public program (DECISIONS 338), with a rule that keeps the two packs.
 2. **The host.** The lab server serves the two survey packs under their SHA-256, by HOST-PLAN.md stages 1 to 3. The relay and its pointers (stage 4) are not needed.
 3. **Readings for both.** The peer's reports held no reading that bean reads (DECISIONS 306). A value typed by hand works, with the type name and unit that a pack lists. Open: who the peer is.
 4. **The swap,** by [FIRST-RUN.md](FIRST-RUN.md): a package sealed to the reader's address, and a reply sealed back. It goes by a channel that the two already use, not through the server (DECISIONS 341).
@@ -25,9 +25,9 @@ No code in bean changes for it. A key file with a passphrase is not needed, beca
 
 ## Next: 0.9, then the lock
 
-**0.9 is the loop for people with a terminal:** import, share 1:1 and get an answer, and compare with a pack (DECISIONS 342). Its status is written after the proof of concept, from what is true then. It says first that no pool exists, and that only the project's own lab server hosts a pack.
+**0.9 is the loop for people with a terminal:** import, share 1:1 and get an answer, and compare with a pack (DECISIONS 342). Its status is written after the proof of concept, from what is true then. It says first that no pool exists, and that only the lab server hosts a pack. The owner runs that server, it is no part of bean, and it is not up yet.
 
-**1.0 is the owner's word that the formats lock** (CORE.md section 6, DECISIONS 343). There is no clock. The version stays at 0.9 until he says so. Only data formats can lock. At 1.0 these lock: the record at `v` = 0, a share bundle with its seal, and a reply. That includes the encryption of stored files, the key derivation, the 24 words, and the folder layout that a restore needs. It also includes the identity, address and six words that people check by voice. A reference pack, a saved comparison and a device's folder stay drafts until the owner names them. A saved comparison cannot lock before `pack/0` does. Command-line details never lock.
+**1.0 is the owner's word that the formats lock.** [CORE.md](../CORE.md) section 6 says what locks, and how the word is given (DECISIONS 343). There is no clock.
 
 **Settle before the formats lock.** Each is an open question, from the audits of 2026-11-21.
 

@@ -43,7 +43,7 @@ What bean does not do well today, said out loud. [ROADMAP.md](ROADMAP.md) says w
 - From the reviews of the share review (DECISIONS 324):
   - `view.Safe` shows a space other than U+0020, a combining mark and a few rare blank characters as they are. A value can look blank, struck through, or like another value. It cannot hide a name: the letters are shown.
   - A field of more than 50 different numbers or times shows its count. Many numbers could still spell a message.
-  - A photo's file can hold what the camera wrote: a place, a time, a device. bean does not take that out, and the review before a share does not warn of it (DECISIONS 323, 325 (l)).
+  - A photo's file can hold what the camera wrote: a place, a time, a device. bean does not take that out, and the review before a share does not warn of it (DECISIONS 325 (l)).
 - From the reviews of the plan for reference data (DECISIONS 321):
   - For a pack in a format that it does not know, bean says that the file is not a pack of version 0.
   - `bean purge` of the record that keeps a file erases the file, also when a saved comparison is about that record. The same file cannot be kept again on that copy.

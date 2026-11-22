@@ -13,7 +13,7 @@ The key words MUST, MUST NOT, REQUIRED, SHOULD, SHOULD NOT and MAY have the mean
 Text marked DEFAULT is a decision that can change until the formats lock (8.1).
 Every DEFAULT in sections 1 to 8 locks with the record format, except the hold length (7.6).
 The hold length and the DEFAULTs of section 9 (importers) and section 12 (CLI) never lock.
-They bind only the reference implementation, and are no MUST for another implementation.
+They bind only the reference implementation, and are no MUST for another implementation. A plain MUST in those sections binds every implementation.
 The DEFAULT for random nonces of a hardware P-256 signer (4.5) stays open until a device signs ([docs/ROADMAP.md](docs/ROADMAP.md), "Next").
 An implementation MUST follow every other DEFAULT until the specification changes it.
 [CORE.md](CORE.md) is a short summary of the rules that two implementations must agree on.
@@ -467,6 +467,7 @@ Risk: a person can type the words into a crypto wallet by mistake.
 The wallet then sees the seed.
 The CLI MUST tell the person that the words are for bean only.
 DEFAULT.
+The text of that warning is CLI behaviour, and never locks.
 
 ## 5. Identity
 
@@ -992,7 +993,7 @@ If it has no `subject`, `bean append` sets the local identity id.
 ### 9.3 Blob first
 
 1. Store the raw source file as a blob before any record (`bean blob put <file>` prints the blob id). DEFAULT.
-2. Put `{"hash": <blob id>, "role": "raw-export", "media_type": <type>}` in `blobs` of the one record that keeps that file. Each other record from the file names it by its SHA-256 in `context`, not in `blobs`. Then a purge of the record that keeps the file erases the file. DEFAULT.
+2. Put `{"hash": <blob id>, "role": "raw-export", "media_type": <type>}` in `blobs` of the one record that keeps that file. Each other record from the file names it by its SHA-256 in `context`, not in `blobs`. Then a purge of the record that keeps the file erases the file.
 
 ### 9.4 Granularity
 
@@ -1001,7 +1002,7 @@ Each record has `source.system`, `source.adapter` as `name@version`, and a dedup
 The adapter does not hold the dedupe key.
 The adapter writes the HMAC input array (4.8) as `source.ref_input`.
 `bean append` computes `source.ref` from it and removes `source.ref_input` before it signs.
-`source.ref_input` never reaches the log. DEFAULT.
+`source.ref_input` never reaches the log.
 
 ### 9.5 Dedupe
 
