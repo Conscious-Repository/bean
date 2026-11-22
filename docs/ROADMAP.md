@@ -2,7 +2,7 @@
 
 This file is the one place for open paths: what bean does now, what comes next, and what is not decided. Work that is done is in the git history. The reasons are in [DECISIONS.md](DECISIONS.md), and [KNOWN-GAPS.md](KNOWN-GAPS.md) lists known limits. Nothing here is final.
 
-**Where bean stands (2026-11-21).** A person keeps a log, and imports lab reports, Apple Health and CSV files. They compare a reading with a survey, or with a reference pack. They share chosen records as one sealed file, with six words or sealed to the reader's address. A reader who runs bean answers with signed notes, and the person takes them into their log. Release 0.8.2 is out, as a pre-release. Two people keep a log, so `main` is a release, with or without a tag (DECISIONS 310).
+**Where bean stands (2026-11-22).** A person keeps a log, and imports lab reports, Apple Health and CSV files. They compare a reading with a survey, or with a reference pack. They share chosen records as one sealed file, with six words or sealed to the reader's address. A reader who runs bean answers with signed notes, and the person takes them into their log. Release 0.8.2 is out, as a pre-release. Two people keep a log, so `main` is a release, with or without a tag (DECISIONS 310).
 
 ## Now: the proof of concept
 
@@ -10,12 +10,12 @@ This file is the one place for open paths: what bean does now, what comes next, 
 
 **What it needs.**
 
-1. **The owner's four answers** to stage 2 of [HOST-PLAN.md](HOST-PLAN.md) (DECISIONS 341). Each has a proposed answer, so that one reply can answer all four.
+1. **The lab setup** for the first publisher (DECISIONS 341, 344). Confirm the isolation, name and operator for the live trial.
    - How the server is kept apart from the lab's other machines. Proposed: a separate machine or network segment, with only the file host's port open.
    - Its name. Decided: a name under the publisher's own domain (DECISIONS 338). Proposed: `packs.` before that domain.
    - Who acts on it. Proposed: the owner, or a person whom he names, and an assistant only writes the commands as files.
-   - Which file host program. Proposed: `blossom-server`, a public program (DECISIONS 338), with a rule that keeps the two packs.
-2. **The host.** The lab server serves the two survey packs under their SHA-256, by HOST-PLAN.md stages 1 to 3. The relay and its pointers (stage 4) are not needed.
+   - The [read-only example](../examples/pack-host/README.md) uses Caddy and two local files. Another lab can choose its own server.
+2. **The host.** Build the two survey packs, then try the read-only setup on the isolated lab server. Open HTTPS by [HOST-PLAN.md](HOST-PLAN.md#the-read-only-host) and check both digests from outside. Relay pointers can follow later.
 3. **Readings for both.** The peer's reports held no reading that bean reads (DECISIONS 306). A value typed by hand works, with the type name and unit that a pack lists. Open: who the peer is.
 4. **The swap,** by [FIRST-RUN.md](FIRST-RUN.md): a package sealed to the reader's address, and a reply sealed back. It goes by a channel that the two already use, not through the server (DECISIONS 341).
 5. **The comparison,** by FIRST-RUN.md. Each fetches a pack with a plain download tool such as `curl`, and checks its SHA-256 against [REFERENCE.md](REFERENCE.md). Then each runs `bean compare -pack`. bean fetches nothing itself (DECISIONS 340 (d)).
@@ -97,7 +97,7 @@ Done: reference packs, two NHANES packs on record, and `bean compare -pack` (DEC
 
 ### Hosting
 
-[HOST-PLAN.md](HOST-PLAN.md) is the one plan for a host. Later: a relay with a pointer for each pack, a second host, and a second person who states the digests. Someone also keeps a copy of the survey's files, for the day that their host is gone. A publisher's own key waits for a design for a lost key (DECISIONS 338).
+[HOST-PLAN.md](HOST-PLAN.md) is the one plan for a host. A second lab can copy or rebuild the packs and run the same reader check against its own domain. The test passes when the first host is unreachable and the same offline comparison works. Later come relay pointers and independent statements of source digests. Someone also keeps a copy of the survey's files, for the day that their host is gone. A publisher's own key waits for a design for a lost key (DECISIONS 338).
 
 ### Smaller paths
 

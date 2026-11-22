@@ -1,6 +1,6 @@
-# A first host for the survey's packs: a plan on paper
+# A first host for the survey's packs
 
-This is for anyone who sets up, or reviews, a publisher's first host. Nothing of it is set up. DECISIONS 337 has the account of its reviews.
+This is for anyone who sets up, or reviews, a publisher's first host. The example has run on loopback. The lab endpoint is still pending. DECISIONS 337 has the account of its reviews.
 
 **It changes nothing in bean.** bean fetches nothing. It signs no upload and no pointer. A host and a relay are programs that exist. A publisher's network address, terms and keys are its own, and none is in this repository.
 
@@ -22,7 +22,7 @@ This is the one plan for a first host. It holds the rules, and puts them in an o
 
 **H1. The steps ran on one machine.** `examples/pool/run.sh` uploads a file, publishes an event of kind 1063, finds it, and fetches the file. It uses the test server of `nak` 0.22.3. That server keeps everything in memory, and is no host. Of the rules below, the trial tried only the first.
 
-**H2. No real file host and no real relay has run for this project.** No program is chosen. So no rule below is tried against a real program.
+**H2. Caddy served both packs on loopback.** The checks covered a restart and a second local server with the first stopped. Private TLS also passed on loopback. A live lab, outside reader and production TLS still await a trial.
 
 **H3. The two packs are in no repository as files.** A person builds each with `bean-pack-nhanes` from the survey's files. REFERENCE.md states the SHA-256 of each, and bean has both on record.
 
@@ -34,7 +34,7 @@ This is the one plan for a first host. It holds the rules, and puts them in an o
 
 **By the owner.**
 
-- **A relay is in the first setup** (DECISIONS 314, 318). The reviews said that a file host is enough to begin. He wants the relay and its pointers tried from the start. In this plan the relay is in the trial of stage 2, and opens at stage 4. Nothing depends on the relay.
+- **A relay is in the first setup** (DECISIONS 314, 318). The reviews said that a file host is enough to begin. He wants the relay and its pointers tried from the start. The earlier Blossom trial includes it at stage 2 and opens it at stage 4. The read-only path below can run first (DECISIONS 344). Nothing depends on the relay.
 - **He gave the word to host the two packs of the survey** (DECISIONS 314). He had read the survey's terms. They limit how the data is used, and say nothing on handing it on (DECISIONS 313).
 - **The first data on a publisher's host is those two packs** (DECISIONS 325).
 - **No package of his goes on a public host** before a key file can have a passphrase (DECISIONS 328).
@@ -73,7 +73,7 @@ The first three come from the reviews of DECISIONS 313 and 317. The author propo
 - **Proposed:** the address is served with TLS.
 - **Proposed:** when no program can hold a rule, the owner decides. He takes another program, or the rule changes in this document first. No rule is worked around.
 
-How a program holds the fifth rule is not known: by a list of SHA-256, or by one upload key. The trial of stage 2 finds it.
+The static example allows exactly two paths and has no upload endpoint. A Blossom trial must test its upload rules separately.
 
 A reader can check the bytes that they fetch, and that TLS answers. What the host takes and what it keeps are settings of the publisher. A reader cannot check those.
 
@@ -93,9 +93,27 @@ No secret key of bean and no secret Nostr key of a person is on the server. A pe
 - **The cost: with the key gone, nobody can ask a relay to delete a pointer.** Whoever holds the relay removes the event there, and a copy elsewhere stays. A host that moves gets new pointers, under a new key.
 - **DECISIONS 313 calls a note under a throwaway key a test, and no more.** A pointer on an open relay is more: it is public, and it stays.
 
+## The read-only host
+
+The first lab publishes the two packs. Another lab can run the [same example](../examples/pack-host/README.md) with its own domain and operator.
+The shared interface is an anonymous HEAD or GET at the digest path. The read-only stages for this choice are:
+
+1. Build both packs and check their SHA-256 against REFERENCE.md. Keep the source files and build tools outside the served directory.
+2. Rehearse on loopback, then on an isolated lab machine behind private TLS. Serve only the two digest paths. Check reads, restart, missing paths and refusal of writes.
+   The operator checks the logs and retention at every layer. Check from outside that the closed trial is unreachable.
+3. On the owner's word, enable the public HTTPS endpoint. An outside reader checks both packs using digests obtained apart from the host.
+   The operator records the actual settings, versions and results, apart from the generic example.
+   If any check fails, close the endpoint and investigate.
+
+This path uses local file placement. It needs no upload key, account or relay.
+A second operator can repeat it and verify the same offline comparison with the first host unreachable.
+Mirroring the two packs is a test of availability. A new source and a publisher's signature are separate work.
+
 ## The stages
 
-The author proposes this gate. Each stage starts on the owner's word at that time. Stages 3 and 4 need his word a second time, before the first act that cannot be taken back. The owner, or a person whom he names, does each act on the server. The stages are written with the keys as the author proposes them.
+### Blossom uploads and relay pointers
+
+For a trial of uploads or relay pointers, the author proposes this gate. Each stage starts on the owner's word at that time. Stages 3 and 4 need his word a second time, before the first act that cannot be taken back. The owner, or a person whom he names, does each act on the server. The stages are written with the keys as the author proposes them.
 
 Without that word, an assistant does nothing on the server or on the lab's network. It does none of these for this plan:
 
@@ -147,7 +165,7 @@ The setup document names each setting that changes after the trial: where each k
 - **A second place for the digests.** A second person fetches the survey's files from their own connection, and sends receipts ([tools/receipts](../tools/receipts/README.md)). They build each pack, and state its SHA-256. That needs no server. Until then one hand holds the host, the relay and this repository.
 - **A second host,** and who keeps a copy of the survey's files for the day that their host is gone. ROADMAP has both under "Later".
 
-No stage needs a change to bean. The owner decided that the host comes first (DECISIONS 339). The proof of concept in ROADMAP, "Now", fetches a pack from the host, so it waits for stage 3. No other step of ROADMAP waits for this plan.
+No stage needs a change to bean. The owner decided that the host comes first (DECISIONS 339). The proof of concept in ROADMAP, "Now", fetches a pack from the host, so it waits for stage 3. The read-only stages above also meet the pack-host need of the first run.
 
 ## The setup, as far as it is known
 
@@ -197,7 +215,7 @@ DECISIONS 338 has his answers of 2026-11-19. Each line below says what is decide
 - **The person outside the lab,** who tries and fetches at stages 2, 3 and 4. Proposed: the peer of the first run, who states what they fetched as receipts.
 - **The keys.** Proposed: each is thrown away for this publication. A kept key is the next step, after the design for a lost key.
 - **A pack of made-up people on this host.** He said: maybe. Proposed: never on a public address. A test server that only the lab's network reaches does the same for a demonstration.
-- **The order with the first run with a peer.** Decided: the host first (DECISIONS 339). Open: whether the run waits for the pointers of stage 4 too.
+- **The order with the first run with a peer.** Decided: the host first (DECISIONS 339). The peer run needs only the file host (DECISIONS 341).
 - **More packs.** He wants more packs that are worth a host. A search for sources is proposed as work of its own.
 - Whether the relay uses the name of the file host. Proposed: yes.
 - How the server is kept apart from the lab's other machines. The limits of size and of rate.
@@ -208,7 +226,7 @@ DECISIONS 338 has his answers of 2026-11-19. Each line below says what is decide
 
 ## Known weak points
 
-- **Nothing here is tried against a real program** (H2).
+- **The live lab setup still needs a trial** (H2).
 - **One hand holds everything** until a second person states the digests.
 - **What is published stays published.** A pack, a name and a pointer cannot be called back. With the pointer key gone, nobody can ask another relay to delete a copy.
 - **A server in a lab has no promise of being up.** When it is down, each pointer leads nowhere. The packs can still be built from the survey's files.

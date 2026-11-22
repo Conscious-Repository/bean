@@ -94,7 +94,7 @@ bean compare -pack nhanes.pack
 bean compare -pack nhanes.pack -cohort male-30-39 -type 'lab.*'
 ```
 
-- The address is an example. The owner gives the real one when the host is up, and its file host program is chosen ([HOST-PLAN.md](HOST-PLAN.md)). With a Blossom server it ends in the SHA-256.
+- The owner gives the HTTPS origin when the host is up. Either lab can serve the same digest path. The [host check](../examples/pack-host/README.md) can also download and verify the file.
 - The host sees your network address and the time of the fetch.
 - Take the SHA-256 from REFERENCE.md in this repository or a release, never from the host. The SHA-256 that `shasum` prints must be that one. If it is not, delete the file and stop.
 - `bean compare -pack nhanes.pack` must say that bean has the pack on record. It lists the cohorts, and the type names and units that the pack takes.
