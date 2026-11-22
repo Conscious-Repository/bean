@@ -284,7 +284,7 @@ A pack is one file of reference data, and a cell is its table for one measure an
 - **What it would do.** Two people confirm each other's Nostr identity once. After that, a client fetches the peer's signed bean address from Nostr, and a share or a reply is sealed to it. Nobody types address words for each package.
 - **What it answers.** "Where cards live" (step 4 above) could be Nostr relays. It is also a way to remember an address that a person confirmed, which SHARE-PLAN.md puts under "Later".
 - **What it must keep.** bean works with no Nostr, no relay and no service. No health record goes to a relay: only an address and a signature. The person chooses each peer, and nothing is sealed to an address that the person did not confirm.
-- **Where it meets a rule that stands.** Above, a command in bean that fetches from a network is not planned, and 328 (g) says no network code in bean. So the fetch is in a tool of its own, or in the person's own Nostr client, which hands bean an address. Whether bean itself may fetch is the owner's to decide.
+- **Decided by the owner (2026-11-21): a separate tool only.** bean itself fetches nothing from Nostr. A tool of its own, or the person's own Nostr client, hands bean an address. This keeps the rule above: no command in bean fetches from a network (328 (g)). bean checks what the tool hands it, as it checks any address.
 
 **Open questions for its design.**
 
