@@ -203,6 +203,8 @@ DECISIONS 338 has his answers of 2026-11-19. Each line below says what is decide
 - How the server is kept apart from the lab's other machines. The limits of size and of rate.
 - Where the packs are announced, and how long the host stays up.
 - A second host.
+- **A package between two peers on this host.** Not in this plan. ROADMAP.md, "The week ahead", says what it needs first (DECISIONS 341).
+- **What the setup document names.** Proposed: only what was run, as it was run. A public program that nobody tried is named as one that was read and not tried.
 
 ## Known weak points
 

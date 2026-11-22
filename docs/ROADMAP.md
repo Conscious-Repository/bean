@@ -86,6 +86,18 @@ A pack is one file of reference data, and a cell is its table for one measure an
    - If the reply to an address is not merged when the peer is ready, the owner says whether the run goes on six words.
 4. **Fourth: 0.9.** Its status is written on that day, from what is true then. From here the version stays at 0.9 until the owner says that the formats are locked.
 
+**The week ahead: one lab server, and what it does first (DECISIONS 341).** The owner said on 2026-11-21: "i can share data with a peer via (i think best) nostr infrustructure hosted on aion server". And: "the same aion server hosts data other can compare themselves against". He asked for the common sense thing that keeps his values. A scope was written, and three reviews judged it, one for each paragon. All three said: build with changes.
+
+- **This week, proposed:** the server hosts the two packs of the survey, by HOST-PLAN.md stages 1 to 3. The first run with a peer follows FIRST-RUN.md: its package goes by a channel that the two already use. No code in bean changes. The relay and its pointers of stage 4 are not needed for the run.
+- **What the week waits for:** the owner's answers to stage 2 of HOST-PLAN.md, on its first day. They are how the server is kept apart, the name, who acts on the server, and which file host program.
+- **A package between two peers through that server is a later step,** with a design and an audit of its own. The owner decides whether it is a need of this run. The reviews recommend that it is not.
+- **What that later step needs first.** The owner's rule of DECISIONS 328 covers his package, and the key that opens it is the peer's. So the peer's key file is protected with a passphrase, and bean has no such key file yet.
+  - One address for each package, and its key file deleted after reading. Only that stops a copy from being read later.
+  - What the server's staff learn, said plainly: who uploads and fetches, from which network address, when, and how much. The owner says whether they may.
+  - HOST-PLAN.md, FIRST-RUN.md and SHARE.md change in the same step. Today they keep a person's package off a host.
+  - An upload needs a Nostr tool that signs it, and an admitted key. Each person asks the server's staff for that.
+- **"Nostr infrastructure", in the owner's words, is not all in this.** A package would go by a link that the two send each other, with no event on a relay. A pointer for each package would link two people for good. Finding a peer on Nostr is the open path of DECISIONS 340. The owner can choose otherwise.
+
 **Beside the order, and before the first run: the survey's packs on a host** (phase 2 of the section "Order"). It is the owner's own act, with no code in bean. The owner decided on 2026-11-19 that it comes before the first run with a peer (DECISIONS 339). No other step waits for it.
 
 - It keeps the rules of "A first publisher hosts" below: a document of the setup, and a rehearsal with a throwaway identity.
@@ -265,6 +277,22 @@ A pack is one file of reference data, and a cell is its table for one measure an
 - A reply to a reply. Today a note is about a record of a share, and the owner answers with a new share.
 - Who runs the place where cards live: nobody (people pass addresses by hand), an open network, or AION?
 - A spelling that no pack has waits for a pack (REFERENCE-PLAN decision 4). A table of names waits for a real case (DECISIONS 323).
+
+**Proposed by the owner (2026-11-19): find a peer, and their address, on Nostr** (DECISIONS 340). Nothing of it is designed or built, and no step of the order to 0.9 holds it.
+
+- **The owner's direction, as a chat summary that he gave puts it:** bean "should add optional peer discovery and authenticated public-key exchange from Nostr". Its aim is to avoid routine checks of words by hand, and bean's core stays self-contained.
+- **What it would do.** Two people confirm each other's Nostr identity once. After that, a client fetches the peer's signed bean address from Nostr, and a share or a reply is sealed to it. Nobody types address words for each package.
+- **What it answers.** "Where cards live" (step 4 above) could be Nostr relays. It is also a way to remember an address that a person confirmed, which SHARE-PLAN.md puts under "Later".
+- **What it must keep.** bean works with no Nostr, no relay and no service. No health record goes to a relay: only an address and a signature. The person chooses each peer, and nothing is sealed to an address that the person did not confirm.
+- **Decided by the owner (2026-11-21): a separate tool only.** bean itself fetches nothing from Nostr. A tool of its own, or the person's own Nostr client, hands bean an address. This keeps the rule above: no command in bean fetches from a network (328 (g)). bean checks what the tool hands it, as it checks any address.
+
+**Open questions for its design.**
+
+- What binds a Nostr identity to a bean identity? A record in the log could name the Nostr key. An event that the Nostr key signs could name the bean identity. Or both.
+- What stands in the place of the first call by voice. The confirmation once is still a second channel. Without it, a relay or a stolen Nostr key can hand over a swapped address.
+- A stolen or lost Nostr key. It could swap the address of every peer who trusts it, with no word typed. How does a peer learn of a new key, and how is an old one retired?
+- What a relay learns: who publishes an address, who fetches it, and when. A card for a rare condition can identify a person (the risks above).
+- Whether it waits for the first run with a peer, so that real use shows how much the words cost.
 
 ## Path 3: a device signs what it captures
 
