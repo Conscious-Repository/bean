@@ -98,7 +98,7 @@ It is `tools/pool/` and `make pool`. **It is built (DECISIONS 334).** [tools/poo
 - **The note is a tripwire.** A bundle is left out unless its share's note is exactly `synthetic contributor`. Anyone can write that note. It guards against an accident, and proves nothing.
 - **Only comparisons and their readings.** A bundle is left out when it holds another record, or a record that keeps a file. The check of a bundle holds that a carried file is the file of such a record. An archive holds the records of a bundle, and nothing else of its folder: not the `README.txt` that bean writes there.
 - **Every claim of a bundle counts, or the bundle is left out.** So no record rides into the archive on a claim that does not count. A bundle whose records are larger together than 1 MiB is left out too.
-- **One reading for each identity and measure.** An identity with two different bundles that pass their check is left out of the pool, whatever their notes. So is an identity with two readings of one measure that count. So is an identity whose reading has claims in two cohorts. This is the test's rule, and the author's choice. What would give more: ROADMAP's rule, which takes the latest reading. ROADMAP keeps its own rule for a real pool, where a person must be able to correct a reading.
+- **One reading for each identity and measure.** An identity with two different bundles that pass their check is left out of the pool, whatever their notes. So is an identity with two readings of one measure that count. So is an identity whose reading has claims in two cohorts. This is the test's rule, and the author's choice. What would give more: DECISIONS 325's rule, which takes the latest reading. DECISIONS 325's rule stays for a real pool, where a person must be able to correct a reading.
 - **One bundle is one bundle.** Two folders with one share id that pass their check are one bundle, and it is taken once. They hold the same records: the share record lists each one, and the check holds the list.
 - **What it prints.** One line for each identity: taken, or left out and why. Each identity that it takes counts as one in its cell. A bundle that fails its check has no identity that can be trusted, so its line names the folder. The builder writes out safely every text that it quotes, so that no text can fake a line.
 
@@ -295,7 +295,7 @@ Any change to the bean binary. A flag that holds a pack to a SHA-256. A new reco
 
 ## Known weak points
 
-- **It comes before the order to 0.9,** by the author's reading of the owner's request (DECISIONS 332). He can say otherwise. That order slips by about four days.
+- **It is built** (DECISIONS 334 to 336).
 - **Nothing shows that three parts and their audits fit four days.**
 - **A demonstration can be taken for a pool.** The pool's pack, the pointer and the tally say what they are. The committed survey pack cannot. A recording or a post is outside what bean can mark.
 - **One identity can be put out of the test's pool by a replay.** The builder leaves out an identity with two different bundles. So whoever holds another share of that identity can hand it in. That is the test's rule. A real pool needs a share that is bound to its reader, and a rule for a correction.

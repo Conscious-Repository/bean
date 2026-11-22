@@ -32,7 +32,7 @@ What bean does not do well today, said out loud. [ROADMAP.md](ROADMAP.md) says w
   - A source with a stranger's broken file makes every `sync` from it exit 1.
   - The purge check in `bean import` reads only this copy's `local/purged-refs.jsonl`.
 - From the reviews of reference packs (DECISIONS 283, 284):
-  - A check of a bundle does not compute a comparison again. A claim with false numbers that names the pack on record reads like a true one there. `reproduce.py` with the pack finds it (path 4, step 3).
+  - A check of a bundle does not compute a comparison again. A claim with false numbers that names the pack on record reads like a true one there. `reproduce.py` with the pack finds it (ROADMAP, path 4: the check page computes a shared comparison again).
   - The Python check of a bundle, `checkbundle.py`, does not mark a comparison's pack. `reproduce.py` does.
   - The list of packs on record is in bean's code. A second publisher needs a signature, not a line in that list.
   - A pull request's build of the check page names the merge commit, which nobody can build again. The build on `main` and on a tag names a real commit.
@@ -43,6 +43,7 @@ What bean does not do well today, said out loud. [ROADMAP.md](ROADMAP.md) says w
 - From the reviews of the share review (DECISIONS 324):
   - `view.Safe` shows a space other than U+0020, a combining mark and a few rare blank characters as they are. A value can look blank, struck through, or like another value. It cannot hide a name: the letters are shown.
   - A field of more than 50 different numbers or times shows its count. Many numbers could still spell a message.
+  - A photo's file can hold what the camera wrote: a place, a time, a device. bean does not take that out, and the review before a share does not warn of it (DECISIONS 323, 325 (l)).
 - From the reviews of the plan for reference data (DECISIONS 321):
   - For a pack in a format that it does not know, bean says that the file is not a pack of version 0.
   - `bean purge` of the record that keeps a file erases the file, also when a saved comparison is about that record. The same file cannot be kept again on that copy.

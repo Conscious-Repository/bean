@@ -10,7 +10,11 @@ This file is the one place for open paths: what bean does now, what comes next, 
 
 **What it needs.**
 
-1. **The owner's four answers** to stage 2 of [HOST-PLAN.md](HOST-PLAN.md) (DECISIONS 341). They are how the server is kept apart, its name, who acts on it, and which file host program.
+1. **The owner's four answers** to stage 2 of [HOST-PLAN.md](HOST-PLAN.md) (DECISIONS 341). Each has HOST-PLAN's proposal, if it has one, so one line can answer them.
+   - How the server is kept apart from the lab's other machines. HOST-PLAN has no proposal yet.
+   - Its name. Decided: a name under the publisher's own domain (DECISIONS 338). Open: which name.
+   - Who acts on it. Proposed: the owner, or a person whom he names, and an assistant only writes the commands as files.
+   - Which file host program. Proposed: a public program, so that a second publisher can get it. Open: which one.
 2. **The host.** The lab server serves the two survey packs under their SHA-256, by HOST-PLAN.md stages 1 to 3. The relay and its pointers (stage 4) are not needed.
 3. **Readings for both.** The peer's reports held no reading that bean reads (DECISIONS 306). A value typed by hand works, with the type name and unit that a pack lists. Open: who the peer is.
 4. **The swap,** by [FIRST-RUN.md](FIRST-RUN.md): a package sealed to the reader's address, and a reply sealed back. It goes by a channel that the two already use, not through the server (DECISIONS 341).
@@ -21,15 +25,15 @@ No code in bean changes for it. A key file with a passphrase is not needed, beca
 
 ## Next: 0.9, then the lock
 
-**0.9 is the loop for people with a terminal:** import, share 1:1 and get an answer, and compare with a pack (DECISIONS 342). Its status is written after the proof of concept, from what is true then. It says first that no pool exists, and that no other entity hosts a pack.
+**0.9 is the loop for people with a terminal:** import, share 1:1 and get an answer, and compare with a pack (DECISIONS 342). Its status is written after the proof of concept, from what is true then. It says first that no pool exists, and that only the project's own lab server hosts a pack.
 
-**1.0 is the owner's word that the formats lock** (CORE.md section 6, DECISIONS 343). There is no clock. The version stays at 0.9 until he says so. Only data formats lock: a record, a share bundle and its seal, a reply, a reference pack, a saved comparison, and a device's folder. Command-line details never lock.
+**1.0 is the owner's word that the formats lock** (CORE.md section 6, DECISIONS 343). There is no clock. The version stays at 0.9 until he says so. Only data formats can lock. At 1.0 these lock: the record at `v` = 0, a share bundle with its seal, and a reply. That includes the encryption of stored files, the key derivation, the 24 words, and the folder layout that a restore needs. It also includes the identity, address and six words that people check by voice. A reference pack, a saved comparison and a device's folder stay drafts until the owner names them. A saved comparison cannot lock before `pack/0` does. Command-line details never lock.
 
 **Settle before the formats lock.** Each is an open question, from the audits of 2026-11-21.
 
 - **English in signed comparisons.** A saved comparison holds caveat sentences, and a check compares them letter for letter. Should a claim carry short codes instead?
 - **The built-in list of known packs.** It is in bean's code, which makes the project the judge of every pack. Should it only be a hint, outside the locked formats?
-- **`pack/0` changed its meaning without a new label.** Release 0.8.2 reads packs that 0.8.1 refuses, and a reply to an address came the same way. Should packs, bundles and replies carry a format mark?
+- **`pack/0` changed its meaning without a new label.** Release 0.8.2 reads packs that 0.8.1 refuses, and a reply to an address came the same way. Should a loosened format get a new label, and should bundles and replies carry a mark?
 - **Nostr kind 29944 is not registered,** but the validity rules use it. Register it, or accept the risk in writing?
 - **P-256 lets a hardware signer use random nonces,** and no device exists yet. A weak random source can leak the key. Should P-256 stay out of the lock until a real device signs?
 - **A stolen Nostr key could swap the address of every peer** who finds addresses on Nostr. Does an address from Nostr still need a check by voice once, and again when it changes?
@@ -41,6 +45,7 @@ No code in bean changes for it. A key file with a passphrase is not needed, beca
 - Whether the survey method drops its 30 too, as a pack cell did (DECISIONS 333). The packs on record would need a new builder version.
 - Whether a result from a very small cell gets words of its own.
 - Whether 1.0 can come while `pack/0` is a draft, and whether a review from outside the project is a condition of 1.0.
+- Whether the caveat of a small cohort stays at 100, and why 100. The number is set twice in the code, with no reason given.
 - Whether a record gets a mark for a value that was typed by hand.
 - Whether bean ever keeps a package or a pack with the log, so that an export holds it.
 - Where code lives. Proposed: what runs offline is here, and what listens on a network is not.
@@ -54,7 +59,7 @@ Each path waits for its real case. The steps that are done are in DECISIONS.md.
 Done: a seal with six words, a seal to a reader's address, and the `age` format. The review before a share says what leaves. Identity words show who signed. Open:
 
 - A key that the check page makes for a reader who has only a browser. A forged page would take a key that opens every package, so it needs a design of its own (SHARE-PLAN.md).
-- A package by link on a file host, sealed to the reader's key. The owner's rule: a key file with a passphrase comes first (DECISIONS 328).
+- A package by link on a file host, sealed to the reader's key. The owner's rule: a key file with a passphrase comes first (DECISIONS 328). A key made for that one upload signs it, never a key of a log. The host learns the size, the time and each network address.
 - A second, independent place for the check page's SHA-256, and a short address of the project's own.
 - Whether `-seal` becomes the default, `bean share -except <id>`, and an end date for a package.
 
@@ -64,7 +69,7 @@ A reader who opened a package holds a copy for good. Withdrawing permission stop
 
 A person with a condition learns from peers they trust. bean does not diagnose, rank treatments or advise. Done: one person to one person (path 1), and a reply that the person keeps (DECISIONS 290). Open:
 
-- **Finding each other.** A person publishes a short card with a reader address and no measurement. Where cards live is not decided. Finding a peer and their address on Nostr is proposed, as a separate tool (DECISIONS 340).
+- **Finding each other.** A person publishes a short card with a reader address and no measurement. Where cards live is not decided. A card for a rare condition can identify a person. Finding a peer and their address on Nostr is proposed, as a separate tool (DECISIONS 340).
 - **A statistic over a group** that hides each member's value. It waits for a real group and a real question.
 - A reply from a reader who has only a browser, a peer's notes in the peer's own log, and a reply to a reply.
 
@@ -78,7 +83,7 @@ An AION instrument signs each acquisition, and the person brings the signed reco
 - a counter that never goes back;
 - the time and storage to hash each raw acquisition.
 
-Not built: `bean pair` and `bean import-device`, and the device's label wherever its records show. A device signature shows which key signed which bytes. It does not show that the reading is accurate, or whose body was measured.
+Not built: `bean pair` and `bean import-device`, and the device's label wherever its records show. Open: whether any maker's certificate counts the same, with the reader choosing which makers to trust. A device signature shows which key signed which bytes. It does not show that the reading is accurate, or whose body was measured.
 
 ### Path 4: compare with public data, from any source
 
@@ -101,6 +106,8 @@ Done: reference packs, two NHANES packs on record, and `bean compare -pack` (DEC
 - A check of a whole export in Python.
 - Whether a file that only another key's record names keeps its file at all.
 - A neutral home for the project ([GOVERNANCE-PROPOSAL.md](GOVERNANCE-PROPOSAL.md)).
+- Require the CI check on `main`. Today GitHub reports that `main` is not protected.
+- A table of names for one quantity. It waits for a real case (DECISIONS 323).
 
 ## Not planned
 
@@ -110,7 +117,7 @@ Done: reference packs, two NHANES packs on record, and `bean compare -pack` (DEC
 - Health records on relays, or a public card of what a person holds.
 - A service that computes a comparison from a person's value or cohort, paid or free.
 - A wallet in bean, or a program that a pack names and bean runs.
-- A table of names, or a unit that bean converts.
+- A unit that bean converts.
 - Encryption of record files at rest. Use an encrypted volume.
 - Whoop and Oura importers until there is a real export.
 - Zero-knowledge proofs, and distributed trust scores.
