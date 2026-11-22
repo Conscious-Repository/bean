@@ -94,6 +94,18 @@ A pack is one file of reference data, and a cell is its table for one measure an
    - A peer shows under a name only when the person accepted a reply of theirs before. If not, the view shows eight identity words and a key.
 5. **Fifth: 0.9.** Its status is written on that day, from what is true then. From here the version stays at 0.9 until the owner says that the formats are locked.
 
+**The week ahead: one lab server, and what it does first (DECISIONS 341).** The owner said on 2026-11-21: "i can share data with a peer via (i think best) nostr infrustructure hosted on aion server". And: "the same aion server hosts data other can compare themselves against". He asked for the common sense thing that keeps his values. A scope was written, and three reviews judged it, one for each paragon. All three said: build with changes.
+
+- **This week, proposed:** the server hosts the two packs of the survey, by HOST-PLAN.md stages 1 to 3. The first run with a peer follows FIRST-RUN.md: its package goes by a channel that the two already use. No code in bean changes. The relay and its pointers of stage 4 are not needed for the run.
+- **What the week waits for:** the owner's answers to stage 2 of HOST-PLAN.md, on its first day. They are how the server is kept apart, the name, who acts on the server, and which file host program.
+- **A package between two peers through that server is a later step,** with a design and an audit of its own. The owner decides whether it is a need of this run. The reviews recommend that it is not.
+- **What that later step needs first.** The owner's rule of DECISIONS 328 covers his package, and the key that opens it is the peer's. So the peer's key file is protected with a passphrase, and bean has no such key file yet.
+  - One address for each package, and its key file deleted after reading. Only that stops a copy from being read later.
+  - What the server's staff learn, said plainly: who uploads and fetches, from which network address, when, and how much. The owner says whether they may.
+  - HOST-PLAN.md, FIRST-RUN.md and SHARE.md change in the same step. Today they keep a person's package off a host.
+  - An upload needs a Nostr tool that signs it, and an admitted key. Each person asks the server's staff for that.
+- **"Nostr infrastructure", in the owner's words, is not all in this.** A package would go by a link that the two send each other, with no event on a relay. A pointer for each package would link two people for good. Finding a peer on Nostr is the open path of DECISIONS 340. The owner can choose otherwise.
+
 **Beside the order, and before the first run: the survey's packs on a host** (phase 2 of the section "Order"). It is the owner's own act, with no code in bean. The owner decided on 2026-11-19 that it comes before the first run with a peer (DECISIONS 339). No other step waits for it.
 
 - It keeps the rules of "A first publisher hosts" below: a document of the setup, and a rehearsal with a throwaway identity.
