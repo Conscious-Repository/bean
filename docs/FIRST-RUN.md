@@ -1,6 +1,6 @@
 # A first exchange between two people
 
-This is one page for two people who each run bean in a terminal. One shares records, the other reads them and answers, and then the two change places. No six words are read out. [SHARE.md](SHARE.md) has the reasons for each step.
+This is one page for two people who each run bean in a terminal. One shares records, the other reads them and answers, and then the two change places. Then each compares with a pack from a host. No six words are read out. [SHARE.md](SHARE.md) has the reasons for each step.
 
 **bean is not a diagnosing tool.** A note from a peer is that person's word, and not medical advice.
 
@@ -10,7 +10,7 @@ In the examples, Ben shares and Ana answers.
 
 ## Before the call
 
-1. **Both install release 0.8.1 or a later one.** `bean version` names the release. An earlier bean does not open these files.
+1. **Both install release 0.8.2, the current one, or a later one.** `bean version` names the release. 0.8.1 is the oldest release that opens these files. 0.8.2 also reads a pack with a cell of fewer than 30 people ([UPGRADING.md](../UPGRADING.md)).
 
    ```
    go install github.com/Conscious-Repository/bean/cmd/...@latest
@@ -82,6 +82,24 @@ bean ls
 - `-label` is the name under which Ana's notes show. `bean ls` then shows each note with `[peer Ana]`.
 
 Then change places: Ana shares, and Ben answers.
+
+## Each compares with a pack
+
+Each does this alone, at their own terminal: `bean compare` prints your own values. bean fetches nothing, so you download the pack yourself ([REFERENCE.md](REFERENCE.md)).
+
+```
+curl -fL -o nhanes.pack https://<host>/5cae07db64295d565ffae7c251c17fdb9f043dc0638868557275f8b0b0311efa
+shasum -a 256 nhanes.pack        # on Linux: sha256sum nhanes.pack
+bean compare -pack nhanes.pack
+bean compare -pack nhanes.pack -cohort male-30-39 -type 'lab.*'
+```
+
+- The address is an example. The owner gives the real one when the host is up, and its file host program is chosen ([HOST-PLAN.md](HOST-PLAN.md)). With a Blossom server it ends in the SHA-256.
+- The host sees your network address and the time of the fetch.
+- Take the SHA-256 from REFERENCE.md in this repository or a release, never from the host. The SHA-256 that `shasum` prints must be that one. If it is not, delete the file and stop.
+- `bean compare -pack nhanes.pack` must say that bean has the pack on record. It lists the cohorts, and the type names and units that the pack takes.
+- Choose your own cohort. A reading in another unit gets no number.
+- With no host, build the same pack from the survey's files (REFERENCE.md). Its SHA-256 is the same.
 
 ## When a file does not open
 

@@ -2,7 +2,7 @@
 
 This is for anyone who publishes reference data, and for anyone who writes a tool that reads it. It says what a pack must hold so that bean, and anyone else, can compare a reading with it and check the result. [ARCHITECTURE.md](ARCHITECTURE.md) shows the whole path in one picture.
 
-It is a draft at version 0. One source has been built into a pack: NHANES 2017-2018. The format changes when a second source shows that it must. [REFERENCE-PLAN.md](REFERENCE-PLAN.md) says what changes next and what does not, and where bean falls short of its own rules.
+It is a draft at version 0. One source has been built into a pack: NHANES 2017-2018. The format changes when a second source shows that it must. It stays a draft at 1.0 until the maintainers name it, and so does a saved comparison (CORE.md section 6). [REFERENCE-PLAN.md](REFERENCE-PLAN.md) says what changes next and what does not, and where bean falls short of its own rules.
 
 ## The idea
 
@@ -171,7 +171,7 @@ A saved comparison gives the reading's value away to anyone with the pack ([COMP
 - **The same files give the same bytes.** Write the object in canonical form. Sort the cells by measure, then by cohort. Add no time and no name of a machine.
 - **Name every source file by its SHA-256.** A reader who fetches the files from the source can then build the pack again.
 - **State your own rule for a small cell.** The format has no least size. The survey's builder leaves out a cell of fewer than 30 people: that is the method of [COMPARE.md](COMPARE.md), for a sample of a survey.
-- **Tell each contributor what a cell shows, before they contribute.** A cell lists each distinct value with its weight, beside the cohort's text. In a pack that is built from contributions, each listed value is the value of one contributor or more. That holds in a cell of any size, and whoever has the pack reads it. The cells of one cohort are read together: in a cohort of one person, they are that person's values. `bean compare` prints a cell's median and its middle half: in a cell of one, that is the one value. Two packs that differ by one contributor show that person's value. bean cannot check that a builder said so. [ROADMAP.md](ROADMAP.md), under "A pool", lists what a real pool needs first.
+- **Tell each contributor what a cell shows, before they contribute.** A cell lists each distinct value with its weight, beside the cohort's text. In a pack that is built from contributions, each listed value is the value of one contributor or more. That holds in a cell of any size, and whoever has the pack reads it. The cells of one cohort are read together: in a cohort of one person, they are that person's values. `bean compare` prints a cell's median and its middle half: in a cell of one, that is the one value. Two packs that differ by one contributor show that person's value. bean cannot check that a builder said so. [ROADMAP.md](ROADMAP.md), path 4, and DECISIONS 325 and 328 list what a real pool needs first.
 - **Take each `same` entry from a real reading.** Use the type and the unit that a real importer or a real report writes. A second name or unit for a quantity is a second entry.
 - **Say what does not carry over.** A caveat is part of the pack. Each comparison shows it, and each saved claim holds it.
 - **Use the weights that the source says to use.** A wrong weight gives a number that looks right.

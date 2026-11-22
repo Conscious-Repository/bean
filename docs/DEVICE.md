@@ -2,7 +2,7 @@
 
 This is for the people who build an instrument and its firmware. It says what the device must write so that bean, and anyone else, can check it. No device exists yet. The format is fixed first, and the hardware is built to meet it.
 
-It is a draft at version 0. It changes when a real device shows that it must.
+It is a draft at version 0. It changes when a real device shows that it must. It stays a draft at 1.0 until the maintainers name it (CORE.md section 6).
 
 ## The idea
 

@@ -1,6 +1,6 @@
 # bean core specification, draft
 
-Status: draft. This text is not frozen. [CORE.md](CORE.md) section 6 tells when it freezes.
+Status: draft. This text is not locked. [CORE.md](CORE.md) section 6 tells when it locks, and what locks.
 Date: 2026-10-30.
 This text defines record format `v` 0. [UPGRADING.md](UPGRADING.md) lists the changes that alter results for an existing log.
 
@@ -10,8 +10,12 @@ Name: bean.
 
 This specification uses Simplified Technical English (ASD-STE100).
 The key words MUST, MUST NOT, REQUIRED, SHOULD, SHOULD NOT and MAY have the meanings in RFC 2119 and RFC 8174.
-Text marked DEFAULT is a decision that can change until the format freezes (8.1).
-An implementation MUST follow a DEFAULT until the specification changes it.
+Text marked DEFAULT is a decision that can change until the formats lock (8.1).
+Every DEFAULT in sections 1 to 8 locks with the record format, except the hold length (7.6).
+The hold length and the DEFAULTs of section 9 (importers) and section 12 (CLI) never lock.
+They bind only the reference implementation, and are no MUST for another implementation. A plain MUST in those sections binds every implementation.
+The DEFAULT for random nonces of a hardware P-256 signer (4.5) stays open until a device signs ([docs/ROADMAP.md](docs/ROADMAP.md), "Next").
+An implementation MUST follow every other DEFAULT until the specification changes it.
 [CORE.md](CORE.md) is a short summary of the rules that two implementations must agree on.
 
 ## Contents
@@ -463,6 +467,7 @@ Risk: a person can type the words into a crypto wallet by mistake.
 The wallet then sees the seed.
 The CLI MUST tell the person that the words are for bean only.
 DEFAULT.
+The text of that warning is CLI behaviour, and never locks.
 
 ## 5. Identity
 
@@ -924,7 +929,7 @@ A write MUST NOT return an id for a record that the verifier of the same folder 
 ### 8.1 Known versions
 
 This specification defines record version `v` = 0.
-The format freezes at `v` = 0. After the freeze, no rule for a `v` 0 record changes.
+The record format locks at `v` = 0, on the maintainers' word (CORE.md section 6). After the lock, no rule for a `v` 0 record changes.
 A later change that alters the validity of an existing record needs a new `v` (8.4). That version MUST say how it treats `v` 0 records, and an identity with records of both versions.
 A verifier knows a version only if it implements every rule of that version.
 
@@ -988,7 +993,7 @@ If it has no `subject`, `bean append` sets the local identity id.
 ### 9.3 Blob first
 
 1. Store the raw source file as a blob before any record (`bean blob put <file>` prints the blob id). DEFAULT.
-2. Put `{"hash": <blob id>, "role": "raw-export", "media_type": <type>}` in `blobs` of the one record that keeps that file. Each other record from the file names it by its SHA-256 in `context`, not in `blobs`. Then a purge of the record that keeps the file erases the file. DEFAULT.
+2. Put `{"hash": <blob id>, "role": "raw-export", "media_type": <type>}` in `blobs` of the one record that keeps that file. Each other record from the file names it by its SHA-256 in `context`, not in `blobs`. Then a purge of the record that keeps the file erases the file.
 
 ### 9.4 Granularity
 
@@ -997,7 +1002,7 @@ Each record has `source.system`, `source.adapter` as `name@version`, and a dedup
 The adapter does not hold the dedupe key.
 The adapter writes the HMAC input array (4.8) as `source.ref_input`.
 `bean append` computes `source.ref` from it and removes `source.ref_input` before it signs.
-`source.ref_input` never reaches the log. DEFAULT.
+`source.ref_input` never reaches the log.
 
 ### 9.5 Dedupe
 
@@ -1488,17 +1493,17 @@ Hand-built AES-SIV code MUST also pass the RFC 4493 and RFC 5297 Appendix A vect
 
 ## Appendix: defaults and open items
 
-Each item has a DEFAULT in the text, or is open. A DEFAULT can change until the format freezes (CORE.md section 6).
+Each item has a DEFAULT in the text, or is open. A DEFAULT can change until the formats lock (CORE.md section 6). Which DEFAULTs lock is set by section, at the start of this text.
 
 Decided:
 
 1. Signing keys: Ed25519 is the default. P-256 is for hardware keys in devices. secp256k1 BIP-340 keys sign through a Nostr wrapper event, so NIP-46 and NIP-07 signers can sign. The wrapper uses kind 29944 and a NIP-31 `alt` tag.
 2. Records have their own format. Nostr can carry them later, encrypted. The core has no NIP-01 event shape.
 3. Every succession is signed with the paper seed. Any fork freezes the identity (5.6, 5.7).
-4. The hold before erasure is 7 days (7.6). The hold controls `gc`. A timer does not erase anything.
+4. The hold before erasure is 7 days (7.6). The hold controls `gc`. A timer does not erase anything. The hold is CLI behaviour, and does not lock.
 5. One host holds the signing key. Other devices use bare device keys (Extension 2). Devices do not share a signing key.
 6. Measurement uncertainty is `context.uncertainty` (9.9).
-7. The format freezes at `v` = 0 (8.1).
+7. The record format locks at `v` = 0, on the maintainers' word (8.1).
 
 Defaults:
 
@@ -1507,7 +1512,7 @@ Defaults:
 10. The `type` pattern and the precision values (3.2, 3.5).
 11. The AES-SIV associated data label (4.9) and the `hmac-sha256:` ref prefix (4.8). An implementation can use a tested AES-SIV library. The reference implementation builds AES-SIV and agrees with OpenSSL.
 12. The paper seed as 24 BIP-39 English words over 32 bytes (4.10).
-13. The order of exit codes (12.1).
+13. The order of exit codes (12.1). It is CLI behaviour, and does not lock.
 
 Open:
 
