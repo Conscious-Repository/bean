@@ -44,7 +44,7 @@ A pack is one file of reference data, and a cell is its table for one measure an
 
 - What "a user uploads data" means: "Import into own log".
 - Who walks the loop at 1.0: "People with a terminal".
-- What "compare against pools of user data" is at 1.0: "Side by side, two people". **Changed since.** The 30 that this answer rested on is gone (DECISIONS 333). On 2026-11-21 the owner dropped the view (DECISIONS 342).
+- What "compare against pools of user data" is at 1.0: "Side by side, two people". **Changed since.** He chose it for two reasons (DECISIONS 328 (b)). A pool's cell needed 30 identities, and that floor is gone (DECISIONS 333). A pack lists every value of a cell, so a pack of a few peers shows each person's value. That is still true. On 2026-11-21 the owner dropped the view (DECISIONS 342). In its place, a person compares with a pack: the survey's, or a small pool's whose members accept that cost.
 - When a reply to an address is built: "Before the first run".
 - What 1.0 promises. His own words: "maybe we should plan to leave this at .9 for a while too until we're positive formats are locked".
 - Whether a key file with a passphrase is built before any package of his goes on a public host: "Yes, before a public host".
@@ -57,7 +57,7 @@ A pack is one file of reference data, and a cell is its table for one measure an
 
 1. Import into your own log.
 2. Share 1:1 and get an answer: with six words, or with identity words and address words.
-3. Compare with a pack of the survey, which bean has on record. A person builds it with `bean-pack-nhanes` from the survey's files, which [COMPARE.md](COMPARE.md) lists. Or they fetch it, when the packs are on a host. A pack of a small pool of peers is read the same way, since a cell has no least number (DECISIONS 333).
+3. Compare with a pack of the survey, which bean has on record. A person builds it with `bean-pack-nhanes` from the survey's files, which [COMPARE.md](COMPARE.md) lists. Or they fetch it, when the packs are on a host. A pack of a small pool of peers is read the same way, since a cell has no least number (DECISIONS 333). Its cost: a pack lists every value of a cell, so a pack of a few people shows each person's value to whoever holds it. Whoever pools tells each contributor this first (DECISIONS 333 (e), [REFERENCE.md](REFERENCE.md)).
 
 **0.9 is not the owner's whole loop, and its status says so first.** No pool exists, and no other entity hosts a pack.
 
