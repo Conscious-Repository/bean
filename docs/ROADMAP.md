@@ -290,6 +290,22 @@ A pack is one file of reference data, and a cell is its table for one measure an
 - Who runs the place where cards live: nobody (people pass addresses by hand), an open network, or AION?
 - A spelling that no pack has waits for a pack (REFERENCE-PLAN decision 4). A table of names waits for a real case (DECISIONS 323).
 
+**Proposed by the owner (2026-11-19): find a peer, and their address, on Nostr** (DECISIONS 340). Nothing of it is designed or built, and no step of the order to 0.9 holds it.
+
+- **The owner's direction, as a chat summary that he gave puts it:** bean "should add optional peer discovery and authenticated public-key exchange from Nostr". Its aim is to avoid routine checks of words by hand, and bean's core stays self-contained.
+- **What it would do.** Two people confirm each other's Nostr identity once. After that, a client fetches the peer's signed bean address from Nostr, and a share or a reply is sealed to it. Nobody types address words for each package.
+- **What it answers.** "Where cards live" (step 4 above) could be Nostr relays. It is also a way to remember an address that a person confirmed, which SHARE-PLAN.md puts under "Later".
+- **What it must keep.** bean works with no Nostr, no relay and no service. No health record goes to a relay: only an address and a signature. The person chooses each peer, and nothing is sealed to an address that the person did not confirm.
+- **Decided by the owner (2026-11-21): a separate tool only.** bean itself fetches nothing from Nostr. A tool of its own, or the person's own Nostr client, hands bean an address. This keeps the rule above: no command in bean fetches from a network (328 (g)). bean checks what the tool hands it, as it checks any address.
+
+**Open questions for its design.**
+
+- What binds a Nostr identity to a bean identity? A record in the log could name the Nostr key. An event that the Nostr key signs could name the bean identity. Or both.
+- What stands in the place of the first call by voice. The confirmation once is still a second channel. Without it, a relay or a stolen Nostr key can hand over a swapped address.
+- A stolen or lost Nostr key. It could swap the address of every peer who trusts it, with no word typed. How does a peer learn of a new key, and how is an old one retired?
+- What a relay learns: who publishes an address, who fetches it, and when. A card for a rare condition can identify a person (the risks above).
+- Whether it waits for the first run with a peer, so that real use shows how much the words cost.
+
 ## Path 3: a device signs what it captures
 
 **The need.** An AION instrument signs each acquisition when it captures it. The person brings the signed records into their log over a cable or a radio link. A reader can tell which device captured, with which settings, and that nothing changed since.
