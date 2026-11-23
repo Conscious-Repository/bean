@@ -2,30 +2,23 @@
 
 This file is the one place for open paths: what bean does now, what comes next, and what is not decided. Work that is done is in the git history. The reasons are in [DECISIONS.md](DECISIONS.md), and [KNOWN-GAPS.md](KNOWN-GAPS.md) lists known limits. Nothing here is final.
 
-**Where bean stands (2026-11-22).** A person keeps a log, and imports lab reports, Apple Health and CSV files. They compare a reading with a survey, or with a reference pack. They share chosen records as one sealed file, with six words or sealed to the reader's address. A reader who runs bean answers with signed notes, and the person takes them into their log. Release 0.8.2 is out, as a pre-release. Two people keep a log, so `main` is a release, with or without a tag (DECISIONS 310).
+**Where bean stands (2026-11-23).** A person keeps a log, and imports lab reports, Apple Health and CSV files. They compare a reading with a survey, or with a reference pack. They share chosen records as one sealed file, with six words or sealed to the reader's address. A reader who runs bean answers with signed notes, and the person takes them into their log. Release 0.8.2 is out, as a pre-release. Two people keep a log, so `main` is a release, with or without a tag (DECISIONS 310).
 
 ## Now: the proof of concept
 
-**The aim.** The owner and a peer each import their own readings. They swap a sealed package and a signed reply. Then each compares with a survey pack that the lab server hosts.
+**Run the existing one-to-one exchange.** Two people each import a reading. They exchange a package sealed to a verified reader address and a signed reply, then compare locally with a reference pack. Use [FIRST-RUN.md](FIRST-RUN.md) and a channel the two already use. A peer whose report bean does not read can enter a reading with the type and unit the pack lists. Each person checks the pack against the SHA-256 in [REFERENCE.md](REFERENCE.md). Record where each person needed help and how long the exchange took. This exercise can run today with a local copy of the pack.
 
-**What it needs.**
+**Try ongoing sharing in a separate delivery client.** Use synthetic readings and a local inbox. These are proposed trials for the next few days. Each builds on the last. Use the existing [selection and seal for one reader](SHARE.md).
 
-1. **The lab setup** for the first publisher (DECISIONS 341, 344). Confirm the isolation, name and operator for the live trial.
-   - How the server is kept apart from the lab's other machines. Proposed: a separate machine or network segment, with only the file host's port open.
-   - Its name. Decided: a name under the publisher's own domain (DECISIONS 338). Proposed: `packs.` before that domain.
-   - Who acts on it. Proposed: the owner, or a person whom he names, and an assistant only writes the commands as files.
-   - The [read-only example](../examples/pack-host/README.md) uses Caddy and two local files. Another lab can choose its own server.
-2. **The host.** Build the two survey packs, then try the read-only setup on the isolated lab server. Open HTTPS by [HOST-PLAN.md](HOST-PLAN.md#the-read-only-host) and check both digests from outside. Relay pointers can follow later.
-3. **Readings for both.** The peer's reports held no reading that bean reads (DECISIONS 306). A value typed by hand works, with the type name and unit that a pack lists. Open: who the peer is.
-4. **The swap,** by [FIRST-RUN.md](FIRST-RUN.md): a package sealed to the reader's address, and a reply sealed back. It goes by a channel that the two already use, not through the server (DECISIONS 341).
-5. **The comparison,** by FIRST-RUN.md. Each fetches a pack with a plain download tool such as `curl`, and checks its SHA-256 against [REFERENCE.md](REFERENCE.md). Then each runs `bean compare -pack`. bean fetches nothing itself (DECISIONS 340 (d)).
-6. **A note of the run:** how long it took from the install on, and where each person was stuck.
+1. **One invitation.** The sender chooses a contact, one reading type and a date window. Verify the reader’s address and the sender’s signing identity by another channel. Preview the full selection, including records brought along by a comparison and any attachments. If it exceeds the permission, hold the package for review. The reader accepts one invitation and checks the expected signed share ID. A third key cannot open the file. A changed contact key needs fresh verification.
+2. **One ongoing permission.** The sender chooses between sharing once and including future results, with a separate expiry for that permission. If the window refers to when a reading was taken, use its observation date. Hold an undated reading for review. Test a late import, a correction and an unrelated reading. Recheck the current permission before every handoff, including retries. Stop or expiry cancels queued work still under sender control. Once a recipient can retrieve the sealed bytes, count them as released even if unread. A timeout leaves delivery uncertain. Retry the same sealed package only while authorized. The reader catches up after an outage and recognizes a repeated signed share ID. Replaying an older share must never replace a correction.
+3. **Two readers.** Pick two verified contacts and show what each will get. Seal separately to each using the same one-reader format. Give them different scopes. Remove one while an update is queued and check that only the remaining reader gets the next matching result once. A reader adding a contact grants that person nothing. Block the first host and start a fresh reader from a second inbox holding the authorized package. Verify the same signed share ID and sender offline with the reader’s own key.
 
-No code in bean changes for it. A key file with a passphrase is not needed, because no package goes on a public host (DECISIONS 328).
+The sender should be able to review and stop each permission, and each reader should be able to receive updates without moving files by hand. The client owns contacts, permissions, delivery and retries. If the trial exposes a missing offline operation, bring that specific case to bean. A public host for personal packages still needs the protected reader key described in path 1 (DECISIONS 328).
 
 ## Next: 0.9, then the lock
 
-**0.9 is the loop for people with a terminal:** import, share 1:1 and get an answer, and compare with a pack (DECISIONS 342). Its status is written after the proof of concept, from what is true then. It says first that no pool exists, and that only the lab server hosts a pack. The owner runs that server, it is no part of bean, and it is not up yet.
+**0.9 is the loop for people with a terminal:** import, share 1:1 and get an answer, and compare with a pack (DECISIONS 342). Report the results of the two-person proof of concept and its limitations. The scoped-updates trial informs paths 1 and 2; its client and the rollout of any publisher’s server have independent schedules.
 
 **1.0 is the owner's word that the formats lock.** [CORE.md](../CORE.md) section 6 says what locks, and how the word is given (DECISIONS 343). There is no clock.
 
@@ -37,7 +30,7 @@ No code in bean changes for it. A key file with a passphrase is not needed, beca
 - **Nostr kind 29944 is not registered,** but the validity rules use it. Register it, or accept the risk in writing?
 - **P-256 lets a hardware signer use random nonces,** and no device exists yet. A weak random source can leak the key. Should P-256 stay out of the lock until a real device signs?
 - **A stolen Nostr key could swap the address of every peer** who finds addresses on Nostr. Does an address from Nostr still need a check by voice once, and again when it changes?
-- **A lab server that carries packages would see who shares with whom.** Should packages between peers stay off any shared server for good?
+- **A lab server that carries packages would see who shares with whom.** What delivery metadata would the participants accept before a personal package goes on such a host?
 - **A deletion stays only on the copy where it was made** (`local/purged-refs.jsonl`). Should a deletion travel with the log?
 
 **Other open decisions of the owner.**
@@ -95,9 +88,9 @@ Done: reference packs, two NHANES packs on record, and `bean compare -pack` (DEC
 - **The check page computes a shared comparison again,** when the reader gives it the pack.
 - **A pool of real people.** It needs a share that names its reader, written consent and a review of the law (DECISIONS 325, 328). It also needs a pack format for data that is not public ([POOL-PLAN.md](POOL-PLAN.md)). A pack lists every value of a cell, so a small pool shows each member's value.
 
-### Hosting
+### Portability check
 
-[HOST-PLAN.md](HOST-PLAN.md) is the one plan for a host. A second lab can copy or rebuild the packs and run the same reader check against its own domain. The test passes when the first host is unreachable and the same offline comparison works. Later come relay pointers and independent statements of source digests. Someone also keeps a copy of the survey's files, for the day that their host is gone. A publisher's own key waits for a design for a lost key (DECISIONS 338).
+A second publisher can serve the same public pack. With the first host unreachable, a reader checks the digest and repeats the offline comparison. The [read-only example](../examples/pack-host/README.md) gives the reader check. [HOST-PLAN.md](HOST-PLAN.md) records the operator trial. Each operator owns deployment, domain, access policy and operations outside this roadmap.
 
 ### Smaller paths
 

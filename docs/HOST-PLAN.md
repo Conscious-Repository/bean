@@ -16,9 +16,9 @@ The owner asked for this plan on 2026-11-19, and said where it can run:
 we have a server in the lab we can host a relay + blossom on
 ```
 
-This is the one plan for a first host. It holds the rules, and puts them in an order. [ROADMAP.md](ROADMAP.md), "Now", says what waits for it.
+This plan records the stages of the first host trial. Each publisher runs its own deployment. The sharing trial in [ROADMAP.md](ROADMAP.md) can start with a local inbox.
 
-## What is true today
+## What was known when the host trial was planned
 
 **H1. The steps ran on one machine.** `examples/pool/run.sh` uploads a file, publishes an event of kind 1063, finds it, and fetches the file. It uses the test server of `nak` 0.22.3. That server keeps everything in memory, and is no host. Of the rules below, the trial tried only the first.
 
