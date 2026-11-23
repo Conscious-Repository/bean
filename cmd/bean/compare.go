@@ -502,7 +502,7 @@ func printComparisons(w io.Writer, rows []comparison, head, known string, all bo
 	}
 	// The table is shown only when it has a row.
 	var table bytes.Buffer
-	shown := 0
+	shown, compared := 0, 0
 	tw := tabwriter.NewWriter(&table, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "DATE\tREADING\tVALUE\tPERCENTILE\tLOWER\tSAME\tMIDDLE HALF\tMEDIAN\tN\tNOTE\tID")
 	var caveats, help, unmapped, against []string
@@ -535,6 +535,7 @@ func printComparisons(w io.Writer, rows []comparison, head, known string, all bo
 				once(&help, text)
 			}
 		default:
+			compared++
 			res := c.result
 			var note []string
 			if res.N < nhanes.SmallN {
@@ -560,6 +561,11 @@ func printComparisons(w io.Writer, rows []comparison, head, known string, all bo
 	tw.Flush()
 	if shown > 0 {
 		w.Write(table.Bytes())
+	}
+	if len(rows) == 1 {
+		fmt.Fprintf(w, "Compared %d of 1 selected reading.\n", compared)
+	} else {
+		fmt.Fprintf(w, "Compared %d of %d selected readings.\n", compared, len(rows))
 	}
 	// Which measure a reading is set against is the pack's claim, so it is
 	// shown.

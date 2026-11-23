@@ -88,15 +88,21 @@ Then change places: Ana shares, and Ben answers.
 Each does this alone, at their own terminal: `bean compare` prints your own values. bean fetches nothing, so you download the pack yourself ([REFERENCE.md](REFERENCE.md)).
 
 ```
-curl -fL -o nhanes.pack https://<host>/5cae07db64295d565ffae7c251c17fdb9f043dc0638868557275f8b0b0311efa
-shasum -a 256 nhanes.pack        # on Linux: sha256sum nhanes.pack
-bean compare -pack nhanes.pack
+digest=5cae07db64295d565ffae7c251c17fdb9f043dc0638868557275f8b0b0311efa
+origin=https://stele.aion.bio
+curl -fsS "$origin/$digest" -o nhanes.pack &&
+  printf '%s  nhanes.pack\n' "$digest" | shasum -a 256 -c - &&
+  bean compare -pack nhanes.pack
+```
+
+The digest above is the one Bean records for the 20-measure pack. On Linux, use `sha256sum -c -` in place of `shasum -a 256 -c -`. Continue once the file passes and Bean lists its cohorts.
+
+```
 bean compare -pack nhanes.pack -cohort male-30-39 -type 'lab.*'
 ```
 
-- Whoever runs the host gives its HTTPS origin. Any lab can serve the same digest path. The [host check](../examples/pack-host/README.md) can also download and verify the file.
-- The host sees your network address and the time of the fetch.
-- Take the SHA-256 from REFERENCE.md in this repository or a release, never from the host. The SHA-256 that `shasum` prints must be that one. If it is not, delete the file and stop.
+- If Stele is down, set `origin=https://codex-reference-library-preview-aionbio.me-3ff.workers.dev` and repeat the download and check with the same digest. Both hosts use Cloudflare. Any lab can serve the same digest path. The [host check](../examples/pack-host/README.md) also works with either origin.
+- The host sees your network address, the pack path and the time of the fetch. The reading and the choice of cohort stay on your machine.
 - `bean compare -pack nhanes.pack` must say that bean has the pack on record. It lists the cohorts, and the type names and units that the pack takes.
 - Choose your own cohort. A reading in another unit gets no number.
 - What bean checks here, and what no check shows: [ARCHITECTURE.md](ARCHITECTURE.md#what-bean-checks-in-a-comparison).

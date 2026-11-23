@@ -127,6 +127,30 @@ func TestComparePack(t *testing.T) {
 	}
 }
 
+// Coverage counts readings, including a second unmapped reading of the
+// same type and a known type with an incompatible unit.
+func TestComparePackCoverage(t *testing.T) {
+	dir, _, ids := compareLog(t, "TCHOL_J", "HDL_J", "DEMO_J")
+	path, _ := testPack(t)
+	for _, args := range [][]string{
+		{"add", "lab.tsh", "3.1", "-unit", "uIU/mL"},
+		{"add", "lab.cholesterol-total", "4.9", "-unit", "mmol/L"},
+	} {
+		if _, errs, code := run(t, dir, "", args...); code != 0 {
+			t.Fatal(errs)
+		}
+	}
+	args := []string{"compare", "-pack", path, "-unknown-pack", "-cohort", "male-30-39"}
+	out, errs, code := run(t, dir, "", append(args, "-type", "lab.*")...)
+	if code != 0 || !strings.Contains(out, "Compared 2 of 5 selected readings.") {
+		t.Fatalf("coverage: %d\n%s%s", code, out, errs)
+	}
+	out, _, code = run(t, dir, "", append(args, ids[2])...)
+	if code == 0 || !strings.Contains(out, "Compared 0 of 1 selected reading.") {
+		t.Fatalf("unmapped: %d\n%s", code, out)
+	}
+}
+
 // TestComparePackRefuses: what is not a pack, a cohort that is not on the
 // menu, a unit that the pack does not take, and the flags of the files.
 func TestComparePackRefuses(t *testing.T) {
