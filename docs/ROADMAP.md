@@ -83,6 +83,7 @@ Not built: `bean pair` and `bean import-device`, and the device's label wherever
 Done: reference packs, two NHANES packs on record, and `bean compare -pack` (DECISIONS 281, 309). A pool path with made-up contributors is built as a test (DECISIONS 334 to 336). Open:
 
 - **A second source, from another publisher.** The pack format does not lock before a second real source is built into a pack. Leads, none confirmed: other parts of NHANES, other open US survey files, and counts of genetic variants. Tables in journals may not be free to hand on.
+- **The cohort from two records of the person.** `person.sex` and `person.birth` are ordinary records, and `bean compare -pack` takes each row's cohort from them. It shows, and `-save` still needs `-cohort`. The design is on paper (DECISIONS 345). It is built after the two-person run.
 - **More tests** by [REFERENCE-PLAN.md](REFERENCE-PLAN.md): values below a detection limit, more of the blood count, and a caveat with a size. The fasting tests need a weight of their own, which is a decision of their own.
 - **A publisher signs a pack,** and **a person keeps their own list of packs** (DECISIONS 308). Each is built when a second publisher exists.
 - **The check page computes a shared comparison again,** when the reader gives it the pack.
