@@ -42,3 +42,13 @@ c73be016d0cf67870a7fbc2c694de6459ac7438ed3e62c18c103e01ccd65a3c0
 ```
 
 Use a reader with `pack/3` support to retain reported zeros. The [source review](https://stele.aion.bio/cbc/review.html) covers segmented neutrophil labels, unit scaling, rounding and the top-coded white cell count.
+
+## Aion's thyroid function pack
+
+Four serum measures come from the 2011–2012 NHANES thyroid subsample. Adult tables use WTSA2YR from THYROD_G and age and sex from DEMO_G. The CDC codebook and assay manual give total T4 in micrograms per deciliter.
+
+```
+ad6ff2869ef265301c1c92feebf5f3bfea107b6786e2be637017f00154651233
+```
+
+A reader with `pack/2` support checks the signed lab, test, panel and printed unit. The [release review](https://stele.aion.bio/thyroid/review.html) documents eligibility, assay differences and the total T4 transport-label correction. Individuals can select this digest independently of the other packs in [Stele’s discovery catalog](https://stele.aion.bio/catalog.json).
