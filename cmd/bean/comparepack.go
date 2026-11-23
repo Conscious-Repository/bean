@@ -62,11 +62,15 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 		c := comparison{reading: r, by: byText(r, l.ID, labels)}
 		v, isNumber := r.Value["n"].(float64)
 		unit, _ := r.Value["unit"].(string)
-		id, units := p.MeasureFor(r.Type, unit)
+		test, _ := r.Context["test"].(string)
+		panel, _ := r.Context["panel"].(string)
+		id, units, panelMismatch := p.MatchReading(r.Type, unit, pack.Panel{System: r.Source.System, Test: test, Panel: panel})
 		cell := p.Cell(id, cohort)
 		switch {
 		case len(units) == 0:
 			c.refused, c.unmapped = "no reference data for this type", true
+		case panelMismatch:
+			c.refused = "the source, printed test or panel does not match the pack"
 		case !isNumber:
 			c.refused = "the reading is not a number"
 		case id == "" && unit == "":
@@ -92,7 +96,7 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 	var known []string
 	for _, id := range slices.Sorted(maps.Keys(p.Measures)) {
 		for _, same := range p.Measures[id].Same {
-			known = append(known, same.Type+" ("+same.Unit+")")
+			known = append(known, matchText(p.Measures[id], same))
 		}
 	}
 	slices.Sort(known)
@@ -133,7 +137,7 @@ func printPack(p *pack.Pack) {
 		m := p.Measures[id]
 		var same []string
 		for _, row := range m.Same {
-			same = append(same, row.Type+" ("+row.Unit+")")
+			same = append(same, matchText(m, row))
 		}
 		fmt.Printf("  %s: %s\n", safe(m.Label), safe(strings.Join(same, ", ")))
 	}
@@ -188,4 +192,13 @@ func packRecord(c comparison, p *pack.Pack, cohort string, co pack.Cohort) map[s
 			},
 		},
 	}
+}
+
+// matchText states all the evidence the menu asks for.
+func matchText(m pack.Measure, row pack.Same) string {
+	text := row.Type + " (" + row.Unit + ")"
+	if w, ok := m.When[row]; ok {
+		text += fmt.Sprintf(" for %s test %q in panel %q", w.System, w.Test, w.Panel)
+	}
+	return text
 }

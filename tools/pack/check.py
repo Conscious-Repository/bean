@@ -250,7 +250,7 @@ def text_list(x, where):
 
 def check_pack(p):
     members(p, TOP, "the pack")
-    if p["bean"] != FORMAT:
+    if p["bean"] not in (FORMAT, "pack/1"):
         raise Refused("the member bean is not %s" % FORMAT)
     text(p["title"], "title")
     members(p["source"], SOURCE, "source")
@@ -284,6 +284,7 @@ def check_pack(p):
         raise Refused("cohorts is not an object")
     if not isinstance(cells, list) or not cells:
         raise Refused("cells is not a list of one cell or more")
+    has_panel = False
     owner = {}
     for mid, m in measures.items():
         ident(mid, "a measure id")
@@ -297,7 +298,13 @@ def check_pack(p):
             # a measure with no entry can never be compared with.
             raise Refused("%s: same is not a list of one entry or more" % w)
         for i, s in enumerate(same):
-            members(s, SAME, "%s same[%d]" % (w, i))
+            qualified = p["bean"] == "pack/1" and isinstance(s, dict) and "when" in s
+            members(s, (*SAME, "when") if qualified else SAME, "%s same[%d]" % (w, i))
+            if qualified:
+                members(s["when"], ("system", "test", "panel"), "same.when")
+                for field in ("system", "test", "panel"):
+                    text(s["when"][field], "when." + field)
+                has_panel = True
             text(s["type"], "%s same[%d].type" % (w, i))
             text(s["unit"], "%s same[%d].unit" % (w, i))
             if own_type(s["type"]):
@@ -308,6 +315,8 @@ def check_pack(p):
                     raise Refused("%s: the type and unit %s %s are there twice" % (w, safe(key[0], 60), safe(key[1], 30)))
                 raise Refused("the type and unit %s %s are in the same lists of two measures" % (safe(key[0], 60), safe(key[1], 30)))
             owner[key] = mid
+    if p["bean"] == "pack/1" and not has_panel:
+        raise Refused("pack/1 requires a panel-qualified match")
     for cid, c in cohorts.items():
         ident(cid, "a cohort id")
         w = "cohort " + safe(cid, 64)

@@ -25,6 +25,7 @@ import (
 
 // Format is the value of a pack's "bean" member.
 const Format = "pack/0"
+const PanelFormat = "pack/1"
 
 // Kind is the one kind of cell that version 0 has: the weight that each
 // distinct value of the cohort carries.
@@ -65,11 +66,15 @@ type File struct {
 // quantity in the measure's unit. It is the publisher's claim.
 type Same struct{ Type, Unit string }
 
+// Panel identifies the printed test inside one source system and panel.
+type Panel struct{ System, Test, Panel string }
+
 // Measure is one quantity that the source measured.
 type Measure struct {
 	Label, Unit string
 	Caveats     []string
 	Same        []Same
+	When        map[Same]Panel
 }
 
 // Cohort is one group of people on the pack's menu.
@@ -128,10 +133,16 @@ func (p *Pack) Bytes() []byte {
 		files = append(files, map[string]any{"name": f.Name, "sha256": f.SHA256, "bytes": float64(f.Bytes), "url": f.URL})
 	}
 	measures := map[string]any{}
+	format := Format
 	for id, m := range p.Measures {
 		same := []any{}
 		for _, s := range m.Same {
-			same = append(same, map[string]any{"type": s.Type, "unit": s.Unit})
+			row := map[string]any{"type": s.Type, "unit": s.Unit}
+			if w, ok := m.When[s]; ok {
+				format = PanelFormat
+				row["when"] = map[string]any{"system": w.System, "test": w.Test, "panel": w.Panel}
+			}
+			same = append(same, row)
 		}
 		measures[id] = map[string]any{"label": m.Label, "unit": m.Unit, "caveats": list(m.Caveats), "same": same}
 	}
@@ -144,7 +155,7 @@ func (p *Pack) Bytes() []byte {
 		cells = append(cells, map[string]any{"measure": c.Measure, "cohort": c.Cohort, "kind": Kind, "n": float64(c.N), "values": nums(c.Values), "weights": nums(c.Weights)})
 	}
 	return append(core.Canonical(map[string]any{
-		"bean":     Format,
+		"bean":     format,
 		"title":    p.Title,
 		"source":   map[string]any{"name": p.Source, "publisher": p.Publisher, "home": p.Home, "files": files},
 		"builder":  map[string]any{"name": p.BuilderName, "version": p.BuilderVersion},
@@ -258,8 +269,9 @@ func Read(data []byte) (*Pack, error) {
 	if !isObject {
 		return nil, errors.New("it is not a pack: it is not one JSON object")
 	}
-	if format, _ := top["bean"].(string); format != Format {
-		return nil, fmt.Errorf("it is not a pack of version 0: its bean member is not %q", Format)
+	format, _ := top["bean"].(string)
+	if format != Format && format != PanelFormat {
+		return nil, fmt.Errorf("unsupported pack format: expected %q or %q", Format, PanelFormat)
 	}
 	top = r.object(v, "the pack", "bean", "title", "source", "builder", "caveats", "measures", "cohorts", "cells")
 	sum := sha256.Sum256(data)
@@ -295,6 +307,7 @@ func Read(data []byte) (*Pack, error) {
 	p.Caveats = r.texts(top["caveats"], "caveats")
 	// Each measure, and no type and unit claimed by two of them: a reading
 	// must have one place.
+	hasPanel := false
 	claimed := map[Same]bool{}
 	measures, _ := top["measures"].(map[string]any)
 	for _, id := range slices.Sorted(maps.Keys(measures)) {
@@ -308,8 +321,22 @@ func Read(data []byte) (*Pack, error) {
 			r.fail("a measure's same is not a list of one entry or more")
 		}
 		for _, x := range same {
-			s := r.object(x, "a same row", "type", "unit")
+			fields := []string{"type", "unit"}
+			obj, _ := x.(map[string]any)
+			_, qualified := obj["when"]
+			if qualified && format == PanelFormat {
+				fields = append(fields, "when")
+			}
+			s := r.object(x, "a same row", fields...)
 			row := Same{r.text(s["type"], "a same row's type"), r.text(s["unit"], "a same row's unit")}
+			if qualified && format == PanelFormat {
+				w := r.object(s["when"], "same.when", "system", "test", "panel")
+				if measure.When == nil {
+					measure.When = make(map[Same]Panel)
+				}
+				measure.When[row] = Panel{r.text(w["system"], "when.system"), r.text(w["test"], "when.test"), r.text(w["panel"], "when.panel")}
+				hasPanel = true
+			}
 			if ownType(row.Type) {
 				r.fail("a measure claims %s, which is a record of bean's own and not a reading", row.Type)
 			}
@@ -320,6 +347,9 @@ func Read(data []byte) (*Pack, error) {
 			measure.Same = append(measure.Same, row)
 		}
 		p.Measures[id] = measure
+	}
+	if format == PanelFormat && !hasPanel {
+		r.fail("pack/1 requires a panel-qualified match")
 	}
 	cohorts, _ := top["cohorts"].(map[string]any)
 	for _, id := range slices.Sorted(maps.Keys(cohorts)) {
@@ -403,18 +433,30 @@ func (r *reader) numbers(v any, where string) []float64 {
 // unit is, by the pack's own claim. units lists the units that the pack
 // takes for the type: it is empty when the pack has no measure for it.
 func (p *Pack) MeasureFor(typ, unit string) (id string, units []string) {
+	id, units, _ = p.MatchReading(typ, unit, Panel{})
+	return id, units
+}
+
+// MatchReading also checks the signed source and printed labels when the
+// publisher requires them. A mismatched panel has no measure.
+func (p *Pack) MatchReading(typ, unit string, panel Panel) (id string, units []string, panelMismatch bool) {
 	for _, mid := range slices.Sorted(maps.Keys(p.Measures)) {
-		for _, s := range p.Measures[mid].Same {
+		m := p.Measures[mid]
+		for _, s := range m.Same {
 			if s.Type != typ {
 				continue
 			}
 			units = append(units, s.Unit)
 			if s.Unit == unit {
-				id = mid
+				if want, ok := m.When[s]; ok && panel != want {
+					panelMismatch = true
+				} else {
+					id = mid
+				}
 			}
 		}
 	}
-	return id, units
+	return id, units, panelMismatch
 }
 
 // Cell returns the cell of a measure in a cohort, or nil: a pack need not

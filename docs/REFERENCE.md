@@ -83,6 +83,11 @@ A measure has these members:
 | `caveats` | Texts that qualify every comparison with this measure. |
 | `same` | A list of one entry or more. Each entry has `type` and `unit`. |
 
+A pack with a panel-qualified match uses `pack/1`. A `same` entry may also hold `when`, an object with three nonempty text fields.
+Compare `when.system`, `when.test` and `when.panel` with the signed reading’s `source.system`, `context.test` and `context.panel`.
+All three strings must match exactly, as must the type and unit. A missing field gives no match. Each type and unit still occurs only once.
+A `pack/1` file must have at least one qualified entry. Readers that support only `pack/0` refuse this file. Both formats use the same percentile method.
+
 A `same` entry is a claim by the builder. It says that a reading of that type, in that unit, is this measure's quantity in this measure's unit. A reader compares a reading only when its type and its unit equal an entry exactly. No reader converts a unit. bean shows which measure each reading was set against, so that the person can see the claim. No type and unit may be in the `same` lists of two measures. A type is never one of bean's own records: `share`, or a type that starts with `comparison.`, `reference.`, `bean.` or `agent.`.
 
 A cohort has `text`, such as `male, age 30-39`, and `caveats`. Its id is the name that a person gives to choose it.

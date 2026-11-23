@@ -497,7 +497,10 @@ def check_pack_claim(claim, inputs):
         raise ValueError("the pack has no cell for measure %s and cohort %s" % (mid, cid))
     # Step 2: the reading's type and unit are in the measure's same list.
     kind = (reading.get("type"), (reading.get("value") or {}).get("unit"))
-    if {"type": kind[0], "unit": kind[1]} not in measure["same"]:
+    context = reading.get("context") or {}
+    panel = {"system": reading["source"]["system"], "test": context.get("test"), "panel": context.get("panel")}
+    if not any((row["type"], row["unit"]) == kind and ("when" not in row or row["when"] == panel)
+               for row in measure["same"]):
         raise ValueError("the pack does not set %s in %s against %s" % (kind[0], kind[1], mid))
     # Step 3: the texts and the caveats are the pack's.
     for what, got, expect in (("title", ref["title"], pack["title"]), ("source", ref["source"], pack["source"]["name"]),

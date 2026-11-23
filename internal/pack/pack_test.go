@@ -233,3 +233,46 @@ func TestRefuses(t *testing.T) {
 		t.Errorf("the unchanged pack: %v", err)
 	}
 }
+
+func TestPanelMatch(t *testing.T) {
+	p := small()
+	key := Same{"lab.saturation", "%"}
+	panel := Panel{"quest", "% SATURATION", "IRON AND TOTAL IRON BINDING CAPACITY"}
+	m := p.Measures["M1"]
+	m.Same = append(m.Same, key)
+	m.When = map[Same]Panel{key: panel}
+	p.Measures["M1"] = m
+	data := p.Bytes()
+	got, err := Read(data)
+	if err != nil || !strings.Contains(string(data), `"bean":"pack/1"`) || string(got.Bytes()) != string(data) {
+		t.Fatalf("qualified pack round trip: %v", err)
+	}
+	for _, tc := range []struct {
+		unit  string
+		panel Panel
+		want  string
+	}{
+		{"%", panel, "M1"},
+		{"%", Panel{}, ""},
+		{"%", Panel{"quest", "% SATURATION", "OXYGEN SATURATION"}, ""},
+		{"%", Panel{"quest", "SATURATION", panel.Panel}, ""},
+		{"%", Panel{"other", panel.Test, panel.Panel}, ""},
+		{"mg/dL", panel, ""},
+	} {
+		id, _, _ := got.MatchReading(key.Type, tc.unit, tc.panel)
+		if id != tc.want {
+			t.Errorf("match(%q, %+v) = %q, want %q", tc.unit, tc.panel, id, tc.want)
+		}
+	}
+	if mid, _ := got.MeasureFor(key.Type, key.Unit); mid != "" {
+		t.Fatal("unqualified lookup accepted a qualified row")
+	}
+	for _, mutation := range [][2]string{
+		{`"pack/1"`, `"pack/0"`}, {`"system":"quest"`, `"system":""`},
+		{`"test":"% SATURATION"`, `"test":null`}, {`"panel":`, `"unknown":`},
+	} {
+		if _, err := Read([]byte(strings.Replace(string(data), mutation[0], mutation[1], 1))); err == nil {
+			t.Fatalf("accepted %v", mutation)
+		}
+	}
+}
