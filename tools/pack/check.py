@@ -4,7 +4,7 @@
     check.py <pack>
     check.py <pack> place <measure id> <cohort id> <value>
 
-Written from docs/REFERENCE.md alone (format pack/0, method
+Written from docs/REFERENCE.md alone (formats pack/0 and pack/1, method
 weighted-percentile version 1); it shares no code with bean.
 
 The first form applies every rule of the document to the file. On success it
@@ -251,7 +251,7 @@ def text_list(x, where):
 def check_pack(p):
     members(p, TOP, "the pack")
     if p["bean"] not in (FORMAT, "pack/1"):
-        raise Refused("the member bean is not %s" % FORMAT)
+        raise Refused("unsupported pack format: expected pack/0 or pack/1")
     text(p["title"], "title")
     members(p["source"], SOURCE, "source")
     for k in ("name", "publisher", "home"):

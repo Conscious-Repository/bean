@@ -2,7 +2,7 @@
 
 This is for anyone who publishes reference data, and for anyone who writes a tool that reads it. It says what a pack must hold so that bean, and anyone else, can compare a reading with it and check the result. [ARCHITECTURE.md](ARCHITECTURE.md) shows the whole path in one picture.
 
-It is a draft at version 0. One source has been built into a pack: NHANES 2017-2018. The format changes when a second source shows that it must. It stays a draft at 1.0 until the maintainers name it, and so does a saved comparison (CORE.md section 6). [REFERENCE-PLAN.md](REFERENCE-PLAN.md) says what changes next and what does not, and where bean falls short of its own rules.
+Readers support two draft file formats. A saved comparison records the method and the digest of the exact pack it used. [REFERENCE-PLAN.md](REFERENCE-PLAN.md) says what changes next and what does not, and where bean falls short of its own rules.
 
 ## The idea
 
@@ -64,7 +64,7 @@ A pack is one JSON object, in UTF-8. A builder writes it in bean's canonical for
 
 | Member | Value |
 |---|---|
-| `bean` | `pack/0`. |
+| `bean` | `pack/0` or `pack/1`. |
 | `title` | What the pack is, in a few words. |
 | `source.name`, `source.publisher`, `source.home` | The source, who publishes it, and its address. |
 | `source.files` | One entry or more. Each has `name`, `sha256` (64 lower-case hex digits), `bytes` and `url`. These are the files that the pack was built from. A name is there once. |
@@ -167,7 +167,7 @@ The four caveats that a claim adds, in this order:
 
 A claim means the same for ever. The third of these caveats says what the signer's bean knew on that day, and a pack can be put on record later. So a check allows that caveat, in its place, for a pack that the reader's bean has on record. A check judges a claim by what the claim names: the reading, the pack and the method.
 
-A reader with the pack checks a claim in four steps. The pack has the SHA-256 that the claim names. The reading's type and unit are in the measure's `same` list. The texts and the caveats are the ones that the pack gives. The method gives every number of the result. `tools/compare/reproduce.py` does this, and shares no code with bean. It fails for a pack that is not on record, unless the reader names that pack.
+A reader with the pack checks a claim in four steps. The pack has the SHA-256 that the claim names. The reading matches a `same` entry, including its `when` fields if present. The texts and the caveats are the ones that the pack gives. The method gives every number of the result. `tools/compare/reproduce.py` does this, and shares no code with bean. It fails for a pack that is not on record, unless the reader names that pack.
 
 A saved comparison gives the reading's value away to anyone with the pack ([COMPARE.md](COMPARE.md)). It does not outlive its reading.
 
@@ -269,14 +269,4 @@ Public reference data comes in more shapes than a table of weights. Version 0 de
 - **A pack in a share.** `bean share` does not carry a pack. The reader's check names each pack by its SHA-256 and says that it is needed. The reader gets it from the sender or from any host. The check page does not compute a comparison again.
 - **A measure that can be zero**, and an interval of uncertainty. Each is a new method version.
 
-## Aion's serum iron pack
-
-Stele publishes a 23-measure pack built by Aion from nine CDC NHANES 2017–2018 files. Its SHA-256 is:
-
-```
-a72b2a0933f7feba57cb24ce1461c278168a7dd619b31ba7566ab87bc50c714e
-```
-
-The file uses `pack/1` to check the source and printed panel for ambiguous test names. The comparison needs a reader with that format.
-Bean treats this as an external pack. Verify the digest above before choosing `-unknown-pack`. The independent verifier takes `-accept-pack` with that digest.
-The [release review](https://stele.aion.bio/iron/review.html) gives the source files, both builders, and the rule for each iron measurement.
+The [external pack directory](EXTERNAL-PACKS.md) records digests supplied by other publishers and the reader version each pack requires.
