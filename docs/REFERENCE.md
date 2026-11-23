@@ -192,7 +192,7 @@ Three more marks. `(names NO reference data)`: the comparison names no pack and 
 
 **What a check of a bundle does not do.** It does not compute a comparison again: it has the claim and not the pack. So a claim with false numbers that names the pack on record reads like a true one there. `reproduce.py` with the pack is what finds it.
 
-One list in bean's code is not how many publishers will be known. A publisher's signature is the next step ([ROADMAP.md](ROADMAP.md)).
+One list in bean's code is not how many publishers will be known. A publisher's signature is built when a second publisher exists ([ROADMAP.md](ROADMAP.md), path 4).
 
 ## What a check refuses
 
@@ -216,11 +216,11 @@ One list in bean's code is not how many publishers will be known. A publisher's 
 A pack is public data, and a file. It needs no account and no server of its own.
 
 - **No publisher is special.** bean names no publisher of a pack, and no host of one. A file and its SHA-256 on a page is a full publication: a signature, a Blossom server and a relay are additions. One thing falls short of this today: the list of packs on record is in bean's code ([ROADMAP.md](ROADMAP.md)).
-- **Any host will do.** A web server, a file sent by e-mail, a disk. A host that serves a file under its SHA-256 as the path fits a pack with no change. The Blossom servers of Nostr do that.
+- **Any host will do.** A web server, a file sent by e-mail, a disk. [examples/pack-host](../examples/pack-host/README.md) is a read-only one, with a check that a reader runs. A host that serves a file under its SHA-256 as the path fits a pack with no change. The Blossom servers of Nostr do that.
 - **A pointer is not the data.** A publisher can announce a pack: its title, its SHA-256 and where it is. A signed note on Nostr relays can carry that. The relays then hold a pointer and no health record.
 - **A host may charge for bytes.** Storage and bandwidth cost money, and a host can ask for payment before it serves a file. bean holds no wallet. A person pays a host, if they must, with their own tools.
 - **Nobody is paid to compute.** A paid comparison would send the cohort or the value to the one who computes. That is the disclosure that a pack exists to prevent.
-- **Who says that a pack is the right one.** Today: this repository states the SHA-256 of the NHANES pack, below. Two builders that share no code give that SHA-256 from the files: `bean-pack-nhanes`, and `tools/pack/rebuild_nhanes.py` in Python.
+- **Who says that a pack is the right one.** Today: this repository states the SHA-256 of each of the two NHANES packs, below. Two builders that share no code give each from the files: `bean-pack-nhanes`, and `tools/pack/rebuild_nhanes.py` in Python.
 
 The pack that `bean-pack-nhanes` version 1 builds from the six files on record has this SHA-256. The files are `DEMO_J`, `TCHOL_J`, `HDL_J`, `GHB_J`, `CBC_J` and `BMX_J`.
 

@@ -14,8 +14,10 @@ $ bean ls -since 2026-10-01
 This repository is the reference implementation of the **bean** protocol: [CORE.md](CORE.md) in short, [SPEC.md](SPEC.md) in full. The command is `bean`.
 
 > **Status: pre-release.** The record format is a draft. It locks at `v` 0 only on the maintainers' word (today, Benjamin Anderson), at 1.0 ([CORE.md](CORE.md) section 6). Until then, keep your source files (PDFs, exports), so that you can import them again if the format changes.
+>
+> **Works today:** import, a comparison with public data, and a sealed share that a peer answers. **Next:** two people run that whole loop, and each compares with a pack from a lab's host ([docs/ROADMAP.md](docs/ROADMAP.md)). No public host is up, and no pool of real people exists.
 
-New here: [docs/ONBOARDING.md](docs/ONBOARDING.md) goes from install to an imported lab report, an AI assistant, a backup and a tested exit. It has rules to give an AI that helps you.
+New here: [docs/ONBOARDING.md](docs/ONBOARDING.md) goes from install to an imported lab report, a comparison, a backup and a tested exit. It has rules to give an AI that helps you.
 
 ## Principles
 
@@ -41,11 +43,11 @@ flowchart TB
     end
     peer["A peer or a doctor"]
     public -->|"the whole pack, checked by its SHA-256"| machine
-    machine -->|"a sealed file of the records<br/>that you chose, and<br/>six words"| peer
+    machine -->|"a sealed file of the<br/>records that you chose"| peer
     peer -->|"signed notes in reply"| machine
 ```
 
-Your data stays in your folder. You share chosen records with one person at a time. To compare, public data comes to your machine whole, and your reading never leaves. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the three parts as pictures, with what works today and what is planned.
+Your data stays in your folder. You share chosen records with one person at a time: six words open the file, or the reader's own key. To compare, public data comes to your machine whole, and your reading never leaves. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the three parts as pictures, with what works today and what is planned.
 
 ## Try it in five minutes
 
@@ -207,7 +209,7 @@ The CSV needs a header row and a `value` column. A `time` column (RFC 3339) and 
 `bean compare` shows where a reading lies among people you describe, in public survey data (NHANES, from the US CDC). You say who: sex, age, and if you like ethnicity, BMI, or what they ate that day. It runs on your machine, on files you downloaded and keep.
 
 ```
-mkdir ~/nhanes && cd ~/nhanes        # a folder of its own, not the bean folder
+mkdir -p ~/nhanes && cd ~/nhanes     # a folder of its own, not the bean folder
 for f in DEMO_J TCHOL_J HDL_J GHB_J CBC_J BIOPRO_J FERTIN_J BMX_J; do
   curl -fLO https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/$f.xpt && bean import -yes nhanes $f.xpt
 done
@@ -229,7 +231,27 @@ DATE              READING                VALUE      PERCENTILE  LOWER  SAME  MID
 - `-save` keeps a result as a signed record that names each file by its SHA-256, the cohort and the method. Anyone can compute it again without bean: `tools/compare/reproduce.py` does, in Python.
 - Nineteen blood tests today: total and HDL cholesterol, hemoglobin A1c, the blood count, six tests of the biochemistry profile, and ferritin. Each test needs its own file, and a rule on BMI needs `BMX_J`: the loop above fetches all eight, about 9 MB. [COMPARE.md](docs/COMPARE.md) lists the type names and units to use when you type a reading by hand.
 
-- **A reference pack is the general form.** A pack is one small file of public reference data, with a table for each measure and each cohort on its menu. `bean-pack-nhanes -out nhanes.pack *.xpt`, in the folder of the downloads, builds one from them, with weight beside the blood tests. A measure is one quantity that the source measured, such as total cholesterol. `bean compare -pack nhanes.pack -cohort male-30-39 -type 'lab.*'` compares with it. Keep the pack file: your log names it by its SHA-256 and does not hold it. The table comes to your value, so no host learns the value or the cohort. Any source that someone builds into a pack works the same way.
+### With a reference pack
+
+A pack is one small file of public reference data, with a table for each measure and each cohort on its menu. A measure is one quantity that the source measured, such as total cholesterol. Any source that someone builds into a pack works the same way. In the folder of the downloads:
+
+```
+bean-pack-nhanes -out nhanes.pack *.xpt                              # build the pack, with weight beside the blood tests
+bean compare -pack nhanes.pack                                       # what it holds
+bean compare -pack nhanes.pack -cohort male-30-39 -type 'lab.*'      # compare
+```
+
+Today you build a pack, or someone gives you the file. Next, a lab serves the same two packs from a [read-only host](examples/pack-host/README.md), and you fetch one with `curl`. Keep the pack file: your log names it by its SHA-256 and does not hold it.
+
+### What keeps a comparison private, and checkable
+
+- **Your reading stays home.** The pack comes to your machine whole, and bean has no command that fetches from a network. A host sees your network address and that you fetched a file. It sees no value and no cohort.
+- **The pack is what its SHA-256 says.** You check it against [REFERENCE.md](docs/REFERENCE.md#how-a-pack-travels), or build the same bytes yourself. bean stops at a pack that it does not have on record, unless you pass `-unknown-pack`.
+- **A saved result can be computed again.** It is your signed record of the reading, the pack and the method. Another person with the pack gets the same numbers, with no bean.
+- **What you share is checked too.** A peer opens your sealed package, and the check fails if a record was changed, added or taken out. It does not compute a comparison again: `reproduce.py` does.
+- **bean proves who signed, and never that a value is true.** A saved comparison also gives its reading away: share one as you would the reading.
+
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#what-bean-checks-in-a-comparison) has each check, and what you can compare with today.
 
 [docs/COMPARE.md](docs/COMPARE.md) has the files to download, the rules, the limits and the method. [docs/REFERENCE.md](docs/REFERENCE.md) has the pack format, who hosts what, and how anyone checks a pack.
 
@@ -242,7 +264,7 @@ bean share -seal -out for-ana.bean -note "my lipids" -type 'comparison.*'
 bean check-bundle for-ana.bean     # what Ana runs: it asks for the six words, checks, then shows what it holds
 ```
 
-Two people who both run bean can share with no words read out. The reader makes a key file once with `bean address`, and gives its address to the sender. `bean share -for <address>` seals a package to it, and `bean check-bundle -key <file>` opens it. A reply goes back the same way: `bean reply -for`, and `bean accept -key`. [docs/SHARE.md](docs/SHARE.md) says what that costs: a key file to guard, and no call that says which share a package is.
+Two people who both run bean can share with no words read out. The reader makes a key file once with `bean address`, and gives its address to the sender. `bean share -for <address>` seals a package to it, and `bean check-bundle -key <file>` opens it. A reply goes back the same way: `bean reply -for`, and `bean accept -key`. [docs/FIRST-RUN.md](docs/FIRST-RUN.md) is one page for the two people. [docs/SHARE.md](docs/SHARE.md) says what that costs: a key file to guard, and no call that says which share a package is.
 
 - It shows what will leave and asks first. Only the records you choose go, with what they are about. Files go only with `-files`, and a lab report only when you name it.
 - The reader can tell that each record is yours and unchanged, and that nothing was added or removed. They can check it without bean: `tools/second/checkbundle.py`.
@@ -336,7 +358,7 @@ Anyone who can read the server's folder can read your records: they are plain JS
 
 Any copy of `objects/` and `blobs/` is a backup: Time Machine, a drive, another machine. The 24 words rebuild the keys in `local/`. Also back up `local/purged-refs.jsonl`: it is the only record of which imports you deleted. Without it, importing the same source data again brings deleted readings back ([SECURITY.md](SECURITY.md)).
 
-A backup is a copy of the log. An export is plain files for leaving; `bean restore -export` turns one back into a log ([ONBOARDING](docs/ONBOARDING.md#7-leave-and-come-back)).
+A backup is a copy of the log. An export is plain files for leaving; `bean restore -export` turns one back into a log ([ONBOARDING](docs/ONBOARDING.md#9-leave-and-come-back)).
 
 **What a backup and an export do not hold.** Keep each of these yourself.
 
@@ -394,38 +416,57 @@ bean protects who wrote what, and protects your identity against a stolen device
 
 ## Documentation
 
+**Start here**
+
 | Document | For |
 |---|---|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The whole of bean in three pictures: your machine, a share with one person, a comparison with public data. |
 | [docs/ONBOARDING.md](docs/ONBOARDING.md) | First run, step by step, alone or with an AI. |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The whole of bean in three pictures: your machine, a share with one person, a comparison with public data. |
+| [examples/blood](examples/blood/README.md) | The whole loop in one script, on a synthetic report. |
+| [docs/FIRST-RUN.md](docs/FIRST-RUN.md) | One page for two people: a sealed package, a signed reply, and a comparison with a pack. No six words are read out. |
+
+**Use**
+
+| Document | For |
+|---|---|
 | [docs/COMMANDS.md](docs/COMMANDS.md) | Every command, flag and exit code. |
-| [docs/IMPORTERS.md](docs/IMPORTERS.md) | Write an importer for your own source; community importers. |
 | [docs/COMPARE.md](docs/COMPARE.md) | Compare a reading with people like you: files, rules, limits, method. |
 | [docs/REFERENCE.md](docs/REFERENCE.md) | Reference packs: public data as one file, its format, who hosts what, and the checks. |
-| [docs/REFERENCE-PLAN.md](docs/REFERENCE-PLAN.md) | What is decided for reference data before more is built, with the facts that were measured. |
 | [docs/SHARE.md](docs/SHARE.md) | Share chosen records as a bundle anyone can check: what goes in, limits, format. |
-| [docs/FIRST-RUN.md](docs/FIRST-RUN.md) | One page for two people: a first exchange with no six words read out. |
-| [docs/POOL-PLAN.md](docs/POOL-PLAN.md) | A demonstration of the pool path with made-up people, and receipts for a source file: what is decided before it is built. |
-| [docs/HOST-PLAN.md](docs/HOST-PLAN.md) | A first host for the survey's packs: a plan on paper in stages, and what is not known yet. Nothing of it is set up. |
-| [docs/SHARE-PLAN.md](docs/SHARE-PLAN.md) | A seal to a reader's key: what was decided before it was built, what is built, and what it costs. |
-| [examples/blood](examples/blood/README.md) | The whole loop in one script, on a synthetic report. |
-| [examples/pool](examples/pool/README.md) | A trial run of the network leg of a pool, on one machine, with made-up contributors. It needs `nak`. |
-| [cmd/bean/vocabulary.md](cmd/bean/vocabulary.md) | The usual record types and units. |
+| [docs/IMPORTERS.md](docs/IMPORTERS.md) | Write an importer for your own source; community importers. |
 | Importer notes: [lab](cmd/bean-import-lab/README.md), [Apple Health](cmd/bean-import-apple-health/README.md), [NHANES](cmd/bean-import-nhanes/README.md) | What each importer reads, keeps and refuses. |
+| [cmd/bean/vocabulary.md](cmd/bean/vocabulary.md) | The usual record types and units. |
 | [SECURITY.md](SECURITY.md) | What is protected, and the keys. |
-| [CORE.md](CORE.md) | The protocol, in short. |
 | [UPGRADING.md](UPGRADING.md) | Changes that alter results for an existing log. |
-| [SPEC.md](SPEC.md) | The full protocol: every rule, error and conformance test. |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | The open paths: what comes now, next and later, and what is not planned. |
 | [docs/KNOWN-GAPS.md](docs/KNOWN-GAPS.md) | Known limits and gaps, said out loud. |
-| [docs/DECISIONS.md](docs/DECISIONS.md) | Every design decision, numbered, with the reason. |
+
+**Where it goes**
+
+| Document | For |
+|---|---|
+| [docs/ROADMAP.md](docs/ROADMAP.md) | The open paths: what comes now, next and later, and what is not planned. |
+| [docs/HOST-PLAN.md](docs/HOST-PLAN.md) | A first host for the survey's packs: a plan in stages, and what is not known yet. |
+| [examples/pack-host](examples/pack-host/README.md) | A read-only host of the two packs that any lab can run, and the check that a reader runs. It has run on one machine. |
+| [docs/PACK-CANDIDATES.md](docs/PACK-CANDIDATES.md) | Public data that a pack could be built from, and what each source allows. None is built. |
+| [docs/REFERENCE-PLAN.md](docs/REFERENCE-PLAN.md) | What is decided for reference data before more is built, with the facts that were measured. |
+| [docs/SHARE-PLAN.md](docs/SHARE-PLAN.md) | A seal to a reader's key: what was decided before it was built, what is built, and what it costs. |
+| [docs/POOL-PLAN.md](docs/POOL-PLAN.md) | A demonstration of the pool path with made-up people, and receipts for a source file: what was decided. All three parts are built. |
+| [examples/pool](examples/pool/README.md) | A trial run of the network leg of a pool, on one machine, with made-up contributors. It needs `nak`. |
+| [tools/pool/README.md](tools/pool/README.md) | A synthetic pool: a builder of a pack from made-up contributors, and its test. |
+| [tools/receipts/README.md](tools/receipts/README.md) | Receipts for a source file: what to do when you are asked for one, and a tally of what keys state. |
 | [docs/DEVICE.md](docs/DEVICE.md) | For the people who build an instrument: what a device signs and how it hands it over. A draft. |
 | [docs/EXTENSIONS.md](docs/EXTENSIONS.md) | Two draft extensions that no code implements yet: computed results and device capture. |
 | [docs/PROVIDER-INGESTION.md](docs/PROVIDER-INGESTION.md) | How data from a provider gets in, one source at a time. |
 | [docs/GOVERNANCE-PROPOSAL.md](docs/GOVERNANCE-PROPOSAL.md) | A proposal for who decides changes to the protocol. Not decided. |
+
+**Protocol and code**
+
+| Document | For |
+|---|---|
+| [CORE.md](CORE.md) | The protocol, in short. |
+| [SPEC.md](SPEC.md) | The full protocol: every rule, error and conformance test. |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | Every design decision, numbered, with the reason. |
 | [tools/second/README.md](tools/second/README.md) | The second verifier, in Python, written from the documents alone. |
-| [tools/pool/README.md](tools/pool/README.md) | A synthetic pool: a builder of a pack from made-up contributors, and its test. |
-| [tools/receipts/README.md](tools/receipts/README.md) | Receipts for a source file: what to do when you are asked for one, and a tally of what keys state. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Build, test and change the code. |
 
 ## License

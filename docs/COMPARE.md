@@ -13,7 +13,7 @@ There are two ways to compare, and both give the same numbers. One rule differs.
 Download the files you need from CDC and keep each one. bean never goes online: you fetch, bean keeps. Use a folder of its own, not the folder of bean's code: files there change what `make page` builds.
 
 ```
-mkdir ~/nhanes && cd ~/nhanes
+mkdir -p ~/nhanes && cd ~/nhanes
 for f in DEMO_J TCHOL_J HDL_J GHB_J CBC_J BIOPRO_J FERTIN_J BMX_J DR1TOT_J; do
   curl -fLO https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/$f.xpt && bean import -yes nhanes $f.xpt
 done
