@@ -38,6 +38,15 @@ Do not run `purge` or `gc` on the copies. Only they erase anything.
 
 ## Changes
 
+### 0.8.3 (2026-11-23)
+
+Bean reads both `pack/0` and `pack/1`. A `pack/1` publisher can require the signed source system, printed test name and panel alongside the type and unit.
+
+- The 13- and 20-measure Stele packs use `pack/0`. You can keep using the copies you already have.
+- The 23-measure iron pack uses `pack/1`. Check its [external publisher digest](docs/EXTERNAL-PACKS.md) before using `-unknown-pack`.
+- A Quest “% SATURATION” row compares only when its signed fields match the iron panel rule. A missing or different panel yields no percentile.
+- Existing imports already contain their signed fields. Run the comparison on your existing log.
+
 ### 0.8.2 (2026-11-21)
 
 A reference pack may have a cell of any number of people. Nothing in a log changes, and no saved comparison reads differently ([docs/REFERENCE.md](docs/REFERENCE.md), DECISIONS 333).
