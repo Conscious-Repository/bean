@@ -105,6 +105,7 @@ bean compare -pack nhanes.pack -cohort male-30-39 -type 'lab.*'
 - The host sees your network address, the pack path and the time of the fetch. The reading and the choice of cohort stay on your machine.
 - `bean compare -pack nhanes.pack` must say that bean has the pack on record. It lists the cohorts, and the type names and units that the pack takes.
 - Choose your own cohort. A reading in another unit gets no number.
+- One run sets every reading against the one cohort that you name, also an old reading. For a reading from when you were in another age group, run again. Name that cohort, and the reading by its id.
 - What bean checks here, and what no check shows: [ARCHITECTURE.md](ARCHITECTURE.md#what-bean-checks-in-a-comparison).
 - With no host, build the same pack from the survey's files (REFERENCE.md). Its SHA-256 is the same.
 
