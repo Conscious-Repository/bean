@@ -1,6 +1,6 @@
 # Getting started
 
-From nothing to a working log: install, identity, a checked lab import, an AI assistant (optional), a backup, and a tested exit. About 30 minutes.
+From nothing to a working log: install, identity, a checked lab import, and a comparison with public data. Then a share and an AI assistant, both optional, a backup, and a tested exit. About 30 minutes without the two optional steps.
 
 ## You need
 
@@ -20,7 +20,7 @@ Give the assistant these rules first:
 > Help me set up bean by following docs/ONBOARDING.md. Rules:
 >
 > 1. Never ask for my 24 words. Never run `bean init`, `bean rotate` or `bean restore`: I run them myself, in a terminal you cannot read. If I start to type or paste the words to you, stop me. I also run `bean import` myself: it shows my values for me to check. Never pass `-yes` for me.
-> 2. Do not look at my health data. Do not open my lab reports or log files, and do not run `bean ls`, `bean show`, `bean compare`, `bean check-bundle`, `bean export` or `bean blob get` unless I ask. Never run `bean share`: I decide what leaves, at my own terminal. Use exit codes and counts: the `added` line of an import, the `summary` line of `bean verify`.
+> 2. Do not look at my health data. Do not open my lab reports or log files, and do not run `bean ls`, `bean show`, `bean compare`, `bean check-bundle`, `bean export` or `bean blob get` unless I ask. Never run `bean share`, `bean reply` or `bean accept`: I decide what leaves and what comes in, at my own terminal. Use exit codes and counts: the `added` line of an import, the `summary` line of `bean verify`.
 > 3. If no reading was read, ask for the counts of `bean-import-lab -count`, as the guide shows, not the report or its values.
 > 4. Keep my data on my machine. Do not upload files or paste my records anywhere. Connecting you to my log through MCP is where my records start to reach your provider. Do it only when I say so, read-only first (`bean mcp`, no `-write` or `-blobs`). Ask before `-write` or `-blobs`.
 > 5. Never run `bean address`, and never read or copy a key file. A key file opens every package that was sealed to its address. Never pass `-key` or `-address-words` for me. I type the address words myself: they are my check that an address is my reader's.
@@ -36,7 +36,7 @@ echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.zshrc && source ~/.zshrc
 bean version
 ```
 
-Poppler provides `pdftotext`, which reads PDFs. `go install` puts `bean`, `bean-import-lab`, `bean-import-apple-health`, `bean-import-csv`, `bean-import-nhanes` and `bean-pack-nhanes` in `$(go env GOPATH)/bin`, or in `$GOBIN` if you set it. `bean version` should say `bean 0.6.0 (records v 0)` or later. An older version means another `bean` comes first on your `PATH`: `which -a bean` lists them. `package crypto/hkdf is not in GOROOT` means your Go is too old: `brew upgrade go`.
+Poppler provides `pdftotext`, which reads PDFs. `go install` puts `bean`, `bean-import-lab`, `bean-import-apple-health`, `bean-import-csv`, `bean-import-nhanes` and `bean-pack-nhanes` in `$(go env GOPATH)/bin`, or in `$GOBIN` if you set it. `bean version` should say `bean 0.8.2 (records v 0)` or later. An older version means another `bean` comes first on your `PATH`: `which -a bean` lists them. `package crypto/hkdf is not in GOROOT` means your Go is too old: `brew upgrade go`.
 
 ## 2. Create your log
 
@@ -121,11 +121,48 @@ Its lines say how far each reader got: how many results, and at which line or pl
 
 A `.txt` from `pdftotext -layout report.pdf report.txt` imports the same way. Apple Health and CSV: see the [README](../README.md#import-your-data).
 
-## Compare and share
+## 5. Compare with public data
 
-Once readings are in, [COMPARE.md](COMPARE.md) shows where they lie among people you describe. [SHARE.md](SHARE.md) hands chosen records to someone who can check them without bean. [examples/blood](../examples/blood/README.md) runs both on a synthetic report.
+A reference pack is one file of public data, with a table for each test and each group of people. It comes to your machine, and your reading stays there. Today you build the survey's pack from eight public files of the US CDC, about 9 MB. Use a folder of its own, not the folder of bean's code:
 
-## 5. Connect an AI assistant (optional)
+```
+mkdir -p ~/nhanes && cd ~/nhanes
+for f in DEMO_J TCHOL_J HDL_J GHB_J CBC_J BIOPRO_J FERTIN_J BMX_J; do
+  curl -fLO https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/$f.xpt
+done
+bean-pack-nhanes -out nhanes.pack *.xpt
+shasum -a 256 nhanes.pack
+bean compare -pack nhanes.pack
+```
+
+1. `bean-pack-nhanes` ends with `This is the pack that bean has on record.` The SHA-256 is the second one in [REFERENCE.md](REFERENCE.md#how-a-pack-travels), which starts `5cae07db`. The builder refuses a file that is not the one on record: fetch that file again.
+2. The last command lists the groups, and the type names and units that the pack takes.
+
+**Yourself:** choose the group that describes you. bean does not know yours, and never guesses. In a practice log, put `-dir /tmp/practice` after `bean`.
+
+```
+bean compare -pack nhanes.pack -cohort male-30-39 -type 'lab.*'
+```
+
+Read N, the number of people, before the percentile. A row says where a value lies in that sample, and not whether it is healthy. A reading in another unit gets no number.
+
+Nothing is written until you add `-save`. Then each result is a record that you signed. It names your reading, the pack and the method, so another person can compute it again. It also gives the reading's value away to anyone who has the record and the pack.
+
+- **What bean checks,** and what no check shows: [ARCHITECTURE.md](ARCHITECTURE.md#what-bean-checks-in-a-comparison).
+- **A pack from a host** is next. You fetch one file and check the same SHA-256, and the rest is as above ([ROADMAP.md](ROADMAP.md)).
+- **A group of your own,** by ethnicity, body or food: [COMPARE.md](COMPARE.md).
+- **Keep the pack file.** Your log names it and does not hold it.
+
+## 6. Share with one person (optional)
+
+**Yourself,** in each case: a share shows your values, and it cannot be taken back once it is opened.
+
+- **A reader with no bean,** such as a doctor. `bean share -seal -out for-ana.bean <id>` writes one file that opens with six words, in a browser or with bean. Send the file one way and say the words another.
+- **A peer who runs bean.** [FIRST-RUN.md](FIRST-RUN.md) is one page for the two of you: a sealed package, a signed reply, and the comparison of step 5. No six words are read out.
+
+The reader checks that each record is yours and unchanged. They cannot check that a value is true, or that you sent everything. [SHARE.md](SHARE.md) has the limits, and [examples/blood](../examples/blood/README.md) runs an import, a comparison with the survey's files and a share on a synthetic report.
+
+## 7. Connect an AI assistant (optional)
 
 `bean mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server over stdio. What a tool returns goes to the assistant's provider; use a local model if that matters to you. Start read-only.
 
@@ -175,7 +212,7 @@ claude mcp add -s user bean -- "$(which bean)" -dir "$HOME/health" mcp -write -l
 
 Its records show as `[assistant]` in `bean ls`. One machine has one agent key with one label: see the [README](../README.md#log-from-an-ai-assistant).
 
-## 6. Back up
+## 8. Back up
 
 The log is `objects/` and `blobs/`. Any copy of the two is a backup: Time Machine, a drive, another machine. Also copy `local/purged-refs.jsonl` once it exists: it records which imports you deleted, so a later import does not bring them back.
 
@@ -187,7 +224,7 @@ bean -dir /Volumes/Backup/health verify
 
 `verify` checks the copy without keys. Never copy the rest of `local/` to another machine: it holds this machine's keys, and the 24 words rebuild them. Lost laptop: see the [README](../README.md#backups-and-a-lost-laptop).
 
-## 7. Leave, and come back
+## 9. Leave, and come back
 
 ```
 bean export ~/bean-export
@@ -227,13 +264,15 @@ Saved comparisons, the reference files you kept and the records of your shares a
 | Message | Do this |
 |---|---|
 | `command not found: bean` | Add `$(go env GOPATH)/bin` to `PATH` (step 1). |
-| `bean: not initialized`, `no log in ...` | Set `BEAN_DIR` (step 2) or pass `-dir ~/health`. Rebuilding? `bean restore` (step 7), not `bean init`. |
+| `bean: not initialized`, `no log in ...` | Set `BEAN_DIR` (step 2) or pass `-dir ~/health`. Rebuilding? `bean restore` (step 9), not `bean init`. |
 | `pdftotext not found` | `brew install poppler`, or import a `.txt` from `pdftotext -layout`. |
 | `unknown time zone` | A zone name such as `America/Chicago`, not `CST`. |
 | `the file was not accepted, and nothing was written` | The file is not one that the importer takes at all, or you did not say yes. |
 | `no reading was read` | A line the importer could not read for sure. The file is kept. See [If no reading was read](#if-no-reading-was-read). |
 | `bean: input missing: <id>` | Use the record id from `bean ls` or the `kept` line, not the `stored as` id. |
+| `bean has no record of this pack` | The file is not a pack that bean has on record. Check its SHA-256 (step 5), and fetch or build it again. |
+| `not comparable: ...` in a row | The row says why, for example a unit that the pack does not take. bean converts no unit. |
 | `changed: ... this input says ...` | A newer report changed a value. If it is right, import again with `-corrections`. |
-| `bean: undecided: ...` from `restore` | Expected on the first run. Read the list, then `-seal-all` (step 7). |
+| `bean: undecided: ...` from `restore` | Expected on the first run. Read the list, then `-seal-all` (step 9). |
 
 Every command, flag and exit code: [COMMANDS.md](COMMANDS.md).

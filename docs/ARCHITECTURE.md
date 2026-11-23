@@ -1,6 +1,6 @@
 # How bean works, in three pictures
 
-This is for anyone who wants the whole of bean in one view. It shows where your data lives, how you share it with one person, and how you compare it with public data. Each picture has the parts that work today as solid lines. A dashed line is a part that is planned and not built.
+This is for anyone who wants the whole of bean in one view. It shows where your data lives, how you share it with one person, and how you compare it with public data. Each picture has the parts that work today as solid lines. A dashed line is a part that nobody runs yet.
 
 bean is not a diagnosing tool. Nothing in these pictures says whether a value is healthy.
 
@@ -31,7 +31,7 @@ flowchart LR
     bean -->|"signs and stores"| objects
     bean --> blobs
     local -->|"signs"| bean
-    paper -.->|"only to recover or to retire a lost key"| bean
+    paper -->|"only to recover or to retire a lost key"| bean
     objects -->|"sync or export"| copy
     blobs -->|"sync or export"| copy
 ```
@@ -58,7 +58,6 @@ flowchart LR
         page["The check page, in a browser"]
         check["Or: bean check-bundle"]
         reply["bean reply: signed notes about what they received"]
-        side["Planned: the sender's readings beside the reader's own"]
     end
     log --> share
     share --> file
@@ -70,14 +69,15 @@ flowchart LR
     check --> reply
     reply -->|"a sealed reply"| accept
     accept -->|"the notes, under the name that you give the peer"| log
-    check -.-> side
 ```
 
-- The reader needs no key and no account. The check runs on their device and sends nothing.
+- With six words, the reader needs no key and no account. The check runs on their device and sends nothing.
+- Sealed to an address, the reader's key file takes the place of the six words. The check page cannot open such a package: the reader needs bean.
 - The check shows who signed, as eight identity words that you read out in the same call.
 - A check proves who signed a record and that nobody changed it. It does not prove that a record is true.
 - A reader who has opened the file holds a copy for good.
 - A peer's records are never mixed into your log. Only their signed notes come in, under a name that you choose.
+- To see a peer's values next to yours, read their package with `bean check-bundle` and your own with `bean ls`. bean has no view of two people, and none is planned (DECISIONS 342).
 
 ## 3. Compare with public data
 
@@ -103,22 +103,56 @@ flowchart LR
     source --> builder
     builder --> pack
     pack -->|"today: you build it, or someone hands you the file"| compare
-    pack -.->|"a publisher uploads it"| host
-    pack -.->|"the publisher signs a pointer: title, SHA-256, address"| relay
+    pack -.->|"next: a lab serves it, read only"| host
+    pack -.->|"later: a publisher signs a pointer: title, SHA-256, address"| relay
     relay -.->|"where to find it"| compare
     host -.->|"the whole pack, checked by its SHA-256"| compare
     reading --> compare
     compare -->|"where the value lies in the group, with caveats"| claim
     claim -->|"shared as in picture 2"| peer
-    peer -.->|"computes it again from the pack"| claim
+    peer -->|"computes it again from the pack, with no bean"| claim
 ```
 
 - **A pack is what its SHA-256 says.** A host cannot change it without the check failing. So no host needs to be trusted, and any person can host a pack for a friend.
 - **A pointer is not the data.** A publisher signs a short note: the title of the pack, its SHA-256 and where it is. A relay holds that note. The note helps you find a pack. It never makes a pack right.
-- **What a host learns:** that someone fetched a pack. It learns no reading and no group, because the pack is fetched whole.
+- **What a host learns:** that someone fetched a pack, from which network address and when. It learns no reading and no group, because the pack is fetched whole.
 - **Who says that a pack is right.** bean holds the SHA-256 of the packs that it has on record. Two programs that share no code build those bytes from the source's files. For any other pack, bean says that nobody has checked it.
 - **A saved comparison is your claim.** It names the reading, the pack, the group and the method. A peer with the pack can do the arithmetic again. That shows that the numbers hold, not that the reading is true.
-- **Today** a person builds a pack from the source's files, or gets the file from someone. Packs on a host, and pointers on a relay, are the next step ([ROADMAP.md](ROADMAP.md)).
+- **Today** a person builds a pack from the source's files, or gets the file from someone. A read-only host of the two survey packs is next. It has run on one machine ([examples/pack-host](../examples/pack-host/README.md)). Pointers on a relay can follow later ([ROADMAP.md](ROADMAP.md)).
+
+### What you can compare with
+
+| Compare with | Today |
+|---|---|
+| The survey's own files, for a group that you state | Works: `bean compare -sex ... -age ...` ([COMPARE.md](COMPARE.md)). |
+| A reference pack that you built, or that someone gave you | Works: `bean compare -pack` ([REFERENCE.md](REFERENCE.md)). |
+| A reference pack from a lab's host | Next. The commands are the same: you fetch the file with `curl`, and check it before you use it. No public host is up yet ([ROADMAP.md](ROADMAP.md)). |
+| One peer | Works as a swap of packages ([FIRST-RUN.md](FIRST-RUN.md)). You read theirs beside your own. bean computes nothing across the records of two people. |
+| A pool of real people | Not built. A path with made-up contributors is a test ([tools/pool](../tools/pool/README.md)). ROADMAP.md, path 4, says what a real pool waits for. |
+
+### What bean checks in a comparison
+
+bean's part is the same, whoever made the pack and whoever serves it. It keeps your reading on your machine, and it leaves a record that another person can check.
+
+| Stage | What bean does | How a person checks it |
+|---|---|---|
+| Your reading | On an import, keeps the file first, then signs each reading that you confirmed. | `bean verify`, and `shasum -a 256` of your file. |
+| The pack | Names it by the SHA-256 of its bytes. It stops at a pack that it does not have on record, unless you pass `-unknown-pack`. | `shasum -a 256` against [REFERENCE.md](REFERENCE.md#how-a-pack-travels), or build the pack again. |
+| The match | Compares only a type and a unit that the pack lists, and converts no unit. | `bean compare -pack <file>` lists them. |
+| The arithmetic | Runs on your machine. bean has no command that fetches from a network. | The method and its test values are in REFERENCE.md. |
+| The result | Writes nothing, unless you pass `-save`. Then it signs the reading's id, the pack's SHA-256, the group, the method, the numbers and the caveats. | `bean show <id>`. |
+| A correction | Deletes each saved comparison of a reading that you correct or delete. | `bean ls`. |
+| A share | Shows what leaves and asks. Seals it with `-seal` or `-for`. | `bean check-bundle` fails if a record was changed, added or taken out. |
+| The numbers of a share | Nothing: the check shows them as the sender's claim. | `tools/compare/reproduce.py` with the same pack computes each one again, with no bean. |
+
+What no check shows:
+
+- **That a reading is true.** A signature shows which key signed. A value that was typed by hand is signed like a lab's result.
+- **That you belong to the group.** You chose it.
+- **That the lab and the source measured alike.** The caveats of a result say so.
+- **That a share is complete.** It is what its sender chose.
+
+A saved comparison gives its reading away. Anyone who has the record and the pack can work the value out. Save and share one as you would the reading itself.
 
 ## The words
 

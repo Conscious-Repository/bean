@@ -18,6 +18,8 @@ PY=python3 bash tools/second/run.sh  # the second verifier against bean and agai
 PY=python3 bash tools/compare/run.sh # every saved comparison computed again with Python and pandas
 PY=python3 bash tools/second/bundles.sh # share bundles, good and damaged, checked by bean and by Python
 PY=python3 bash tools/device/run.sh  # a device's folder, good and wrong, checked by Go and by Python
+make pack                            # packs, good and wrong, checked by Go and by Python
+make pool                            # a pool of made-up contributors, and the tally of receipts
 ```
 
 Run all of them before every commit; `make check` runs them, plus staticcheck, govulncheck and a check that `tools/genvectors` reproduces every vector byte for byte. It also runs the example, the page in a browser, and a comparison with the build of `origin/main`. So it needs node (for `bundles`), node with Playwright and Chromium (for `pagetest`), and `origin/main` (for `differential`). `make fuzz` runs the fuzz targets (2 minutes each) and `make smoke` runs the end-to-end and adversarial suite in `tools/smoke.sh`. When you change a test vector, run `go run ./tools/genvectors` and the Python checks. The conformance folders come from `tools/second/cases.py`: delete `vectors/conformance`, run `python3 tools/second/cases.py vectors/conformance`, then `go run ./tools/genvectors` to write each `expected.txt`. Every vector is reproducible; V6 uses an RFC 6979 nonce since 2026-10-30.
@@ -33,7 +35,8 @@ cmd/bean/                 the CLI; read.go (ls, show, add), mcp.go (MCP server),
 cmd/bean/compare.go       bean compare: a reading against NHANES, as a signed claim
 cmd/bean/share.go         bean share and check-bundle: chosen records as a
                           folder anyone can check
-cmd/bean-import-nhanes/   keeps a public NHANES file as reference data
+cmd/bean-pack-nhanes/     builds a reference pack from NHANES files
+internal/pack/            reads a reference pack, and its method
 internal/xpt/             reads SAS transport (XPT) files
 internal/nhanes/          the files, the table of tests, and the method of
                           bean compare; testdata/ has synthetic files
@@ -44,6 +47,7 @@ cmd/bean-import-apple-health/  Apple Health export importer
 cmd/bean-import-nhanes/   keeps a public NHANES file as a reference file
 internal/bundle/          the check of a share bundle; bean check-bundle and the
                           page run it
+internal/reply/           signed notes in reply to a share
 internal/view/            the words a record is shown in
 internal/capture/         the check of the folder that a device hands over
 tools/device/             a software device, a second writer and the Python
@@ -53,17 +57,22 @@ tools/page/               builds bean-check.html, the page that checks a bundle
 tools/differential/       compares this build's output with another build's
 tools/adversary/          writes hostile logs for the smoke suite
 examples/blood/           the whole loop on a synthetic report, as one script
+examples/pool/            the network leg of a pool, on one machine; needs nak
+examples/pack-host/       a read-only host of two packs, and the reader's check
 tools/genvectors/         writes vectors/
 tools/check*.py           independent checks of the vectors
 tools/second/             a second verifier in Python, and the conformance cases
 tools/compare/            a second implementation of bean compare in Python
+tools/pack/               the check of a pack, and a second builder, in Python
+tools/pool/               a pack from made-up contributors, and its test
+tools/receipts/           a tally of what keys state of a source file
 vectors/                  published test vectors (SPEC.md 14); conformance/ has
                           folders of record files with their verify output
 ```
 
 ## Rules
 
-- **Standard library first.** Ask before you add a dependency. The only one is `btcec/v2`, for secp256k1 signatures.
+- **Standard library first.** Ask before you add a dependency. There are two: `btcec/v2`, for secp256k1 signatures, and `filippo.io/age`, for sealed packages.
 - **Tests before code.** Every crypto primitive has an RFC or BIP vector. Every behavior has a test. A bug fix comes with a test that fails without the fix.
 - **The core knows no source.** Each data source is its own `cmd/bean-import-<source>`. Write an importer from a real export file, never from memory.
 - **Test data is synthetic.** Never commit real health data, keys or the 24 words. The lab importer's tests build fake reports in code, and testdata/real-layout.txt is a real layout with synthetic content.

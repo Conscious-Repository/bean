@@ -94,11 +94,12 @@ bean compare -pack nhanes.pack
 bean compare -pack nhanes.pack -cohort male-30-39 -type 'lab.*'
 ```
 
-- The owner gives the HTTPS origin when the host is up. Either lab can serve the same digest path. The [host check](../examples/pack-host/README.md) can also download and verify the file.
+- Whoever runs the host gives its HTTPS origin. Any lab can serve the same digest path. The [host check](../examples/pack-host/README.md) can also download and verify the file.
 - The host sees your network address and the time of the fetch.
 - Take the SHA-256 from REFERENCE.md in this repository or a release, never from the host. The SHA-256 that `shasum` prints must be that one. If it is not, delete the file and stop.
 - `bean compare -pack nhanes.pack` must say that bean has the pack on record. It lists the cohorts, and the type names and units that the pack takes.
 - Choose your own cohort. A reading in another unit gets no number.
+- What bean checks here, and what no check shows: [ARCHITECTURE.md](ARCHITECTURE.md#what-bean-checks-in-a-comparison).
 - With no host, build the same pack from the survey's files (REFERENCE.md). Its SHA-256 is the same.
 
 ## When a file does not open
@@ -116,4 +117,4 @@ bean compare -pack nhanes.pack -cohort male-30-39 -type 'lab.*'
 ## Keep, and write down
 
 - **Keep your key file, and each package that you want to read again.** A backup of the log and an export hold neither ([README](../README.md#backups-and-a-lost-laptop)).
-- **Write down how long the run took, from the install on, and where you were stuck.** The next step of the roadmap is built from that.
+- **Write down how long the run took, from the install on, and where you were stuck.** The status of 0.9 is written from that ([ROADMAP.md](ROADMAP.md)).

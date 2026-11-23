@@ -34,7 +34,9 @@ This page says what bean protects, what it does not protect, and where each key 
 
 **A package that is sealed to your address opens for whatever runs as you.** `bean share -for` seals a package to a reader's address, and the reader's key file opens it. A program that runs as you, such as an assistant with a shell, opens such a package with no word typed. Then another person's values are in its context. The six words were also a gate: such a program does not have them. A stolen key file opens every package that was sealed to it and still exists anywhere. That holds for a reply that was sealed to your address too. `bean accept -key` asks on a terminal, and does not take `-yes`. A program that makes a terminal of its own answers that question. This bean does not open a key file that is protected with a passphrase ([docs/SHARE.md](docs/SHARE.md)).
 
-**A saved comparison gives its reading away.** The record holds the cohort and the result. With the public files, anyone who has the record can work the value out.
+**A saved comparison gives its reading away.** The record holds the cohort and the result. With the public files, or with the pack, anyone who has the record can work the value out.
+
+**A host of a reference pack sees that you fetched it.** It sees your network address and the time. It learns no reading and no cohort, since the pack is fetched whole and the arithmetic is done on your machine. It cannot change a pack without another SHA-256, and bean stops at a pack that it does not have on record ([docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#what-bean-checks-in-a-comparison)).
 
 **A page that checks a bundle is only as good as its sender.** A forged page can call anything good. Get `bean-check.html` from the project's [releases](https://github.com/Conscious-Repository/bean/releases), or build it with `make page`, and compare its SHA-256.
 
