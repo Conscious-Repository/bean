@@ -93,7 +93,7 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 			c.against = fmt.Sprintf("%s in %s against %s", r.Type, unit, p.Measures[id].Label)
 			c.result = res
 			c.caveats = packCaveats(p, id, cohort, res.N, onRec, c.by != "")
-			claims = append(claims, packRecord(c, p, cohort, co))
+			claims = append(claims, packRecord(c, p, cohort, co, cell.MethodVersion()))
 		}
 		rows = append(rows, c)
 	}
@@ -168,7 +168,7 @@ func onRecord(p *pack.Pack) string {
 // packRecord is the claim that -save signs for a comparison with a pack.
 // It names the reading by id and the pack by its SHA-256, so anyone with
 // the pack computes the result again.
-func packRecord(c comparison, p *pack.Pack, cohort string, co pack.Cohort) map[string]any {
+func packRecord(c comparison, p *pack.Pack, cohort string, co pack.Cohort, version string) map[string]any {
 	var caveats []any
 	for _, text := range c.caveats {
 		caveats = append(caveats, text)
@@ -189,7 +189,7 @@ func packRecord(c comparison, p *pack.Pack, cohort string, co pack.Cohort) map[s
 				"measure": c.measure, "label": m.Label, "unit": m.Unit, "cohort": cohort,
 			},
 			"cohort": map[string]any{"text": co.Text},
-			"method": map[string]any{"id": pack.MethodID, "version": pack.MethodVersion},
+			"method": map[string]any{"id": pack.MethodID, "version": version},
 			"result": map[string]any{
 				"n": float64(res.N), "percentile": res.Percentile, "below": res.Below, "equal": res.Equal,
 				"p25": res.P25, "p50": res.P50, "p75": res.P75,

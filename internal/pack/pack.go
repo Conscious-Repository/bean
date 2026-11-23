@@ -27,6 +27,8 @@ import (
 const Format = "pack/0"
 const PanelFormat = "pack/1"
 const EvidenceFormat = "pack/2"
+const NonnegativeFormat = "pack/3"
+const NonnegativeKind = "weights-nonnegative"
 
 // Kind is the one kind of cell that version 0 has: the weight that each
 // distinct value of the cohort carries.
@@ -92,6 +94,7 @@ type Cell struct {
 	Measure, Cohort string
 	N               int
 	Values, Weights []float64
+	AllowZero       bool
 }
 
 // Pack is a reference pack.
@@ -168,7 +171,12 @@ func (p *Pack) Bytes() []byte {
 	}
 	cells := []any{}
 	for _, c := range p.Cells {
-		cells = append(cells, map[string]any{"measure": c.Measure, "cohort": c.Cohort, "kind": Kind, "n": float64(c.N), "values": nums(c.Values), "weights": nums(c.Weights)})
+		kind := Kind
+		if c.AllowZero {
+			kind = NonnegativeKind
+			format = NonnegativeFormat
+		}
+		cells = append(cells, map[string]any{"measure": c.Measure, "cohort": c.Cohort, "kind": kind, "n": float64(c.N), "values": nums(c.Values), "weights": nums(c.Weights)})
 	}
 	return append(core.Canonical(map[string]any{
 		"bean":     format,
@@ -286,8 +294,8 @@ func Read(data []byte) (*Pack, error) {
 		return nil, errors.New("it is not a pack: it is not one JSON object")
 	}
 	format, _ := top["bean"].(string)
-	if format != Format && format != PanelFormat && format != EvidenceFormat {
-		return nil, fmt.Errorf("unsupported pack format: expected %q, %q or %q", Format, PanelFormat, EvidenceFormat)
+	if format != Format && format != PanelFormat && format != EvidenceFormat && format != NonnegativeFormat {
+		return nil, fmt.Errorf("unsupported pack format: expected %q, %q, %q or %q", Format, PanelFormat, EvidenceFormat, NonnegativeFormat)
 	}
 	top = r.object(v, "the pack", "bean", "title", "source", "builder", "caveats", "measures", "cohorts", "cells")
 	sum := sha256.Sum256(data)
@@ -323,6 +331,7 @@ func Read(data []byte) (*Pack, error) {
 	p.Caveats = r.texts(top["caveats"], "caveats")
 	// Each measure, and no type and unit claimed by two of them: a reading
 	// must have one place.
+	supportsEvidence := format == EvidenceFormat || format == NonnegativeFormat
 	hasPanel, hasEvidence := false, false
 	claimed := map[Same]bool{}
 	measures, _ := top["measures"].(map[string]any)
@@ -344,7 +353,7 @@ func Read(data []byte) (*Pack, error) {
 				fields = append(fields, "when")
 			}
 			_, guarded := obj["any_of"]
-			if guarded && !qualified && format == EvidenceFormat {
+			if guarded && !qualified && supportsEvidence {
 				fields = append(fields, "any_of")
 			}
 			s := r.object(x, "a same row", fields...)
@@ -357,7 +366,7 @@ func Read(data []byte) (*Pack, error) {
 				measure.When[row] = Panel{r.text(w["system"], "when.system"), r.text(w["test"], "when.test"), r.text(w["panel"], "when.panel")}
 				hasPanel = true
 			}
-			if guarded && !qualified && format == EvidenceFormat {
+			if guarded && !qualified && supportsEvidence {
 				if measure.AnyOf == nil {
 					measure.AnyOf = make(map[Same][]Evidence)
 				}
@@ -396,6 +405,7 @@ func Read(data []byte) (*Pack, error) {
 	if !ok || len(cells) == 0 {
 		r.fail("cells is not a list of one cell or more")
 	}
+	hasNonnegative := false
 	seen := map[[2]string]bool{}
 	for _, x := range cells {
 		c := r.object(x, "a cell", "measure", "cohort", "kind", "n", "values", "weights")
@@ -413,10 +423,13 @@ func Read(data []byte) (*Pack, error) {
 			r.fail("%s is there twice", where)
 		}
 		seen[[2]string{cell.Measure, cell.Cohort}] = true
-		if kind, _ := c["kind"].(string); kind != Kind {
-			r.fail("%s is of kind %q, and this version reads only %q: a table is not read by a guess", where, kind, Kind)
+		kind, _ := c["kind"].(string)
+		cell.AllowZero = kind == NonnegativeKind && format == NonnegativeFormat
+		hasNonnegative = hasNonnegative || cell.AllowZero
+		if kind != Kind && !cell.AllowZero {
+			r.fail("%s is of kind %q; this version reads only the cell kinds declared by the pack format", where, kind)
 		}
-		cell.Values, cell.Weights = r.numbers(c["values"], where), r.numbers(c["weights"], where)
+		cell.Values, cell.Weights = r.numbers(c["values"], where, cell.AllowZero), r.numbers(c["weights"], where, false)
 		n, isNumber := c["n"].(float64)
 		switch {
 		case len(cell.Values) == 0 || len(cell.Values) != len(cell.Weights):
@@ -435,14 +448,17 @@ func Read(data []byte) (*Pack, error) {
 		cell.N = int(n)
 		p.Cells = append(p.Cells, cell)
 	}
+	if format == NonnegativeFormat && !hasNonnegative {
+		r.fail("pack/3 requires a nonnegative cell")
+	}
 	if r.err != nil {
 		return nil, fmt.Errorf("it is not a pack that this version reads: %w", r.err)
 	}
 	return p, nil
 }
 
-// numbers returns a list of numbers above zero.
-func (r *reader) numbers(v any, where string) []float64 {
+// numbers reads bounded table values or weights. Only nonnegative cells admit a zero value.
+func (r *reader) numbers(v any, where string, allowZero bool) []float64 {
 	list, ok := v.([]any)
 	if !ok {
 		r.fail("%s has values or weights that are not a list", where)
@@ -450,7 +466,8 @@ func (r *reader) numbers(v any, where string) []float64 {
 	out := make([]float64, 0, len(list))
 	for _, x := range list {
 		n, isNumber := x.(float64)
-		if !isNumber || !(n >= MinNumber && n <= MaxNumber) {
+		inRange := n >= MinNumber && n <= MaxNumber
+		if !isNumber || !(inRange || (allowZero && n == 0)) {
 			r.fail("%s has a value or a weight that is not a number from %g to %g", where, MinNumber, MaxNumber)
 			return nil
 		}
@@ -515,6 +532,14 @@ func (p *Pack) Cell(measure, cohort string) *Cell {
 	return nil
 }
 
+// MethodVersion names the input domain as well as the percentile calculation.
+func (c *Cell) MethodVersion() string {
+	if c.AllowZero {
+		return "2"
+	}
+	return MethodVersion
+}
+
 // Result is where a value lies in a cell. The percentages are rounded to
 // one decimal; the quartiles are values of the sample.
 type Result struct {
@@ -523,10 +548,13 @@ type Result struct {
 	P25, P50, P75            float64
 }
 
-// Place is the method, version 1: where v lies among the values of a cell.
+// Place checks the cell’s input domain and computes the weighted midrank.
 // docs/REFERENCE.md has it as numbered steps.
 func (c *Cell) Place(v float64) (Result, error) {
-	if !(v > 0) || math.IsInf(v, 0) {
+	if c.AllowZero && (v < 0 || math.IsNaN(v) || math.IsInf(v, 0)) {
+		return Result{}, errors.New("the reading must be a finite nonnegative number")
+	}
+	if !c.AllowZero && (!(v > 0) || math.IsInf(v, 0)) {
 		return Result{}, errors.New("the reading is not a number above zero")
 	}
 	res := Result{N: c.N}

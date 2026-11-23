@@ -322,3 +322,39 @@ func TestSignedEvidenceAlternatives(t *testing.T) {
 		}
 	}
 }
+
+func TestNonnegativeCells(t *testing.T) {
+	p := small()
+	c := &p.Cells[0]
+	c.AllowZero = true
+	c.Values[0] = 0
+	raw := p.Bytes()
+	got, err := Read(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got.Bytes()) != string(raw) {
+		t.Fatal("pack/3 round trip differs")
+	}
+	for _, v := range []float64{-1, math.NaN(), math.Inf(1)} {
+		if _, err := got.Cells[0].Place(v); err == nil {
+			t.Fatalf("placed %v", v)
+		}
+	}
+	result, err := got.Cells[0].Place(0)
+	if err != nil || result.Below != 0 || result.Equal != 2.5 || result.Percentile != 1.3 || got.Cells[0].MethodVersion() != "2" {
+		t.Fatalf("zero: %+v %v", result, err)
+	}
+	if _, err := got.Cells[1].Place(0); err == nil || got.Cells[1].MethodVersion() != "1" {
+		t.Fatal("positive-only cell changed")
+	}
+	for _, version := range []string{"pack/0", "pack/1", "pack/2"} {
+		if _, err := Read([]byte(strings.Replace(string(raw), "pack/3", version, 1))); err == nil {
+			t.Fatalf("%s accepted nonnegative cells", version)
+		}
+	}
+	c.Weights[0] = 0
+	if _, err := Read(p.Bytes()); err == nil {
+		t.Fatal("accepted zero weight")
+	}
+}

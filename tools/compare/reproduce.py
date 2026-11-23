@@ -28,7 +28,7 @@ For each comparison.percentile record it checks, in this order:
  4. the method of docs/COMPARE.md, computed here from the claim's own
     cohort and the reading's value, gives every number of the result.
 
-A claim whose method is `weighted-percentile` version 1 is checked against a
+A claim whose method is `weighted-percentile` version 1 or 2 is checked against a
 pack (docs/REFERENCE.md, "The claim"), found by the SHA-256 that the claim
 names: the pack has that SHA-256 and is a good pack (tools/pack/check.py);
 the cell is there; the reading's type and unit are in the measure's `same`
@@ -389,7 +389,7 @@ class Inputs:
         return self.tables[digest]
 
 
-def find_reading(claim, inputs):
+def find_reading(claim, inputs, allow_zero=False):
     """The reading a claim is about, and its value, or an error."""
     ctx = claim["context"]
     rid = ctx["reading"]
@@ -401,7 +401,7 @@ def find_reading(claim, inputs):
     if {"rel": "about", "id": rid} not in claim.get("refs", []) or reading.get("subject") != claim.get("subject"):
         raise ValueError("the claim is not about the reading it names, or they are about two people")
     value = reading.get("value", {}).get("n")
-    if not is_number(value) or not value > 0:
+    if not is_number(value) or not (value > 0 or (allow_zero and value == 0)):
         raise ValueError("the reading is not a number above zero")
     return reading, value
 
@@ -411,7 +411,7 @@ def check(claim, inputs):
     when an input is not there, ValueError when a check fails."""
     ctx = claim["context"]
     method = ctx["method"]
-    if (method.get("id"), method.get("version")) == PACK_METHOD:
+    if (method.get("id"), method.get("version")) in (PACK_METHOD, ("weighted-percentile", "2")):
         return check_pack_claim(claim, inputs)
     if (method.get("id"), method.get("version")) != METHOD:
         raise ValueError("a method this tool does not know: %s@%s" % (method.get("id"), method.get("version")))
@@ -454,10 +454,10 @@ def same_number(a, b):
 
 
 def check_pack_claim(claim, inputs):
-    """A claim of the method weighted-percentile, version 1, against a pack:
+    """A claim of the method weighted-percentile against a pack:
     the four steps of docs/REFERENCE.md, "The claim"."""
     ctx = claim["context"]
-    reading, value = find_reading(claim, inputs)
+    reading, value = find_reading(claim, inputs, allow_zero=True)
     if claim.get("author") != claim.get("subject"):
         raise ValueError("the claim is not signed by the person it is about")
     # The context has the members the document names, and no others.
@@ -515,7 +515,8 @@ def check_pack_claim(claim, inputs):
                               ("cohort.text", ctx["cohort"]["text"], cohort["text"])):
         if got != expect:
             raise ValueError("%s is not the pack's: %r" % (what, expect))
-    if (ctx["method"]["id"], ctx["method"]["version"]) != PACK_METHOD:
+    version = "2" if cell["kind"] == "weights-nonnegative" else "1"
+    if (ctx["method"]["id"], ctx["method"]["version"]) != ("weighted-percentile", version):
         raise ValueError("a method this tool does not know")
     caveats = list(pack["caveats"]) + list(measure["caveats"]) + list(cohort["caveats"]) + [CAVEAT_COHORT]
     if cell["n"] < SMALL_N:

@@ -64,7 +64,7 @@ A pack is one JSON object, in UTF-8. A builder writes it in bean's canonical for
 
 | Member | Value |
 |---|---|
-| `bean` | `pack/0`, `pack/1` or `pack/2`. |
+| `bean` | `pack/0`, `pack/1`, `pack/2` or `pack/3`. |
 | `title` | What the pack is, in a few words. |
 | `source.name`, `source.publisher`, `source.home` | The source, who publishes it, and its address. |
 | `source.files` | One entry or more. Each has `name`, `sha256` (64 lower-case hex digits), `bytes` and `url`. These are the files that the pack was built from. A name is there once. |
@@ -118,10 +118,14 @@ An id is 1 to 64 letters, digits, dots, `-` and `_`, and starts with a letter or
 | Member | Value |
 |---|---|
 | `measure`, `cohort` | The ids of the measure and the cohort. A pair is there once. |
-| `kind` | `weights`. Version 0 has no other kind. |
+| `kind` | `weights` or, in `pack/3`, `weights-nonnegative`. |
 | `n` | The number of people: a whole number from 1 to 2147483647, and not below the number of distinct values. |
-| `values` | The distinct values of the cohort, in rising order: one or more. Each is a number from 1e-12 to 1e15. |
+| `values` | The distinct values of the cohort, in rising order: one or more. Positive values are from 1e-12 to 1e15. Nonnegative cells also admit zero. |
 | `weights` | One number from 1e-12 to 1e15 for each value: the weight that the value carries. |
+
+A `pack/3` file uses the same match rules and has at least one cell of kind `weights-nonnegative`.
+That kind admits zero among its values and uses method version 2. Every weight remains strictly positive.
+Other cells keep kind `weights` and method version 1.
 
 A weight is the sum of the sample weights of the people with that value. For a source with no sample weights, it is the count of those people.
 
@@ -136,6 +140,8 @@ The method's id is `weighted-percentile`, and this is version 1. Inputs: the val
 3. lower = 100 B / W, same = 100 E / W, percentile = 100 (B + E/2) / W. Round each to one decimal: floor(10 y + 0.5) / 10, with the multiplication and the addition as two steps.
 4. The 25th, 50th and 75th percentile, for q = 0.25, 0.5 and 0.75. Add the weights in the cell's order, and call the sum so far S. Each percentile is the first value at which S >= q × W. Compute q × W as one multiplication, and compare S with it as doubles. If no value reaches it, take the last value.
 5. n is the cell's n.
+
+For `weights-nonnegative`, version 2 also accepts a reading of zero in step 1. Steps 2 through 5 are identical.
 
 Every sum is in IEEE 754 doubles, in the order given. So every implementation gets the same bits. A change to any step is a new version.
 
@@ -274,6 +280,6 @@ Public reference data comes in more shapes than a table of weights. Version 0 de
 - **A pack from data that is not public.** Nobody can build such a pack again, so a reader has only the publisher's word. Version 0 requires an address for each source file.
 - **Names for a measure that do not depend on bean's types.** A public code system for lab tests and for units could replace the `same` list. Its terms of use are not confirmed.
 - **A pack in a share.** `bean share` does not carry a pack. The reader's check names each pack by its SHA-256 and says that it is needed. The reader gets it from the sender or from any host. The check page does not compute a comparison again.
-- **A measure that can be zero**, and an interval of uncertainty. Each is a new method version.
+- **An interval of uncertainty.** It would need a new method version.
 
 The [external pack directory](EXTERNAL-PACKS.md) records digests supplied by other publishers and the reader version each pack requires.

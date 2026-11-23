@@ -5,7 +5,7 @@
     check.py <pack> place <measure id> <cohort id> <value>
 
 Written from docs/REFERENCE.md alone (formats pack/0 and pack/1, method
-weighted-percentile version 1); it shares no code with bean.
+weighted-percentile versions 1 and 2); it shares no code with bean.
 
 The first form applies every rule of the document to the file. On success it
 prints
@@ -250,8 +250,8 @@ def text_list(x, where):
 
 def check_pack(p):
     members(p, TOP, "the pack")
-    if p["bean"] not in (FORMAT, "pack/1", "pack/2"):
-        raise Refused("unsupported pack format: expected pack/0, pack/1 or pack/2")
+    if p["bean"] not in (FORMAT, "pack/1", "pack/2", "pack/3"):
+        raise Refused("unsupported pack format: expected pack/0, pack/1, pack/2 or pack/3")
     text(p["title"], "title")
     members(p["source"], SOURCE, "source")
     for k in ("name", "publisher", "home"):
@@ -299,7 +299,7 @@ def check_pack(p):
             raise Refused("%s: same is not a list of one entry or more" % w)
         for i, s in enumerate(same):
             qualified = p["bean"] != FORMAT and isinstance(s, dict) and "when" in s
-            guarded = p["bean"] == "pack/2" and isinstance(s, dict) and "any_of" in s and not qualified
+            guarded = p["bean"] in ("pack/2", "pack/3") and isinstance(s, dict) and "any_of" in s and not qualified
             members(s, (*SAME, "any_of") if guarded else (*SAME, "when") if qualified else SAME, "%s same[%d]" % (w, i))
             if guarded:
                 choices = s["any_of"]
@@ -347,7 +347,8 @@ def check_pack(p):
             raise Refused("%s: measure and cohort are not ids" % w)
         ident(c["measure"], w + " measure")
         ident(c["cohort"], w + " cohort")
-        if c["kind"] != "weights":
+        allow_zero = p["bean"] == "pack/3" and c["kind"] == "weights-nonnegative"
+        if c["kind"] != "weights" and not allow_zero:
             raise Refused("%s is of a kind this reader does not know: %s" % (w, safe(c["kind"], 40) if isinstance(c["kind"], str) else "not a text"))
         if c["measure"] not in measures:
             raise Refused("%s names a measure the pack does not have: %s" % (w, safe(c["measure"], 64)))
@@ -369,7 +370,7 @@ def check_pack(p):
         for j, v in enumerate(values):
             if not is_num(v):
                 raise Refused("%s: value %d is not a number" % (w, j))
-            if not MIN_NUMBER <= v <= MAX_NUMBER:
+            if not (allow_zero and v == 0) and not MIN_NUMBER <= v <= MAX_NUMBER:
                 raise Refused("%s: value %d is not from 1e-12 to 1e15" % (w, j))
             if last is not None and not v > last:
                 raise Refused("%s: value %d is not above the one before" % (w, j))
@@ -385,6 +386,8 @@ def check_pack(p):
         n = int(n)
         if n < len(values):
             raise Refused("%s has an n below the number of distinct values" % w)
+    if p["bean"] == "pack/3" and not any(c["kind"] == "weights-nonnegative" for c in cells):
+        raise Refused("pack/3 requires a nonnegative cell")
     return p
 
 
@@ -403,7 +406,10 @@ def place(cell, value):
         v = float(value)
     except OverflowError:
         raise NotPlaced("the value is not a number above zero")
-    if not (math.isfinite(v) and v > 0):
+    if cell.get("kind") == "weights-nonnegative":
+        if not math.isfinite(v) or v < 0:
+            raise NotPlaced("the reading must be a finite nonnegative number")
+    elif not (math.isfinite(v) and v > 0):
         raise NotPlaced("the value is not a number above zero")
     values = [float(x) for x in cell["values"]]
     weights = [float(x) for x in cell["weights"]]

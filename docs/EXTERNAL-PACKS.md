@@ -32,3 +32,13 @@ This pack adds eleven NHANES 2017–2018 serum chemistry measures across fourtee
 ```
 
 Use a reader with `pack/2` support. It checks the source, test, unit and panel or specimen recorded with each reading. The [release review](https://stele.aion.bio/chemistry/review.html) lists eligible tests, source file digests and instructions for rebuilding every table.
+
+## Aion's CBC differential and mean platelet volume pack
+
+Five differential percentages, five absolute counts and mean platelet volume come from NHANES 2017–2018. Each absolute count has tables in both printed unit scales.
+
+```
+c73be016d0cf67870a7fbc2c694de6459ac7438ed3e62c18c103e01ccd65a3c0
+```
+
+Use a reader with `pack/3` support to retain reported zeros. The [source review](https://stele.aion.bio/cbc/review.html) covers segmented neutrophil labels, unit scaling, rounding and the top-coded white cell count.
