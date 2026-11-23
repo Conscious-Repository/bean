@@ -22,3 +22,13 @@ This separate pack uses NHANES fasting subsample weights. It holds plasma glucos
 
 Use a Bean build that supports `pack/2`. Each match requires signed fasting evidence. Glucose also requires an identified plasma result.
 The [source review](https://stele.aion.bio/fasting/review.html) lists the LDL variants, source files, checks, and download instructions.
+
+## Aion's routine blood chemistry pack
+
+This pack adds eleven NHANES 2017–2018 serum chemistry measures across fourteen adult groups. It uses MEC exam weights. ALT, GGT and total bilirubin include only CDC results flagged at or above the detection limit.
+
+```
+588c19e75c80b4ef900b53d5b649d4c4bb2470e2a95fce2931a4e914b13e7de3
+```
+
+Use a reader with `pack/2` support. It checks the source, test, unit and panel or specimen recorded with each reading. The [release review](https://stele.aion.bio/chemistry/review.html) lists eligible tests, source file digests and instructions for rebuilding every table.
