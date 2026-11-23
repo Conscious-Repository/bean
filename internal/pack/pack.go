@@ -26,6 +26,7 @@ import (
 // Format is the value of a pack's "bean" member.
 const Format = "pack/0"
 const PanelFormat = "pack/1"
+const EvidenceFormat = "pack/2"
 
 // Kind is the one kind of cell that version 0 has: the weight that each
 // distinct value of the cohort carries.
@@ -75,6 +76,7 @@ type Measure struct {
 	Caveats     []string
 	Same        []Same
 	When        map[Same]Panel
+	AnyOf       map[Same][]Evidence
 }
 
 // Cohort is one group of people on the pack's menu.
@@ -139,8 +141,22 @@ func (p *Pack) Bytes() []byte {
 		for _, s := range m.Same {
 			row := map[string]any{"type": s.Type, "unit": s.Unit}
 			if w, ok := m.When[s]; ok {
-				format = PanelFormat
+				if format == Format {
+					format = PanelFormat
+				}
 				row["when"] = map[string]any{"system": w.System, "test": w.Test, "panel": w.Panel}
+			}
+			if rules, ok := m.AnyOf[s]; ok {
+				format = EvidenceFormat
+				choices := []any{}
+				for _, rule := range rules {
+					fields := map[string]any{}
+					for key, value := range rule {
+						fields[key] = value
+					}
+					choices = append(choices, fields)
+				}
+				row["any_of"] = choices
 			}
 			same = append(same, row)
 		}
@@ -270,8 +286,8 @@ func Read(data []byte) (*Pack, error) {
 		return nil, errors.New("it is not a pack: it is not one JSON object")
 	}
 	format, _ := top["bean"].(string)
-	if format != Format && format != PanelFormat {
-		return nil, fmt.Errorf("unsupported pack format: expected %q or %q", Format, PanelFormat)
+	if format != Format && format != PanelFormat && format != EvidenceFormat {
+		return nil, fmt.Errorf("unsupported pack format: expected %q, %q or %q", Format, PanelFormat, EvidenceFormat)
 	}
 	top = r.object(v, "the pack", "bean", "title", "source", "builder", "caveats", "measures", "cohorts", "cells")
 	sum := sha256.Sum256(data)
@@ -307,7 +323,7 @@ func Read(data []byte) (*Pack, error) {
 	p.Caveats = r.texts(top["caveats"], "caveats")
 	// Each measure, and no type and unit claimed by two of them: a reading
 	// must have one place.
-	hasPanel := false
+	hasPanel, hasEvidence := false, false
 	claimed := map[Same]bool{}
 	measures, _ := top["measures"].(map[string]any)
 	for _, id := range slices.Sorted(maps.Keys(measures)) {
@@ -324,18 +340,29 @@ func Read(data []byte) (*Pack, error) {
 			fields := []string{"type", "unit"}
 			obj, _ := x.(map[string]any)
 			_, qualified := obj["when"]
-			if qualified && format == PanelFormat {
+			if qualified && format != Format {
 				fields = append(fields, "when")
+			}
+			_, guarded := obj["any_of"]
+			if guarded && !qualified && format == EvidenceFormat {
+				fields = append(fields, "any_of")
 			}
 			s := r.object(x, "a same row", fields...)
 			row := Same{r.text(s["type"], "a same row's type"), r.text(s["unit"], "a same row's unit")}
-			if qualified && format == PanelFormat {
+			if qualified && format != Format {
 				w := r.object(s["when"], "same.when", "system", "test", "panel")
 				if measure.When == nil {
 					measure.When = make(map[Same]Panel)
 				}
 				measure.When[row] = Panel{r.text(w["system"], "when.system"), r.text(w["test"], "when.test"), r.text(w["panel"], "when.panel")}
 				hasPanel = true
+			}
+			if guarded && !qualified && format == EvidenceFormat {
+				if measure.AnyOf == nil {
+					measure.AnyOf = make(map[Same][]Evidence)
+				}
+				measure.AnyOf[row] = r.evidence(s["any_of"])
+				hasEvidence = true
 			}
 			if ownType(row.Type) {
 				r.fail("a measure claims %s, which is a record of bean's own and not a reading", row.Type)
@@ -347,6 +374,9 @@ func Read(data []byte) (*Pack, error) {
 			measure.Same = append(measure.Same, row)
 		}
 		p.Measures[id] = measure
+	}
+	if format == EvidenceFormat && !hasEvidence {
+		r.fail("pack/2 requires an evidence-qualified match")
 	}
 	if format == PanelFormat && !hasPanel {
 		r.fail("pack/1 requires a panel-qualified match")
@@ -440,6 +470,18 @@ func (p *Pack) MeasureFor(typ, unit string) (id string, units []string) {
 // MatchReading also checks the signed source and printed labels when the
 // publisher requires them. A mismatched panel has no measure.
 func (p *Pack) MatchReading(typ, unit string, panel Panel) (id string, units []string, panelMismatch bool) {
+	return p.match(typ, unit, panel, nil)
+}
+
+// MatchRecord checks all qualifiers against the original signed record.
+func (p *Pack) MatchRecord(record *core.Record) (string, []string, bool) {
+	unit, _ := record.Value["unit"].(string)
+	test, _ := record.Context["test"].(string)
+	panel, _ := record.Context["panel"].(string)
+	return p.match(record.Type, unit, Panel{record.Source.System, test, panel}, record)
+}
+
+func (p *Pack) match(typ, unit string, panel Panel, record *core.Record) (id string, units []string, panelMismatch bool) {
 	for _, mid := range slices.Sorted(maps.Keys(p.Measures)) {
 		m := p.Measures[mid]
 		for _, s := range m.Same {
@@ -448,7 +490,10 @@ func (p *Pack) MatchReading(typ, unit string, panel Panel) (id string, units []s
 			}
 			units = append(units, s.Unit)
 			if s.Unit == unit {
-				if want, ok := m.When[s]; ok && panel != want {
+				rules, guarded := m.AnyOf[s]
+				if guarded && !slices.ContainsFunc(rules, func(rule Evidence) bool { return rule.matches(record) }) {
+					panelMismatch = true
+				} else if want, ok := m.When[s]; ok && panel != want {
 					panelMismatch = true
 				} else {
 					id = mid

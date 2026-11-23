@@ -174,6 +174,17 @@ def specs():
     return out
 
 
+def cohort_menu():
+    cohorts, menu = {}, []
+    for sex, code in (("female", 2), ("male", 1)):
+        for lo, hi in AGES:
+            cid = "%s-%d-over" % (sex, lo) if hi == 80 else "%s-%d-%d" % (sex, lo, hi)
+            text = "%s, age %d and over" % (sex, lo) if hi == 80 else "%s, age %d-%d" % (sex, lo, hi)
+            cohorts[cid] = {"text": text, "caveats": [reproduce.CAVEAT_TOP_AGE] if hi == 80 else []}
+            menu.append((cid, code, lo, hi))
+    return cohorts, menu
+
+
 def build(given, sizes, digests):
     """The whole pack that the files give, as the builder writes it."""
     tables = {}
@@ -190,13 +201,8 @@ def build(given, sizes, digests):
         files.append({"name": d + ".xpt", "sha256": digests[d], "bytes": sizes[d], "url": URL + d + ".xpt"})
         if reproduce.KNOWN.get(d) != digests[d]:
             caveats.append(reproduce.CAVEAT_UNKNOWN % d)
-    cohorts, menu = {}, []
-    for sex, code in (("female", 2), ("male", 1)):
-        for lo, hi in AGES:
-            cid = "%s-%d-over" % (sex, lo) if hi == 80 else "%s-%d-%d" % (sex, lo, hi)
-            text = "%s, age %d and over" % (sex, lo) if hi == 80 else "%s, age %d-%d" % (sex, lo, hi)
-            cohorts[cid] = {"text": text, "caveats": [reproduce.CAVEAT_TOP_AGE] if hi == 80 else []}
-            menu.append((cid, code, lo, hi))
+    cohorts, menu = cohort_menu()
+
     measures, cells = {}, []
     for variable, spec in specs().items():
         d = spec["dataset"]

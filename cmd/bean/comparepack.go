@@ -62,15 +62,19 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 		c := comparison{reading: r, by: byText(r, l.ID, labels)}
 		v, isNumber := r.Value["n"].(float64)
 		unit, _ := r.Value["unit"].(string)
-		test, _ := r.Context["test"].(string)
-		panel, _ := r.Context["panel"].(string)
-		id, units, panelMismatch := p.MatchReading(r.Type, unit, pack.Panel{System: r.Source.System, Test: test, Panel: panel})
+		id, units, panelMismatch := p.MatchRecord(r)
 		cell := p.Cell(id, cohort)
 		switch {
 		case len(units) == 0:
 			c.refused, c.unmapped = "no reference data for this type", true
 		case panelMismatch:
 			c.refused = "the source, printed test or panel does not match the pack"
+			for _, m := range p.Measures {
+				if rules := m.AnyOf[pack.Same{Type: r.Type, Unit: unit}]; len(rules) > 0 {
+					c.refused = "required signed evidence: " + evidenceText(rules)
+					break
+				}
+			}
 		case !isNumber:
 			c.refused = "the reading is not a number"
 		case id == "" && unit == "":
@@ -200,5 +204,20 @@ func matchText(m pack.Measure, row pack.Same) string {
 	if w, ok := m.When[row]; ok {
 		text += fmt.Sprintf(" for %s test %q in panel %q", w.System, w.Test, w.Panel)
 	}
+	if rules := m.AnyOf[row]; len(rules) > 0 {
+		text += " when " + evidenceText(rules)
+	}
 	return text
+}
+
+func evidenceText(rules []pack.Evidence) string {
+	var choices []string
+	for _, rule := range rules {
+		var fields []string
+		for _, key := range slices.Sorted(maps.Keys(rule)) {
+			fields = append(fields, fmt.Sprintf("%s=%q", key, rule[key]))
+		}
+		choices = append(choices, strings.Join(fields, " and "))
+	}
+	return strings.Join(choices, " or ")
 }

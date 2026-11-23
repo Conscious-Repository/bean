@@ -2,7 +2,7 @@
 
 This is for anyone who publishes reference data, and for anyone who writes a tool that reads it. It says what a pack must hold so that bean, and anyone else, can compare a reading with it and check the result. [ARCHITECTURE.md](ARCHITECTURE.md) shows the whole path in one picture.
 
-Readers support two draft file formats. A saved comparison records the method and the digest of the exact pack it used. [REFERENCE-PLAN.md](REFERENCE-PLAN.md) says what changes next and what does not, and where bean falls short of its own rules.
+Readers support three draft file formats. A saved comparison records the method and the digest of the exact pack it used. [REFERENCE-PLAN.md](REFERENCE-PLAN.md) says what changes next and what does not, and where bean falls short of its own rules.
 
 ## The idea
 
@@ -64,7 +64,7 @@ A pack is one JSON object, in UTF-8. A builder writes it in bean's canonical for
 
 | Member | Value |
 |---|---|
-| `bean` | `pack/0` or `pack/1`. |
+| `bean` | `pack/0`, `pack/1` or `pack/2`. |
 | `title` | What the pack is, in a few words. |
 | `source.name`, `source.publisher`, `source.home` | The source, who publishes it, and its address. |
 | `source.files` | One entry or more. Each has `name`, `sha256` (64 lower-case hex digits), `bytes` and `url`. These are the files that the pack was built from. A name is there once. |
@@ -83,7 +83,14 @@ A measure has these members:
 | `caveats` | Texts that qualify every comparison with this measure. |
 | `same` | A list of one entry or more. Each entry has `type` and `unit`. |
 
-A pack with a panel-qualified match uses `pack/1`. A `same` entry may also hold `when`, an object with three nonempty text fields.
+A pack with a panel-qualified match uses `pack/1`. A `pack/2` file has at least one `same` entry with `any_of`. Other entries can use the earlier forms.
+An entry uses at most one of `when` and `any_of`.
+The latter lists 1 through 16 alternatives. Each alternative maps 1 through 8 field names to nonempty text values.
+A field is `source.system` or `context.NAME`. NAME follows the measure id rules and contains no dot.
+An alternative passes only when every named field of the signed reading is the exact stated string. One passing alternative gives a match.
+The type and unit must still match exactly. The table, weights and percentile method follow the same rules in all three formats.
+
+A `same` entry may also hold `when`, an object with three nonempty text fields.
 Compare `when.system`, `when.test` and `when.panel` with the signed reading’s `source.system`, `context.test` and `context.panel`.
 All three strings must match exactly, as must the type and unit. A missing field gives no match. Each type and unit still occurs only once.
 A `pack/1` file must have at least one qualified entry. Readers that support only `pack/0` refuse this file. Both formats use the same percentile method.

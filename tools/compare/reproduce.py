@@ -499,7 +499,14 @@ def check_pack_claim(claim, inputs):
     kind = (reading.get("type"), (reading.get("value") or {}).get("unit"))
     context = reading.get("context") or {}
     panel = {"system": reading["source"]["system"], "test": context.get("test"), "panel": context.get("panel")}
-    if not any((row["type"], row["unit"]) == kind and ("when" not in row or row["when"] == panel)
+    def qualifies(row):
+        if "any_of" in row:
+            fields = {"context." + k: v for k, v in context.items()}
+            fields["source.system"] = reading["source"]["system"]
+            return any(all(fields.get(k) == v for k, v in rule.items()) for rule in row["any_of"])
+        return "when" not in row or row["when"] == panel
+
+    if not any((row["type"], row["unit"]) == kind and qualifies(row)
                for row in measure["same"]):
         raise ValueError("the pack does not set %s in %s against %s" % (kind[0], kind[1], mid))
     # Step 3: the texts and the caveats are the pack's.

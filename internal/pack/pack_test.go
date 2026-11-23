@@ -276,3 +276,49 @@ func TestPanelMatch(t *testing.T) {
 		}
 	}
 }
+
+func TestSignedEvidenceAlternatives(t *testing.T) {
+	p := small()
+	key := p.Measures["M1"].Same[0]
+	m := p.Measures["M1"]
+	m.AnyOf = map[Same][]Evidence{key: {
+		{"source.system": "lab", "context.fasting": "Yes"},
+		{"context.specimen_type": "plasma", "context.fasting": "Yes"},
+	}}
+	p.Measures["M1"] = m
+	data := p.Bytes()
+	got, err := Read(data)
+	if err != nil || string(data) != string(got.Bytes()) {
+		t.Fatalf("round trip: %v", err)
+	}
+	for _, tc := range []struct {
+		system string
+		ctx    map[string]any
+		want   string
+	}{
+		{"lab", map[string]any{"fasting": "Yes"}, "M1"},
+		{"other", map[string]any{"fasting": "Yes", "specimen_type": "plasma"}, "M1"},
+		{"lab", map[string]any{"fasting": "No"}, ""},
+		{"lab", map[string]any{"fasting": true}, ""},
+		{"other", map[string]any{"fasting": "Yes"}, ""},
+		{"lab", nil, ""},
+	} {
+		rec := core.Record{Type: key.Type, Value: map[string]any{"unit": key.Unit}, Source: core.Source{System: tc.system}, Context: tc.ctx}
+		if mid, _, _ := got.MatchRecord(&rec); mid != tc.want {
+			t.Errorf("matched %q, want %q", mid, tc.want)
+		}
+	}
+	if id, _ := got.MeasureFor(key.Type, key.Unit); id != "" {
+		t.Fatal("matched without a record")
+	}
+	for _, pair := range [][2]string{
+		{`"bean":"pack/2"`, `"bean":"pack/1"`},
+		{`"context.fasting":"Yes"`, `"value.n":"Yes"`},
+		{`"context.fasting":"Yes"`, `"context.fasting":true`},
+		{`{"context.fasting":"Yes","source.system":"lab"}`, `{}`},
+	} {
+		if _, err := Read([]byte(strings.Replace(string(data), pair[0], pair[1], 1))); err == nil {
+			t.Errorf("accepted mutation %v", pair)
+		}
+	}
+}
