@@ -96,7 +96,7 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 				c.against = fmt.Sprintf("%s in %s against %s", r.Type, unit, p.Measures[id].Label)
 			}
 			c.result = res
-			c.caveats = packCaveats(p, id, cohort, res.N, onRec, c.by != "")
+			c.caveats = p.PlacementCaveats(id, cohort, res.N, c.by != "")
 			claims = append(claims, packRecord(c, p, cohort, co, cell.MethodVersion()))
 		}
 		rows = append(rows, c)
@@ -111,24 +111,6 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 	head := fmt.Sprintf("Compared with the pack %q. Cohort: %s.\nThe pack is %s, SHA-256 %s.\n%s", p.Title, co.Text, path, p.SHA256, onRecord(p))
 	printComparisons(os.Stdout, rows, head, strings.Join(known, ", "), typ == "")
 	saveComparisons(s, l, claims, save, "the pack")
-}
-
-// packCaveats are the caveats of one comparison with a pack, in the order
-// that every implementation gives them: the pack's, the measure's, the
-// cohort's, that the person chose the cohort, the small cohort, a pack
-// that bean has no record of, and the reading's signer.
-func packCaveats(p *pack.Pack, measure, cohort string, n int, known, otherSigner bool) []string {
-	out := slices.Concat(p.Caveats, p.Measures[measure].Caveats, p.Cohorts[cohort].Caveats, []string{caveatCohort})
-	if n < pack.SmallN {
-		out = append(out, fmt.Sprintf(caveatSmall, pack.SmallN))
-	}
-	if !known {
-		out = append(out, pack.CaveatNotOnRecord)
-	}
-	if otherSigner {
-		out = append(out, caveatAuthor)
-	}
-	return out
 }
 
 // printPack shows what a pack holds: where it comes from, and its menu.

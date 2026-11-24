@@ -402,3 +402,9 @@ Without `-blob` it keeps its older behaviour for those two: an unread time goes 
 | `local/hidden/`, `local/holds.json` | Deletion state of this copy. A lost `holds.json` starts each wait again. | No. |
 | `local/purged-refs.jsonl` | The import refs of purged records. Without it, a new import of the same data brings them back. | Back it up; do not sync it. |
 | `local/cache/` | Caches. Safe to delete. | No. |
+
+## Replay selected lab sources
+
+`bean coverage -sources FILE -assets DIR -cohort ID` checks current lab readings against local, digest-pinned sources.
+Add `-json` for per-reading evidence, or `-report SHA256` to select one original report.
+The [reader trial](../examples/coverage/README.md) includes a source selection and five synthetic readings.

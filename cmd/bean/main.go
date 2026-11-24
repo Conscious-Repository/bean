@@ -41,6 +41,8 @@ Read
   verify                        Check every file and signature.
 
 Compare
+  coverage -sources <file> -cohort <id> [-assets <folder>] [-report <sha256>] [-json]
+                                Replay current lab readings against chosen local files.
   compare -sex <s> -age <from>-<to> [-where <rule>]... [-unknown-files] [-save] <id>... | -type <type>
                                 Show where a reading lies among people like the
                                 ones you describe, in public survey data (NHANES).
@@ -129,6 +131,7 @@ var syntax = map[string]string{
 	"reply":         "reply -to <what you received> [-key <key file>] [-for <address> [-address-words \"<eight words>\"] [-yes]] -out <new file> <id> <note> [<id> <note>]...",
 	"accept":        "accept [-label <name>] [-words \"<eight words>\"] [-yes | -key <key file>] <reply>",
 	"unpair":        "unpair <name>",
+	"coverage":      "coverage -sources <file> -cohort <id> [-assets <folder>] [-report <sha256>] [-json]",
 	"compare":       "compare -sex male|female -age <from>-<to> [-where <DATASET>.<VARIABLE>=<value>|<from>-<to>]... [-unknown-files] [-save] <id>... | -type <type>\n       bean [-dir <folder>] compare -pack <file> [-cohort <cohort> [-unknown-pack] [-save] <id>... | -type <type>]",
 	"mcp":           "mcp [-write] [-blobs] [-label <name>]",
 	"agent":         "agent init [-label <name>] [-identity <id>] | agent pair <npub> [-label <name>]",
@@ -333,6 +336,8 @@ func main() {
 		}
 	case "ls":
 		cmdList(s, rest)
+	case "coverage":
+		cmdCoverage(s, rest)
 	case "compare":
 		cmdCompare(s, rest)
 	case "share":

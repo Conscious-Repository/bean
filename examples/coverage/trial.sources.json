@@ -1,0 +1,15 @@
+{
+  "format": "bean-coverage-sources/1",
+  "packs": [
+    {
+      "sha256": "67a39c4ed9cd00f0b84dd78c154edd104e5d4d9b0f140dfa96eb5d91ca93771f",
+      "review": "https://stele.aion.bio/ratios-iron/review.html"
+    }
+  ],
+  "guides": [
+    {
+      "sha256": "e1805bc10b8dbd8483ff3f0163ace4c4b0bdc842708810ecaa3d9f38b053a15b",
+      "review": "https://stele.aion.bio/assays/review.html"
+    }
+  ]
+}

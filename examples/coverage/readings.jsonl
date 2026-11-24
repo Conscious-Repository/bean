@@ -1,0 +1,5 @@
+{"type":"lab.albumin-globulin-ratio","times":{"observed":null},"value":{"n":1.6},"context":{"test":"ALBUMIN/GLOBULIN RATIO","panel":"COMPREHENSIVE METABOLIC PANEL"},"source":{"system":"quest","adapter":"synthetic@1","ref":null}}
+{"type":"lab.albumin-globulin-ratio","times":{"observed":null},"value":{"n":1.6},"context":{"test":"ALBUMIN/GLOBULIN RATIO","panel":"Other panel"},"source":{"system":"quest","adapter":"synthetic@1","ref":null}}
+{"type":"lab.albumin-globulin-ratio","times":{"observed":null},"value":{"s":"<1.6"},"context":{"test":"ALBUMIN/GLOBULIN RATIO","panel":"COMPREHENSIVE METABOLIC PANEL"},"source":{"system":"quest","adapter":"synthetic@1","ref":null}}
+{"type":"lab.albumin-globulin-ratio","times":{"observed":null},"value":{"n":null},"context":{"test":"ALBUMIN/GLOBULIN RATIO","panel":"COMPREHENSIVE METABOLIC PANEL"},"source":{"system":"quest","adapter":"synthetic@1","ref":null}}
+{"type":"lab.cortisol-total","times":{"observed":null},"value":{"n":12,"unit":"mcg/dL"},"context":{"test":"CORTISOL, TOTAL","panel":"CORTISOL, TOTAL"},"source":{"system":"quest","adapter":"synthetic@1","ref":null}}
