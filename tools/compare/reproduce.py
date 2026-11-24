@@ -500,6 +500,8 @@ def check_pack_claim(claim, inputs):
     context = reading.get("context") or {}
     panel = {"system": reading["source"]["system"], "test": context.get("test"), "panel": context.get("panel")}
     def qualifies(row):
+        if row["unit"] is None and "unit" in reading["value"]:
+            return False
         if "any_of" in row:
             fields = {"context." + k: v for k, v in context.items()}
             fields["source.system"] = reading["source"]["system"]

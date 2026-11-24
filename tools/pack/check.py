@@ -249,9 +249,10 @@ def text_list(x, where):
 
 
 def check_pack(p):
+    has_ratio = False
     members(p, TOP, "the pack")
-    if p["bean"] not in (FORMAT, "pack/1", "pack/2", "pack/3"):
-        raise Refused("unsupported pack format: expected pack/0, pack/1, pack/2 or pack/3")
+    if p["bean"] not in (FORMAT, "pack/1", "pack/2", "pack/3", "pack/4"):
+        raise Refused("unsupported pack format: expected pack/0, pack/1, pack/2, pack/3 or pack/4")
     text(p["title"], "title")
     members(p["source"], SOURCE, "source")
     for k in ("name", "publisher", "home"):
@@ -299,7 +300,7 @@ def check_pack(p):
             raise Refused("%s: same is not a list of one entry or more" % w)
         for i, s in enumerate(same):
             qualified = p["bean"] != FORMAT and isinstance(s, dict) and "when" in s
-            guarded = p["bean"] in ("pack/2", "pack/3") and isinstance(s, dict) and "any_of" in s and not qualified
+            guarded = p["bean"] in ("pack/2", "pack/3", "pack/4") and isinstance(s, dict) and "any_of" in s and not qualified
             members(s, (*SAME, "any_of") if guarded else (*SAME, "when") if qualified else SAME, "%s same[%d]" % (w, i))
             if guarded:
                 choices = s["any_of"]
@@ -319,7 +320,10 @@ def check_pack(p):
                     text(s["when"][field], "when." + field)
                 has_panel = True
             text(s["type"], "%s same[%d].type" % (w, i))
-            text(s["unit"], "%s same[%d].unit" % (w, i))
+            if p["bean"] == "pack/4" and qualified and m["unit"] == "1" and s["unit"] is None:
+                has_ratio = True
+            else:
+                text(s["unit"], "%s same[%d].unit" % (w, i))
             if own_type(s["type"]):
                 raise Refused("%s claims %s, which is a record of bean's own and not a reading" % (w, safe(s["type"], 60)))
             key = (s["type"], s["unit"])
@@ -328,6 +332,8 @@ def check_pack(p):
                     raise Refused("%s: the type and unit %s %s are there twice" % (w, safe(key[0], 60), safe(key[1], 30)))
                 raise Refused("the type and unit %s %s are in the same lists of two measures" % (safe(key[0], 60), safe(key[1], 30)))
             owner[key] = mid
+    if p["bean"] == "pack/4" and not has_ratio:
+        raise Refused("pack/4 requires a panel-qualified dimensionless measure with an omitted reading unit")
     if p["bean"] == "pack/2" and not has_evidence:
         raise Refused("pack/2 requires evidence")
     if p["bean"] == "pack/1" and not has_panel:
@@ -347,7 +353,7 @@ def check_pack(p):
             raise Refused("%s: measure and cohort are not ids" % w)
         ident(c["measure"], w + " measure")
         ident(c["cohort"], w + " cohort")
-        allow_zero = p["bean"] == "pack/3" and c["kind"] == "weights-nonnegative"
+        allow_zero = p["bean"] in ("pack/3", "pack/4") and c["kind"] == "weights-nonnegative"
         if c["kind"] != "weights" and not allow_zero:
             raise Refused("%s is of a kind this reader does not know: %s" % (w, safe(c["kind"], 40) if isinstance(c["kind"], str) else "not a text"))
         if c["measure"] not in measures:

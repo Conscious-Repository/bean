@@ -28,6 +28,7 @@ const Format = "pack/0"
 const PanelFormat = "pack/1"
 const EvidenceFormat = "pack/2"
 const NonnegativeFormat = "pack/3"
+const RatioFormat = "pack/4"
 const NonnegativeKind = "weights-nonnegative"
 
 // Kind is the one kind of cell that version 0 has: the weight that each
@@ -139,10 +140,15 @@ func (p *Pack) Bytes() []byte {
 	}
 	measures := map[string]any{}
 	format := Format
+	hasRatio := false
 	for id, m := range p.Measures {
 		same := []any{}
 		for _, s := range m.Same {
 			row := map[string]any{"type": s.Type, "unit": s.Unit}
+			if s.Unit == "" {
+				row["unit"] = nil
+				hasRatio = true
+			}
 			if w, ok := m.When[s]; ok {
 				if format == Format {
 					format = PanelFormat
@@ -177,6 +183,9 @@ func (p *Pack) Bytes() []byte {
 			format = NonnegativeFormat
 		}
 		cells = append(cells, map[string]any{"measure": c.Measure, "cohort": c.Cohort, "kind": kind, "n": float64(c.N), "values": nums(c.Values), "weights": nums(c.Weights)})
+	}
+	if hasRatio {
+		format = RatioFormat
 	}
 	return append(core.Canonical(map[string]any{
 		"bean":     format,
@@ -294,8 +303,8 @@ func Read(data []byte) (*Pack, error) {
 		return nil, errors.New("it is not a pack: it is not one JSON object")
 	}
 	format, _ := top["bean"].(string)
-	if format != Format && format != PanelFormat && format != EvidenceFormat && format != NonnegativeFormat {
-		return nil, fmt.Errorf("unsupported pack format: expected %q, %q, %q or %q", Format, PanelFormat, EvidenceFormat, NonnegativeFormat)
+	if format != Format && format != PanelFormat && format != EvidenceFormat && format != NonnegativeFormat && format != RatioFormat {
+		return nil, fmt.Errorf("unsupported pack format: expected %q, %q, %q, %q or %q", Format, PanelFormat, EvidenceFormat, NonnegativeFormat, RatioFormat)
 	}
 	top = r.object(v, "the pack", "bean", "title", "source", "builder", "caveats", "measures", "cohorts", "cells")
 	sum := sha256.Sum256(data)
@@ -331,8 +340,8 @@ func Read(data []byte) (*Pack, error) {
 	p.Caveats = r.texts(top["caveats"], "caveats")
 	// Each measure, and no type and unit claimed by two of them: a reading
 	// must have one place.
-	supportsEvidence := format == EvidenceFormat || format == NonnegativeFormat
-	hasPanel, hasEvidence := false, false
+	supportsEvidence := format == EvidenceFormat || format == NonnegativeFormat || format == RatioFormat
+	hasPanel, hasEvidence, hasRatio := false, false, false
 	claimed := map[Same]bool{}
 	measures, _ := top["measures"].(map[string]any)
 	for _, id := range slices.Sorted(maps.Keys(measures)) {
@@ -357,7 +366,12 @@ func Read(data []byte) (*Pack, error) {
 				fields = append(fields, "any_of")
 			}
 			s := r.object(x, "a same row", fields...)
-			row := Same{r.text(s["type"], "a same row's type"), r.text(s["unit"], "a same row's unit")}
+			row := Same{Type: r.text(s["type"], "a same row's type")}
+			if format == RatioFormat && s["unit"] == nil && qualified && measure.Unit == "1" {
+				hasRatio = true
+			} else {
+				row.Unit = r.text(s["unit"], "a same row's unit")
+			}
 			if qualified && format != Format {
 				w := r.object(s["when"], "same.when", "system", "test", "panel")
 				if measure.When == nil {
@@ -386,6 +400,9 @@ func Read(data []byte) (*Pack, error) {
 	}
 	if format == EvidenceFormat && !hasEvidence {
 		r.fail("pack/2 requires an evidence-qualified match")
+	}
+	if format == RatioFormat && !hasRatio {
+		r.fail("pack/4 requires a panel-qualified dimensionless measure with an omitted reading unit")
 	}
 	if format == PanelFormat && !hasPanel {
 		r.fail("pack/1 requires a panel-qualified match")
@@ -424,7 +441,7 @@ func Read(data []byte) (*Pack, error) {
 		}
 		seen[[2]string{cell.Measure, cell.Cohort}] = true
 		kind, _ := c["kind"].(string)
-		cell.AllowZero = kind == NonnegativeKind && format == NonnegativeFormat
+		cell.AllowZero = kind == NonnegativeKind && (format == NonnegativeFormat || format == RatioFormat)
 		hasNonnegative = hasNonnegative || cell.AllowZero
 		if kind != Kind && !cell.AllowZero {
 			r.fail("%s is of kind %q; this version reads only the cell kinds declared by the pack format", where, kind)
@@ -505,7 +522,19 @@ func (p *Pack) match(typ, unit string, panel Panel, record *core.Record) (id str
 			if s.Type != typ {
 				continue
 			}
-			units = append(units, s.Unit)
+			label := s.Unit
+			if label == "" {
+				label = "an omitted unit on the named ratio"
+			}
+			units = append(units, label)
+			if s.Unit == "" {
+				if record == nil {
+					continue
+				}
+				if _, present := record.Value["unit"]; present {
+					continue
+				}
+			}
 			if s.Unit == unit {
 				rules, guarded := m.AnyOf[s]
 				if guarded && !slices.ContainsFunc(rules, func(rule Evidence) bool { return rule.matches(record) }) {

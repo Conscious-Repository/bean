@@ -358,3 +358,50 @@ func TestNonnegativeCells(t *testing.T) {
 		t.Fatal("accepted zero weight")
 	}
 }
+
+func TestRatioOmittedUnit(t *testing.T) {
+	p := small()
+	key := Same{"lab.bun-creatinine-ratio", ""}
+	panel := Panel{"labcorp", "BUN/Creatinine Ratio", "Comp. Metabolic Panel (14)"}
+	p.Measures["M1"] = Measure{Label: "BUN/creatinine", Unit: "1", Same: []Same{key}, When: map[Same]Panel{key: panel}}
+	raw := p.Bytes()
+	got, err := Read(raw)
+	if err != nil || string(got.Bytes()) != string(raw) {
+		t.Fatalf("round trip: %v", err)
+	}
+	for _, version := range []string{Format, PanelFormat, EvidenceFormat, NonnegativeFormat} {
+		if _, err := Read([]byte(strings.Replace(string(raw), RatioFormat, version, 1))); err == nil {
+			t.Fatalf("%s accepted omitted unit", version)
+		}
+	}
+	rec := core.Record{Type: key.Type, Source: core.Source{System: panel.System}, Context: map[string]any{"test": panel.Test, "panel": panel.Panel}, Value: map[string]any{"n": 12}}
+	if id, _, _ := got.MatchRecord(&rec); id != "M1" {
+		t.Fatal("named ratio declined")
+	}
+	if id, _, _ := got.MatchReading(key.Type, "", panel); id != "" {
+		t.Fatal("missing signed record")
+	}
+	for _, u := range []any{"", "1", "mg/dL", nil, 42} {
+		rec.Value["unit"] = u
+		if id, _, _ := got.MatchRecord(&rec); id != "" {
+			t.Fatalf("accepted explicit unit %v", u)
+		}
+	}
+	delete(rec.Value, "unit")
+	rec.Context["panel"] = "OTHER"
+	if id, _, _ := got.MatchRecord(&rec); id != "" {
+		t.Fatal("accepted different panel")
+	}
+	m := p.Measures["M1"]
+	m.Unit = "mg/dL"
+	p.Measures["M1"] = m
+	if _, err := Read(p.Bytes()); err == nil {
+		t.Fatal("dimensioned measure accepted")
+	}
+	m.Unit = "1"
+	m.When = nil
+	p.Measures["M1"] = m
+	if _, err := Read(p.Bytes()); err == nil {
+		t.Fatal("unguarded unit omission")
+	}
+}

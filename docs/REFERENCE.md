@@ -64,7 +64,7 @@ A pack is one JSON object, in UTF-8. A builder writes it in bean's canonical for
 
 | Member | Value |
 |---|---|
-| `bean` | `pack/0`, `pack/1`, `pack/2` or `pack/3`. |
+| `bean` | `pack/0`, `pack/1`, `pack/2`, `pack/3`, or `pack/4`. |
 | `title` | What the pack is, in a few words. |
 | `source.name`, `source.publisher`, `source.home` | The source, who publishes it, and its address. |
 | `source.files` | One entry or more. Each has `name`, `sha256` (64 lower-case hex digits), `bytes` and `url`. These are the files that the pack was built from. A name is there once. |
@@ -88,7 +88,9 @@ An entry uses at most one of `when` and `any_of`.
 The latter lists 1 through 16 alternatives. Each alternative maps 1 through 8 field names to nonempty text values.
 A field is `source.system` or `context.NAME`. NAME follows the measure id rules and contains no dot.
 An alternative passes only when every named field of the signed reading is the exact stated string. One passing alternative gives a match.
-The type and unit must still match exactly. All four formats use the same weighted percentile method. The cell kind determines whether a table may include a reported zero.
+A `pack/4` file includes at least one dimensionless measure (UCUM unit `1`) whose matching row declares `"unit":null` and a complete `when` panel. This matches only a signed record with the same type, provider, printed test and panel, and an absent `value.unit` member. An explicit empty string, null or a different unit fails. The publisher must establish what the named ratio divides, its scale and any rounding. An unreported numerator, denominator or result cannot be inferred from this rule. Other measures retain exact unit matching. Earlier formats reject a null matching unit.
+
+The type and unit must still match exactly in all other cases. All five formats use the same weighted percentile method. The cell kind determines whether a table may include a reported zero.
 
 A `same` entry may also hold `when`, an object with three nonempty text fields.
 Compare `when.system`, `when.test` and `when.panel` with the signed reading’s `source.system`, `context.test` and `context.panel`.
@@ -118,7 +120,7 @@ An id is 1 to 64 letters, digits, dots, `-` and `_`, and starts with a letter or
 | Member | Value |
 |---|---|
 | `measure`, `cohort` | The ids of the measure and the cohort. A pair is there once. |
-| `kind` | `weights` or, in `pack/3`, `weights-nonnegative`. |
+| `kind` | `weights` or, in `pack/3` or `pack/4`, `weights-nonnegative`. |
 | `n` | The number of people: a whole number from 1 to 2147483647, and not below the number of distinct values. |
 | `values` | The distinct values of the cohort, in rising order: one or more. Positive values are from 1e-12 to 1e15. Nonnegative cells also admit zero. |
 | `weights` | One number from 1e-12 to 1e15 for each value: the weight that the value carries. |

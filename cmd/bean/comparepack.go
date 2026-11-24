@@ -90,7 +90,11 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 				break
 			}
 			c.measure = id
-			c.against = fmt.Sprintf("%s in %s against %s", r.Type, unit, p.Measures[id].Label)
+			if unit == "" {
+				c.against = fmt.Sprintf("%s (dimensionless) against %s", r.Type, p.Measures[id].Label)
+			} else {
+				c.against = fmt.Sprintf("%s in %s against %s", r.Type, unit, p.Measures[id].Label)
+			}
 			c.result = res
 			c.caveats = packCaveats(p, id, cohort, res.N, onRec, c.by != "")
 			claims = append(claims, packRecord(c, p, cohort, co, cell.MethodVersion()))
@@ -200,7 +204,11 @@ func packRecord(c comparison, p *pack.Pack, cohort string, co pack.Cohort, versi
 
 // matchText states all the evidence the menu asks for.
 func matchText(m pack.Measure, row pack.Same) string {
-	text := row.Type + " (" + row.Unit + ")"
+	unit := row.Unit
+	if unit == "" {
+		unit = "dimensionless; printed unit omitted"
+	}
+	text := row.Type + " (" + unit + ")"
 	if w, ok := m.When[row]; ok {
 		text += fmt.Sprintf(" for %s test %q in panel %q", w.System, w.Test, w.Panel)
 	}
