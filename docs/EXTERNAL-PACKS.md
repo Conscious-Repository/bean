@@ -1,5 +1,15 @@
 # External reference packs
 
+## Routine ratios, iron capacity and assay sources
+
+NHANES 2017–2018 supplies the paired inputs for three dimensionless ratios and measured serum UIBC. The [source review](https://stele.aion.bio/ratios-iron/review.html) documents the rounded ratio definitions, signed panel matches and UIBC detection flags. This release requires the `pack/4` reader. Install the reviewed version with `go install github.com/Conscious-Repository/bean/cmd/bean@e017a7a32ce125cfe3c677b3aa52370a99fadccb`.
+
+Pack SHA-256: `67a39c4ed9cd00f0b84dd78c154edd104e5d4d9b0f140dfa96eb5d91ca93771f`
+
+The [assay source guide](https://stele.aion.bio/assays/review.html) is a separately selectable JSON directory of laboratory documentation. Match the printed test and provider to discover sources. Apply reference text from the original signed report with its original unit, bound and collection conditions. A source-guide match cannot produce a population percentile.
+
+Guide SHA-256: `e1805bc10b8dbd8483ff3f0163ace4c4b0bdc842708810ecaa3d9f38b053a15b`
+
 ## Cardiometabolic measures
 
 This NHANES 2015–2016 pack covers fasting serum apolipoprotein B, calculated non-HDL cholesterol and two unit displays of the same HbA1c-derived estimated average glucose. ApoB uses positive fasting-subsample weights and excludes values below the codebook detection limit. The derived measures use exam weights. [Codebooks, equations, eligibility and rebuild](https://stele.aion.bio/cardiometabolic/review.html).
@@ -107,7 +117,7 @@ fee20744c19ce3c92192144e6173aa035e52c96f7284f68e048d34393fc4db51
 
 ## Verify rebuild tools before execution
 
-The [release checksums](STELE-SHA256SUMS) cover every catalog download and the eight sets of hosted builders, verifiers and shell recipes. Choose a trusted revision of this public Bean repository independently. From a new directory, verify a recipe before running it. For example, with the chosen Bean checkout at `$BEAN`, run
+The [release checksums](STELE-SHA256SUMS) cover every catalog download and the assay source guide and the nine sets of hosted builders, verifiers and shell recipes. Choose a trusted revision of this public Bean repository independently. From a new directory, verify a recipe before running it. For example, with the chosen Bean checkout at `$BEAN`, run
 
 ```sh
 mkdir -p exam
