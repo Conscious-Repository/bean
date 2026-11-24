@@ -153,6 +153,8 @@ def number(x):
 
 
 def canonical(x):
+    if x is None:
+        return "null"
     if isinstance(x, dict):
         return "{" + ",".join(json.dumps(k, ensure_ascii=False) + ":" + canonical(x[k]) for k in sorted(x)) + "}"
     if isinstance(x, list):
