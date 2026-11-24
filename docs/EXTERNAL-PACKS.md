@@ -1,8 +1,22 @@
 # External reference packs
 
-## Aion's serum iron pack
+## Evidence-qualified core packs
 
-Stele publishes a 23-measure pack built by Aion from nine CDC NHANES 2017–2018 files. Its SHA-256 is:
+Stele’s current 13-, 20- and 23-measure releases use `pack/2`. Clinical rows require the signed source, printed test and order panel. Imported body mass requires the Apple Health XML source and HealthKit body-mass identifier. A white cell count coded “400 and over” has been excluded from the exact-count distribution.
+
+| Measures | SHA-256 |
+|---:|---|
+| 13 | `a646d6ec1b954fae02b12f1895a5e67b47aea43d03a734eb2ae939e5751d13a1` |
+| 20 | `7460c20ceab711ded88e9ad7f0dc676f5708d6f7ccf258f9d8c02fd15bf52692` |
+| 23 | `05dc27e6e78429e80b373cf1f04e9d4ee2ca4925f42391c43f6fea3d1bd5f93e` |
+
+Use the [source and matching review](https://stele.aion.bio/core/review.html) and verify the chosen download against [these checksums](STELE-SHA256SUMS). The ordinary Bean reader treats these as externally curated packs. After verifying the digest, pass `-unknown-pack` when comparing or `-accept-pack DIGEST` to the independent verifier.
+
+The original Bean builder and the [archive](https://stele.aion.bio/archive.html) reproduce historical claims. A reader replaying one must fetch the digest in that claim.
+
+## Aion's archived serum iron pack
+
+This historical 23-measure pack was built by Aion from nine CDC NHANES 2017–2018 files. Its SHA-256 is:
 
 ```
 a72b2a0933f7feba57cb24ce1461c278168a7dd619b31ba7566ab87bc50c714e
@@ -83,7 +97,7 @@ fee20744c19ce3c92192144e6173aa035e52c96f7284f68e048d34393fc4db51
 
 ## Verify rebuild tools before execution
 
-The [release checksums](STELE-SHA256SUMS) cover every catalog download and the six sets of hosted builders, verifiers and shell recipes. Choose a trusted revision of this public Bean repository independently. From a new directory, verify a recipe before running it. For example, with the chosen Bean checkout at `$BEAN`, run
+The [release checksums](STELE-SHA256SUMS) cover every catalog download and the seven sets of hosted builders, verifiers and shell recipes. Choose a trusted revision of this public Bean repository independently. From a new directory, verify a recipe before running it. For example, with the chosen Bean checkout at `$BEAN`, run
 
 ```sh
 mkdir -p exam
