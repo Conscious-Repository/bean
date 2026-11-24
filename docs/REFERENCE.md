@@ -2,7 +2,7 @@
 
 This is for anyone who publishes reference data, and for anyone who writes a tool that reads it. It says what a pack must hold so that bean, and anyone else, can compare a reading with it and check the result. [ARCHITECTURE.md](ARCHITECTURE.md) shows the whole path in one picture.
 
-Readers support three draft file formats. A saved comparison records the method and the digest of the exact pack it used. [REFERENCE-PLAN.md](REFERENCE-PLAN.md) says what changes next and what does not, and where bean falls short of its own rules.
+Readers support four draft file formats. A saved comparison records the method and the digest of the exact pack it used. [REFERENCE-PLAN.md](REFERENCE-PLAN.md) says what changes next and what does not, and where bean falls short of its own rules.
 
 ## The idea
 
@@ -88,7 +88,7 @@ An entry uses at most one of `when` and `any_of`.
 The latter lists 1 through 16 alternatives. Each alternative maps 1 through 8 field names to nonempty text values.
 A field is `source.system` or `context.NAME`. NAME follows the measure id rules and contains no dot.
 An alternative passes only when every named field of the signed reading is the exact stated string. One passing alternative gives a match.
-The type and unit must still match exactly. The table, weights and percentile method follow the same rules in all three formats.
+The type and unit must still match exactly. All four formats use the same weighted percentile method. The cell kind determines whether a table may include a reported zero.
 
 A `same` entry may also hold `when`, an object with three nonempty text fields.
 Compare `when.system`, `when.test` and `when.panel` with the signed reading’s `source.system`, `context.test` and `context.panel`.
