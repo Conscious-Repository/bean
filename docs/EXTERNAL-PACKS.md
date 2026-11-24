@@ -1,5 +1,15 @@
 # External reference packs
 
+## Cardiometabolic measures
+
+This NHANES 2015–2016 pack covers fasting serum apolipoprotein B, calculated non-HDL cholesterol and two unit displays of the same HbA1c-derived estimated average glucose. ApoB uses positive fasting-subsample weights and excludes values below the codebook detection limit. The derived measures use exam weights. [Codebooks, equations, eligibility and rebuild](https://stele.aion.bio/cardiometabolic/review.html).
+
+SHA-256
+
+```text
+80a43c7bec2250c934ace36dc7f1de5a938d4a27f3f1bfbf946c186396f57bb4
+```
+
 ## Evidence-qualified core packs
 
 Stele’s current 13-, 20- and 23-measure releases use `pack/2`. Clinical rows require the signed source, printed test and order panel. Imported body mass requires the Apple Health XML source and HealthKit body-mass identifier. A white cell count coded “400 and over” has been excluded from the exact-count distribution.
@@ -97,7 +107,7 @@ fee20744c19ce3c92192144e6173aa035e52c96f7284f68e048d34393fc4db51
 
 ## Verify rebuild tools before execution
 
-The [release checksums](STELE-SHA256SUMS) cover every catalog download and the seven sets of hosted builders, verifiers and shell recipes. Choose a trusted revision of this public Bean repository independently. From a new directory, verify a recipe before running it. For example, with the chosen Bean checkout at `$BEAN`, run
+The [release checksums](STELE-SHA256SUMS) cover every catalog download and the eight sets of hosted builders, verifiers and shell recipes. Choose a trusted revision of this public Bean repository independently. From a new directory, verify a recipe before running it. For example, with the chosen Bean checkout at `$BEAN`, run
 
 ```sh
 mkdir -p exam
