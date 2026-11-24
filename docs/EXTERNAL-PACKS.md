@@ -52,3 +52,44 @@ ad6ff2869ef265301c1c92feebf5f3bfea107b6786e2be637017f00154651233
 ```
 
 A reader with `pack/2` support checks the signed lab, test, panel and printed unit. The [release review](https://stele.aion.bio/thyroid/review.html) documents eligibility, assay differences and the total T4 transport-label correction. Individuals can select this digest independently of the other packs in [Stele’s discovery catalog](https://stele.aion.bio/catalog.json).
+
+## Adult exam-weighted packs
+
+These pack/2 distributions use positive NHANES MEC exam weights. Match the printed lab, analyte and unit, and the panel where required.
+
+[NHANES 2013-2014: Total testosterone and SHBG](https://stele.aion.bio/androgens/review.html)
+
+```
+256d6644c1aebc7c62815ba93724813569e464bff9a20eea6a259ea2add3b457
+```
+
+[NHANES 2013-2014: Vitamin B12 and red cell folate](https://stele.aion.bio/b-vitamins/review.html)
+
+```
+5906be12d6ed39b36bb813ed90c3d8c1f81d171c433e384127585d7e43bd1167
+```
+
+[NHANES 2017-2018: High-sensitivity C-reactive protein](https://stele.aion.bio/hs-crp/review.html)
+
+```
+0996de8c76b333373c09acf5e2788ca1584c6b150783ee9309dd1d3be5f37164
+```
+
+[NHANES 2013-2014: Total 25-hydroxyvitamin D](https://stele.aion.bio/vitamin-d/review.html)
+
+```
+fee20744c19ce3c92192144e6173aa035e52c96f7284f68e048d34393fc4db51
+```
+
+## Verify rebuild tools before execution
+
+The [release checksums](STELE-SHA256SUMS) cover every catalog download and the six sets of hosted builders, verifiers and shell recipes. Choose a trusted revision of this public Bean repository independently. From a new directory, verify a recipe before running it. For example, with the chosen Bean checkout at `$BEAN`, run
+
+```sh
+mkdir -p exam
+curl -fsS https://stele.aion.bio/exam/rebuild.txt -o exam/rebuild.txt
+awk '$2 == "exam/rebuild.txt"' "$BEAN/docs/STELE-SHA256SUMS" > recipe.sha256
+shasum -a 256 -c recipe.sha256 && bash exam/rebuild.txt
+```
+
+The recipes also check their downloaded builder and verifier before execution. SHA-256 identifies the exact bytes. Source selection and scientific interpretation still belong to the reader.
