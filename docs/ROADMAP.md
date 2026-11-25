@@ -43,8 +43,8 @@ The sender should be able to review and stop each permission, and each reader sh
 - Whether a record gets a mark for a value that was typed by hand.
 - Whether bean ever keeps a package or a pack with the log, so that an export holds it.
 - Where code lives. Proposed: what runs offline is here, and what listens on a network is not.
-- Whether the documents name a publisher. The rule is that they name none (DECISIONS 318). Since 2026-11-23 some name one: EXTERNAL-PACKS.md, `STELE-SHA256SUMS`, FIRST-RUN.md, and a format name in `bean coverage` (DECISIONS 346).
-- Whether a person accepts one pack by its SHA-256 in a run, in place of `-unknown-pack` for any pack. The signed list of DECISIONS 308 stands, and waits.
+- Whether the documents name a publisher. The rule is that they name none (DECISIONS 318). Since 2026-11-23 some name one: EXTERNAL-PACKS.md, `STELE-SHA256SUMS`, FIRST-RUN.md, and a format name in `bean coverage`. A review raised this, and not the owner (DECISIONS 346).
+- Whether a person accepts one pack by its SHA-256 in a run, in place of `-unknown-pack` for any pack. The signed list of DECISIONS 308 stands, and waits. A review raised this, and not the owner (DECISIONS 346).
 - Whether the relay of DECISIONS 318 comes before a tool reads a pointer. Three reviews of 2026-11-25 said that it waits (DECISIONS 346).
 
 ## Later

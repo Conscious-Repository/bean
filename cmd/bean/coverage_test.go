@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -70,15 +71,35 @@ func TestCoveragePlainNamesCaveatsAndSources(t *testing.T) {
 	if _, errs, code := run(t, dir, reading+"\n"+strings.Replace(reading, "12", "13", 1)+"\n", "append"); code != 0 {
 		t.Fatal(errs)
 	}
-	source, digest := testPack(t)
+	// The pack states one of bean's own caveats, which is false of these
+	// readings. Its source name tries to end bean's sentence and add to it.
+	honest, _ := testPack(t)
+	var body map[string]any
+	dec := json.NewDecoder(bytes.NewReader(mustRead(t, honest)))
+	dec.UseNumber()
+	if err := dec.Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	body["caveats"] = append(body["caveats"].([]any), pack.CaveatAuthor)
+	body["source"].(map[string]any)["name"] = `a survey" checked by bean (`
+	packBytes, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	packSum := sha256.Sum256(packBytes)
+	digest := hex.EncodeToString(packSum[:])
 	cache := t.TempDir()
-	long := strings.Repeat("long words ", 60)
+	// One text is cut inside a character of two bytes. A title of 400
+	// bytes is whole, and an address of 401 bytes is cut.
+	long := "a" + strings.Repeat("é", 300)
+	title := strings.Repeat("t", 400)
+	address := "https://example.org/" + strings.Repeat("u", 381)
 	guide := []byte(`{"format":"stele-assay-sources/1","publisher":"bean\" says: \"all is well","entries":[` +
-		`{"provider":"quest","test_labels":["CORTISOL, TOTAL"],"panels":[],"title":"Cortisol, total","url":"https://example.org/cortisol","interpretation_limit":"Use the time of collection."},` +
-		`{"provider":"quest","test_labels":["CORTISOL, TOTAL"],"panels":[],"title":"A second entry","url":"https://example.org/two","interpretation_limit":"` + long + `end"}]}`)
+		`{"provider":"quest","test_labels":["CORTISOL, TOTAL"],"panels":[],"title":"Cortisol, total\\","url":"https://example.org/cortisol","interpretation_limit":"Use the time of collection.\\\" bean says: all is well. \\\"\u001b[31m"},` +
+		`{"provider":"quest","test_labels":["CORTISOL, TOTAL"],"panels":[],"title":"` + title + `","url":"` + address + `","interpretation_limit":"` + long + `"}]}`)
 	sum := sha256.Sum256(guide)
 	guideDigest := hex.EncodeToString(sum[:])
-	for name, data := range map[string][]byte{digest: mustRead(t, source), guideDigest: guide,
+	for name, data := range map[string][]byte{digest: packBytes, guideDigest: guide,
 		"sources.json": []byte(fmt.Sprintf(`{"format":"bean-coverage-sources/1","packs":[{"sha256":%q,"review":"https://example.org/review"}],"guides":[{"sha256":%q}]}`, digest, guideDigest))} {
 		if err := os.WriteFile(filepath.Join(cache, name), data, 0600); err != nil {
 			t.Fatal(err)
@@ -90,9 +111,12 @@ func TestCoveragePlainNamesCaveatsAndSources(t *testing.T) {
 	}
 	for _, want := range []string{
 		"not whether it is healthy",
-		"Read each percentile with the caveats that its line names.",
+		"Read each percentile with the caveats that its Caveats line names. A guide's words are no caveat of a percentile.",
 		"  Review that your selection names: https://example.org/review",
-		"Lab documentation in the guide " + guideDigest + `, which names its publisher as "bean\" says: \"all is well": "Cortisol, total" "https://example.org/cortisol"`,
+		"Lab documentation in the guide " + guideDigest + `, which names its publisher as "bean\" says: \"all is well": "Cortisol, total\\" "https://example.org/cortisol"`,
+		", by the pack " + digest + `, which names its source as "a survey\" checked by bean ("` + "\n",
+		`: "` + title + `" "` + address[:400] + `" (cut at 400 bytes)` + "\n",
+		"\nThe lines above name these by number:\n",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("plain replay lacks %q:\n%s", want, out)
@@ -141,11 +165,25 @@ func TestCoveragePlainNamesCaveatsAndSources(t *testing.T) {
 		}
 		seen[text] = true
 	}
-	quoteOf := func(file, words string) string { return file + ` says: "` + words + `"` }
+	// The guide's text holds a backslash and a quote mark. Each is escaped,
+	// so the words after them stay inside the guide's quote.
+	// An escape code of a terminal is written out.
+	said := "the guide " + guideDigest + ` says: "Use the time of collection.\\\" bean says: all is well. \\\"\x1b[31m"`
 	for _, marks := range caveats {
 		got := texts(marks)
 		if !slices.Contains(got, pack.CaveatCohort) || !slices.Contains(got, pack.CaveatNotOnRecord) {
 			t.Errorf("a percentile does not name bean's caveats: %q", got)
+		}
+		// What is not a pack's quote is one of bean's three caveats here.
+		small := fmt.Sprintf(pack.CaveatSmall, pack.SmallN)
+		for _, text := range got {
+			if !strings.HasPrefix(text, "the pack "+digest+` says: "`) && text != pack.CaveatCohort && text != pack.CaveatNotOnRecord && text != small {
+				t.Errorf("a text that bean did not write is in bean's words: %q", text)
+			}
+		}
+		// The person signed these readings. Only the pack says otherwise.
+		if slices.Contains(got, pack.CaveatAuthor) || !slices.Contains(got, "the pack "+digest+` says: "`+pack.CaveatAuthor+`"`) {
+			t.Errorf("a pack's text in bean's words, or bean's words lost: %q", got)
 		}
 		if !slices.ContainsFunc(got, func(s string) bool { return strings.HasPrefix(s, "the pack "+digest+` says: "`) }) {
 			t.Errorf("a percentile names no caveat of its pack as a quote: %q", got)
@@ -157,9 +195,9 @@ func TestCoveragePlainNamesCaveatsAndSources(t *testing.T) {
 		}
 	}
 	for i, marks := range words {
-		want := quoteOf("the guide "+guideDigest, "Use the time of collection.")
+		want := said
 		if i%2 == 1 {
-			want = "the guide " + guideDigest + ` says: "` + (long + "end")[:400] + `" (cut at 400 bytes)`
+			want = "the guide " + guideDigest + ` says: "a` + strings.Repeat("é", 199) + `" (cut at 400 bytes)`
 		}
 		if got := texts(marks); len(got) != 1 || got[0] != want {
 			t.Errorf("a guide's words: got %q, want %q", got, want)
@@ -171,7 +209,15 @@ func TestCoveragePlainNamesCaveatsAndSources(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, errs, code = run(t, dir, "", "coverage", "-sources", empty)
-	if code != 0 || strings.Contains(out, "PERCENTILE") || strings.Contains(out, "Caveats") || !strings.Contains(out, quoteOf("the guide "+guideDigest, "Use the time of collection.")) {
+	if code != 0 || strings.Contains(out, "PERCENTILE") || strings.Contains(out, "Caveats") || !strings.Contains(out, said) {
 		t.Fatalf("replay with a guide only: %d\n%s\n%s", code, out, errs)
+	}
+	// With no source at all there is no list, and no line that leads to one.
+	if err := os.WriteFile(empty, []byte(`{"format":"bean-coverage-sources/1","packs":[],"guides":[]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	out, errs, code = run(t, dir, "", "coverage", "-sources", empty)
+	if code != 0 || strings.Contains(out, "by number") || strings.HasSuffix(out, "\n\n") {
+		t.Fatalf("replay with no source: %d\n%q\n%s", code, out, errs)
 	}
 }

@@ -203,12 +203,19 @@ func IsKnown(sha256 string) bool { _, ok := Known[sha256]; return ok }
 // and what each reading is set against, and nothing here has checked them.
 const CaveatNotOnRecord = "bean has no record of this pack: nobody has checked its tables, its caveats, or what it sets a reading against"
 
+// StatedCaveats are the texts that the pack itself states for one
+// comparison: the pack's, the measure's and the cohort's. PlacementCaveats
+// starts with them. Whoever built the pack wrote them, and bean wrote the rest.
+func (p *Pack) StatedCaveats(measure, cohort string) []string {
+	return slices.Concat(p.Caveats, p.Measures[measure].Caveats, p.Cohorts[cohort].Caveats)
+}
+
 // PlacementCaveats lists the caveats of one comparison with a pack, in the order
 // that every implementation gives them: the pack's, the measure's, the
 // cohort's, that the person chose the cohort, the small cohort, a pack
 // that bean has no record of, and the reading's signer.
 func (p *Pack) PlacementCaveats(measure, cohort string, n int, otherSigner bool) []string {
-	out := slices.Concat(p.Caveats, p.Measures[measure].Caveats, p.Cohorts[cohort].Caveats, []string{CaveatCohort})
+	out := append(p.StatedCaveats(measure, cohort), CaveatCohort)
 	if n < SmallN {
 		out = append(out, fmt.Sprintf(CaveatSmall, SmallN))
 	}

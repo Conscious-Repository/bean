@@ -31,6 +31,10 @@ type Match struct {
 	Method     string   `json:"method"`
 	Evidence   Rule     `json:"evidence"`
 	Caveats    []string `json:"caveats"`
+	// FromPack counts the texts at the start of Caveats that the pack
+	// states. bean wrote the others. A pack can state bean's own words, so
+	// the two are told apart by where they come from, never by their text.
+	FromPack int `json:"-"`
 }
 
 type Decline struct {
@@ -181,7 +185,7 @@ func (s *Sources) Replay(r *core.Record, cohort string) (Row, error) {
 		}
 		row.Matches = append(row.Matches, Match{Pin: source.Pin, Measure: mid, Builder: p.BuilderName, Survey: p.Source, Source: p.Home,
 			Cohort: cohort, N: c.N, Percentile: res.Percentile, Below: res.Below, Equal: res.Equal, Method: pack.MethodID + "/" + c.MethodVersion(), Evidence: rules[i],
-			Caveats: p.PlacementCaveats(mid, cohort, c.N, r.Author != r.Subject)})
+			Caveats: p.PlacementCaveats(mid, cohort, c.N, r.Author != r.Subject), FromPack: len(p.StatedCaveats(mid, cohort))})
 		row.Status = "placed"
 	}
 	switch row.Status {

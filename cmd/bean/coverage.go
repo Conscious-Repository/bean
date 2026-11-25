@@ -97,7 +97,9 @@ func cmdCoverage(s *core.Store, args []string) {
 	// Several packs and guides can be in one replay. So a text that is not
 	// bean's own is a quote, with the SHA-256 of the file that states it.
 	// A quote is cut at 400 bytes, the most that a text of a pack holds: a
-	// guide has no such limit, and its words must not bury the caveats.
+	// guide has no such limit, and one text must not bury the caveats. A
+	// backslash and a quote mark in the text are escaped, so that no text
+	// ends its own quote.
 	var notes []string
 	mark := func(text string) string {
 		i := slices.Index(notes, text)
@@ -108,7 +110,7 @@ func cmdCoverage(s *core.Store, args []string) {
 		return fmt.Sprintf("[%d]", i+1)
 	}
 	quote := func(text string) string {
-		text, cut := safe(text), ""
+		cut := ""
 		if len(text) > 400 {
 			n := 400
 			for !utf8.RuneStart(text[n]) {
@@ -116,15 +118,14 @@ func cmdCoverage(s *core.Store, args []string) {
 			}
 			text, cut = text[:n], " (cut at 400 bytes)"
 		}
-		return `"` + strings.ReplaceAll(text, `"`, `\"`) + `"` + cut
+		return `"` + safe(strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(text)) + `"` + cut
 	}
-	own := []string{pack.CaveatCohort, fmt.Sprintf(pack.CaveatSmall, pack.SmallN), pack.CaveatNotOnRecord, pack.CaveatAuthor}
 	placed := false
 	for _, r := range result.Rows {
 		test, _ := r.Facts["context.test"].(string)
 		fmt.Printf("\n%s  %s  %s  (%s)\n", safe(r.ID), safe(test), safe(r.Type), r.Status)
 		for _, m := range r.Matches {
-			fmt.Printf("  %s in %s: percentile %g, n=%d (%s), SHA-256 %s\n", safe(m.Measure), safe(m.Cohort), m.Percentile, m.N, safe(m.Survey), m.SHA256)
+			fmt.Printf("  %s in %s: percentile %g, n=%d, by the pack %s, which names its source as %s\n", safe(m.Measure), safe(m.Cohort), m.Percentile, m.N, m.SHA256, quote(m.Survey))
 			var evidence []string
 			for _, k := range slices.Sorted(maps.Keys(m.Evidence.Required)) {
 				v := m.Evidence.Required[k]
@@ -140,8 +141,8 @@ func cmdCoverage(s *core.Store, args []string) {
 			}
 			// A placement always has a caveat: that the person chose the cohort.
 			var marks []string
-			for _, text := range m.Caveats {
-				if !slices.Contains(own, text) {
+			for i, text := range m.Caveats {
+				if i < m.FromPack {
 					text = fmt.Sprintf("the pack %s says: %s", m.SHA256, quote(text))
 				}
 				marks = append(marks, mark(text))
@@ -190,7 +191,7 @@ func cmdCoverage(s *core.Store, args []string) {
 	fmt.Println()
 	if placed {
 		fmt.Println(percentileMeans)
-		fmt.Println("Read each percentile with the caveats that its line names.")
+		fmt.Println("Read each percentile with the caveats that its Caveats line names. A guide's words are no caveat of a percentile.")
 	}
 	fmt.Println("The lines above name these by number:")
 	for i, text := range notes {

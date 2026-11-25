@@ -48,7 +48,7 @@ No record changes, and `bean verify` and `bean ls` print the same for an existin
 - **A `pack/4` pack can match a ratio that a report prints with no unit.** The reading must have no `unit` member. The pack must name the source system, the test and the panel.
 - **bean has no record of any pack in these formats.** `bean compare -pack` takes one only with `-unknown-pack`, and each result says so. The two packs on record are the same two as before.
 - **Release 0.8.3 lists a comparison that it cannot compute again.** It shows a comparison that 0.8.4 saved with a `pack/3` or `pack/4` pack, and `bean verify` passes its signature. It cannot read that pack.
-- **`bean coverage` is new since 0.8.3.** Its plain output names the caveats of each percentile by number, and says what a percentile means. A text of a pack or of an assay guide is a quote, with the SHA-256 of its file. A quote is cut at 400 bytes. Its formats are drafts and can change.
+- **`bean coverage` is new since 0.8.3.** Its plain output names the caveats of each percentile by number, and says what a percentile means. A text that a pack or an assay guide states is a quote, with the SHA-256 of its file. A quote is cut at 400 bytes. Its formats are drafts and can change.
 - **Tell your assistant not to run `bean coverage`** unless you ask. It prints your values. [ONBOARDING.md](docs/ONBOARDING.md) has the rule to copy again.
 
 ### 0.8.3 (2026-11-23)
