@@ -2,7 +2,7 @@
 
 This file is the one place for open paths: what bean does now, what comes next, and what is not decided. Work that is done is in the git history. The reasons are in [DECISIONS.md](DECISIONS.md), and [KNOWN-GAPS.md](KNOWN-GAPS.md) lists known limits. Nothing here is final.
 
-**Where bean stands (2026-11-23).** A person keeps a log, and imports lab reports, Apple Health and CSV files. They compare a reading with a survey, or with a reference pack. They share chosen records as one sealed file, with six words or sealed to the reader's address. A reader who runs bean answers with signed notes, and the person takes them into their log. Release 0.8.2 is out, as a pre-release. Two people keep a log, so `main` is a release, with or without a tag (DECISIONS 310).
+**Where bean stands (2026-11-25).** A person keeps a log, and imports lab reports, Apple Health and CSV files. They compare a reading with a survey, or with a reference pack. They share chosen records as one sealed file, with six words or sealed to the reader's address. A reader who runs bean answers with signed notes, and the person takes them into their log. A public host serves reference packs ([EXTERNAL-PACKS.md](EXTERNAL-PACKS.md)). Release 0.8.3 is out, as a pre-release, and `main` is 0.8.4. Two people keep a log, so `main` is a release, with or without a tag (DECISIONS 310).
 
 ## Now: the proof of concept
 
@@ -27,6 +27,7 @@ The sender should be able to review and stop each permission, and each reader sh
 - **English in signed comparisons.** A saved comparison holds caveat sentences, and a check compares them letter for letter. Should a claim carry short codes instead?
 - **The built-in list of known packs.** It is in bean's code, which makes the project the judge of every pack. Should it only be a hint, outside the locked formats?
 - **`pack/0` changed its meaning without a new label.** Release 0.8.2 reads packs that 0.8.1 refuses, and a reply to an address came the same way. Should a loosened format get a new label, and should bundles and replies carry a mark?
+- **Four pack labels came in one day** (`pack/1` to `pack/4`, DECISIONS 346). Each names one added rule, and a later label takes the rules before it. Is that one format with optional parts, or a label for each rule? Each rule is written three times: in bean, in `tools/pack/check.py` and in `tools/compare/reproduce.py`.
 - **Nostr kind 29944 is not registered,** but the validity rules use it. Register it, or accept the risk in writing?
 - **P-256 lets a hardware signer use random nonces,** and no device exists yet. A weak random source can leak the key. Should P-256 stay out of the lock until a real device signs?
 - **A stolen Nostr key could swap the address of every peer** who finds addresses on Nostr. Does an address from Nostr still need a check by voice once, and again when it changes?
@@ -42,6 +43,9 @@ The sender should be able to review and stop each permission, and each reader sh
 - Whether a record gets a mark for a value that was typed by hand.
 - Whether bean ever keeps a package or a pack with the log, so that an export holds it.
 - Where code lives. Proposed: what runs offline is here, and what listens on a network is not.
+- Whether the documents name a publisher. The rule is that they name none (DECISIONS 318). Since 2026-11-23 some name one: EXTERNAL-PACKS.md, `STELE-SHA256SUMS`, FIRST-RUN.md, and a format name in `bean coverage`. A review raised this, and not the owner (DECISIONS 346).
+- Whether a person accepts one pack by its SHA-256 in a run, in place of `-unknown-pack` for any pack. The signed list of DECISIONS 308 stands, and waits. A review raised this, and not the owner (DECISIONS 346).
+- Whether the relay of DECISIONS 318 comes before a tool reads a pointer. Three reviews of 2026-11-25 said that it waits (DECISIONS 346).
 
 ## Later
 
@@ -100,7 +104,8 @@ A second publisher can serve the same public pack. With the first host unreachab
 - A check of a whole export in Python.
 - Whether a file that only another key's record names keeps its file at all.
 - A neutral home for the project ([GOVERNANCE-PROPOSAL.md](GOVERNANCE-PROPOSAL.md)).
-- Require the CI check on `main`. Today GitHub reports that `main` is not protected.
+- Require the CI check on `main`. Today GitHub reports that `main` is not protected. On 2026-11-23, 17 commits reached `main` with no pull request and no review (DECISIONS 346).
+- Tests for `internal/coverage`, which has none of its own. It also repeats the match rules of `internal/pack` to show them.
 - A table of names for one quantity. It waits for a real case (DECISIONS 323).
 
 ## Not planned

@@ -103,10 +103,10 @@ flowchart LR
     source --> builder
     builder --> pack
     pack -->|"today: you build it, or someone hands you the file"| compare
-    pack -.->|"next: a lab serves it, read only"| host
+    pack -->|"today: a host serves it, read only"| host
     pack -.->|"later: a publisher signs a pointer: title, SHA-256, address"| relay
     relay -.->|"where to find it"| compare
-    host -.->|"the whole pack, checked by its SHA-256"| compare
+    host -->|"the whole pack, checked by its SHA-256"| compare
     reading --> compare
     compare -->|"where the value lies in the group, with caveats"| claim
     claim -->|"shared as in picture 2"| peer
@@ -118,7 +118,7 @@ flowchart LR
 - **What a host learns:** that someone fetched a pack, from which network address and when. It learns no reading and no group, because the pack is fetched whole.
 - **Who says that a pack is right.** bean holds the SHA-256 of the packs that it has on record. Two programs that share no code build those bytes from the source's files. For any other pack, bean says that nobody has checked it.
 - **A saved comparison is your claim.** It names the reading, the pack, the group and the method. A peer with the pack can do the arithmetic again. That shows that the numbers hold, not that the reading is true.
-- **Today** a person builds a pack from the source's files, or gets the file from someone. A read-only host of the two survey packs is next. It has run on one machine ([examples/pack-host](../examples/pack-host/README.md)). Pointers on a relay can follow later ([ROADMAP.md](ROADMAP.md)).
+- **Today** a person builds a pack from the source's files, gets the file from someone, or fetches it from a host. On 2026-11-25 a public host serves packs, read only ([EXTERNAL-PACKS.md](EXTERNAL-PACKS.md)). Any person can run such a host ([examples/pack-host](../examples/pack-host/README.md)). Pointers on a relay can follow later ([ROADMAP.md](ROADMAP.md)).
 
 ### What you can compare with
 
@@ -126,7 +126,7 @@ flowchart LR
 |---|---|
 | The survey's own files, for a group that you state | Works: `bean compare -sex ... -age ...` ([COMPARE.md](COMPARE.md)). |
 | A reference pack that you built, or that someone gave you | Works: `bean compare -pack` ([REFERENCE.md](REFERENCE.md)). |
-| A reference pack from a lab's host | Next. The commands are the same: you fetch the file with `curl`, and check it before you use it. No public host is up yet ([ROADMAP.md](ROADMAP.md)). |
+| A reference pack from a host | Works. You fetch the file with `curl`, and check its SHA-256 before you use it ([FIRST-RUN.md](FIRST-RUN.md#each-compares-with-a-pack)). On 2026-11-25 a public host is up ([EXTERNAL-PACKS.md](EXTERNAL-PACKS.md)). |
 | One peer | Works as a swap of packages ([FIRST-RUN.md](FIRST-RUN.md)). You read theirs beside your own. bean computes nothing across the records of two people. |
 | A pool of real people | Not built. A path with made-up contributors is a test ([tools/pool](../tools/pool/README.md)). ROADMAP.md, path 4, says what a real pool waits for. |
 

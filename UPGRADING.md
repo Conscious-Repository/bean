@@ -38,6 +38,19 @@ Do not run `purge` or `gc` on the copies. Only they erase anything.
 
 ## Changes
 
+### 0.8.4 (2026-11-25)
+
+No record changes, and `bean verify` and `bean ls` print the same for an existing log. bean reads three more pack formats, and `bean coverage` prints more ([DECISIONS 346](docs/DECISIONS.md)).
+
+- **bean reads `pack/2`, `pack/3` and `pack/4`.** Release 0.8.3 refuses each: `unsupported pack format: expected "pack/0" or "pack/1"`. A pack that 0.8.3 reads compares the same. [REFERENCE.md](docs/REFERENCE.md#the-file) says what each format adds.
+- **A `pack/2` match can need signed fields of the reading.** They are the source system and context fields, such as the test, the panel and the fasting state. A reading without them gets no percentile. bean prints the fields that the pack requires.
+- **A `pack/3` table can hold a reported zero.** A comparison with such a table has method version 2. Every other table keeps version 1.
+- **A `pack/4` pack can match a ratio that a report prints with no unit.** The reading must have no `unit` member. The pack must name the source system, the test and the panel.
+- **bean has no record of any pack in these formats.** `bean compare -pack` takes one only with `-unknown-pack`, and each result says so. The two packs on record are the same two as before.
+- **Release 0.8.3 lists a comparison that it cannot compute again.** It shows a comparison that 0.8.4 saved with a `pack/3` or `pack/4` pack, and `bean verify` passes its signature. It cannot read that pack.
+- **`bean coverage` is new since 0.8.3.** Its plain output names the caveats of each percentile by number, and says what a percentile means. A caveat or a source name of a pack is a quote, with the SHA-256 of the pack. So are the words of an assay guide. A quote is cut at 400 bytes. A measure id of a pack is not a quote. Its formats are drafts and can change.
+- **Tell your assistant not to run `bean coverage`** unless you ask. It prints your values. [ONBOARDING.md](docs/ONBOARDING.md) has the rule to copy again.
+
 ### 0.8.3 (2026-11-23)
 
 Bean reads both `pack/0` and `pack/1`. A `pack/1` publisher can require the signed source system, printed test name and panel alongside the type and unit.

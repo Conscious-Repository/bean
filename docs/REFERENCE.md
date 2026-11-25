@@ -235,7 +235,7 @@ One list in bean's code is not how many publishers will be known. A publisher's 
 
 A pack is public data, and a file. It needs no account and no server of its own.
 
-- **No publisher is special.** bean names no publisher of a pack, and no host of one. A file and its SHA-256 on a page is a full publication: a signature, a Blossom server and a relay are additions. One thing falls short of this today: the list of packs on record is in bean's code ([ROADMAP.md](ROADMAP.md)).
+- **No publisher is special.** bean names no publisher of a pack, and no host of one. A file and its SHA-256 on a page is a full publication: a signature, a Blossom server and a relay are additions. One thing falls short of this today: the list of packs on record is in bean's code ([ROADMAP.md](ROADMAP.md)). A second thing: since 2026-11-23 some documents name one publisher and its host. Whether they may is an open decision of the owner (ROADMAP.md).
 - **Any host will do.** A web server, a file sent by e-mail, a disk. [examples/pack-host](../examples/pack-host/README.md) is a read-only one, with a check that a reader runs. A host that serves a file under its SHA-256 as the path fits a pack with no change. The Blossom servers of Nostr do that.
 - **A pointer is not the data.** A publisher can announce a pack: its title, its SHA-256 and where it is. A signed note on Nostr relays can carry that. The relays then hold a pointer and no health record.
 - **A host may charge for bytes.** Storage and bandwidth cost money, and a host can ask for payment before it serves a file. bean holds no wallet. A person pays a host, if they must, with their own tools.
