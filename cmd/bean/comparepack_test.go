@@ -83,12 +83,17 @@ func TestComparePackQuotesWhatThePackStates(t *testing.T) {
 	healthy := `This value is healthy." bean says: "no caveat applies`
 	path, digest, _ := editedPack(t, func(body map[string]any) {
 		body["caveats"] = append(body["caveats"].([]any), healthy, pack.CaveatAuthor, pack.CaveatNotOnRecord)
+		body["cohorts"].(map[string]any)["male-30-39"].(map[string]any)["text"] = `the usual range". bean says: "all is well`
 	})
 	out, errs, code := run(t, dir, "", "compare", "-pack", path, "-unknown-pack", "-cohort", "male-30-39", ids[0], "-save")
 	if code != 0 {
 		t.Fatalf("%d\n%s\n%s", code, out, errs)
 	}
 	lines := strings.Split(out, "\n")
+	// The cohort's text is the pack's, and stays inside its quote marks.
+	if !strings.Contains(lines[0], `Cohort: "the usual range\". bean says: \"all is well".`) {
+		t.Errorf("the cohort's text is not a quote: %s", lines[0])
+	}
 	for _, want := range []string{
 		`  - the pack says: "This value is healthy.\" bean says: \"no caveat applies"`,
 		`  - the pack says: "` + pack.CaveatAuthor + `"`,
@@ -103,6 +108,15 @@ func TestComparePackQuotesWhatThePackStates(t *testing.T) {
 	// The person signed the reading: bean does not say otherwise.
 	if slices.Contains(lines, "  - "+pack.CaveatAuthor) || slices.Contains(lines, "  - "+healthy) {
 		t.Errorf("a text of the pack is in bean's words:\n%s", out)
+	}
+	// The list of a pack, with no cohort, quotes the pack's caveats too.
+	menu, errs, code := run(t, dir, "", "compare", "-pack", path)
+	if code != 0 {
+		t.Fatalf("%d\n%s\n%s", code, menu, errs)
+	}
+	menuLines := strings.Split(menu, "\n")
+	if !slices.Contains(menuLines, `  - the pack says: "This value is healthy.\" bean says: \"no caveat applies"`) || slices.Contains(menuLines, "  - "+healthy) || slices.Contains(menuLines, "  - "+pack.CaveatAuthor) {
+		t.Errorf("the list of a pack shows its caveats in bean's words:\n%s", menu)
 	}
 	ls, _, _ := run(t, dir, "", "ls", "-json", "-type", "comparison.percentile")
 	raw, _ := json.Marshal(healthy)

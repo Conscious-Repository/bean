@@ -161,9 +161,9 @@ Compares with a reference pack: one file of public reference data, with a table 
 - `-cohort` names one cohort of the pack's menu, such as `male-30-39`. The output and `-save` are as above. A saved claim names the pack by its SHA-256.
 - A pack that bean has no record of is refused, with a warning. `-unknown-pack` uses it as it is: each row then says `pack NOT on record`, and each saved claim has that caveat. Whoever built such a pack chose its tables, its caveats and what each reading is set against.
 - The pack decides which types and units it takes. The output shows which measure each reading was set against. A reading in another unit gets a row that says so, and no number.
-- A pack can require signed fields of a reading: its source system, its test and its panel. A reading without them gets a row that names the required fields, and no number.
+- A pack can require signed fields of a reading: its source system, its test and its panel. A reading without them gets a row that names them, and no number. The row starts with `required signed fields:` or `required signed evidence:`. An importer writes those fields from a report. `bean add` writes none, so a reading typed by hand cannot meet such a rule.
 - A line says how many of the selected readings were compared: `Compared 2 of 5 selected readings.`
-- A caveat that the pack states shows as a quote: `the pack says: "..."`. A pack can state any words. Only the other caveats are bean's.
+- A caveat that the pack states shows as a quote, in the list of a pack and in a comparison: `the pack says: "..."`. A pack can state any words. Only the other caveats are bean's.
 - bean reads the file and goes nowhere. `-sex`, `-age`, `-where` and `-unknown-files` are for the files, and are refused with `-pack`.
 
 `bean-pack-nhanes -out <new file> <DEMO_J.xpt> <a test's .xpt>...` builds the NHANES pack from files that you downloaded. The same files give the same pack, byte for byte.
@@ -413,5 +413,5 @@ Add `-json` for per-reading evidence, or `-report SHA256` to select one original
 Each percentile names its caveats by number, and the list follows the rows. A caveat of a pack and the words of an assay guide each show as a quote, with the SHA-256 of the file.
 The output holds your values and record ids. An assistant runs this command only when you ask.
 With `-json`, `caveats_from_pack` counts the caveats, from the first, that the pack states. bean wrote the others. `percentile_means` says what a percentile is.
-A key of the selection or of a guide is in lower case. A key in another case is refused.
+A key of the selection or of a guide has exactly the letters of its name. A key in another case, or with a letter that folds to one of the name, is refused anywhere in the file.
 The [reader trial](../examples/coverage/README.md) includes a source selection and five synthetic readings.

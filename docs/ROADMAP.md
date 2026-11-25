@@ -108,7 +108,7 @@ A second publisher can serve the same public pack. With the first host unreachab
 - Whether a file that only another key's record names keeps its file at all.
 - A neutral home for the project ([GOVERNANCE-PROPOSAL.md](GOVERNANCE-PROPOSAL.md)).
 - Require the CI check on `main`. Today GitHub reports that `main` is not protected. On 2026-11-23, 17 commits reached `main` with no pull request and no review (DECISIONS 346).
-- Tests for `internal/coverage`, which has none of its own. It also repeats the match rules of `internal/pack` to show them.
+- `internal/coverage` repeats the match rules of `internal/pack` to show them. Its tests are those of the command, with two of its own.
 - A table of names for one quantity. It waits for a real case (DECISIONS 323).
 
 ## Not planned

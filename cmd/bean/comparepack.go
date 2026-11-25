@@ -113,7 +113,7 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 		}
 	}
 	slices.Sort(known)
-	head := fmt.Sprintf("Compared with the pack %q. Cohort: %s.\nThe pack is %s, SHA-256 %s.\n%s", p.Title, co.Text, path, p.SHA256, onRecord(p))
+	head := fmt.Sprintf("Compared with the pack %q. Cohort: %q.\nThe pack is %s, SHA-256 %s.\n%s", p.Title, co.Text, path, p.SHA256, onRecord(p))
 	printComparisons(os.Stdout, rows, head, strings.Join(known, ", "), typ == "")
 	saveComparisons(s, l, claims, save, "the pack")
 }
@@ -140,9 +140,10 @@ func printPack(p *pack.Pack) {
 	for _, id := range slices.Sorted(maps.Keys(p.Cohorts)) {
 		fmt.Printf("  %s: %s\n", id, safe(p.Cohorts[id].Text))
 	}
-	fmt.Println("Read every result with these caveats:")
+	// The words are the pack's, also here: bean wrote none of them.
+	fmt.Println("The pack states these caveats for every result:")
 	for _, text := range p.Caveats {
-		fmt.Println("  - " + safe(text))
+		fmt.Println("  - the pack says: " + quoted(text))
 	}
 	fmt.Println(onRecord(p))
 }

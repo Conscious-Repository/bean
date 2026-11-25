@@ -62,9 +62,12 @@ func TestCoverageSelectionAndCurrentReadings(t *testing.T) {
 	for _, bad := range []string{
 		fmt.Sprintf(`{"format":"bean-coverage-sources/1","packs":[{"SHA256":%q}],"guides":[]}`, digest),
 		fmt.Sprintf(`{"format":"bean-coverage-sources/1","Packs":[{"sha256":%q}],"guides":[]}`, digest),
+		// A long s folds to s, and a lower-case form of it does not exist.
+		fmt.Sprintf(`{"format":"bean-coverage-sources/1","packs":[{"sha256":%q,"ſha256":%q}],"guides":[]}`, strings.Repeat("0", 64), digest),
+		fmt.Sprintf(`{"format":"bean-coverage-sources/1","pac\u212as":[{"sha256":%q}],"guides":[]}`, digest),
 	} {
 		write(selection, []byte(bad))
-		if out, errs, code := run(t, dir, "", args...); code == 0 || out != "" || !strings.Contains(errs, "a key is in lower case") {
+		if out, errs, code := run(t, dir, "", args...); code == 0 || out != "" || !strings.Contains(errs, "a key has exactly the letters of its name") {
 			t.Fatalf("a key in another case: %d %s %s", code, out, errs)
 		}
 	}
