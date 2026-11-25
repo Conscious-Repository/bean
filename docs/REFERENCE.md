@@ -2,7 +2,7 @@
 
 This is for anyone who publishes reference data, and for anyone who writes a tool that reads it. It says what a pack must hold so that bean, and anyone else, can compare a reading with it and check the result. [ARCHITECTURE.md](ARCHITECTURE.md) shows the whole path in one picture.
 
-Readers support four draft file formats. A saved comparison records the method and the digest of the exact pack it used. [REFERENCE-PLAN.md](REFERENCE-PLAN.md) says what changes next and what does not, and where bean falls short of its own rules.
+Readers support five draft file formats, `pack/0` to `pack/4`. A saved comparison records the method and the digest of the exact pack it used. [REFERENCE-PLAN.md](REFERENCE-PLAN.md) says what changes next and what does not, and where bean falls short of its own rules.
 
 ## The idea
 
@@ -105,7 +105,7 @@ Each object has the members that this document names and no other, each once. A 
 
 A number is a JSON number that a bean record may hold: a double, and for a whole number at most 9007199254740991. How it is written does not matter: 94, 94.0 and 9.4e1 are one number. `bytes` is a whole number of 1 or more.
 
-A text holds no character that ends a line, or that hides, reorders or fakes text. Those are the Unicode categories Cc, Cf, Cs, Co, Zl and Zp, and every space but U+0020. They are also the blank fillers U+115F, U+1160, U+3164 and U+FFA0, and the noncharacters.
+A text holds no character that ends a line, or that hides, reorders or fakes text. Those are the Unicode categories Cc, Cf, Cs, Co, Zl and Zp, and every space but U+0020. A reader takes the categories from the Unicode version that it is built with. So two readers can judge one character differently, when a later version gives it a category ([KNOWN-GAPS.md](KNOWN-GAPS.md)). They are also the blank fillers U+115F, U+1160, U+3164 and U+FFA0, and the noncharacters.
 
 A measure or a cohort may have no cell. The cells may be in any order.
 
@@ -182,7 +182,7 @@ The four caveats that a claim adds, in this order:
 
 A claim means the same for ever. The third of these caveats says what the signer's bean knew on that day, and a pack can be put on record later. So a check allows that caveat, in its place, for a pack that the reader's bean has on record. A check judges a claim by what the claim names: the reading, the pack and the method.
 
-A reader with the pack checks a claim in four steps. The pack has the SHA-256 that the claim names. The reading matches a `same` entry, including its `when` fields if present. The texts and the caveats are the ones that the pack gives. The method gives every number of the result. `tools/compare/reproduce.py` does this, and shares no code with bean. It fails for a pack that is not on record, unless the reader names that pack.
+A reader with the pack checks a claim in four steps. The pack has the SHA-256 that the claim names. The reading matches a `same` entry, including its `when` fields, one of its `any_of` alternatives, or its omitted unit, if present. The texts and the caveats are the ones that the pack gives. The method gives every number of the result. `tools/compare/reproduce.py` does this, and shares no code with bean. It fails for a pack that is not on record, unless the reader names that pack. It also checks the record around the claim: the record has the members of a record and no other, and its source is `bean-compare`. It does not check the claim's own time. bean sets that to the time of the reading, so take the time from the reading.
 
 A saved comparison gives the reading's value away to anyone with the pack ([COMPARE.md](COMPARE.md)). It does not outlive its reading.
 
@@ -284,4 +284,4 @@ Public reference data comes in more shapes than a table of weights. Version 0 de
 - **A pack in a share.** `bean share` does not carry a pack. The reader's check names each pack by its SHA-256 and says that it is needed. The reader gets it from the sender or from any host. The check page does not compute a comparison again.
 - **An interval of uncertainty.** It would need a new method version.
 
-The [external pack directory](EXTERNAL-PACKS.md) records digests supplied by other publishers and the reader version each pack requires.
+The [external pack directory](EXTERNAL-PACKS.md) records digests that a publisher supplied, and the reader version each pack requires. On 2026-11-25 every entry comes from one publisher.

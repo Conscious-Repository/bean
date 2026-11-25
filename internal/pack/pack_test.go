@@ -3,6 +3,7 @@ package pack
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"math"
 	"reflect"
 	"strings"
@@ -38,6 +39,13 @@ func small() *Pack {
 
 // TestRoundTrip: what a builder writes reads back as the same pack, under
 // the SHA-256 of its bytes, and writes the same bytes again.
+// reading is a signed reading of a type and a unit, with the three fields
+// that a panel names.
+func reading(typ, unit string, panel Panel) *core.Record {
+	return &core.Record{Type: typ, Value: map[string]any{"n": 1.0, "unit": unit}, Source: core.Source{System: panel.System},
+		Context: map[string]any{"test": panel.Test, "panel": panel.Panel}}
+}
+
 func TestRoundTrip(t *testing.T) {
 	p := small()
 	data := p.Bytes()
@@ -56,13 +64,13 @@ func TestRoundTrip(t *testing.T) {
 	if !reflect.DeepEqual(got.Cells, p.Cells) || !reflect.DeepEqual(got.Measures["M1"], p.Measures["M1"]) || got.Cohorts["old"].Caveats[0] != "80 stands for more" {
 		t.Errorf("read back: %+v", got)
 	}
-	if id, units := got.MeasureFor("lab.first", "mg/dl"); id != "M1" || len(units) != 2 {
-		t.Errorf("MeasureFor: %q %v", id, units)
+	if id, units, _ := got.MatchRecord(reading("lab.first", "mg/dl", Panel{})); id != "M1" || len(units) != 2 {
+		t.Errorf("the measure of a reading: %q %v", id, units)
 	}
-	if id, units := got.MeasureFor("lab.first", "mmol/L"); id != "" || len(units) != 2 {
+	if id, units, _ := got.MatchRecord(reading("lab.first", "mmol/L", Panel{})); id != "" || len(units) != 2 {
 		t.Errorf("another unit: %q %v", id, units)
 	}
-	if id, units := got.MeasureFor("lab.third", "mg/dL"); id != "" || units != nil {
+	if id, units, _ := got.MatchRecord(reading("lab.third", "mg/dL", Panel{})); id != "" || units != nil {
 		t.Errorf("another type: %q %v", id, units)
 	}
 	if got.Cell("M1", "old") != nil || got.Cell("M2", "old") == nil {
@@ -259,13 +267,10 @@ func TestPanelMatch(t *testing.T) {
 		{"%", Panel{"other", panel.Test, panel.Panel}, ""},
 		{"mg/dL", panel, ""},
 	} {
-		id, _, _ := got.MatchReading(key.Type, tc.unit, tc.panel)
-		if id != tc.want {
-			t.Errorf("match(%q, %+v) = %q, want %q", tc.unit, tc.panel, id, tc.want)
+		id, _, mismatch := got.MatchRecord(reading(key.Type, tc.unit, tc.panel))
+		if id != tc.want || mismatch != (tc.want == "" && tc.unit == key.Unit) {
+			t.Errorf("match(%q, %+v) = %q, %v, want %q", tc.unit, tc.panel, id, mismatch, tc.want)
 		}
-	}
-	if mid, _ := got.MeasureFor(key.Type, key.Unit); mid != "" {
-		t.Fatal("unqualified lookup accepted a qualified row")
 	}
 	for _, mutation := range [][2]string{
 		{`"pack/1"`, `"pack/0"`}, {`"system":"quest"`, `"system":""`},
@@ -307,9 +312,6 @@ func TestSignedEvidenceAlternatives(t *testing.T) {
 		if mid, _, _ := got.MatchRecord(&rec); mid != tc.want {
 			t.Errorf("matched %q, want %q", mid, tc.want)
 		}
-	}
-	if id, _ := got.MeasureFor(key.Type, key.Unit); id != "" {
-		t.Fatal("matched without a record")
 	}
 	for _, pair := range [][2]string{
 		{`"bean":"pack/2"`, `"bean":"pack/1"`},
@@ -378,9 +380,6 @@ func TestRatioOmittedUnit(t *testing.T) {
 	if id, _, _ := got.MatchRecord(&rec); id != "M1" {
 		t.Fatal("named ratio declined")
 	}
-	if id, _, _ := got.MatchReading(key.Type, "", panel); id != "" {
-		t.Fatal("missing signed record")
-	}
 	for _, u := range []any{"", "1", "mg/dL", nil, 42} {
 		rec.Value["unit"] = u
 		if id, _, _ := got.MatchRecord(&rec); id != "" {
@@ -403,5 +402,148 @@ func TestRatioOmittedUnit(t *testing.T) {
 	p.Measures["M1"] = m
 	if _, err := Read(p.Bytes()); err == nil {
 		t.Fatal("unguarded unit omission")
+	}
+}
+
+// TestRulesOfTheNewerFormats holds the rules of pack/1 to pack/4, and a few
+// of every format, that no other test holds: each was taken out of the
+// reader in turn, and the other tests passed.
+func TestRulesOfTheNewerFormats(t *testing.T) {
+	edit := func(data []byte, f func(top map[string]any)) []byte {
+		v, err := core.Parse(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f(v.(map[string]any))
+		return core.Canonical(v)
+	}
+	row := func(top map[string]any) map[string]any {
+		return top["measures"].(map[string]any)["M1"].(map[string]any)["same"].([]any)[0].(map[string]any)
+	}
+	refused := func(name string, data []byte) {
+		t.Helper()
+		if p, err := Read(data); err == nil {
+			t.Errorf("%s: read as a pack with the label %s", name, strings.SplitN(string(p.Bytes()), `"`, 5)[3])
+		}
+	}
+	read := func(name string, data []byte) *Pack {
+		t.Helper()
+		p, err := Read(data)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		return p
+	}
+	key := small().Measures["M1"].Same[0]
+	panel := Panel{"quest", "A TEST", "A PANEL"}
+	// with returns the test pack with a change, as the bytes that a builder writes.
+	with := func(f func(p *Pack)) []byte {
+		p := small()
+		f(p)
+		return p.Bytes()
+	}
+	when := func(p *Pack) {
+		m := p.Measures["M1"]
+		m.When = map[Same]Panel{key: panel}
+		p.Measures["M1"] = m
+	}
+	anyOf := func(p *Pack) {
+		m := p.Measures["M1"]
+		m.AnyOf = map[Same][]Evidence{key: {{"source.system": "quest"}}}
+		p.Measures["M1"] = m
+	}
+	zero := func(p *Pack) { p.Cells[0].AllowZero, p.Cells[0].Values[0] = true, 0 }
+	ratio := func(p *Pack) {
+		same := Same{"lab.a-ratio", ""}
+		p.Measures["M2"] = Measure{Label: "A ratio", Unit: "1", Same: []Same{same}, When: map[Same]Panel{same: panel}}
+	}
+
+	// Every format.
+	base := small().Bytes()
+	read("a title of 400 bytes", edit(base, func(top map[string]any) { top["title"] = strings.Repeat("a", 400) }))
+	refused("a title of 401 bytes", edit(base, func(top map[string]any) { top["title"] = strings.Repeat("a", 401) }))
+	for name, c := range map[string]string{"a paragraph end": " ", "a private use character": "", "a Hangul filler": "ᅠ", "a halfwidth filler": "ﾠ", "a noncharacter of the Arabic block": "﷐"} {
+		refused("a title with "+name, edit(base, func(top map[string]any) { top["title"] = "a" + c + "b" }))
+	}
+	refused("a source file with half a byte", edit(base, func(top map[string]any) {
+		top["source"].(map[string]any)["files"].([]any)[0].(map[string]any)["bytes"] = 1.5
+	}))
+	refused("a measure id with a space", edit(base, func(top map[string]any) {
+		measures := top["measures"].(map[string]any)
+		measures["M 2"] = measures["M2"]
+		delete(measures, "M2")
+		top["cells"].([]any)[1].(map[string]any)["measure"] = "M 2"
+	}))
+	for _, typ := range []string{"agent.note", "reference.file", "bean.genesis"} {
+		refused("a measure that claims "+typ, edit(base, func(top map[string]any) {
+			top["measures"].(map[string]any)["M2"].(map[string]any)["same"] = []any{map[string]any{"type": typ, "unit": "kg"}}
+		}))
+	}
+
+	// pack/2: the alternatives of an entry.
+	evidence := with(anyOf)
+	if !strings.Contains(string(evidence), `"bean":"pack/2"`) {
+		t.Fatalf("a pack with any_of does not get the label pack/2")
+	}
+	many := func(n int) []any {
+		var out []any
+		for i := range n {
+			out = append(out, map[string]any{"source.system": fmt.Sprintf("lab-%d", i)})
+		}
+		return out
+	}
+	fields := func(n int) []any {
+		one := map[string]any{}
+		for i := range n {
+			one[fmt.Sprintf("context.f%d", i)] = "x"
+		}
+		return []any{one}
+	}
+	read("16 alternatives", edit(evidence, func(top map[string]any) { row(top)["any_of"] = many(16) }))
+	refused("17 alternatives", edit(evidence, func(top map[string]any) { row(top)["any_of"] = many(17) }))
+	refused("no alternative", edit(evidence, func(top map[string]any) { row(top)["any_of"] = []any{} }))
+	read("an alternative of 8 fields", edit(evidence, func(top map[string]any) { row(top)["any_of"] = fields(8) }))
+	refused("an alternative of 9 fields", edit(evidence, func(top map[string]any) { row(top)["any_of"] = fields(9) }))
+	refused("a field under a field of the context", edit(evidence, func(top map[string]any) {
+		row(top)["any_of"] = []any{map[string]any{"context.a.b": "x"}}
+	}))
+	refused("when and any_of on one entry", edit(evidence, func(top map[string]any) {
+		row(top)["when"] = map[string]any{"system": "quest", "test": "A TEST", "panel": "A PANEL"}
+	}))
+	// Also beside an entry that has its alternatives alone: the label is
+	// then right, and only the entry with both is wrong.
+	refused("when and any_of on one entry, beside a good entry", edit(evidence, func(top map[string]any) {
+		second := top["measures"].(map[string]any)["M1"].(map[string]any)["same"].([]any)[1].(map[string]any)
+		second["when"] = map[string]any{"system": "quest", "test": "A TEST", "panel": "A PANEL"}
+		second["any_of"] = []any{map[string]any{"source.system": "quest"}}
+	}))
+
+	// pack/3: a table with a zero. An earlier label does not take one, also
+	// with the entry that the label requires.
+	nonneg := with(zero)
+	if !strings.Contains(string(nonneg), `"bean":"pack/3"`) {
+		t.Fatalf("a pack with a zero does not get the label pack/3")
+	}
+	refused("a negative value in a table with a zero", edit(nonneg, func(top map[string]any) {
+		top["cells"].([]any)[0].(map[string]any)["values"].([]any)[0] = float64(-1)
+	}))
+	refused("pack/3 with no table that takes a zero", []byte(strings.Replace(string(base), `"bean":"pack/0"`, `"bean":"pack/3"`, 1)))
+	refused("pack/1 with a table that takes a zero", []byte(strings.Replace(string(with(func(p *Pack) { when(p); zero(p) })), `"bean":"pack/3"`, `"bean":"pack/1"`, 1)))
+	refused("pack/2 with a table that takes a zero", []byte(strings.Replace(string(with(func(p *Pack) { anyOf(p); zero(p) })), `"bean":"pack/3"`, `"bean":"pack/2"`, 1)))
+	// A later label takes what the labels before it take.
+	for name, f := range map[string]func(p *Pack){
+		"pack/3 with when and any_of entries": func(p *Pack) {
+			zero(p)
+			m := p.Measures["M1"]
+			m.When = map[Same]Panel{m.Same[1]: panel}
+			m.AnyOf = map[Same][]Evidence{key: {{"source.system": "quest"}}}
+			p.Measures["M1"] = m
+		},
+		"pack/4 with an any_of entry and a table that takes a zero": func(p *Pack) { anyOf(p); zero(p); ratio(p) },
+	} {
+		data := with(f)
+		if got := read(name, data); string(got.Bytes()) != string(data) || !strings.Contains(string(data), `"bean":"`+name[:6]+`"`) {
+			t.Errorf("%s: read and written again as other bytes, or under another label", name)
+		}
 	}
 }

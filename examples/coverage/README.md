@@ -32,6 +32,8 @@ python3 -I "$ex/verify-trial.py" < "$trial/replay.json"
 The trial selection pins two files by SHA-256. The larger example, `stele.sources.json`, pins the active survey packs and assay guide in this revision.
 Copy a selection and keep the sources you approve. Review links identify the publisher's rationale. Check the file digests against the [published receipts](../../docs/STELE-SHA256SUMS).
 Only the download step contacts the host. The replay checks every selected file again.
+The host, and anyone who watches the network, learns which files you fetch. The choice of a pack can show which tests you hold.
+`fetch.py` saves each file under its SHA-256 alone. A guide that a host serves as `<SHA-256>.json` goes into the assets folder under that bare name.
 
 To apply a selection to a local Bean log, use the following command. Supply a cohort available in your chosen packs.
 Use `-report` with the original PDF's SHA-256 to restrict the replay to one report.
@@ -45,3 +47,5 @@ The source-covered count includes readings with a survey placement or a matching
 An assay entry identifies the lab's documentation. Its presence alone supplies no population rank.
 A percentile describes the named survey group. The output includes the matching rule, sample size, method and caveats.
 Personal replays contain values, identifiers and report context. The public exercise uses only the supplied synthetic fixture.
+Give a replay of your own log to an assistant only when you choose to. The [rules for an assistant](../../docs/ONBOARDING.md) tell it not to run `bean coverage` unless you ask.
+In the JSON, `caveats_from_pack` counts the caveats that the pack states. A pack can state any words, and bean wrote only the others.

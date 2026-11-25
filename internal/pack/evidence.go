@@ -37,9 +37,6 @@ func (r *reader) evidence(value any) []Evidence {
 }
 
 func (rule Evidence) matches(record *core.Record) bool {
-	if record == nil {
-		return false
-	}
 	for key, want := range rule {
 		got := record.Source.System
 		if key != "source.system" {

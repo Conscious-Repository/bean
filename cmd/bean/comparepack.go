@@ -68,11 +68,15 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 		case len(units) == 0:
 			c.refused, c.unmapped = "no reference data for this type", true
 		case panelMismatch:
+			// The pack names what the reading must hold. One measure, at
+			// most, takes this type and unit.
 			c.refused = "the source, printed test or panel does not match the pack"
+			same := pack.Same{Type: r.Type, Unit: unit}
 			for _, m := range p.Measures {
-				if rules := m.AnyOf[pack.Same{Type: r.Type, Unit: unit}]; len(rules) > 0 {
+				if want, ok := m.When[same]; ok {
+					c.refused = fmt.Sprintf("required signed fields: source.system=%q and context.test=%q and context.panel=%q", want.System, want.Test, want.Panel)
+				} else if rules := m.AnyOf[same]; len(rules) > 0 {
 					c.refused = "required signed evidence: " + evidenceText(rules)
-					break
 				}
 			}
 		case !isNumber:
@@ -97,6 +101,7 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 			}
 			c.result = res
 			c.caveats = p.PlacementCaveats(id, cohort, res.N, c.by != "")
+			c.stated = len(p.StatedCaveats(id, cohort))
 			claims = append(claims, packRecord(c, p, cohort, co, cell.MethodVersion()))
 		}
 		rows = append(rows, c)
@@ -108,14 +113,15 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 		}
 	}
 	slices.Sort(known)
-	head := fmt.Sprintf("Compared with the pack %q. Cohort: %s.\nThe pack is %s, SHA-256 %s.\n%s", p.Title, co.Text, path, p.SHA256, onRecord(p))
+	head := fmt.Sprintf("Compared with the pack %q. Cohort: %q.\nThe pack is %s, SHA-256 %s.\n%s", p.Title, co.Text, path, p.SHA256, onRecord(p))
 	printComparisons(os.Stdout, rows, head, strings.Join(known, ", "), typ == "")
 	saveComparisons(s, l, claims, save, "the pack")
 }
 
 // printPack shows what a pack holds: where it comes from, and its menu.
 func printPack(p *pack.Pack) {
-	fmt.Println(safe(p.Title))
+	// The first line is the pack's own name for itself, and says so.
+	fmt.Println("The pack's title: " + quoted(p.Title))
 	fmt.Println("sha256 " + p.SHA256)
 	fmt.Printf("source: %s, by %s (%s)\n", safe(p.Source), safe(p.Publisher), safe(p.Home))
 	fmt.Printf("built by %s, version %s, from %d files:\n", safe(p.BuilderName), safe(p.BuilderVersion), len(p.Files))
@@ -135,9 +141,10 @@ func printPack(p *pack.Pack) {
 	for _, id := range slices.Sorted(maps.Keys(p.Cohorts)) {
 		fmt.Printf("  %s: %s\n", id, safe(p.Cohorts[id].Text))
 	}
-	fmt.Println("Read every result with these caveats:")
+	// The words are the pack's, also here: bean wrote none of them.
+	fmt.Println("The pack states these caveats for every result:")
 	for _, text := range p.Caveats {
-		fmt.Println("  - " + safe(text))
+		fmt.Println("  - the pack says: " + quoted(text))
 	}
 	fmt.Println(onRecord(p))
 }

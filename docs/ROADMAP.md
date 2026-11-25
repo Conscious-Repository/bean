@@ -27,12 +27,15 @@ The sender should be able to review and stop each permission, and each reader sh
 - **English in signed comparisons.** A saved comparison holds caveat sentences, and a check compares them letter for letter. Should a claim carry short codes instead?
 - **The built-in list of known packs.** It is in bean's code, which makes the project the judge of every pack. Should it only be a hint, outside the locked formats?
 - **`pack/0` changed its meaning without a new label.** Release 0.8.2 reads packs that 0.8.1 refuses, and a reply to an address came the same way. Should a loosened format get a new label, and should bundles and replies carry a mark?
+- **A text of a pack is judged by the reader's Unicode version.** Two readers can differ on a character that a later version names. Should the format name one version, or refuse every character with no category (DECISIONS 347)?
 - **Four pack labels came in one day** (`pack/1` to `pack/4`, DECISIONS 346). Each names one added rule, and a later label takes the rules before it. Is that one format with optional parts, or a label for each rule? Each rule is written three times: in bean, in `tools/pack/check.py` and in `tools/compare/reproduce.py`.
 - **Nostr kind 29944 is not registered,** but the validity rules use it. Register it, or accept the risk in writing?
 - **P-256 lets a hardware signer use random nonces,** and no device exists yet. A weak random source can leak the key. Should P-256 stay out of the lock until a real device signs?
 - **A stolen Nostr key could swap the address of every peer** who finds addresses on Nostr. Does an address from Nostr still need a check by voice once, and again when it changes?
 - **A lab server that carries packages would see who shares with whom.** What delivery metadata would the participants accept before a personal package goes on such a host?
 - **A deletion stays only on the copy where it was made** (`local/purged-refs.jsonl`). Should a deletion travel with the log?
+- **A saved comparison can carry another time than its reading,** and no check refuses it. The made-up pool on record holds such a claim. Must a claim's time be its reading's (DECISIONS 347)?
+- **bean keeps one of two comparisons that state the same, under the lowest id.** The record around a claim is not in that test. So a copy with another source could be the one that stays. Should the test read the whole record?
 
 **Other open decisions of the owner.**
 
@@ -43,7 +46,7 @@ The sender should be able to review and stop each permission, and each reader sh
 - Whether a record gets a mark for a value that was typed by hand.
 - Whether bean ever keeps a package or a pack with the log, so that an export holds it.
 - Where code lives. Proposed: what runs offline is here, and what listens on a network is not.
-- Whether the documents name a publisher. The rule is that they name none (DECISIONS 318). Since 2026-11-23 some name one: EXTERNAL-PACKS.md, `STELE-SHA256SUMS`, FIRST-RUN.md, and a format name in `bean coverage`. A review raised this, and not the owner (DECISIONS 346).
+- Whether the documents name a publisher. The rule is that they name none (DECISIONS 318). Since 2026-11-23 some name one: EXTERNAL-PACKS.md, `STELE-SHA256SUMS`, FIRST-RUN.md with a second address of the same hand, and one line of UPGRADING.md. So do `examples/coverage`, in its README, a selection file and the default address of `fetch.py`, and a format name in `bean coverage`. A review raised this, and not the owner (DECISIONS 346).
 - Whether a person accepts one pack by its SHA-256 in a run, in place of `-unknown-pack` for any pack. The signed list of DECISIONS 308 stands, and waits. A review raised this, and not the owner (DECISIONS 346).
 - Whether the relay of DECISIONS 318 comes before a tool reads a pointer. Three reviews of 2026-11-25 said that it waits (DECISIONS 346).
 
@@ -105,7 +108,7 @@ A second publisher can serve the same public pack. With the first host unreachab
 - Whether a file that only another key's record names keeps its file at all.
 - A neutral home for the project ([GOVERNANCE-PROPOSAL.md](GOVERNANCE-PROPOSAL.md)).
 - Require the CI check on `main`. Today GitHub reports that `main` is not protected. On 2026-11-23, 17 commits reached `main` with no pull request and no review (DECISIONS 346).
-- Tests for `internal/coverage`, which has none of its own. It also repeats the match rules of `internal/pack` to show them.
+- `internal/coverage` repeats the match rules of `internal/pack` to show them. Its tests are those of the command, with two of its own.
 - A table of names for one quantity. It waits for a real case (DECISIONS 323).
 
 ## Not planned

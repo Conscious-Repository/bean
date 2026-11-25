@@ -4,7 +4,7 @@ Release 0.8.4 and later read `pack/2`, `pack/3` and `pack/4`. Release 0.8.3 read
 
 ## Routine ratios, iron capacity and assay sources
 
-NHANES 2017–2018 supplies the paired inputs for three dimensionless ratios and measured serum UIBC. The [source review](https://stele.aion.bio/ratios-iron/review.html) documents the rounded ratio definitions, signed panel matches and UIBC detection flags. This release requires the `pack/4` reader. Install the reviewed version with `go install github.com/Conscious-Repository/bean/cmd/bean@e017a7a32ce125cfe3c677b3aa52370a99fadccb`.
+NHANES 2017–2018 supplies the paired inputs for three dimensionless ratios and measured serum UIBC. The [source review](https://stele.aion.bio/ratios-iron/review.html) documents the rounded ratio definitions, signed panel matches and UIBC detection flags. This pack needs the `pack/4` reader of release 0.8.4 or later.
 
 Pack SHA-256: `67a39c4ed9cd00f0b84dd78c154edd104e5d4d9b0f140dfa96eb5d91ca93771f`
 

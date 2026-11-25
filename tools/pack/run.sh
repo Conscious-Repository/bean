@@ -134,7 +134,7 @@ done
 forged=0
 forge() {
   forged=$((forged + 1))
-  "$PY" -I - "$T/records.jsonl" "$2" >"$T/forged.jsonl" <<'PYEOF'
+  "$PY" -I - "$T/records.jsonl" "$2" "$T/forged.id" >"$T/forged.jsonl" <<'PYEOF'
 import json, sys
 records = [json.loads(l) for l in open(sys.argv[1])]
 person = lambda x: x["author"] == x["subject"]
@@ -145,14 +145,21 @@ r = next(x for x in records if x["type"] == "comparison.percentile" and x["conte
 other = next(x for x in records if x["type"] == "weight")
 ldl = next(x for x in records if x["type"] == "lab.ldl-cholesterol")
 c = r["context"]
+times, source, more = {"observed": r["times"]["observed"]}, dict(r["source"], ref=None), {}
 exec(sys.argv[2])
-print(json.dumps({"type": r["type"], "value": r["value"], "times": {"observed": r["times"]["observed"]},
-                  "refs": r["refs"], "source": dict(r["source"], ref=None), "context": c}))
+open(sys.argv[3], "w").write(r["id"])
+print(json.dumps(dict(more, type=r["type"], value=r["value"], times=times, refs=r["refs"], source=source, context=c)))
 PYEOF
   mkdir "$T/flog$forged"; cp -R "$T/log/." "$T/flog$forged/"
+  # bean keeps one of two claims that state the same, under the lowest id.
+  # A claim that differs only in the record around it is such a claim. So
+  # the true one is deleted first, and the forged one is the one that stays.
+  if [ "${3:-}" = alone ]; then
+    bean -dir "$T/flog$forged" purge "$(cat "$T/forged.id")" >/dev/null 2>&1 || { say "forge $1: the true claim was not deleted"; return; }
+  fi
   bean -dir "$T/flog$forged" append <"$T/forged.jsonl" >/dev/null 2>&1 || { say "forge $1: the claim was not appended"; return; }
   bean -dir "$T/flog$forged" ls -all -json >"$T/forged-log.jsonl"
-  [ "$(grep -c . "$T/forged-log.jsonl")" = $(($(b ls -all -json | grep -c .) + 1)) ] || { say "forge $1: the forged claim was not added"; return; }
+  [ "${3:-}" = alone ] || [ "$(grep -c . "$T/forged-log.jsonl")" = $(($(b ls -all -json | grep -c .) + 1)) ] || { say "forge $1: the forged claim was not added"; return; }
   "$PY" -I "$ROOT/tools/compare/reproduce.py" -accept-pack "$DIGEST" "$T/forged-log.jsonl" "$T/syn.pack" >"$T/fo.txt" 2>&1 && say "reproduce.py passes a forged claim: $1"
   [ "$(grep -c '^DIFFERS' "$T/fo.txt")" = 1 ] || say "forge $1: reproduce.py does not refuse exactly the forged claim: $(grep -c '^DIFFERS' "$T/fo.txt") refused"
 }
@@ -170,6 +177,10 @@ forge "the caveat of a pack not on record taken out" 'c["caveats"] = [x for x in
 forge "another n" 'c["result"]["n"] += 1'
 forge "another quartile" 'c["result"]["p75"] = c["result"]["p50"]'
 forge "another value" 'r["value"]["n"] = 99.9'
+# The record around the claim is a part of it: a signed claim with another
+# source or a member more is not one that bean compare writes.
+forge "another source system" 'source["system"] = "quest"' alone
+forge "a member more beside the context" 'more["x-note"] = "audited"' alone
 
 # A pack can be put on record after a claim was saved with it. The claim
 # then still says that bean had no record of the pack, and it must still

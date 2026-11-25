@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/Conscious-Repository/bean/core"
 	"github.com/Conscious-Repository/bean/internal/pack"
@@ -72,8 +73,43 @@ func webURL(s string) bool {
 	return err == nil && u.Scheme == "https" && u.Hostname() != "" && u.User == nil
 }
 
+// names are the members that a selection and a guide have. Go's decoder
+// takes a key for a member when the two are equal under Unicode case
+// folding: "SHA256", and also "ſha256" with a long s. So such a key beside
+// "sha256" would name one file to a person who reads the selection and
+// another to bean.
+var names = []string{"format", "packs", "guides", "sha256", "review", "publisher", "entries", "provider", "test_labels", "panels", "title", "url", "interpretation_limit"}
+
+// exactKeys refuses a key that folds to a member's name and is not that name.
+func exactKeys(v any) error {
+	switch v := v.(type) {
+	case map[string]any:
+		for key, value := range v {
+			for _, name := range names {
+				if key != name && strings.EqualFold(key, name) {
+					return fmt.Errorf("the key %q is not %q: a key has exactly the letters of its name", key, name)
+				}
+			}
+			if err := exactKeys(value); err != nil {
+				return err
+			}
+		}
+	case []any:
+		for _, value := range v {
+			if err := exactKeys(value); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func strict(data []byte, dst any, closed bool) error {
-	if _, err := core.Parse(data); err != nil {
+	tree, err := core.Parse(data)
+	if err != nil {
+		return err
+	}
+	if err := exactKeys(tree); err != nil {
 		return err
 	}
 	dec := json.NewDecoder(bytes.NewReader(data))

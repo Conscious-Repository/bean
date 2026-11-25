@@ -10,7 +10,7 @@ In the examples, Ben shares and Ana answers.
 
 ## Before the call
 
-1. **Both install release 0.8.3 or later.** `bean version` names the release. 0.8.1 is the oldest release that opens these files. 0.8.2 also reads a pack with a cell of fewer than 30 people ([UPGRADING.md](../UPGRADING.md)).
+1. **Both install release 0.8.4 or later.** `bean version` names the release. 0.8.1 is the oldest release that opens these files. 0.8.2 also reads a pack with a cell of fewer than 30 people ([UPGRADING.md](../UPGRADING.md)).
 
    ```
    go install github.com/Conscious-Repository/bean/cmd/...@latest
