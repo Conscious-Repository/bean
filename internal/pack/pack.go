@@ -493,33 +493,20 @@ func (r *reader) numbers(v any, where string, allowZero bool) []float64 {
 	return out
 }
 
-// MeasureFor returns the id of the measure that a reading of this type and
-// unit is, by the pack's own claim. units lists the units that the pack
-// takes for the type: it is empty when the pack has no measure for it.
-func (p *Pack) MeasureFor(typ, unit string) (id string, units []string) {
-	id, units, _ = p.MatchReading(typ, unit, Panel{})
-	return id, units
-}
-
-// MatchReading also checks the signed source and printed labels when the
-// publisher requires them. A mismatched panel has no measure.
-func (p *Pack) MatchReading(typ, unit string, panel Panel) (id string, units []string, panelMismatch bool) {
-	return p.match(typ, unit, panel, nil)
-}
-
-// MatchRecord checks all qualifiers against the original signed record.
-func (p *Pack) MatchRecord(record *core.Record) (string, []string, bool) {
+// MatchRecord returns the id of the measure that a signed reading is, by
+// the pack's own claim. It reads the type and the unit, and the fields that
+// an entry of the pack requires. units lists the units that the pack takes
+// for the type: it is empty when the pack has no measure for it. A reading
+// whose required fields differ has no measure, and panelMismatch says so.
+func (p *Pack) MatchRecord(record *core.Record) (id string, units []string, panelMismatch bool) {
 	unit, _ := record.Value["unit"].(string)
 	test, _ := record.Context["test"].(string)
-	panel, _ := record.Context["panel"].(string)
-	return p.match(record.Type, unit, Panel{record.Source.System, test, panel}, record)
-}
-
-func (p *Pack) match(typ, unit string, panel Panel, record *core.Record) (id string, units []string, panelMismatch bool) {
+	name, _ := record.Context["panel"].(string)
+	panel := Panel{record.Source.System, test, name}
 	for _, mid := range slices.Sorted(maps.Keys(p.Measures)) {
 		m := p.Measures[mid]
 		for _, s := range m.Same {
-			if s.Type != typ {
+			if s.Type != record.Type {
 				continue
 			}
 			label := s.Unit
@@ -527,13 +514,9 @@ func (p *Pack) match(typ, unit string, panel Panel, record *core.Record) (id str
 				label = "an omitted unit on the named ratio"
 			}
 			units = append(units, label)
-			if s.Unit == "" {
-				if record == nil {
-					continue
-				}
-				if _, present := record.Value["unit"]; present {
-					continue
-				}
+			// An entry with no unit takes a reading with no unit member.
+			if _, present := record.Value["unit"]; s.Unit == "" && present {
+				continue
 			}
 			if s.Unit == unit {
 				rules, guarded := m.AnyOf[s]

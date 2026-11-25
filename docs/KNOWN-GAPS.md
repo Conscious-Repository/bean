@@ -48,5 +48,6 @@ What bean does not do well today, said out loud. [ROADMAP.md](ROADMAP.md) says w
   - For a pack in a format that it does not know, bean says that the file is not a pack of version 0.
   - `bean purge` of the record that keeps a file erases the file, also when a saved comparison is about that record. The same file cannot be kept again on that copy.
   - A pack that is not in canonical form is accepted, as another pack.
+  - A text of a pack is judged by the Unicode version of the reader. bean, built with Go 1.27, refuses U+1343F in a title. `tools/pack/check.py` on Python 3.9 takes it, since its Unicode has no category for it (DECISIONS 347).
   - Nothing marks a pack on record that is later found wrong.
 - No way to test the 24 words without rotating. `net/http` is in the binary only to detect image types. CI does not run `lint`, `vuln` or fuzzing.

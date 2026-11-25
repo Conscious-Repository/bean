@@ -49,13 +49,20 @@ No record changes, and `bean verify` and `bean ls` print the same for an existin
 - **bean has no record of any pack in these formats.** `bean compare -pack` takes one only with `-unknown-pack`, and each result says so. The two packs on record are the same two as before.
 - **Release 0.8.3 lists a comparison that it cannot compute again.** It shows a comparison that 0.8.4 saved with a `pack/3` or `pack/4` pack, and `bean verify` passes its signature. It cannot read that pack.
 - **`bean coverage` is new since 0.8.3.** Its plain output names the caveats of each percentile by number, and says what a percentile means. A caveat or a source name of a pack is a quote, with the SHA-256 of the pack. So are the words of an assay guide. A quote is cut at 400 bytes. A measure id of a pack is not a quote. Its formats are drafts and can change.
+- **`bean compare` prints one more line since 0.8.2:** `Compared 2 of 5 selected readings.`
+- **A pack with the same number of measures can be another file.** [EXTERNAL-PACKS.md](docs/EXTERNAL-PACKS.md) lists packs of 13, 20 and 23 measures in `pack/2`. Each has another SHA-256 than the two on record, and bean has no record of them.
+- **`bean compare -pack` shows a caveat that the pack states as a quote:** `the pack says: "..."`. Only what bean wrote is in bean's words. A saved comparison holds the same texts as before.
+- **A refusal names the fields that a pack requires:** `required signed fields: source.system="..." and context.test="..." and context.panel="..."`. Release 0.8.3 said only that the source, test or panel does not match.
+- **`tools/compare/reproduce.py` checks the record around a saved comparison.** It refuses a claim with another source, or with a member more. A comparison that bean saved passes as before. It does not check the claim's own date.
+- **The `reproduce.py` of release 0.8.3 prints `DIFFERS` for a comparison with a `pack/2`, `pack/3` or `pack/4` pack.** It cannot read the pack. The comparison is not shown false: use the `reproduce.py` of this release.
+- **The `-json` output of `bean coverage` has two more members,** `percentile_means` and, for each match, `caveats_from_pack`. A selection or a guide with a key in upper case is refused.
 - **Tell your assistant not to run `bean coverage`** unless you ask. It prints your values. [ONBOARDING.md](docs/ONBOARDING.md) has the rule to copy again.
 
 ### 0.8.3 (2026-11-23)
 
 Bean reads both `pack/0` and `pack/1`. A `pack/1` publisher can require the signed source system, printed test name and panel alongside the type and unit.
 
-- The 13- and 20-measure Stele packs use `pack/0`. You can keep using the copies you already have.
+- The two packs that bean has on record use `pack/0`: 13 measures (`10555d67…`) and 20 measures (`5cae07db…`). You can keep using the copies you already have.
 - The 23-measure iron pack uses `pack/1`. Check its [external publisher digest](docs/EXTERNAL-PACKS.md) before using `-unknown-pack`.
 - A Quest “% SATURATION” row compares only when its signed fields match the iron panel rule. A missing or different panel yields no percentile.
 - Existing imports already contain their signed fields. Run the comparison on your existing log.

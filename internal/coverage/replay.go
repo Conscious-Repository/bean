@@ -34,7 +34,7 @@ type Match struct {
 	// FromPack counts the texts at the start of Caveats that the pack
 	// states. bean wrote the others. A pack can state bean's own words, so
 	// the two are told apart by where they come from, never by their text.
-	FromPack int `json:"-"`
+	FromPack int `json:"caveats_from_pack"`
 }
 
 type Decline struct {

@@ -406,6 +406,26 @@ def find_reading(claim, inputs, allow_zero=False):
     return reading, value
 
 
+RECORD = {"v", "id", "type", "subject", "author", "kid", "nonce", "sig", "times", "value", "refs", "source", "context"}
+
+
+def check_record(claim, reading):
+    """The record around a claim is the one that bean compare writes. It has
+    the members of a record and no other, and its source is the comparison.
+    A signed claim with another source or a member more is not one that the
+    method gives, though its numbers compute. The claim's own time is not
+    checked: bean sets it to the time of the reading, and the made-up pool on
+    record holds one claim twice, with two times (tools/pool). A reader takes
+    the time from the reading."""
+    if set(claim) != RECORD:
+        raise ValueError("the claim does not have exactly the members of a record: %s" % ", ".join(sorted(set(claim) ^ RECORD)))
+    source, times = claim["source"], claim["times"]
+    if not isinstance(source, dict) or set(source) != {"system", "adapter", "ref"} or source["system"] != "bean-compare" or source["ref"] is not None:
+        raise ValueError("the claim's source is not a comparison of bean")
+    if not isinstance(times, dict) or set(times) != {"observed", "imported"}:
+        raise ValueError("the claim's times are not the two that a record has")
+
+
 def check(claim, inputs):
     """Returns the text for one comparison that reproduces. Raises Missing
     when an input is not there, ValueError when a check fails."""
@@ -416,6 +436,7 @@ def check(claim, inputs):
     if (method.get("id"), method.get("version")) != METHOD:
         raise ValueError("a method this tool does not know: %s@%s" % (method.get("id"), method.get("version")))
     reading, value = find_reading(claim, inputs)
+    check_record(claim, reading)
     caveats, by = check_form(claim, reading)
     ref = ctx["reference"]
     tables, off_record = {}, []
@@ -458,6 +479,7 @@ def check_pack_claim(claim, inputs):
     the four steps of docs/REFERENCE.md, "The claim"."""
     ctx = claim["context"]
     reading, value = find_reading(claim, inputs, allow_zero=True)
+    check_record(claim, reading)
     if claim.get("author") != claim.get("subject"):
         raise ValueError("the claim is not signed by the person it is about")
     # The context has the members the document names, and no others.

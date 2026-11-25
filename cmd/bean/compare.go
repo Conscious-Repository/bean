@@ -22,6 +22,7 @@ import (
 	"github.com/Conscious-Repository/bean/internal/nhanes"
 	"github.com/Conscious-Repository/bean/internal/pack"
 	"github.com/Conscious-Repository/bean/internal/xpt"
+	"unicode/utf8"
 )
 
 // bean compare sets a reading against public reference data: where the
@@ -65,6 +66,7 @@ type comparison struct {
 	by       string // who signed the reading, when not the person
 	result   nhanes.Result
 	caveats  []string
+	stated   int        // with a pack: how many of the caveats, from the first, the pack states
 	files    []*refFile // the analyte's file, the demographics file, then each rule's file
 	measure  string     // with a pack: the id of the pack's measure
 	against  string     // with a pack: the reading's type and unit, and the measure's label
@@ -491,6 +493,23 @@ func comparable() string {
 	return strings.Join(order, ", ")
 }
 
+// quoted returns a text that a file states, as a quote. The file is a pack
+// or a guide, and bean did not write its words. A backslash and a quote mark
+// are escaped, so that no text ends its own quote. Other characters are
+// written out as safe writes them. A quote is cut at 400 bytes, the most
+// that a text of a pack holds: a guide has no such limit.
+func quoted(text string) string {
+	cut := ""
+	if len(text) > 400 {
+		n := 400
+		for n > 0 && !utf8.RuneStart(text[n]) {
+			n--
+		}
+		text, cut = text[:n], " (cut at 400 bytes)"
+	}
+	return `"` + safe(strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(text)) + `"` + cut
+}
+
 // percentileMeans is the line under every table of percentiles. bean
 // says where a value lies, and never whether it is healthy.
 const percentileMeans = "PERCENTILE is the weighted share of the cohort with a lower value, plus half of those with the same value. It says where a value lies in this sample, not whether it is healthy."
@@ -550,13 +569,17 @@ func printComparisons(w io.Writer, rows []comparison, head, known string, all bo
 					once(&note, "file not on record")
 				}
 			}
-			if slices.Contains(c.caveats, pack.CaveatNotOnRecord) {
+			// What the pack states is not bean's word, also when the words are bean's.
+			if slices.Contains(c.caveats[c.stated:], pack.CaveatNotOnRecord) {
 				note = append(note, "pack NOT on record")
 			}
 			shown++
 			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s%%\t%s%%\t%s to %s\t%s\t%d\t%s\t%s\n", when, r.Type, value,
 				nhanes.Num(res.Percentile), nhanes.Num(res.Below), nhanes.Num(res.Equal), nhanes.Num(res.P25), nhanes.Num(res.P75), nhanes.Num(res.P50), res.N, strings.Join(note, ", "), r.ID[7:19])
-			for _, text := range c.caveats {
+			for i, text := range c.caveats {
+				if i < c.stated {
+					text = "the pack says: " + quoted(text)
+				}
 				once(&caveats, text)
 			}
 			once(&against, c.against)

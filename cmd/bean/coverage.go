@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/Conscious-Repository/bean/core"
 	"github.com/Conscious-Repository/bean/internal/coverage"
@@ -25,6 +24,8 @@ type coverageReport struct {
 	Counts        map[string]int     `json:"counts"`
 	SourceCovered int                `json:"source_covered"`
 	Rows          []coverage.Row     `json:"rows"`
+	// Means says what a percentile is, also to a program that reads this.
+	Means string `json:"percentile_means"`
 }
 
 func cmdCoverage(s *core.Store, args []string) {
@@ -61,7 +62,7 @@ func cmdCoverage(s *core.Store, args []string) {
 	if warnFrozen(l) {
 		os.Exit(4)
 	}
-	result := coverageReport{Format: "bean-coverage/1", Cohort: *cohort, Selection: sources.Selection,
+	result := coverageReport{Format: "bean-coverage/1", Cohort: *cohort, Selection: sources.Selection, Means: percentileMeans,
 		Counts: map[string]int{"placed": 0, "unmatched_numeric": 0, "bounded": 0, "unreported": 0, "text": 0, "other": 0}, Rows: []coverage.Row{}}
 	for _, r := range records {
 		if r.Subject != l.ID || r.Type == "lab.report" || r.Value["blob"] != nil {
@@ -96,10 +97,7 @@ func cmdCoverage(s *core.Store, args []string) {
 	// names each by number, and the list follows the rows, each text once.
 	// Several packs and guides can be in one replay. So a text that is not
 	// bean's own is a quote, with the SHA-256 of the file that states it.
-	// A quote is cut at 400 bytes, the most that a text of a pack holds: a
-	// guide has no such limit, and one text must not bury the caveats. A
-	// backslash and a quote mark in the text are escaped, so that no text
-	// ends its own quote.
+	// A quote is cut, so that one text of a guide cannot bury the caveats.
 	var notes []string
 	mark := func(text string) string {
 		i := slices.Index(notes, text)
@@ -109,17 +107,7 @@ func cmdCoverage(s *core.Store, args []string) {
 		}
 		return fmt.Sprintf("[%d]", i+1)
 	}
-	quote := func(text string) string {
-		cut := ""
-		if len(text) > 400 {
-			n := 400
-			for !utf8.RuneStart(text[n]) {
-				n--
-			}
-			text, cut = text[:n], " (cut at 400 bytes)"
-		}
-		return `"` + safe(strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(text)) + `"` + cut
-	}
+	quote := quoted
 	placed := false
 	for _, r := range result.Rows {
 		test, _ := r.Facts["context.test"].(string)
@@ -137,7 +125,7 @@ func cmdCoverage(s *core.Store, args []string) {
 			}
 			fmt.Println("  Matched", safe(strings.Join(evidence, ", ")))
 			if m.Review != "" {
-				fmt.Println("  Review that your selection names:", safe(m.Review))
+				fmt.Println("  Review that your selection names:", quote(m.Review))
 			}
 			// A placement always has a caveat: that the person chose the cohort.
 			var marks []string

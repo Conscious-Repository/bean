@@ -68,11 +68,15 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 		case len(units) == 0:
 			c.refused, c.unmapped = "no reference data for this type", true
 		case panelMismatch:
+			// The pack names what the reading must hold. One measure, at
+			// most, takes this type and unit.
 			c.refused = "the source, printed test or panel does not match the pack"
+			same := pack.Same{Type: r.Type, Unit: unit}
 			for _, m := range p.Measures {
-				if rules := m.AnyOf[pack.Same{Type: r.Type, Unit: unit}]; len(rules) > 0 {
+				if want, ok := m.When[same]; ok {
+					c.refused = fmt.Sprintf("required signed fields: source.system=%q and context.test=%q and context.panel=%q", want.System, want.Test, want.Panel)
+				} else if rules := m.AnyOf[same]; len(rules) > 0 {
 					c.refused = "required signed evidence: " + evidenceText(rules)
-					break
 				}
 			}
 		case !isNumber:
@@ -97,6 +101,7 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 			}
 			c.result = res
 			c.caveats = p.PlacementCaveats(id, cohort, res.N, c.by != "")
+			c.stated = len(p.StatedCaveats(id, cohort))
 			claims = append(claims, packRecord(c, p, cohort, co, cell.MethodVersion()))
 		}
 		rows = append(rows, c)

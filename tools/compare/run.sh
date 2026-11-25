@@ -107,23 +107,31 @@ fi
 # method makes, must be refused: each of these is written with bean append,
 # so its id and signature are good.
 forge() {
-  "$PY" -I - "$T/records.jsonl" "$1" >"$T/forged.jsonl" <<'PYEOF'
+  "$PY" -I - "$T/records.jsonl" "$1" "$T/forged.id" >"$T/forged.jsonl" <<'PYEOF'
 import json, sys
 records = [json.loads(l) for l in open(sys.argv[1])]
 r = next(x for x in records if x["type"] == "comparison.percentile" and len(x["context"]["cohort"]["rules"]) == 2)
 c = r["context"]
+times, source, more = {"observed": r["times"]["observed"]}, dict(r["source"], ref=None), {}
 exec(sys.argv[2])
-src = dict(r["source"]); src.pop("ref", None); src["ref"] = None
-print(json.dumps({"type": r["type"], "value": r["value"], "times": {"observed": r["times"]["observed"]},
-                  "refs": r["refs"], "source": src, "context": c}))
+open(sys.argv[3], "w").write(r["id"])
+print(json.dumps(dict(more, type=r["type"], value=r["value"], times=times, refs=r["refs"], source=source, context=c)))
 PYEOF
   rm -rf "$T/flog"; cp -R "$T/log" "$T/flog"
+  # bean keeps one of two claims that state the same, under the lowest id.
+  # A claim that differs only in the record around it is such a claim. So
+  # the true one is deleted first, and the forged one is the one that stays.
+  good=$n
+  if [ "${3:-}" = alone ]; then
+    "$T/bin/bean" -dir "$T/flog" purge "$(cat "$T/forged.id")" >/dev/null 2>&1 || { echo "forge: the true claim was not deleted"; exit 1; }
+    good=$((n - 1))
+  fi
   "$T/bin/bean" -dir "$T/flog" append <"$T/forged.jsonl" >/dev/null 2>&1 || { echo "forge: append failed"; exit 1; }
   "$T/bin/bean" -dir "$T/flog" ls -all -json >"$T/forged-log.jsonl"
   before=$(grep -c . "$T/records.jsonl"); after=$(grep -c . "$T/forged-log.jsonl")
-  [ "$after" = $((before + 1)) ] || { echo "forge: the forged claim was not added"; exit 1; }
+  [ "${3:-}" = alone ] || [ "$after" = $((before + 1)) ] || { echo "forge: the forged claim was not added"; exit 1; }
   repro "$T/forged-log.jsonl" "${FILES[@]}" >"$T/out.txt"; code=$?
-  if [ "$code" != 1 ] || [ "$(grep -c '^DIFFERS ' "$T/out.txt")" != 1 ] || [ "$(grep -c '^reproduced ' "$T/out.txt")" != "$n" ]; then
+  if [ "$code" != 1 ] || [ "$(grep -c '^DIFFERS ' "$T/out.txt")" != 1 ] || [ "$(grep -c '^reproduced ' "$T/out.txt")" != "$good" ]; then
     echo "DIFFER: reproduce.py accepted a claim with $2 (exit $code)"; grep -v '^reproduced ' "$T/out.txt" | head -5; exit 1
   fi
 }
@@ -136,4 +144,6 @@ forge 'c["reference"]["weight"] = {"dataset": "DEMO_J", "variable": "RIDAGEYR"}'
 forge 'c["caveats"] = c["caveats"][:1]' "caveats left out"
 forge 'c["cohort"]["rules"] = c["cohort"]["rules"][1:]' "a cohort with no sex"
 forge 'c["reference"]["files"] = c["reference"]["files"][:1]' "a file left out of the list"
-echo "compare: reproduce.py checks and computes all $n comparisons again from $(basename "$DATA"), also from an export alone, and refuses a changed result, reading and file, and six signed claims that the method does not give"
+forge 'source["system"] = "quest"' "another source than a comparison" alone
+forge 'more["x-note"] = "audited"' "a member more beside the context" alone
+echo "compare: reproduce.py checks and computes all $n comparisons again from $(basename "$DATA"), also from an export alone, and refuses a changed result, reading and file, and eight signed claims that the method does not give"

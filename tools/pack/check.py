@@ -4,7 +4,7 @@
     check.py <pack>
     check.py <pack> place <measure id> <cohort id> <value>
 
-Written from docs/REFERENCE.md alone (formats pack/0 and pack/1, method
+Written from docs/REFERENCE.md alone (formats pack/0 to pack/4, method
 weighted-percentile versions 1 and 2); it shares no code with bean.
 
 The first form applies every rule of the document to the file. On success it

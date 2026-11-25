@@ -11,6 +11,8 @@ import (
 
 	"github.com/Conscious-Repository/bean/internal/pack"
 	"github.com/Conscious-Repository/bean/internal/xpt"
+
+	"github.com/Conscious-Repository/bean/core"
 )
 
 // sources reads files as BuildPack takes them.
@@ -142,7 +144,7 @@ func realPack(t *testing.T, names []string, measures int) string {
 		t.Fatal(err)
 	}
 	// A body measure is in the pack, under a type that bean writes.
-	if id, _ := p.MeasureFor("weight", "kg"); id != "BMXWT" || p.Cell("BMXWT", "male-30-39") == nil {
+	if id, _, _ := p.MatchRecord(&core.Record{Type: "weight", Value: map[string]any{"unit": "kg"}}); id != "BMXWT" || p.Cell("BMXWT", "male-30-39") == nil {
 		t.Errorf("weight in kg is the measure %q", id)
 	}
 	if len(p.Measures) != measures {

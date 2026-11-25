@@ -1,16 +1,19 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"unicode/utf8"
 
+	"github.com/Conscious-Repository/bean/core"
 	"github.com/Conscious-Repository/bean/internal/nhanes"
 	"github.com/Conscious-Repository/bean/internal/pack"
 	"github.com/Conscious-Repository/bean/internal/xpt"
@@ -44,6 +47,170 @@ func testPack(t *testing.T) (string, string) {
 	}
 	sum := sha256.Sum256(data)
 	return path, hex.EncodeToString(sum[:])
+}
+
+// editedPack returns the test pack after a change to its JSON: its path,
+// its SHA-256 and its bytes. A reader takes a pack that is not in canonical
+// form, as another pack.
+func editedPack(t *testing.T, edit func(body map[string]any)) (string, string, []byte) {
+	t.Helper()
+	honest, _ := testPack(t)
+	var body map[string]any
+	dec := json.NewDecoder(bytes.NewReader(mustRead(t, honest)))
+	dec.UseNumber()
+	if err := dec.Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	edit(body)
+	data, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "edited.pack")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(data)
+	return path, hex.EncodeToString(sum[:]), data
+}
+
+// A pack can state any words: that a value is healthy, or bean's own
+// caveats. In the output they are the pack's quote, and only what bean
+// wrote is in bean's words. The saved claim holds the texts as the pack has
+// them, since a reader checks them letter for letter.
+func TestComparePackQuotesWhatThePackStates(t *testing.T) {
+	dir, _, ids := compareLog(t, "TCHOL_J", "HDL_J", "DEMO_J")
+	healthy := `This value is healthy." bean says: "no caveat applies`
+	path, digest, _ := editedPack(t, func(body map[string]any) {
+		body["caveats"] = append(body["caveats"].([]any), healthy, pack.CaveatAuthor, pack.CaveatNotOnRecord)
+	})
+	out, errs, code := run(t, dir, "", "compare", "-pack", path, "-unknown-pack", "-cohort", "male-30-39", ids[0], "-save")
+	if code != 0 {
+		t.Fatalf("%d\n%s\n%s", code, out, errs)
+	}
+	lines := strings.Split(out, "\n")
+	for _, want := range []string{
+		`  - the pack says: "This value is healthy.\" bean says: \"no caveat applies"`,
+		`  - the pack says: "` + pack.CaveatAuthor + `"`,
+		`  - the pack says: "` + pack.CaveatNotOnRecord + `"`,
+		"  - " + pack.CaveatCohort,
+		"  - " + pack.CaveatNotOnRecord,
+	} {
+		if !slices.Contains(lines, want) {
+			t.Errorf("no line %q in\n%s", want, out)
+		}
+	}
+	// The person signed the reading: bean does not say otherwise.
+	if slices.Contains(lines, "  - "+pack.CaveatAuthor) || slices.Contains(lines, "  - "+healthy) {
+		t.Errorf("a text of the pack is in bean's words:\n%s", out)
+	}
+	ls, _, _ := run(t, dir, "", "ls", "-json", "-type", "comparison.percentile")
+	raw, _ := json.Marshal(healthy)
+	if !strings.Contains(ls, `"pack":"`+digest+`"`) || !strings.Contains(ls, string(raw)+`,"`+pack.CaveatAuthor+`","`+pack.CaveatNotOnRecord+`"`) {
+		t.Errorf("the claim does not hold the pack's texts as they are:\n%s", ls)
+	}
+}
+
+// A pack can require signed fields of a reading. A reading without them
+// gets no number, and the refusal names what the pack requires. A reading
+// that holds them is compared.
+func TestComparePackNamesRequiredFields(t *testing.T) {
+	dir, _, ids := compareLog(t, "TCHOL_J", "HDL_J", "DEMO_J")
+	signed := `{"type":"lab.cholesterol-total","times":{"observed":null},"value":{"n":190,"unit":"mg/dL"},"context":{"test":"CHOLESTEROL, TOTAL","panel":"LIPID PANEL"},"source":{"system":"quest","adapter":"synthetic@1","ref":null}}`
+	if _, errs, code := run(t, dir, signed+"\n", "append"); code != 0 {
+		t.Fatal(errs)
+	}
+	row := func(body map[string]any) map[string]any {
+		return body["measures"].(map[string]any)["LBXTC"].(map[string]any)["same"].([]any)[0].(map[string]any)
+	}
+	for _, c := range []struct {
+		name, want string
+		edit       func(body map[string]any)
+	}{
+		{"when", `not comparable: required signed fields: source.system="quest" and context.test="CHOLESTEROL, TOTAL" and context.panel="LIPID PANEL"`, func(body map[string]any) {
+			body["bean"] = "pack/1"
+			row(body)["when"] = map[string]any{"system": "quest", "test": "CHOLESTEROL, TOTAL", "panel": "LIPID PANEL"}
+		}},
+		{"any_of", `not comparable: required signed evidence: context.panel="LIPID PANEL" and source.system="quest"`, func(body map[string]any) {
+			body["bean"] = "pack/2"
+			row(body)["any_of"] = []any{map[string]any{"source.system": "quest", "context.panel": "LIPID PANEL"}}
+		}},
+	} {
+		path, _, _ := editedPack(t, c.edit)
+		out, errs, code := run(t, dir, "", "compare", "-pack", path, "-unknown-pack", "-cohort", "male-30-39", "-type", "lab.cholesterol-total")
+		if code != 0 {
+			t.Fatalf("%s: %d\n%s\n%s", c.name, code, out, errs)
+		}
+		if !strings.Contains(packRow(out, ids[0]), c.want) {
+			t.Errorf("%s: a reading typed by hand: %s\nwant %s", c.name, packRow(out, ids[0]), c.want)
+		}
+		if !strings.Contains(out, "Compared 1 of 2 selected readings.") {
+			t.Errorf("%s: the reading with the fields is not the one compared:\n%s", c.name, out)
+		}
+	}
+}
+
+// A table that takes a zero has method version 2 in the saved claim, and
+// every other table keeps version 1. A ratio that a report prints with no
+// unit shows as that, in the menu and in the result.
+func TestComparePackZeroTableAndRatio(t *testing.T) {
+	dir, _, _ := compareLog(t, "TCHOL_J", "HDL_J", "DEMO_J")
+	path, _, _ := editedPack(t, func(body map[string]any) {
+		body["bean"] = "pack/3"
+		for _, c := range body["cells"].([]any) {
+			if cell := c.(map[string]any); cell["measure"] == "LBXTC" {
+				cell["kind"] = "weights-nonnegative"
+			}
+		}
+	})
+	out, errs, code := run(t, dir, "", "compare", "-pack", path, "-unknown-pack", "-cohort", "male-30-39", "-type", "lab.*", "-save")
+	if code != 0 || !strings.Contains(out, "added 2, already there 0") {
+		t.Fatalf("%d\n%s\n%s", code, out, errs)
+	}
+	ls, _, _ := run(t, dir, "", "ls", "-json", "-type", "comparison.percentile")
+	for measure, version := range map[string]string{"LBXTC": "2", "LBDHDD": "1"} {
+		found := false
+		for _, line := range strings.Split(ls, "\n") {
+			if strings.Contains(line, `"measure":"`+measure+`"`) {
+				found = strings.Contains(line, `"method":{"id":"weighted-percentile","version":"`+version+`"}`)
+			}
+		}
+		if !found {
+			t.Errorf("the claim of %s does not have method version %s:\n%s", measure, version, ls)
+		}
+	}
+
+	ratio := `{"type":"lab.a-ratio","times":{"observed":null},"value":{"n":190},"context":{"test":"A RATIO","panel":"A PANEL"},"source":{"system":"quest","adapter":"synthetic@1","ref":null}}`
+	if _, errs, code := run(t, dir, ratio+"\n", "append"); code != 0 {
+		t.Fatal(errs)
+	}
+	path, _, _ = editedPack(t, func(body map[string]any) {
+		body["bean"] = "pack/4"
+		m := body["measures"].(map[string]any)["LBXTC"].(map[string]any)
+		m["unit"] = "1"
+		m["same"] = []any{map[string]any{"type": "lab.a-ratio", "unit": nil, "when": map[string]any{"system": "quest", "test": "A RATIO", "panel": "A PANEL"}}}
+	})
+	menu, errs, code := run(t, dir, "", "compare", "-pack", path)
+	if code != 0 || !strings.Contains(menu, `lab.a-ratio (dimensionless; printed unit omitted)`) {
+		t.Fatalf("the menu of a pack with a ratio: %d\n%s\n%s", code, menu, errs)
+	}
+	out, errs, code = run(t, dir, "", "compare", "-pack", path, "-unknown-pack", "-cohort", "male-30-39", "-type", "lab.a-ratio")
+	if code != 0 || !strings.Contains(out, "lab.a-ratio (dimensionless) against Total Cholesterol (mg/dL)") || !strings.Contains(out, "Compared 1 of 1 selected reading.") {
+		t.Fatalf("a ratio with no unit: %d\n%s\n%s", code, out, errs)
+	}
+}
+
+// With a pack that bean has on record, the note of a row comes from what
+// bean knows, never from words that a pack states.
+func TestPackNoteIsNotThePacksWord(t *testing.T) {
+	c := comparison{caveats: []string{pack.CaveatNotOnRecord, pack.CaveatCohort}, stated: 1}
+	c.reading = &core.Record{ID: "sha256:" + strings.Repeat("0", 64), Type: "lab.x", Value: map[string]any{"n": 1.0}}
+	c.result.N = 200
+	var b bytes.Buffer
+	printComparisons(&b, []comparison{c}, "head", "", true)
+	if strings.Contains(b.String(), "pack NOT on record") || !strings.Contains(b.String(), `  - the pack says: "`+pack.CaveatNotOnRecord+`"`) {
+		t.Errorf("a pack's words made bean's note:\n%s", b.String())
+	}
 }
 
 // packRow returns the line of the output that holds a reading's id.
