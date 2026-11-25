@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/Conscious-Repository/bean/core"
 	"github.com/Conscious-Repository/bean/internal/coverage"
@@ -91,9 +92,34 @@ func cmdCoverage(s *core.Store, args []string) {
 	}
 	fmt.Printf("%d current lab readings. %d placed, %d other numeric, %d bounded, %d unreported, %d text, %d other. %d with a survey or assay source.\n",
 		result.Total, result.Counts["placed"], result.Counts["unmatched_numeric"], result.Counts["bounded"], result.Counts["unreported"], result.Counts["text"], result.Counts["other"], result.SourceCovered)
-	// A percentile is read with its caveats, as in bean compare. Each
-	// placement names them by number, and the list follows the rows.
-	var caveats []string
+	// A percentile is read with its caveats, as in bean compare. A line
+	// names each by number, and the list follows the rows, each text once.
+	// Several packs and guides can be in one replay. So a text that is not
+	// bean's own is a quote, with the SHA-256 of the file that states it.
+	// A quote is cut at 400 bytes, the most that a text of a pack holds: a
+	// guide has no such limit, and its words must not bury the caveats.
+	var notes []string
+	mark := func(text string) string {
+		i := slices.Index(notes, text)
+		if i < 0 {
+			i = len(notes)
+			notes = append(notes, text)
+		}
+		return fmt.Sprintf("[%d]", i+1)
+	}
+	quote := func(text string) string {
+		text, cut := safe(text), ""
+		if len(text) > 400 {
+			n := 400
+			for !utf8.RuneStart(text[n]) {
+				n--
+			}
+			text, cut = text[:n], " (cut at 400 bytes)"
+		}
+		return `"` + strings.ReplaceAll(text, `"`, `\"`) + `"` + cut
+	}
+	own := []string{pack.CaveatCohort, fmt.Sprintf(pack.CaveatSmall, pack.SmallN), pack.CaveatNotOnRecord, pack.CaveatAuthor}
+	placed := false
 	for _, r := range result.Rows {
 		test, _ := r.Facts["context.test"].(string)
 		fmt.Printf("\n%s  %s  %s  (%s)\n", safe(r.ID), safe(test), safe(r.Type), r.Status)
@@ -112,15 +138,15 @@ func cmdCoverage(s *core.Store, args []string) {
 			if m.Review != "" {
 				fmt.Println("  Review that your selection names:", safe(m.Review))
 			}
+			// A placement always has a caveat: that the person chose the cohort.
 			var marks []string
 			for _, text := range m.Caveats {
-				i := slices.Index(caveats, text)
-				if i < 0 {
-					i = len(caveats)
-					caveats = append(caveats, text)
+				if !slices.Contains(own, text) {
+					text = fmt.Sprintf("the pack %s says: %s", m.SHA256, quote(text))
 				}
-				marks = append(marks, fmt.Sprintf("[%d]", i+1))
+				marks = append(marks, mark(text))
 			}
+			placed = true
 			fmt.Println("  Caveats", strings.Join(marks, " "))
 		}
 		if len(r.Matches) == 0 {
@@ -151,19 +177,23 @@ func cmdCoverage(s *core.Store, args []string) {
 				}
 			}
 		}
-		// An assay guide is a publisher's list. Its words are shown as a
-		// quote, with the publisher's name and the guide's SHA-256.
+		// An assay guide is a file that someone published. The publisher's
+		// name is the file's own word, and so are the title and the address.
 		for _, ref := range r.References {
-			fmt.Printf("  Lab documentation that %s lists (guide SHA-256 %s): %s %s\n", safe(ref.Publisher), ref.SHA256, safe(ref.Title), safe(ref.URL))
-			fmt.Printf("    %s says: %q\n", safe(ref.Publisher), safe(ref.Limit))
+			fmt.Printf("  Lab documentation in the guide %s, which names its publisher as %s: %s %s\n", ref.SHA256, quote(ref.Publisher), quote(ref.Title), quote(ref.URL))
+			fmt.Println("    The guide's words:", mark(fmt.Sprintf("the guide %s says: %s", ref.SHA256, quote(ref.Limit))))
 		}
 	}
-	if len(caveats) > 0 {
-		fmt.Println()
+	if len(notes) == 0 {
+		return
+	}
+	fmt.Println()
+	if placed {
 		fmt.Println(percentileMeans)
-		fmt.Println("Read each percentile with the caveats that its line names:")
-		for i, text := range caveats {
-			fmt.Printf("  [%d] %s\n", i+1, safe(text))
-		}
+		fmt.Println("Read each percentile with the caveats that its line names.")
+	}
+	fmt.Println("The lines above name these by number:")
+	for i, text := range notes {
+		fmt.Printf("  [%d] %s\n", i+1, text)
 	}
 }

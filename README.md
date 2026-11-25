@@ -15,7 +15,7 @@ This repository is the reference implementation of the **bean** protocol: [CORE.
 
 > **Status: pre-release.** The record format is a draft. It locks at `v` 0 only on the maintainers' word (today, Benjamin Anderson), at 1.0 ([CORE.md](CORE.md) section 6). Until then, keep your source files (PDFs, exports), so that you can import them again if the format changes.
 >
-> **Works today:** import, a comparison with public data, and a sealed share that a peer answers. **Next:** two people run that whole loop, and each compares with a pack from a host ([docs/ROADMAP.md](docs/ROADMAP.md)). A public host serves reference packs ([docs/EXTERNAL-PACKS.md](docs/EXTERNAL-PACKS.md)). No pool of real people exists.
+> **Works today:** import, a comparison with public data, and a sealed share that a peer answers. **Next:** two people run that whole loop, and each compares with a pack from a host ([docs/ROADMAP.md](docs/ROADMAP.md)). On 2026-11-25 a public host serves reference packs ([docs/EXTERNAL-PACKS.md](docs/EXTERNAL-PACKS.md)). No pool of real people exists.
 
 New here: [docs/ONBOARDING.md](docs/ONBOARDING.md) goes from install to an imported lab report, a comparison, a backup and a tested exit. It has rules to give an AI that helps you.
 
@@ -241,7 +241,7 @@ bean compare -pack nhanes.pack                                       # what it h
 bean compare -pack nhanes.pack -cohort male-30-39 -type 'lab.*'      # compare
 ```
 
-Today you build a pack, or someone gives you the file. Next, a lab serves the same two packs from a [read-only host](examples/pack-host/README.md), and you fetch one with `curl`. Keep the pack file: your log names it by its SHA-256 and does not hold it.
+Today you build a pack, someone gives you the file, or you fetch one from a host with `curl`. Any person can run a [read-only host](examples/pack-host/README.md). Keep the pack file: your log names it by its SHA-256 and does not hold it.
 
 ### What keeps a comparison private, and checkable
 
