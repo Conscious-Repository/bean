@@ -120,7 +120,8 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 
 // printPack shows what a pack holds: where it comes from, and its menu.
 func printPack(p *pack.Pack) {
-	fmt.Println(safe(p.Title))
+	// The first line is the pack's own name for itself, and says so.
+	fmt.Println("The pack's title: " + quoted(p.Title))
 	fmt.Println("sha256 " + p.SHA256)
 	fmt.Printf("source: %s, by %s (%s)\n", safe(p.Source), safe(p.Publisher), safe(p.Home))
 	fmt.Printf("built by %s, version %s, from %d files:\n", safe(p.BuilderName), safe(p.BuilderVersion), len(p.Files))

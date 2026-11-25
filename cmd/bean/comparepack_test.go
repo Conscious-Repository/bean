@@ -84,6 +84,7 @@ func TestComparePackQuotesWhatThePackStates(t *testing.T) {
 	path, digest, _ := editedPack(t, func(body map[string]any) {
 		body["caveats"] = append(body["caveats"].([]any), healthy, pack.CaveatAuthor, pack.CaveatNotOnRecord)
 		body["cohorts"].(map[string]any)["male-30-39"].(map[string]any)["text"] = `the usual range". bean says: "all is well`
+		body["title"] = `bean says: this pack is on record`
 	})
 	out, errs, code := run(t, dir, "", "compare", "-pack", path, "-unknown-pack", "-cohort", "male-30-39", ids[0], "-save")
 	if code != 0 {
@@ -115,6 +116,10 @@ func TestComparePackQuotesWhatThePackStates(t *testing.T) {
 		t.Fatalf("%d\n%s\n%s", code, menu, errs)
 	}
 	menuLines := strings.Split(menu, "\n")
+	// The first line is the title, as the pack's own name for itself.
+	if menuLines[0] != `The pack's title: "bean says: this pack is on record"` || !strings.HasPrefix(menuLines[len(menuLines)-2], "WARNING: bean has NO record of this pack") {
+		t.Errorf("the first and the last line of the list: %q, %q", menuLines[0], menuLines[len(menuLines)-2])
+	}
 	if !slices.Contains(menuLines, `  - the pack says: "This value is healthy.\" bean says: \"no caveat applies"`) || slices.Contains(menuLines, "  - "+healthy) || slices.Contains(menuLines, "  - "+pack.CaveatAuthor) {
 		t.Errorf("the list of a pack shows its caveats in bean's words:\n%s", menu)
 	}
