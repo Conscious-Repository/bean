@@ -2,7 +2,7 @@
 
 This file is the one place for open paths: what bean does now, what comes next, and what is not decided. Work that is done is in the git history. The reasons are in [DECISIONS.md](DECISIONS.md), and [KNOWN-GAPS.md](KNOWN-GAPS.md) lists known limits. Nothing here is final.
 
-**Where bean stands (2026-11-25).** A person keeps a log, and imports lab reports, Apple Health and CSV files. They compare a reading with a survey, or with a reference pack. They share chosen records as one sealed file, with six words or sealed to the reader's address. A reader who runs bean answers with signed notes, and the person takes them into their log. A public host serves reference packs ([EXTERNAL-PACKS.md](EXTERNAL-PACKS.md)). Release 0.8.3 is out, as a pre-release, and `main` is 0.8.4. Two people keep a log, so `main` is a release, with or without a tag (DECISIONS 310).
+**Where bean stands (2026-11-25).** A person keeps a log, and imports lab reports, Apple Health and CSV files. They compare a reading with a survey, or with a reference pack. They share chosen records as one sealed file, with six words or sealed to the reader's address. A reader who runs bean answers with signed notes, and the person takes them into their log. A public host serves reference packs ([EXTERNAL-PACKS.md](EXTERNAL-PACKS.md)). Release 0.8.4 is out, as a pre-release. Two people keep a log, so `main` is a release, with or without a tag (DECISIONS 310).
 
 ## Now: the proof of concept
 
