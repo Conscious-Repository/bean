@@ -491,6 +491,10 @@ func comparable() string {
 	return strings.Join(order, ", ")
 }
 
+// percentileMeans is the line under every table of percentiles. bean
+// says where a value lies, and never whether it is healthy.
+const percentileMeans = "PERCENTILE is the weighted share of the cohort with a lower value, plus half of those with the same value. It says where a value lies in this sample, not whether it is healthy."
+
 // printComparisons writes one row per reading: a result, or a few words on
 // why there is none. What to do about a missing result, and the caveats, are
 // said once below the table. Unless all is set, the readings of a type that
@@ -589,7 +593,7 @@ func printComparisons(w io.Writer, rows []comparison, head, known string, all bo
 		fmt.Fprintf(w, "These types have reference data, each in this unit: %s.\n", safe(known))
 	}
 	if len(caveats) > 0 {
-		fmt.Fprintln(w, "PERCENTILE is the weighted share of the cohort with a lower value, plus half of those with the same value. It says where a value lies in this sample, not whether it is healthy.")
+		fmt.Fprintln(w, percentileMeans)
 		fmt.Fprintln(w, "Read each number with these caveats:")
 		for _, text := range caveats {
 			fmt.Fprintln(w, "  - "+text)

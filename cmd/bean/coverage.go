@@ -91,6 +91,9 @@ func cmdCoverage(s *core.Store, args []string) {
 	}
 	fmt.Printf("%d current lab readings. %d placed, %d other numeric, %d bounded, %d unreported, %d text, %d other. %d with a survey or assay source.\n",
 		result.Total, result.Counts["placed"], result.Counts["unmatched_numeric"], result.Counts["bounded"], result.Counts["unreported"], result.Counts["text"], result.Counts["other"], result.SourceCovered)
+	// A percentile is read with its caveats, as in bean compare. Each
+	// placement names them by number, and the list follows the rows.
+	var caveats []string
 	for _, r := range result.Rows {
 		test, _ := r.Facts["context.test"].(string)
 		fmt.Printf("\n%s  %s  %s  (%s)\n", safe(r.ID), safe(test), safe(r.Type), r.Status)
@@ -107,8 +110,18 @@ func cmdCoverage(s *core.Store, args []string) {
 			}
 			fmt.Println("  Matched", safe(strings.Join(evidence, ", ")))
 			if m.Review != "" {
-				fmt.Println("  Review", safe(m.Review))
+				fmt.Println("  Review that your selection names:", safe(m.Review))
 			}
+			var marks []string
+			for _, text := range m.Caveats {
+				i := slices.Index(caveats, text)
+				if i < 0 {
+					i = len(caveats)
+					caveats = append(caveats, text)
+				}
+				marks = append(marks, fmt.Sprintf("[%d]", i+1))
+			}
+			fmt.Println("  Caveats", strings.Join(marks, " "))
 		}
 		if len(r.Matches) == 0 {
 			fmt.Println(" ", safe(r.Reason))
@@ -138,8 +151,19 @@ func cmdCoverage(s *core.Store, args []string) {
 				}
 			}
 		}
+		// An assay guide is a publisher's list. Its words are shown as a
+		// quote, with the publisher's name and the guide's SHA-256.
 		for _, ref := range r.References {
-			fmt.Println("  Lab documentation:", safe(ref.Title), safe(ref.URL))
+			fmt.Printf("  Lab documentation that %s lists (guide SHA-256 %s): %s %s\n", safe(ref.Publisher), ref.SHA256, safe(ref.Title), safe(ref.URL))
+			fmt.Printf("    %s says: %q\n", safe(ref.Publisher), safe(ref.Limit))
+		}
+	}
+	if len(caveats) > 0 {
+		fmt.Println()
+		fmt.Println(percentileMeans)
+		fmt.Println("Read each percentile with the caveats that its line names:")
+		for i, text := range caveats {
+			fmt.Printf("  [%d] %s\n", i+1, safe(text))
 		}
 	}
 }

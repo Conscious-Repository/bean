@@ -407,4 +407,6 @@ Without `-blob` it keeps its older behaviour for those two: an unread time goes 
 
 `bean coverage -sources FILE -assets DIR -cohort ID` checks current lab readings against local, digest-pinned sources.
 Add `-json` for per-reading evidence, or `-report SHA256` to select one original report.
+Each percentile names its caveats by number, and the list follows the rows. An assay guide's words show as a quote, with the name of the guide's publisher.
+The output holds your values and record ids. An assistant runs this command only when you ask.
 The [reader trial](../examples/coverage/README.md) includes a source selection and five synthetic readings.
