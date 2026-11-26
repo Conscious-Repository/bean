@@ -108,7 +108,7 @@ func readPerson(s *core.Store, l *core.Loaded, menu string) person {
 		notRead := ""
 		if otherRecords(l, missing) {
 			// It says what does not count, and not how to write one that does.
-			notRead = " What it holds of these types does not count. No record of an agent or of a peer counts, and none about another person, with another source or with a ref."
+			notRead = " What it does hold does not count. No record of an agent or of a peer counts, and none about another person, with another source or with a ref."
 		}
 		badArg(fmt.Errorf("name a cohort of the pack with -cohort: %s. With no -cohort, bean takes each reading's cohort from its date and from two records, person.sex and person.birth. The log has no current %s record that counts.%s Both are optional, and -cohort needs neither. docs/REFERENCE.md, \"The cohort from two records\", has the rules and says who can read them", menu, strings.Join(missing, " and no "), notRead))
 	}
@@ -157,10 +157,11 @@ func (p person) cohortOf(s *core.Store, k pack.OnRecordPack, r *core.Record) (co
 	id, why := k.CohortAt(p.sex, p.birth, months)
 	switch why {
 	case pack.BeforeBirth:
-		return "", "the reading is dated before the birth in person.birth: correct one, or name a cohort with -cohort"
+		// No cohort is of that date: -cohort is no way out without those words.
+		return "", "the reading is dated before the birth in person.birth: correct one. -cohort sets it against a cohort of another age"
 	case pack.MaybeBeforeBirth:
 		// Not "the age on that date": the person was perhaps not born.
-		return "", "the reading may be dated before the birth in person.birth: correct one, or name a cohort with -cohort"
+		return "", "the reading may be dated before the birth in person.birth: correct one. -cohort sets it against a cohort of another age"
 	case pack.NoCohort:
 		// Every cohort of the menu is then of another age, and the row says so.
 		return "", "the pack has no cohort for the age on that date: -cohort sets it against a cohort of another age"

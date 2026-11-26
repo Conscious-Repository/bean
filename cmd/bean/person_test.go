@@ -209,8 +209,8 @@ func TestComparePackRowsWithNoCohort(t *testing.T) {
 	const (
 		noDate   = "not comparable: the reading has no date: name a cohort with -cohort"
 		after    = "not comparable: the reading is dated after now: correct its date, or name a cohort with -cohort"
-		before   = "not comparable: the reading is dated before the birth in person.birth: correct one, or name a cohort with -cohort"
-		maybe    = "not comparable: the reading may be dated before the birth in person.birth: correct one, or name a cohort with -cohort"
+		before   = "not comparable: the reading is dated before the birth in person.birth: correct one. -cohort sets it against a cohort of another age"
+		maybe    = "not comparable: the reading may be dated before the birth in person.birth: correct one. -cohort sets it against a cohort of another age"
 		none     = "not comparable: the pack has no cohort for the age on that date: -cohort sets it against a cohort of another age"
 		edge     = "not comparable: the date lies on the edge of two cohorts: name one with -cohort"
 		menuEdge = "not comparable: the date lies on the edge of the pack's cohorts: name one with -cohort if it holds the age on that date"
@@ -467,7 +467,7 @@ func TestWhichPersonRecordsCount(t *testing.T) {
 	add(t, dir, "-agent", "person.sex", "male")
 	// The record that this is said of was written with bean add -agent: the
 	// words name no command, and nothing that an assistant can do.
-	const notRead = "What it holds of these types does not count. No record of an agent or of a peer counts, and none about another person, with another source or with a ref."
+	const notRead = "What it does hold does not count. No record of an agent or of a peer counts, and none about another person, with another source or with a ref."
 	if _, errs, code := compare(); code != 2 || !strings.Contains(errs, "The log has no current person.sex and no person.birth record that counts. "+notRead+" Both are optional") || strings.Contains(errs, "bean add") {
 		t.Fatalf("only an agent's record: %d\n%s", code, errs)
 	}

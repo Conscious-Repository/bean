@@ -140,7 +140,7 @@ For current signed clinical-panel matches, use the [evidence-qualified core pack
 1. `bean-pack-nhanes` ends with `This is the pack that bean has on record.` The SHA-256 is the second one in [REFERENCE.md](REFERENCE.md#how-a-pack-travels), which starts `5cae07db`. The builder refuses a file that is not the one on record: fetch that file again.
 2. The last command lists the groups, and the type names and units that the pack takes.
 
-**Yourself:** choose the group that describes you. bean does not know yours, and never guesses. In a practice log, put `-dir /tmp/practice` after `bean`.
+**Yourself:** choose the group that describes you. With `-cohort`, bean uses the group that you name, and never guesses. In a practice log, put `-dir /tmp/practice` after `bean`.
 
 ```
 bean compare -pack nhanes.pack -cohort male-30-39 -type 'lab.*'
