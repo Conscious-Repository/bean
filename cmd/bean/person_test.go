@@ -423,7 +423,7 @@ func TestWhichPersonRecordsCount(t *testing.T) {
 		t.Fatal(errs)
 	}
 	add(t, dir, "-agent", "person.sex", "male")
-	const notRead = "What it holds of these types, bean does not read: only a record that your identity signed about you, as bean add writes it, counts, and not one of an agent, a peer or an importer."
+	const notRead = "What it holds of these types, bean does not read: only a record that your identity signed about you counts, with the source self and no ref, as bean add writes it."
 	if _, errs, code := compare(); code != 2 || !strings.Contains(errs, "The log has no current person.sex and no person.birth that your identity signed. "+notRead+" Both are optional") {
 		t.Fatalf("only an agent's record: %d\n%s", code, errs)
 	}

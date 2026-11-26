@@ -34,8 +34,10 @@ type person struct {
 
 // personRecords returns the records of one type that count, by id: current
 // ones that the person's identity signed about the person, with the source
-// self and no ref. A record of an agent, of a peer or of an importer is
-// not the person's word, and is not read.
+// self and no ref. bean add writes such a record. A record of an agent or
+// of a peer, or with another source or a ref, is not read. Whatever writes
+// under the person's key with the source self is read: bean append, or an
+// importer that names itself so (DECISIONS 345 (k)).
 func personRecords(l *core.Loaded, typ string) []*core.Record {
 	var out []*core.Record
 	for _, id := range slices.Sorted(maps.Keys(l.Report.Records)) {
@@ -104,7 +106,7 @@ func readPerson(s *core.Store, l *core.Loaded, menu string) person {
 		// or not, and whoever runs this may be their assistant.
 		notRead := ""
 		if otherRecords(l, missing) {
-			notRead = " What it holds of these types, bean does not read: only a record that your identity signed about you, as bean add writes it, counts, and not one of an agent, a peer or an importer."
+			notRead = " What it holds of these types, bean does not read: only a record that your identity signed about you counts, with the source self and no ref, as bean add writes it."
 		}
 		badArg(fmt.Errorf("name a cohort of the pack with -cohort: %s. With no -cohort, bean takes each reading's cohort from its date and from two records, person.sex and person.birth. The log has no current %s that your identity signed.%s Both are optional, and -cohort needs neither: docs/REFERENCE.md, \"The cohort from two records\", has the rules and says who can read them", menu, strings.Join(missing, " and no "), notRead))
 	}
