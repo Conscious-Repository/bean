@@ -43,12 +43,16 @@ Do not run `purge` or `gc` on the copies. Only they erase anything.
 No record changes, and `bean verify` and `bean ls` print the same for an existing log. `bean compare -pack` can take each reading's cohort from two records that you state ([DECISIONS 348](docs/DECISIONS.md)).
 
 - **With `-cohort`, nothing changes.** bean prints the same lines and saves the same claim. It reads neither of the two records.
-- **`bean compare -pack` with readings and no `-cohort` was an error.** It still is, unless a `person.sex` and a `person.birth` record count, and the pack is one on record. A record counts when your identity signed it about you, with the source `self` and no ref. `bean add` with no `-agent` writes it so. The error starts with the same words: `name a cohort of the pack with -cohort:`. It then names the two records. For a pack that is not on record, it says that this way needs a pack on record. The exit code is 2, as before. For a pack on record, bean now checks the selection and reads the log first. So another error can come before this one. Record ids beside `-type` is said first, with exit 2. No log, or no reading that matches, is said first, with exit 1.
-- **With both records, that command prints a table.** Each row has the cohort of the age on the reading's own date, in a new COHORT column. [REFERENCE.md](docs/REFERENCE.md#the-cohort-from-two-records) has the rules. It saves nothing: `-save` needs `-cohort`, as before.
+- **With only `-pack`, nothing changes.** bean lists what the pack holds.
+- **`bean compare -pack` with readings and no `-cohort` was an error, with exit 2.** It started with the words `name a cohort of the pack with -cohort:`. In three cases it is still that error, with a sentence more. They are: with `-save`, with a pack that is not on record, and when no `person.sex` or no `person.birth` record counts.
+- **The new way is for a pack on record, with no `-save`.** bean then checks the selection and reads the log, as it does with `-cohort`. An error there comes first. Record ids beside `-type` give exit 2. No log, or no reading that matches, gives exit 1.
+- **With both records, that command prints a table.** Each row has the cohort of the age on the reading's own date, in a new COHORT column. [REFERENCE.md](docs/REFERENCE.md#the-cohort-from-two-records) has the rules. It saves nothing.
+- **Which records count.** A record counts when your identity signed it about you, with the source `self` and no ref. `bean add` with no `-agent` writes it so.
 - **If your log already has a record of type `person.sex` or `person.birth`,** bean now reads it. Until now bean gave these types no meaning. `bean ls -type 'person.*'` shows what your log holds. A record that breaks a rule stops that command with exit 1, and not 2. The stop names the record by id. With `-cohort`, bean reads neither.
 - **The two records are optional, and they are ordinary records.** Whoever reads your log reads them: a copy, an export, a share of `*`, and an assistant with `bean mcp`. A share of `lab.*` or of a comparison does not carry them.
 - **An earlier release gives the two records no meaning.** It lists them with `bean ls`, like any record. There, `bean compare -pack` with no `-cohort` stays an error.
 - **Copy the rule for your assistant again.** [ONBOARDING.md](docs/ONBOARDING.md) now tells it not to ask for your sex or birth, and not to add these records. A record that it adds with a plain `bean add` is signed under your identity.
+- **The usage line of `compare -pack` changes.** It shows that `-save` needs `-cohort`, and that readings can come with no `-cohort`.
 - **No saved comparison reads differently.** No text of a claim changes, and the two packs on record are the same two.
 
 ### 0.8.4 (2026-11-25)

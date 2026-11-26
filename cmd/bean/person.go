@@ -106,7 +106,8 @@ func readPerson(s *core.Store, l *core.Loaded, menu string) person {
 		// or not, and whoever runs this may be their assistant.
 		notRead := ""
 		if otherRecords(l, missing) {
-			notRead = " What it holds of these types, bean does not read: only a record that your identity signed about you counts, with the source self and no ref. A record of an agent or of a peer never counts."
+			// It says what does not count, and not how to write one that does.
+			notRead = " What it holds of these types does not count. No record of an agent or of a peer counts, and none about another person, with another source or with a ref."
 		}
 		badArg(fmt.Errorf("name a cohort of the pack with -cohort: %s. With no -cohort, bean takes each reading's cohort from its date and from two records, person.sex and person.birth. The log has no current %s record that counts.%s Both are optional, and -cohort needs neither. docs/REFERENCE.md, \"The cohort from two records\", has the rules and says who can read them", menu, strings.Join(missing, " and no "), notRead))
 	}

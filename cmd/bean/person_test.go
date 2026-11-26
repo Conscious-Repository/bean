@@ -333,7 +333,7 @@ func TestComparePackStopsOnTheRecords(t *testing.T) {
 	// records and where their rules are. It has no command to copy: whoever
 	// runs this may be the person's assistant, and the two are optional.
 	out, errs, code := compare(dir)
-	if code != 2 || out != "" || !strings.HasPrefix(errs, "bean: "+cohort) || !strings.Contains(errs, "The log has no current person.sex and no person.birth record that counts. Both are optional, and -cohort needs neither. docs/REFERENCE.md, \"The cohort from two records\", has the rules and says who can read them") || strings.Contains(errs, "bean add") || strings.Contains(errs, "does not read") {
+	if code != 2 || out != "" || !strings.HasPrefix(errs, "bean: "+cohort) || !strings.Contains(errs, "The log has no current person.sex and no person.birth record that counts. Both are optional, and -cohort needs neither. docs/REFERENCE.md, \"The cohort from two records\", has the rules and says who can read them") || strings.Contains(errs, "bean add") || strings.Contains(errs, "does not count") {
 		t.Errorf("no record: %d\n%s\n%s", code, out, errs)
 	}
 	// A record that was deleted is not a record that bean does not read.
@@ -344,7 +344,7 @@ func TestComparePackStopsOnTheRecords(t *testing.T) {
 	run(t, gone, "", "purge", add(t, gone, "person.sex", "male"))
 	// Nor is one that a record of another type replaced: it is not current.
 	add(t, gone, "note", "not for the log", "-corrects", add(t, gone, "person.birth", "1986"))
-	if _, errs, code := compare(gone); code != 2 || !strings.Contains(errs, "no current person.sex and no person.birth") || strings.Contains(errs, "does not read") {
+	if _, errs, code := compare(gone); code != 2 || !strings.Contains(errs, "no current person.sex and no person.birth") || strings.Contains(errs, "does not count") {
 		t.Errorf("a deleted record: %d\n%s", code, errs)
 	}
 	type stop struct {
@@ -457,7 +457,7 @@ func TestWhichPersonRecordsCount(t *testing.T) {
 	add(t, dir, "-agent", "person.sex", "male")
 	// The record that this is said of was written with bean add -agent: the
 	// words name no command, and nothing that an assistant can do.
-	const notRead = "What it holds of these types, bean does not read: only a record that your identity signed about you counts, with the source self and no ref. A record of an agent or of a peer never counts."
+	const notRead = "What it holds of these types does not count. No record of an agent or of a peer counts, and none about another person, with another source or with a ref."
 	if _, errs, code := compare(); code != 2 || !strings.Contains(errs, "The log has no current person.sex and no person.birth record that counts. "+notRead+" Both are optional") || strings.Contains(errs, "bean add") {
 		t.Fatalf("only an agent's record: %d\n%s", code, errs)
 	}
