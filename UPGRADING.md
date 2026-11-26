@@ -48,12 +48,13 @@ No record changes, and `bean verify` and `bean ls` print the same for an existin
 - **The new way is for a pack on record, with no `-save`.** bean then checks the selection and reads the log, as it does with `-cohort`. An error there comes first. Record ids beside `-type` give exit 2. No reading that matches gives exit 1. As every read, it writes the cache in `local/cache`.
 - **That way can now delete a saved comparison.** As every `bean compare` with readings, it first deletes the saved comparisons of a reading that was corrected or deleted. In 0.8.4 this command stopped before that. It does so also when it then stops for a record.
 - **With both records, that command prints a table.** Each row has the cohort of the age on the reading's own date, in a new COHORT column. [REFERENCE.md](docs/REFERENCE.md#the-cohort-from-two-records) has the rules. It saves no comparison.
-- **Which records count.** A record counts when your identity signed it about you, with the source `self` and no ref. `bean add` with no `-agent` writes it so.
+- **Which records count.** A record counts when your identity signed it about you, with the source `self` and no import ref. A comment about another record does not count. `bean add` with no `-agent` and no `-about` writes a record that counts.
 - **If your log already has a record of type `person.sex` or `person.birth`,** bean now reads it. Until now bean gave these types no meaning. `bean ls -type 'person.*'` shows what your log holds. A record that breaks a rule stops that command with exit 1, and not 2. The stop names the record by id. With `-cohort`, bean reads neither.
 - **The two records are optional, and they are ordinary records.** Whoever reads your log reads them: a copy, an export, a share of `*`, and an assistant with `bean mcp`. A share of `lab.*` or of a comparison does not carry them.
 - **An earlier release gives the two records no meaning.** It lists them with `bean ls`, like any record. There, `bean compare -pack` with readings and no `-cohort` stays an error.
 - **Copy the rule for your assistant again.** [ONBOARDING.md](docs/ONBOARDING.md) now tells it not to ask for your sex or birth, not to add these records, and not to choose a cohort for you. A record that it adds with a plain `bean add` is signed under your identity.
 - **The usage line of `compare -pack` changes.** It shows that `-save` needs `-cohort`, and that readings can come with no `-cohort`.
+- **bean builds with Go 1.27.4.** Go downloads it on the first build. It mends a fault in Go's HTTP server. bean runs no server, and a check of the built programs named that fault for 1.27.3.
 - **No saved comparison reads differently.** No text of a claim changes, and the two packs on record are the same two.
 
 ### 0.8.4 (2026-11-25)

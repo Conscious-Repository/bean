@@ -484,7 +484,7 @@ func TestWhichPersonRecordsCount(t *testing.T) {
 	add(t, dir, "-agent", "person.sex", "male")
 	// The record that this is said of was written with bean add -agent: the
 	// words name no command, and nothing that an assistant can do.
-	const notRead = "What it does hold does not count. No record of an agent or of a peer counts, and none about another person, with another source or with a ref."
+	const notRead = "What it does hold does not count. No record of an agent or of a peer counts, and none about another person or another record, with another source or with an import ref."
 	if _, errs, code := compare(); code != 2 || !strings.Contains(errs, "The log has no current person.sex and no person.birth record that counts. "+notRead+" Both are optional") || strings.Contains(errs, "bean add") {
 		t.Fatalf("only an agent's record: %d\n%s", code, errs)
 	}
@@ -544,9 +544,28 @@ func TestWhichPersonRecordsCount(t *testing.T) {
 			t.Fatalf("append %s: %s", other, errs)
 		}
 	}
+	// A comment about another record is a word on that record. It is not
+	// read as the person's own sex or birth.
+	add(t, dir, "person.sex", "male", "-about", ids[0])
+	add(t, dir, "person.birth", "1950", "-about", ids[0])
 	out, errs, code = compare()
 	if cohort, _ := cohortOfRow(t, out, ids[0]); code != 0 || cohort != "female-30-39" || strings.Split(out, "\n")[1] != before {
 		t.Fatalf("records that do not count were read: %d\n%s\n%s", code, out, errs)
+	}
+	// A second copy of the log states another birth, and a sync brings it
+	// here: two values, and a stop that names both records.
+	other, here := t.TempDir(), t.TempDir()
+	for _, d := range []string{other, here} {
+		if err := os.CopyFS(d, os.DirFS(dir)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	elsewhere := add(t, other, "person.birth", "1991")
+	if _, errs, code := run(t, here, "", "sync", other); code != 0 {
+		t.Fatalf("sync: %d\n%s", code, errs)
+	}
+	if _, errs, code := run(t, here, "", "compare", "-pack", path, ids[0]); code != 1 || !strings.Contains(errs, "the records person.birth (") || !strings.Contains(errs, elsewhere[7:19]) || !strings.Contains(errs, "do not state one value") {
+		t.Fatalf("a second value that a sync brought: %d\n%s", code, errs)
 	}
 	// A correction replaces a record: the old value is not read, and no
 	// two values stop the run.

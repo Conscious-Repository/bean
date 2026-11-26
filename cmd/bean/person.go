@@ -34,15 +34,18 @@ type person struct {
 
 // personRecords returns the records of one type that count, by id: current
 // ones that the person's identity signed about the person, with the source
-// self and no ref. bean add writes such a record. A record of an agent or
-// of a peer, or with another source or a ref, is not read. Whatever writes
-// under the person's key with the source self is read: bean append, or an
-// importer that names itself so (DECISIONS 345 (k)).
+// self and no import ref. bean add writes such a record. A record of an
+// agent or of a peer, or with another source or an import ref, is not read.
+// Nor is a comment about another record: it is a word on that record, and
+// to read it as the person's own birth or sex would be a guess. A
+// correction counts: its ref replaces a record, and says nothing of
+// another. Whatever writes under the person's key with the source self is
+// read: bean append, or an importer that names itself so (DECISIONS 345 (k)).
 func personRecords(l *core.Loaded, typ string) []*core.Record {
 	var out []*core.Record
 	for _, id := range slices.Sorted(maps.Keys(l.Report.Records)) {
 		r := l.Report.Records[id]
-		if r.Type == typ && l.Current(id) && r.Author == l.ID && r.Subject == l.ID && r.Source.System == "self" && r.Source.Ref == "" {
+		if r.Type == typ && l.Current(id) && r.Author == l.ID && r.Subject == l.ID && r.Source.System == "self" && r.Source.Ref == "" && len(r.Targets("about")) == 0 {
 			out = append(out, r)
 		}
 	}
@@ -109,7 +112,7 @@ func readPerson(s *core.Store, l *core.Loaded, menu string) person {
 		notRead := ""
 		if otherRecords(l, missing) {
 			// It says what does not count, and not how to write one that does.
-			notRead = " What it does hold does not count. No record of an agent or of a peer counts, and none about another person, with another source or with a ref."
+			notRead = " What it does hold does not count. No record of an agent or of a peer counts, and none about another person or another record, with another source or with an import ref."
 		}
 		badArg(fmt.Errorf("name a cohort of the pack with -cohort: %s. With no -cohort, bean takes each reading's cohort from its date and from two records, person.sex and person.birth. The log has no current %s record that counts.%s Both are optional, and -cohort needs neither. person.sex is male or female. person.birth is a year, or a year and a month as 1986-05. Whoever reads your log reads them. docs/REFERENCE.md, \"The cohort from two records\", has the rules", menu, strings.Join(missing, " and no "), notRead))
 	}

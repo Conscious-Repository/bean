@@ -140,7 +140,7 @@ func TestBirthMonths(t *testing.T) {
 }
 
 func TestSex(t *testing.T) {
-	for value, want := range map[string]bool{"male": true, "female": true, "Male": false, "FEMALE": false, "male ": false, " female": false, "m": false, "": false, "intersex": false, "male\n": false, "fe​male": false} {
+	for value, want := range map[string]bool{"male": true, "female": true, "Male": false, "FEMALE": false, "male ": false, " female": false, "m": false, "": false, "intersex": false, "male\n": false, "fe\u200bmale": false} {
 		if got, ok := Sex(map[string]any{"s": value}); ok != want || got != value {
 			t.Errorf("Sex(%q) = %q, %v, want %v", value, got, ok, want)
 		}
