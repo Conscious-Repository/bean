@@ -70,6 +70,10 @@ type comparison struct {
 	files    []*refFile // the analyte's file, the demographics file, then each rule's file
 	measure  string     // with a pack: the id of the pack's measure
 	against  string     // with a pack: the reading's type and unit, and the measure's label
+	// With a pack and no -cohort: the row's own cohort, and how many of
+	// the stated caveats, the last ones, are that cohort's.
+	cohort        string
+	cohortCaveats int
 }
 
 // refFile is a kept NHANES file.
@@ -125,7 +129,7 @@ func cmdCompare(s *core.Store, args []string) {
 		}
 		rows = append(rows, c)
 	}
-	printComparisons(os.Stdout, rows, fmt.Sprintf("Compared with NHANES %s: %s.", nhanes.Years, cohort), comparable(), *typ == "")
+	printComparisons(os.Stdout, rows, fmt.Sprintf("Compared with NHANES %s: %s.", nhanes.Years, cohort), comparable(), *typ == "", false)
 	var claims []map[string]any
 	for _, c := range rows {
 		if c.refused == "" {
@@ -184,16 +188,22 @@ func compareReadings(s *core.Store, typ string, pos []string) ([]*core.Record, *
 	return readings, l
 }
 
+// endComparisons stops after the table when the log is frozen, or when no
+// reading was compared.
+func endComparisons(l *core.Loaded, compared int) {
+	if warnFrozen(l) {
+		os.Exit(4)
+	}
+	if compared == 0 {
+		fail(errors.New("nothing could be compared"))
+	}
+}
+
 // saveComparisons ends a comparison: it stops if nothing was compared, and
 // with save it signs each claim that the log does not hold yet. with names
 // what, together with a claim, gives the reading's value away.
 func saveComparisons(s *core.Store, l *core.Loaded, claims []map[string]any, save bool, with string) {
-	if warnFrozen(l) {
-		os.Exit(4)
-	}
-	if len(claims) == 0 {
-		fail(errors.New("nothing could be compared"))
-	}
+	endComparisons(l, len(claims))
 	if !save {
 		fmt.Println("Not saved. Pass -save to keep these comparisons as signed records.")
 		return
@@ -518,8 +528,10 @@ const percentileMeans = "PERCENTILE is the weighted share of the cohort with a l
 // why there is none. What to do about a missing result, and the caveats, are
 // said once below the table. Unless all is set, the readings of a type that
 // bean has no reference data for are only named: with -type they are most of
-// a lab report.
-func printComparisons(w io.Writer, rows []comparison, head, known string, all bool) {
+// a lab report. With ownCohort each row shows the cohort that it was set
+// against: the rows of one run can then differ in it. It returns the number
+// of readings compared.
+func printComparisons(w io.Writer, rows []comparison, head, known string, all, ownCohort bool) int {
 	for _, line := range strings.Split(head, "\n") {
 		fmt.Fprintln(w, safe(line))
 	}
@@ -527,7 +539,21 @@ func printComparisons(w io.Writer, rows []comparison, head, known string, all bo
 	var table bytes.Buffer
 	shown, compared := 0, 0
 	tw := tabwriter.NewWriter(&table, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "DATE\tREADING\tVALUE\tPERCENTILE\tLOWER\tSAME\tMIDDLE HALF\tMEDIAN\tN\tNOTE\tID")
+	// The COHORT column is there only when each row has its own.
+	cohortHead := ""
+	if ownCohort {
+		cohortHead = "COHORT\t"
+	}
+	cohortCell := func(c comparison) string {
+		switch {
+		case !ownCohort:
+			return ""
+		case c.cohort == "":
+			return "-\t"
+		}
+		return c.cohort + "\t"
+	}
+	fmt.Fprintln(tw, "DATE\tREADING\tVALUE\t"+cohortHead+"PERCENTILE\tLOWER\tSAME\tMIDDLE HALF\tMEDIAN\tN\tNOTE\tID")
 	var caveats, help, unmapped, against []string
 	once := func(list *[]string, text string) {
 		if text != "" && !slices.Contains(*list, text) {
@@ -553,7 +579,7 @@ func printComparisons(w io.Writer, rows []comparison, head, known string, all bo
 				n = strconv.Itoa(c.result.N)
 			}
 			shown++
-			fmt.Fprintf(tw, "%s\t%s\t%s\t-\t-\t-\t-\t-\t%s\tnot comparable: %s\t%s\n", when, r.Type, value, n, safe(c.refused), r.ID[7:19])
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s-\t-\t-\t-\t-\t%s\tnot comparable: %s\t%s\n", when, r.Type, value, cohortCell(c), n, safe(c.refused), r.ID[7:19])
 			for _, text := range c.help {
 				once(&help, text)
 			}
@@ -574,10 +600,14 @@ func printComparisons(w io.Writer, rows []comparison, head, known string, all bo
 				note = append(note, "pack NOT on record")
 			}
 			shown++
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s%%\t%s%%\t%s to %s\t%s\t%d\t%s\t%s\n", when, r.Type, value,
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s%s\t%s%%\t%s%%\t%s to %s\t%s\t%d\t%s\t%s\n", when, r.Type, value, cohortCell(c),
 				nhanes.Num(res.Percentile), nhanes.Num(res.Below), nhanes.Num(res.Equal), nhanes.Num(res.P25), nhanes.Num(res.P75), nhanes.Num(res.P50), res.N, strings.Join(note, ", "), r.ID[7:19])
 			for i, text := range c.caveats {
-				if i < c.stated {
+				switch {
+				case ownCohort && i < c.stated && i >= c.stated-c.cohortCaveats:
+					// The rows differ in cohort, so a cohort's caveat names it.
+					text = "the pack says of " + c.cohort + ": " + quoted(text)
+				case i < c.stated:
 					text = "the pack says: " + quoted(text)
 				}
 				once(&caveats, text)
@@ -622,6 +652,7 @@ func printComparisons(w io.Writer, rows []comparison, head, known string, all bo
 			fmt.Fprintln(w, "  - "+text)
 		}
 	}
+	return compared
 }
 
 // comparisonRecord is the claim that -save signs: the result, what it was

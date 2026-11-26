@@ -106,6 +106,7 @@ bean compare -pack nhanes.pack -cohort male-30-39 -type 'lab.*'
 - `bean compare -pack nhanes.pack` must say that bean has the pack on record. It lists the cohorts, and the type names and units that the pack takes.
 - Choose your own cohort. A reading in another unit gets no number.
 - One run sets every reading against the one cohort that you name, also an old reading. For a reading from when you were in another age group, run again. Name that cohort, and the reading by its id.
+- From 0.8.5, bean can give each reading the cohort of its own date. It needs two records that you state once ([REFERENCE.md](REFERENCE.md#the-cohort-from-two-records)). You do not have to state them: `-cohort` needs neither.
 - What bean checks here, and what no check shows: [ARCHITECTURE.md](ARCHITECTURE.md#what-bean-checks-in-a-comparison).
 - With no host, build the same pack from the survey's files (REFERENCE.md). Its SHA-256 is the same.
 

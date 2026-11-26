@@ -68,7 +68,7 @@ bean compare -sex male -age 30-39 -type 'lab.*'
 bean compare -sex female -age 40-49 3fa9c1
 ```
 
-`-sex` and `-age` are required. bean does not know yours, and never guesses a cohort. `-age` is a range of whole years, both ends included: for someone of 35, try `30-39`. A single year leaves too few people. 80 means 80 and over, because NHANES records it so. Give record ids, or `-type` for every current reading of a type.
+`-sex` and `-age` are required. bean does not know yours, and never guesses a cohort. This way does not read the records `person.sex` and `person.birth`: only `bean compare -pack` does ([REFERENCE.md](REFERENCE.md#the-cohort-from-two-records)). `-age` is a range of whole years, both ends included: for someone of 35, try `30-39`. A single year leaves too few people. 80 means 80 and over, because NHANES records it so. Give record ids, or `-type` for every current reading of a type.
 
 ```
 Compared with NHANES 2017-2018: male, age 30-39.

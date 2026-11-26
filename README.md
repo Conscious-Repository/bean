@@ -65,7 +65,7 @@ It needs Go and `curl`, and downloads about 7 MB from CDC. With Python and `pip 
 
 | You need | For | Install on macOS |
 |---|---|---|
-| Go 1.24 or later | Building `bean`. On the first build, Go downloads the toolchain that `go.mod` names (go1.27.3). | `brew install go` |
+| Go 1.24 or later | Building `bean`. On the first build, Go downloads the toolchain that `go.mod` names (go1.27.4). | `brew install go` |
 | `pdftotext` | Lab report PDFs only | `brew install poppler` |
 | `make` | `make page`, the page that checks a bundle in a browser | It comes with Xcode's command line tools |
 | Python 3 | Optional: the checks that use no bean (`tools/second`, `tools/compare`) | `brew install python`, then `pip install -r tools/requirements.txt` |
@@ -240,6 +240,8 @@ bean-pack-nhanes -out nhanes.pack *.xpt                              # build the
 bean compare -pack nhanes.pack                                       # what it holds
 bean compare -pack nhanes.pack -cohort male-30-39 -type 'lab.*'      # compare
 ```
+
+With a pack on record and no `-cohort`, bean takes each reading's cohort from its date and from two records: `person.sex` and `person.birth`. Both are optional ([REFERENCE.md](docs/REFERENCE.md#the-cohort-from-two-records)).
 
 Today you build a pack, someone gives you the file, or you fetch one from a host with `curl`. Any person can run a [read-only host](examples/pack-host/README.md). Keep the pack file: your log names it by its SHA-256 and does not hold it.
 
