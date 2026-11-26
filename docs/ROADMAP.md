@@ -48,6 +48,7 @@ The sender should be able to review and stop each permission, and each reader sh
 - Whether bean ever keeps a package or a pack with the log, so that an export holds it.
 - Where code lives. Proposed: what runs offline is here, and what listens on a network is not.
 - Whether the documents name a publisher. The rule is that they name none (DECISIONS 318). Since 2026-11-23 some name one: EXTERNAL-PACKS.md, `STELE-SHA256SUMS`, FIRST-RUN.md with a second address of the same hand, and one line of UPGRADING.md. So do `examples/coverage`, in its README, a selection file and the default address of `fetch.py`, and a format name in `bean coverage`. A review raised this, and not the owner (DECISIONS 346).
+- Whether the list of a pack with no record names `-accept-pack`, and whether the flag reads upper-case digits or takes the value twice. Three audits left each as it is (DECISIONS 351, 352).
 - Whether the relay of DECISIONS 318 comes before a tool reads a pointer. Three reviews of 2026-11-25 said that it waits (DECISIONS 346).
 
 ## Later

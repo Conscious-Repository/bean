@@ -173,7 +173,7 @@ It is `examples/pool/`: a short script and a README. **It is built (DECISIONS 33
 6. **Find and fetch.** Another user finds the event with `nak req -k 1063`, and fetches the pack with `curl`. They hold it to the SHA-256 and the size of the event, each of which the event must name once. That shows that the host served what the pointer named, and no more.
 7. **The other two files.** They fetch the archive and the survey pack from the URLs that the pack names. They hold each to the SHA-256 and the size that the pack states.
 8. **Build again.** They build the pack from the archive and the survey pack, with the builder, and with the two URLs as the fetched pack names them. They compare the SHA-256 with the file that they fetched. This is the step that checks something.
-9. **Compare.** They run `bean compare -pack … -accept-pack`, with the SHA-256 that the pointer names.
+9. **Compare.** They run `bean compare -pack … -accept-pack`, with the SHA-256 that the pointer names. The example takes it from the pointer that it fetched. A person takes it from a source other than the pack's host.
 
 ### What the script prints, and when
 
