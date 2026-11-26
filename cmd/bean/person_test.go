@@ -658,3 +658,41 @@ func TestComparePackFromRecordsOnAFrozenLog(t *testing.T) {
 		t.Errorf("a frozen log: %d\n%s\n%s", code, out, errs)
 	}
 }
+
+// With BEAN_NHANES_DIR set to a folder of CDC's own files: the pack of the
+// six files is one that bean has on record, with no hook of a test. The
+// two readings of DECISIONS 345 (b), the same value ten years apart, each
+// get the cohort of their own date. The numbers are statistics of the
+// public files, and are the ones that 345 (b) states.
+func TestRealPackTakesTheCohortFromTheRecords(t *testing.T) {
+	data := os.Getenv("BEAN_NHANES_DIR")
+	if data == "" {
+		t.Skip("BEAN_NHANES_DIR is not set")
+	}
+	path, digest := packFrom(t, data, "DEMO_J", "TCHOL_J", "HDL_J", "GHB_J", "CBC_J", "BMX_J")
+	if digest != "10555d6769421d4305cbcd4ff14960d8b966ddd829a50581a9584a60a84d29e2" {
+		t.Fatalf("the pack of CDC's six files has the SHA-256 %s", digest)
+	}
+	dir := t.TempDir()
+	run(t, dir, "", "init")
+	add(t, dir, "person.sex", "male")
+	add(t, dir, "person.birth", "1986")
+	old, recent := cholesterol(t, dir, "160", "2014-06-01"), cholesterol(t, dir, "160", "2024-06-01")
+	out, errs, code := run(t, dir, "", "compare", "-pack", path, "-type", "lab.*")
+	if code != 0 || !strings.Contains(out, "This is the NHANES 2017-2018 pack that bean has on record.") {
+		t.Fatalf("%d\n%s\n%s", code, out, errs)
+	}
+	for id, want := range map[string][2]string{old: {"male-20-29", "46.7"}, recent: {"male-30-39", "18.9"}} {
+		cohort, row := cohortOfRow(t, out, id)
+		if fields := strings.Fields(row); cohort != want[0] || len(fields) < 6 || fields[5] != want[1] {
+			t.Errorf("want the cohort %s and the percentile %s in the row:\n%s", want[0], want[1], row)
+		}
+	}
+	// One run with -cohort sets both against one cohort: what 345 (b) mends.
+	out, _, _ = run(t, dir, "", "compare", "-pack", path, "-cohort", "male-30-39", "-type", "lab.*")
+	for _, id := range []string{old, recent} {
+		if fields := strings.Fields(packRow(out, id)); len(fields) < 5 || fields[4] != "18.9" {
+			t.Errorf("with -cohort male-30-39, want 18.9 in the row: %s", packRow(out, id))
+		}
+	}
+}

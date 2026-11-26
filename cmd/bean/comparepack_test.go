@@ -23,9 +23,16 @@ import (
 // its SHA-256.
 func testPack(t *testing.T) (string, string) {
 	t.Helper()
+	return packFrom(t, "../../internal/nhanes/testdata", "TCHOL_J", "HDL_J", "DEMO_J")
+}
+
+// packFrom builds a pack from NHANES files of a folder and returns its
+// path and its SHA-256.
+func packFrom(t *testing.T, dir string, names ...string) (string, string) {
+	t.Helper()
 	files := map[string]nhanes.SourceFile{}
-	for _, name := range []string{"TCHOL_J", "HDL_J", "DEMO_J"} {
-		data, err := os.ReadFile(filepath.Join("../../internal/nhanes/testdata", name+".XPT"))
+	for _, name := range names {
+		data, err := os.ReadFile(filepath.Join(dir, name+".XPT"))
 		if err != nil {
 			t.Fatal(err)
 		}
