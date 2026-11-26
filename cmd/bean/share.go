@@ -436,6 +436,9 @@ func chooseForShare(s *core.Store, l *core.Loaded, recs []*core.Record, pos []st
 	// A record is read with the record it is about: a comparison with its
 	// reading, an estimate with its meal. That one comes along, and only
 	// that one: what it is about in turn stays, unless it is chosen too.
+	// A person's sex and birth never come along: anyone can write a record
+	// about them, and it must not carry them out. They go when the person
+	// chooses them, by id or by a type that matches their own.
 	broughtBy := map[string]string{}
 	var leftOut []string
 	for _, id := range slices.Sorted(maps.Keys(chosen)) {
@@ -447,6 +450,8 @@ func chooseForShare(s *core.Store, l *core.Loaded, recs []*core.Record, pos []st
 				leftOut = append(leftOut, fmt.Sprintf("  not shared: %s, which %s is about: it is not in this log", target[7:19], id[7:19]))
 			case notShareable(l, deleted, t) != "":
 				leftOut = append(leftOut, fmt.Sprintf("  not shared: %s, which %s is about: %s", target[7:19], id[7:19], notShareable(l, deleted, t)))
+			case t.Type == pack.SexType || t.Type == pack.BirthType:
+				leftOut = append(leftOut, fmt.Sprintf("  not shared: %s, which %s is about: it is your %s record, which goes only when you choose it. Name it by its id to share it.", target[7:19], id[7:19], t.Type))
 			default:
 				broughtBy[target] = id
 			}
