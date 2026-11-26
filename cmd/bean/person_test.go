@@ -77,6 +77,19 @@ func cohortOfRow(t *testing.T, out, id string) (string, string) {
 	return "", ""
 }
 
+// The helper tells a cohort, a dash and an empty cell apart: a test that
+// reads the column with it holds what the column shows.
+func TestCohortOfRowReadsItsOwnColumn(t *testing.T) {
+	id := "sha256:" + strings.Repeat("ab", 32)
+	table := "DATE  VALUE  COHORT      PERCENTILE  ID\n" +
+		"2014  160    %s  -           " + id[7:19] + "\n"
+	for cell, want := range map[string]string{"male-20-29": "male-20-29", "-         ": "-", "          ": ""} {
+		if got, _ := cohortOfRow(t, strings.Replace(table, "%s", cell, 1), id); got != want {
+			t.Errorf("the cell %q reads as %q, want %q", cell, got, want)
+		}
+	}
+}
+
 // TestComparePackFromRecords: with no -cohort, each row gets the cohort of
 // the age on its own date, from person.sex and person.birth. The numbers
 // are those of a run that names that cohort. Nothing is saved.
@@ -123,7 +136,7 @@ func TestComparePackFromRecords(t *testing.T) {
 	}
 	// With -type, a reading of a type that the pack has no measure for is
 	// named below the table, and has no row.
-	if !strings.Contains(out, "No reference data for 1 other type: lab.tsh.") || strings.Contains(out, ids[2][7:19]) {
+	if !strings.Contains(out, "No reference data for 1 other type: lab.tsh.\nThese types have reference data, each in this unit: lab.cholesterol-total (mg/dL), lab.hdl-cholesterol (mg/dL).\n") || strings.Contains(out, ids[2][7:19]) {
 		t.Errorf("a type with no reference data, with -type:\n%s", out)
 	}
 	// The caveat on the cohort is the one of this mode, and the last line
