@@ -171,8 +171,10 @@ func (p person) cohortOf(s *core.Store, k pack.OnRecordPack, r *core.Record) (co
 			// One of the two ages is in no cohort of the pack.
 			refused = "the date lies on the edge of the pack's cohorts: name one with -cohort if it holds the age on that date"
 		}
-		if p.birthYear {
-			// Not "add": a second record with another value is a stop.
+		// A month of birth helps a reading that has a month. A reading of
+		// a whole year stays on its edge, whatever the month. And not
+		// "add": a second record with another value is a stop.
+		if p.birthYear && months.First == months.Last {
 			refused += ", or correct person.birth to a year and a month"
 		}
 		return "", refused

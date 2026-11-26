@@ -42,10 +42,10 @@ Do not run `purge` or `gc` on the copies. Only they erase anything.
 
 No record changes, and `bean verify` and `bean ls` print the same for an existing log. `bean compare -pack` can take each reading's cohort from two records that you state ([DECISIONS 348](docs/DECISIONS.md)).
 
-- **With `-cohort`, a run that compares prints the same lines** and saves the same claim. It reads neither of the two records. An error of usage shows a new usage line.
+- **With `-cohort`, a run that compares prints the same lines** and saves the same claim, with the new version in its adapter. It reads neither of the two records. An error of usage shows a new usage line.
 - **With only `-pack`, nothing changes.** bean lists what the pack holds.
 - **`bean compare -pack` with readings and no `-cohort` was an error, with exit 2.** It started with the words `name a cohort of the pack with -cohort:`. In three cases it is still that error, with a sentence more. They are: with `-save`, with a pack that is not on record, and when no `person.sex` or no `person.birth` record counts.
-- **The new way is for a pack on record, with no `-save`.** bean then checks the selection and reads the log, as it does with `-cohort`. An error there comes first. Record ids beside `-type` give exit 2. No reading that matches gives exit 1.
+- **The new way is for a pack on record, with no `-save`.** bean then checks the selection and reads the log, as it does with `-cohort`. An error there comes first. Record ids beside `-type` give exit 2. No reading that matches gives exit 1. As every read, it writes the cache in `local/cache`.
 - **That way can now delete a saved comparison.** As every `bean compare` with readings, it first deletes the saved comparisons of a reading that was corrected or deleted. In 0.8.4 this command stopped before that. It does so also when it then stops for a record.
 - **With both records, that command prints a table.** Each row has the cohort of the age on the reading's own date, in a new COHORT column. [REFERENCE.md](docs/REFERENCE.md#the-cohort-from-two-records) has the rules. It saves no comparison.
 - **Which records count.** A record counts when your identity signed it about you, with the source `self` and no ref. `bean add` with no `-agent` writes it so.

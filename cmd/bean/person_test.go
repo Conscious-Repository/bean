@@ -249,8 +249,8 @@ func TestComparePackRowsWithNoCohort(t *testing.T) {
 	// With a birth of a year alone.
 	rows := map[string]string{
 		appendedIDs[0]:                           noDate,
-		appendedIDs[1]:                           "",           // all of 2015: 28 or 29
-		appendedIDs[2]:                           edge + month, // all of 2016: 29 or 30
+		appendedIDs[1]:                           "",   // all of 2015: 28 or 29
+		appendedIDs[2]:                           edge, // all of 2016: 29 or 30, whatever the month of birth: no advice of a month
 		cholesterol(t, dir, "160", "2999-01-01"): after,
 		cholesterol(t, dir, "160", "1985-12-31"): before,
 		cholesterol(t, dir, "160", "1986-06-01"): maybe,            // the year of the birth: no age is sure
