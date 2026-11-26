@@ -279,7 +279,7 @@ func TestShareLeavesPersonRecordsHome(t *testing.T) {
 	out, errs := share("-type", "lab.*")
 	holds(out, map[string]bool{hdl: true, ldl: true, tsh: true, ratio: true, birth: false, sex: false})
 	for _, want := range []string{
-		"not shared: " + birth[7:19] + ", which " + hdl[7:19] + " is about: it is your person.birth record, which goes only when you choose it. Name it by its id to share it.",
+		"not shared: " + birth[7:19] + ", which " + hdl[7:19] + " is about: it is your person.birth record, which goes only when you choose it. Name it by its id, or pick it with -type person.birth.",
 		"not shared: " + sex[7:19] + ", which " + ldl[7:19] + " is about: it is your person.sex record",
 	} {
 		if !strings.Contains(errs, want) {

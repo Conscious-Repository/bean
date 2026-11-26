@@ -451,7 +451,7 @@ func chooseForShare(s *core.Store, l *core.Loaded, recs []*core.Record, pos []st
 			case notShareable(l, deleted, t) != "":
 				leftOut = append(leftOut, fmt.Sprintf("  not shared: %s, which %s is about: %s", target[7:19], id[7:19], notShareable(l, deleted, t)))
 			case t.Type == pack.SexType || t.Type == pack.BirthType:
-				leftOut = append(leftOut, fmt.Sprintf("  not shared: %s, which %s is about: it is your %s record, which goes only when you choose it. Name it by its id to share it.", target[7:19], id[7:19], t.Type))
+				leftOut = append(leftOut, fmt.Sprintf("  not shared: %s, which %s is about: it is your %s record, which goes only when you choose it. Name it by its id, or pick it with -type %s.", target[7:19], id[7:19], t.Type, t.Type))
 			default:
 				broughtBy[target] = id
 			}
