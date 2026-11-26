@@ -37,7 +37,7 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 		fail(fmt.Errorf("%s: %w", path, err))
 	}
 	if accept != "" && accept != p.SHA256 {
-		fail(fmt.Errorf("this is not the pack that -accept-pack names.\n  SHA-256 of the file:  %s\n  -accept-pack names:   %s\nCompare the SHA-256 with the one that the pack's publisher states. A file that differs may be another pack, or a download that was cut short", p.SHA256, accept))
+		fail(fmt.Errorf("this is not the pack that -accept-pack names: the file has SHA-256 %s, and -accept-pack names %s. Compare the SHA-256 with the one that the pack's publisher states. A file that differs may be another pack, or a download that was cut short", p.SHA256, accept))
 	}
 	menu := slices.Sorted(maps.Keys(p.Cohorts))
 	if cohort == "" && len(pos) == 0 && typ == "" && !save {
@@ -68,7 +68,7 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 	// file that is not the one on record is. Whoever built it chose its
 	// tables, its caveats and what each reading is set against.
 	if !onRec && !unknown && accept == "" {
-		fail(fmt.Errorf("bean has no record of this pack (SHA-256 %s). Whoever built it chose its tables, its caveats and what each reading is set against. Compare its SHA-256 with the one that its publisher states, or build the pack again from the files that it names. Then pass -accept-pack <sha256> with the SHA-256 that the publisher states: bean uses the pack only when the two are the same, and each result says that bean has no record of it. -unknown-pack takes any file", p.SHA256))
+		fail(fmt.Errorf("bean has no record of this pack (SHA-256 %s). Whoever built it chose its tables, its caveats and what each reading is set against. Compare its SHA-256 with the one that its publisher states, or build the pack again from the files that it names. Then pass -accept-pack <sha256> with the SHA-256 that the publisher states. Take it from the publisher, not from this message. bean uses the pack only when the two are the same, and each result says that bean has no record of it. -unknown-pack takes any file and checks nothing", p.SHA256))
 	}
 	readings, l := compareReadings(s, typ, pos)
 	var who person

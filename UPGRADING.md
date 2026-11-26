@@ -43,10 +43,9 @@ Do not run `purge` or `gc` on the copies. Only they erase anything.
 No record changes, and `bean verify` and `bean ls` print the same for an existing log. `bean compare -pack` gets one flag ([DECISIONS 351](docs/DECISIONS.md)).
 
 - **`-accept-pack <sha256>` uses a pack that bean has no record of, when the file has that SHA-256.** Pass the SHA-256 that the pack's publisher states.
-- **When the file has another SHA-256, bean stops with exit 1.** It prints both values. A value that is not 64 lower-case hex digits is an error of use, with exit 2.
+- **When the file has another SHA-256, bean stops with exit 1, and prints both values.** A value that is not 64 lower-case hex digits is an error of use, with exit 2. So is an empty value.
 - **The results are those of `-unknown-pack`.** Each row says `pack NOT on record`, the warning stays, and a saved claim holds the same texts. bean stores nothing of the flag.
-- **`-unknown-pack` works as before.** The two flags together are an error of use, with exit 2.
-- **With a pack on record, `-accept-pack` checks the SHA-256 too.** With the same value nothing changes. With another, bean stops.
+- **`-unknown-pack` works as before.** The two flags together are an error of use, with exit 2. With a pack on record, `-accept-pack` checks the SHA-256 too, and changes nothing else.
 - **The cohort from two records is still for a pack on record only.** `-accept-pack` does not change that.
 - **The refusal of a pack with no record has new words.** It names `-accept-pack <sha256>` first, then `-unknown-pack`. A script that looks for `pass -unknown-pack` finds it no longer.
 

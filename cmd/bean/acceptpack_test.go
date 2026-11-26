@@ -26,7 +26,7 @@ func TestComparePackAcceptPack(t *testing.T) {
 	// Another value: bean stops and shows both, with or without readings.
 	for _, a := range [][]string{append(args, "-accept-pack", other), {"compare", "-pack", path, "-accept-pack", other}} {
 		out, errs, code := run(t, dir, "", a...)
-		if code != 1 || out != "" || !strings.Contains(errs, digest) || !strings.Contains(errs, other) || !strings.Contains(errs, "the one that the pack's publisher states") {
+		if code != 1 || out != "" || !strings.Contains(errs, "the file has SHA-256 "+digest+", and -accept-pack names "+other+".") || !strings.Contains(errs, "the one that the pack's publisher states") || strings.Contains(errs, `\x`) {
 			t.Errorf("%v: %d\n%s\n%s", a, code, out, errs)
 		}
 	}
@@ -39,13 +39,15 @@ func TestComparePackAcceptPack(t *testing.T) {
 		"both flags":   append(args, "-accept-pack", digest, "-unknown-pack"),
 		"no pack":      {"compare", "-accept-pack", digest, "-sex", "male", "-age", "30-39", ids[0]},
 		"a typo, menu": {"compare", "-pack", path, "-accept-pack", "x"},
+		"empty":        append(args, "-accept-pack", ""),
+		"empty, both":  append(args, "-accept-pack=", "-unknown-pack"),
 	} {
 		out, errs, code := run(t, dir, "", a...)
 		if code != 2 || out != "" || !strings.Contains(errs, "usage") {
 			t.Errorf("%s: %d\n%s\n%s", name, code, out, errs)
 		}
 	}
-	if _, errs, _ := run(t, dir, "", append(args, "-accept-pack", "x")...); !strings.Contains(errs, "-accept-pack takes the SHA-256 of a pack: 64 lower-case hex digits") {
+	if _, errs, _ := run(t, dir, "", append(args, "-accept-pack", "x")...); !strings.Contains(errs, "-accept-pack takes the SHA-256 of a pack: 64 hex digits in lower case, with no prefix") {
 		t.Errorf("a malformed value: %s", errs)
 	}
 	if _, errs, _ := run(t, dir, "", append(args, "-accept-pack", digest, "-unknown-pack")...); !strings.Contains(errs, "pass -accept-pack or -unknown-pack, not both") {

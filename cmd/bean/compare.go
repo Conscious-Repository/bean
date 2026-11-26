@@ -108,11 +108,15 @@ func cmdCompare(s *core.Store, args []string) {
 			badArg(errors.New("with -pack, name a cohort of the pack's menu with -cohort: -sex, -age, -where and -unknown-files are for the files"))
 		}
 		// The value names one pack: a typo must not read as a pack that
-		// differs. One flag is enough, and two would leave one unused.
-		if *acceptPack != "" && !pack.IsDigest(*acceptPack) {
-			badArg(fmt.Errorf("-accept-pack takes the SHA-256 of a pack: 64 lower-case hex digits, not %q", *acceptPack))
+		// differs, and an empty value, as from a variable that is not set,
+		// must not read as no flag. One flag is enough, and two would
+		// leave one unused.
+		accepted := false
+		fs.Visit(func(f *flag.Flag) { accepted = accepted || f.Name == "accept-pack" })
+		if accepted && !pack.IsDigest(*acceptPack) {
+			badArg(fmt.Errorf("-accept-pack takes the SHA-256 of a pack: 64 hex digits in lower case, with no prefix, not %q", *acceptPack))
 		}
-		if *acceptPack != "" && *unknownPack {
+		if accepted && *unknownPack {
 			badArg(errors.New("pass -accept-pack or -unknown-pack, not both"))
 		}
 		comparePack(s, *packPath, *packCohort, *typ, pos, *save, *unknownPack, *acceptPack)
