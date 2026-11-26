@@ -544,7 +544,7 @@ func printComparisons(w io.Writer, rows []comparison, head, known string, all, o
 	if ownCohort {
 		cohortHead = "COHORT\t"
 	}
-	cohortOf := func(c comparison) string {
+	cohortCell := func(c comparison) string {
 		switch {
 		case !ownCohort:
 			return ""
@@ -579,7 +579,7 @@ func printComparisons(w io.Writer, rows []comparison, head, known string, all, o
 				n = strconv.Itoa(c.result.N)
 			}
 			shown++
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s-\t-\t-\t-\t-\t%s\tnot comparable: %s\t%s\n", when, r.Type, value, cohortOf(c), n, safe(c.refused), r.ID[7:19])
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s-\t-\t-\t-\t-\t%s\tnot comparable: %s\t%s\n", when, r.Type, value, cohortCell(c), n, safe(c.refused), r.ID[7:19])
 			for _, text := range c.help {
 				once(&help, text)
 			}
@@ -600,7 +600,7 @@ func printComparisons(w io.Writer, rows []comparison, head, known string, all, o
 				note = append(note, "pack NOT on record")
 			}
 			shown++
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s%s\t%s%%\t%s%%\t%s to %s\t%s\t%d\t%s\t%s\n", when, r.Type, value, cohortOf(c),
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s%s\t%s%%\t%s%%\t%s to %s\t%s\t%d\t%s\t%s\n", when, r.Type, value, cohortCell(c),
 				nhanes.Num(res.Percentile), nhanes.Num(res.Below), nhanes.Num(res.Equal), nhanes.Num(res.P25), nhanes.Num(res.P75), nhanes.Num(res.P50), res.N, strings.Join(note, ", "), r.ID[7:19])
 			for i, text := range c.caveats {
 				switch {

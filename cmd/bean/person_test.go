@@ -121,6 +121,11 @@ func TestComparePackFromRecords(t *testing.T) {
 			t.Errorf("by the records: %s\nby -cohort:     %s", a, b)
 		}
 	}
+	// With -type, a reading of a type that the pack has no measure for is
+	// named below the table, and has no row.
+	if !strings.Contains(out, "No reference data for 1 other type: lab.tsh.") || strings.Contains(out, ids[2][7:19]) {
+		t.Errorf("a type with no reference data, with -type:\n%s", out)
+	}
 	// The caveat on the cohort is the one of this mode, and the last line
 	// says how to save.
 	for _, want := range []string{"  - " + caveatFromRecords, notSavedFromRecords, "Compared 4 of 5 selected readings.", percentileMeans} {
@@ -466,8 +471,13 @@ func TestWhichPersonRecordsCount(t *testing.T) {
 	if _, errs, code := compare(); code != 2 || !strings.Contains(errs, "The log has no current person.sex and no person.birth record that counts. "+notRead+" Both are optional") || strings.Contains(errs, "bean add") {
 		t.Fatalf("only an agent's record: %d\n%s", code, errs)
 	}
-	add(t, dir, "-agent", "person.birth", "1950")
+	// That is said only of a type that is missing. The person's own sex
+	// counts now: the agent's record of sex is no reason for the stop.
 	sex := add(t, dir, "person.sex", "female")
+	if _, errs, code := compare(); code != 2 || !strings.Contains(errs, "The log has no current person.birth record that counts. Both are optional") {
+		t.Fatalf("an agent's sex beside the person's, and no birth: %d\n%s", code, errs)
+	}
+	add(t, dir, "-agent", "person.birth", "1950")
 	if _, errs, code := compare(); code != 2 || !strings.Contains(errs, "The log has no current person.birth record that counts. "+notRead) {
 		t.Fatalf("an agent's birth beside the person's sex: %d\n%s", code, errs)
 	}
