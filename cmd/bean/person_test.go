@@ -150,6 +150,10 @@ func TestComparePackFromRecords(t *testing.T) {
 	if ls, _, _ := run(t, dir, "", "ls", "-all", "-type", "comparison.*"); ls != "" {
 		t.Errorf("a run with no -cohort saved a comparison:\n%s", ls)
 	}
+	// Record ids beside -type: with a pack on record, bean says that.
+	if _, errs, code := run(t, dir, "", "compare", "-pack", path, "-type", "lab.*", old); code != 2 || !strings.Contains(errs, "say which readings to compare: record ids, or -type, and not both") {
+		t.Errorf("ids beside -type: %d\n%s", code, errs)
+	}
 	// -unknown-pack changes nothing here: the pack is one on record.
 	plain, _, _ := run(t, dir, "", "compare", "-pack", path, "-type", "lab.*")
 	if same, _, code := run(t, dir, "", "compare", "-pack", path, "-unknown-pack", "-type", "lab.*"); code != 0 || same != plain || !strings.Contains(same, "male-20-29") {
@@ -326,7 +330,7 @@ func TestComparePackStopsOnTheRecords(t *testing.T) {
 	// records and where their rules are. It has no command to copy: whoever
 	// runs this may be the person's assistant, and the two are optional.
 	out, errs, code := compare(dir)
-	if code != 2 || out != "" || !strings.HasPrefix(errs, "bean: "+cohort) || !strings.Contains(errs, "The log has no current person.sex and no person.birth that your identity signed. Both are optional, and -cohort needs neither. docs/REFERENCE.md, \"The cohort from two records\", has the rules and says who can read them") || strings.Contains(errs, "bean add") || strings.Contains(errs, "does not read") {
+	if code != 2 || out != "" || !strings.HasPrefix(errs, "bean: "+cohort) || !strings.Contains(errs, "The log has no current person.sex and no person.birth record that counts. Both are optional, and -cohort needs neither. docs/REFERENCE.md, \"The cohort from two records\", has the rules and says who can read them") || strings.Contains(errs, "bean add") || strings.Contains(errs, "does not read") {
 		t.Errorf("no record: %d\n%s\n%s", code, out, errs)
 	}
 	// A record that was deleted is not a record that bean does not read.
@@ -350,8 +354,8 @@ func TestComparePackStopsOnTheRecords(t *testing.T) {
 	twoValues := "do not state one value. Correct one with bean add %s <value> -corrects <id>, or delete one with bean purge <id>. Or " + cohort
 	wrongForm := "is not a year of four digits with no unit, or a year and a month as 1986-05. Correct it with bean add person.birth <value> -corrects <id>. Or " + cohort
 	for name, tc := range map[string]stop{
-		"no birth": {sex: [][]string{{"male"}}, code: 2, want: []string{cohort, "The log has no current person.birth that your identity signed."}, never: []string{"no current person.sex"}},
-		"no sex":   {birth: [][]string{{"1986"}}, code: 2, want: []string{cohort, "The log has no current person.sex that your identity signed."}, never: []string{"no person.birth"}},
+		"no birth": {sex: [][]string{{"male"}}, code: 2, want: []string{cohort, "The log has no current person.birth record that counts."}, never: []string{"no current person.sex"}},
+		"no sex":   {birth: [][]string{{"1986"}}, code: 2, want: []string{cohort, "The log has no current person.sex record that counts."}, never: []string{"no person.birth"}},
 		// Two values of sex can both be true, each for its own dates: -cohort
 		// comes before the correction.
 		"two sexes":                  {sex: [][]string{{"male"}, {"female"}}, birth: [][]string{{"1986"}}, code: 1, want: []string{"the records person.sex (", "do not state one value, and bean takes one value for every date. If each holds for its own dates, " + cohort, ". If one is wrong, correct it with bean add person.sex <value> -corrects <id>, or delete it with bean purge <id>"}},
@@ -451,12 +455,12 @@ func TestWhichPersonRecordsCount(t *testing.T) {
 	// The record that this is said of was written with bean add -agent: the
 	// words name no command, and nothing that an assistant can do.
 	const notRead = "What it holds of these types, bean does not read: only a record that your identity signed about you counts, with the source self and no ref. A record of an agent or of a peer never counts."
-	if _, errs, code := compare(); code != 2 || !strings.Contains(errs, "The log has no current person.sex and no person.birth that your identity signed. "+notRead+" Both are optional") || strings.Contains(errs, "bean add") {
+	if _, errs, code := compare(); code != 2 || !strings.Contains(errs, "The log has no current person.sex and no person.birth record that counts. "+notRead+" Both are optional") || strings.Contains(errs, "bean add") {
 		t.Fatalf("only an agent's record: %d\n%s", code, errs)
 	}
 	add(t, dir, "-agent", "person.birth", "1950")
 	sex := add(t, dir, "person.sex", "female")
-	if _, errs, code := compare(); code != 2 || !strings.Contains(errs, "The log has no current person.birth that your identity signed. "+notRead) {
+	if _, errs, code := compare(); code != 2 || !strings.Contains(errs, "The log has no current person.birth record that counts. "+notRead) {
 		t.Fatalf("an agent's birth beside the person's sex: %d\n%s", code, errs)
 	}
 	number := add(t, dir, "person.birth", "1990")
@@ -529,7 +533,7 @@ func TestWhichPersonRecordsCount(t *testing.T) {
 	if _, errs, code := run(t, dir, "", "purge", sex); code != 0 {
 		t.Fatal(errs)
 	}
-	if _, errs, code := compare(); code != 2 || !strings.Contains(errs, "The log has no current person.sex that your identity signed. "+notRead) {
+	if _, errs, code := compare(); code != 2 || !strings.Contains(errs, "The log has no current person.sex record that counts. "+notRead) {
 		t.Fatalf("after a deletion: %d\n%s", code, errs)
 	}
 }
@@ -542,7 +546,9 @@ func TestComparePackFromRecordsNeedsAPackOnRecord(t *testing.T) {
 	path, _ := testPack(t)
 	add(t, dir, "person.sex", "male")
 	add(t, dir, "person.birth", "1986-05")
-	for _, args := range [][]string{{"compare", "-pack", path, ids[0]}, {"compare", "-pack", path, "-unknown-pack", ids[0]}, {"compare", "-pack", path, "-unknown-pack", "-type", "lab.*"}} {
+	// The last has record ids beside -type: for a pack that is not on
+	// record, the first error is the one of before.
+	for _, args := range [][]string{{"compare", "-pack", path, ids[0]}, {"compare", "-pack", path, "-unknown-pack", ids[0]}, {"compare", "-pack", path, "-unknown-pack", "-type", "lab.*"}, {"compare", "-pack", path, "-type", "lab.*", ids[0]}} {
 		out, errs, code := run(t, dir, "", args...)
 		if code != 2 || out != "" || !strings.Contains(errs, "name a cohort of the pack with -cohort: female-20-29, ") || !strings.Contains(errs, "bean takes a cohort from your records only with a pack that it has on record") {
 			t.Errorf("%v: %d\n%s\n%s", args, code, out, errs)

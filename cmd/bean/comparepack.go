@@ -47,15 +47,16 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 	if cohort != "" && !ok {
 		badArg(fmt.Errorf("the pack has no cohort %q. It has: %s", cohort, strings.Join(menu, ", ")))
 	}
-	if (len(pos) == 0) == (typ == "") {
-		badArg(errors.New("say which readings to compare: record ids, or -type, and not both"))
-	}
 	// With no cohort, each row gets its own from two records of the person.
-	// bean knows whom a cohort holds only for a pack on record.
+	// bean knows whom a cohort holds only for a pack on record. For any
+	// other pack this is the first error, as it was before.
 	onRec := pack.IsKnown(p.SHA256)
 	fromRecords := cohort == ""
 	if fromRecords && !onRec {
 		badArg(errNoCohortForUnknownPack(strings.Join(menu, ", ")))
+	}
+	if (len(pos) == 0) == (typ == "") {
+		badArg(errors.New("say which readings to compare: record ids, or -type, and not both"))
 	}
 	// A pack that bean has no record of is used only when told to, as a
 	// file that is not the one on record is. Whoever built it chose its
