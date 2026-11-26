@@ -58,7 +58,7 @@ func TestComparePackAcceptPack(t *testing.T) {
 	// gives no command ready to run.
 	_, errs, code = run(t, dir, "", args...)
 	if code != 1 || !strings.Contains(errs, "(SHA-256 "+digest+")") || strings.Contains(errs, "-accept-pack "+digest) ||
-		strings.Index(errs, "-accept-pack <sha256>") < 0 || strings.Index(errs, "-accept-pack <sha256>") > strings.Index(errs, "-unknown-pack") {
+		!strings.Contains(errs, "-accept-pack <sha256>") || strings.Index(errs, "-accept-pack <sha256>") > strings.Index(errs, "-unknown-pack") {
 		t.Errorf("the refusal: %d\n%s", code, errs)
 	}
 }
