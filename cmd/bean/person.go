@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -173,10 +172,4 @@ func (p person) cohortOf(s *core.Store, k pack.OnRecordPack, r *core.Record) (co
 		return "", refused
 	}
 	return id, ""
-}
-
-// errNoCohortForUnknownPack: bean knows the sex and the ages of a cohort
-// only for a pack on record. A pack's words for a cohort are its builder's.
-func errNoCohortForUnknownPack(menu string) error {
-	return errors.New("name a cohort of the pack with -cohort: " + menu + ". bean takes a cohort from your records only with a pack that it has on record: it does not know whom a cohort of this pack holds")
 }

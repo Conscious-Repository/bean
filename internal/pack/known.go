@@ -23,7 +23,7 @@ type OnRecordPack struct {
 	// groups says whom each cohort holds: its sex and its ages. No check
 	// of a saved comparison reads it. bean compare -pack reads it when the
 	// person names no cohort (DECISIONS 345).
-	groups map[string]Group
+	groups map[string]group
 }
 
 // The caveats that a claim adds to its pack's, in this order
@@ -183,14 +183,14 @@ const nhanesLab = "the lab that measured the reading and NHANES used their own i
 // sexByAge is the menu of the NHANES pack: each sex, by ten years of age
 // from 20 to 79, and 80 and over. It gives each cohort in words, and the
 // sex and the ages that it holds.
-func sexByAge() (map[string]string, map[string]Group) {
-	texts, groups := map[string]string{}, map[string]Group{}
+func sexByAge() (map[string]string, map[string]group) {
+	texts, groups := map[string]string{}, map[string]group{}
 	for _, sex := range []string{"female", "male"} {
 		for from := 20; from < 80; from += 10 {
 			id := fmt.Sprintf("%s-%d-%d", sex, from, from+9)
-			texts[id], groups[id] = fmt.Sprintf("%s, age %d-%d", sex, from, from+9), Group{sex, from, from + 9}
+			texts[id], groups[id] = fmt.Sprintf("%s, age %d-%d", sex, from, from+9), group{sex, from, from + 9}
 		}
-		texts[sex+"-80-over"], groups[sex+"-80-over"] = sex+", age 80 and over", Group{sex, 80, -1}
+		texts[sex+"-80-over"], groups[sex+"-80-over"] = sex+", age 80 and over", group{sex, 80, -1}
 	}
 	return texts, groups
 }

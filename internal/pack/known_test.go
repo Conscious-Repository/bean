@@ -44,7 +44,7 @@ func TestWhatIsOnRecordNeverChanges(t *testing.T) {
 	}
 	// Whom each cohort of a pack on record holds. A change moves the
 	// cohort that a reading gets from the person's records.
-	groups := map[string]map[string]Group{}
+	groups := map[string]map[string]group{}
 	for digest, k := range Known {
 		groups[digest] = k.groups
 	}

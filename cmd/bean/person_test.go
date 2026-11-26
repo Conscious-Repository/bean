@@ -62,8 +62,10 @@ func cohortOfRow(t *testing.T, out, id string) (string, string) {
 			head = line
 		}
 		if strings.Contains(line, id[7:19]) && head != "" {
+			// The cell starts under the head of its column. An empty cell
+			// is not the dash of the column after it.
 			at := strings.Index(head, "COHORT")
-			if at < 0 {
+			if at < 0 || at >= len(line) || line[at] == ' ' {
 				return "", line
 			}
 			return strings.Fields(line[at:])[0], line
@@ -309,7 +311,8 @@ func TestComparePackRowsWithNoCohort(t *testing.T) {
 		t.Errorf("only a reading on an edge: %d\n%s\n%s", code, out, errs)
 	}
 	// A reading that is dated after now, by the clock of the run.
-	may := cholesterol(t, dir, "160", "2020-06-15")
+	// Both are instants, so that the zone of the machine does not matter.
+	may := cholesterol(t, dir, "160", "2020-06-15T00:00:00Z")
 	out, _, _ = runAt(t, dir, "2020-06-14T23:00:00Z", "compare", "-pack", path, may)
 	if _, row := cohortOfRow(t, out, may); !strings.Contains(row, after) {
 		t.Errorf("a reading after the clock of the run:\n%s", out)

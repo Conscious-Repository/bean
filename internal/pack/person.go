@@ -47,7 +47,7 @@ func BirthMonths(value map[string]any) (Months, bool) {
 		if n != math.Trunc(n) || n < 1000 || n > 9999 {
 			return Months{}, false
 		}
-		return calendar(strconv.Itoa(int(n))), true
+		return Months{12 * int(n), 12*int(n) + 11}, true
 	}
 	s, _ := value["s"].(string)
 	if !yearPattern.MatchString(s) && !monthPattern.MatchString(s) {
@@ -100,11 +100,11 @@ func floorDiv(a, b int) int {
 	return q
 }
 
-// Group says whom a cohort of a pack on record holds: one sex, and the
+// group says whom a cohort of a pack on record holds: one sex, and the
 // ages From to To in whole years, both ends included. To is below zero for
 // a cohort with no highest age. pack/0 has no such field: bean's code keeps
 // it beside the cohort's words, for a pack on record only.
-type Group struct {
+type group struct {
 	Sex      string
 	From, To int
 }

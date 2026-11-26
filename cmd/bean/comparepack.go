@@ -53,7 +53,7 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 	onRec := pack.IsKnown(p.SHA256)
 	fromRecords := cohort == ""
 	if fromRecords && !onRec {
-		badArg(errNoCohortForUnknownPack(strings.Join(menu, ", ")))
+		badArg(fmt.Errorf("name a cohort of the pack with -cohort: %s. bean takes a cohort from your records only with a pack that it has on record: it does not know whom a cohort of this pack holds", strings.Join(menu, ", ")))
 	}
 	if (len(pos) == 0) == (typ == "") {
 		badArg(errors.New("say which readings to compare: record ids, or -type, and not both"))
