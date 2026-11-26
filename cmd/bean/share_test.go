@@ -246,6 +246,63 @@ func TestShareBringsOneStep(t *testing.T) {
 	}
 }
 
+// A reading that is about the person's sex or birth does not carry that
+// record out. The person chooses it by id, or by a type that matches its
+// own. A reading about another reading still brings that one along.
+func TestShareLeavesPersonRecordsHome(t *testing.T) {
+	dir := t.TempDir()
+	run(t, dir, "", "init")
+	birth := add(t, dir, "person.birth", "1986-05")
+	sex := add(t, dir, "person.sex", "female")
+	hdl := add(t, dir, "lab.hdl-cholesterol", "50", "-unit", "mg/dL", "-at", "2024-06-01", "-about", birth[7:19])
+	ldl := add(t, dir, "lab.ldl-cholesterol", "100", "-unit", "mg/dL", "-at", "2024-06-01", "-about", sex[7:19])
+	tsh := add(t, dir, "lab.tsh", "2.4", "-unit", "uIU/mL", "-at", "2024-06-01")
+	ratio := add(t, dir, "lab.ratio", "2", "-at", "2024-06-01", "-about", tsh[7:19])
+	share := func(args ...string) (string, string) {
+		t.Helper()
+		out := filepath.Join(t.TempDir(), "bundle")
+		stdout, errs, code := run(t, dir, "", append([]string{"share", "-yes", "-out", out}, args...)...)
+		if code != 0 {
+			t.Fatalf("share %v: %d\n%s\n%s", args, code, stdout, errs)
+		}
+		return out, errs
+	}
+	holds := func(out string, want map[string]bool) {
+		t.Helper()
+		for id, in := range want {
+			if _, err := os.Stat(objectPath(out, id)); (err == nil) != in {
+				t.Errorf("%s in the bundle: %v, want %v", id[7:19], err == nil, in)
+			}
+		}
+	}
+
+	out, errs := share("-type", "lab.*")
+	holds(out, map[string]bool{hdl: true, ldl: true, tsh: true, ratio: true, birth: false, sex: false})
+	for _, want := range []string{
+		"not shared: " + birth[7:19] + ", which " + hdl[7:19] + " is about: it is your person.birth record, which goes only when you choose it. Name it by its id, or pick it with -type person.birth.",
+		"not shared: " + sex[7:19] + ", which " + ldl[7:19] + " is about: it is your person.sex record",
+	} {
+		if !strings.Contains(errs, want) {
+			t.Errorf("no line %q in:\n%s", want, errs)
+		}
+	}
+
+	// One reading by id brings the reading that it is about, as before.
+	out, _ = share(ratio)
+	holds(out, map[string]bool{ratio: true, tsh: true})
+
+	// Named by id, or picked by a type that matches its own, it goes.
+	out, errs = share(hdl, birth)
+	holds(out, map[string]bool{hdl: true, birth: true, sex: false})
+	if strings.Contains(errs, "not shared") {
+		t.Errorf("a named record was left out:\n%s", errs)
+	}
+	for _, typ := range []string{"*", "person.*", "person.birth"} {
+		out, _ = share("-type", typ)
+		holds(out, map[string]bool{birth: true})
+	}
+}
+
 func TestShareFilesAndComparison(t *testing.T) {
 	dir, _, ids := compareLog(t, "TCHOL_J", "DEMO_J")
 	if out, errs, code := run(t, dir, "", "compare", "-unknown-files", "-sex", "male", "-age", "30-39", "-save", ids[0]); code != 0 {

@@ -38,6 +38,16 @@ Do not run `purge` or `gc` on the copies. Only they erase anything.
 
 ## Changes
 
+### 0.8.6 (2026-11-26)
+
+No record changes, and `bean verify` and `bean ls` print the same for an existing log. Only `bean share` changes ([DECISIONS 350](docs/DECISIONS.md)).
+
+- **A share no longer carries a `person.sex` or `person.birth` record because another record is `about` it.** In 0.8.5 it did. Any record can name one with `about`: `bean add -about`, `bean append`, or an assistant's `log_entry`.
+- **Such a record now stays home, and the share says so.** A line names it: `not shared: <id>, which <id> is about: it is your person.birth record, which goes only when you choose it. Name it by its id, or pick it with -type person.birth.` A record that was corrected or deleted stays home with the line of 0.8.5.
+- **It goes when you choose it.** Name it by its id, or pick it by a type that matches its own: `*`, `person.*` or `person.birth`.
+- **A share of 0.8.5 cannot be taken back.** Only a share that held a record `about` one of the two can hold it. `bean ls -type share` lists your shares. `bean check-bundle <folder or file>` lists what one holds. A sealed file needs its six words or your key.
+- **Nothing else changes.** Any other record still brings the record it is about, one step.
+
 ### 0.8.5 (2026-11-26)
 
 No record changes, and `bean verify` and `bean ls` print the same for an existing log. `bean compare -pack` can take each reading's cohort from two records that you state ([DECISIONS 348](docs/DECISIONS.md)).
