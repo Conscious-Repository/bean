@@ -363,7 +363,7 @@ func TestComparePackRefuses(t *testing.T) {
 		"no such file":                    {[]string{"compare", "-pack", filepath.Join(dir, "none.pack")}, "no such file"},
 		"a cohort not there":              {[]string{"compare", "-pack", path, "-unknown-pack", "-cohort", "male-35-44", ids[0]}, "the pack has no cohort"},
 		"no cohort":                       {[]string{"compare", "-pack", path, ids[0]}, "name a cohort of the pack with -cohort"},
-		"a pack not on record":            {[]string{"compare", "-pack", path, "-cohort", "male-30-39", ids[0]}, "pass -unknown-pack"},
+		"a pack not on record":            {[]string{"compare", "-pack", path, "-cohort", "male-30-39", ids[0]}, "pass -accept-pack <sha256>"},
 		"-unknown-pack with no pack":      {[]string{"compare", "-unknown-pack", "-sex", "male", "-age", "30-39", ids[0]}, "usage"},
 		"-sex with a pack":                {[]string{"compare", "-pack", path, "-sex", "male", "-age", "30-39", ids[0]}, "with -pack, name a cohort"},
 		"-cohort with no pack":            {[]string{"compare", "-cohort", "male-30-39", ids[0]}, "usage"},

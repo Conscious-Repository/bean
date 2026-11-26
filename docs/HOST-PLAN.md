@@ -77,7 +77,7 @@ The static example allows exactly two paths and has no upload endpoint. A Blosso
 
 A reader can check the bytes that they fetch, and that TLS answers. What the host takes and what it keeps are settings of the publisher. A reader cannot check those.
 
-A second publisher copies what it wants of this, and asks nobody. It reads the terms of its source itself: the word to host its copies is its own. The two packs of the survey are on record for anyone who serves them. A pack of another source is not, and compares only with `-unknown-pack`. The list is in bean's code, so a new pack gets on it only by a change to bean. REFERENCE.md says that this falls short of the rule that no publisher is special.
+A second publisher copies what it wants of this, and asks nobody. It reads the terms of its source itself: the word to host its copies is its own. The two packs of the survey are on record for anyone who serves them. A pack of another source is not, and compares only with `-accept-pack` or `-unknown-pack`. The list is in bean's code, so a new pack gets on it only by a change to bean. REFERENCE.md says that this falls short of the rule that no publisher is special.
 
 ## The keys
 
@@ -201,7 +201,7 @@ No stage needs a change to bean. The owner decided that the host comes first (DE
 - The host served them, that one time, the bytes that they got. A host can serve other bytes to another reader.
 - **The SHA-256 to hold a pack to is the one in REFERENCE.md.** The one in a pointer is the pointer's word. bean computes the SHA-256 of a pack, and says whether the pack is on record.
 - **The key of a pointer says nothing.** No key of this plan signs the announcement. Nothing ties a pack to a publisher (H5). A reader can guess the publisher from the address.
-- **Anyone can publish a pointer** to any file, under any key, on any relay. Nothing in a pointer tells such a one apart. bean's list does: a pack that is not on record compares only with `-unknown-pack`.
+- **Anyone can publish a pointer** to any file, under any key, on any relay. Nothing in a pointer tells such a one apart. bean's list does: a pack that is not on record compares only with `-accept-pack` or `-unknown-pack`.
 - Not that a second person checked the digests. One hand holds the host, the relay and this repository (H4).
 
 ## The owner's to decide

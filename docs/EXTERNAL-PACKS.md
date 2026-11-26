@@ -32,7 +32,7 @@ Stele’s current 13-, 20- and 23-measure releases use `pack/2`. Clinical rows r
 | 20 | `7460c20ceab711ded88e9ad7f0dc676f5708d6f7ccf258f9d8c02fd15bf52692` |
 | 23 | `05dc27e6e78429e80b373cf1f04e9d4ee2ca4925f42391c43f6fea3d1bd5f93e` |
 
-Use the [source and matching review](https://stele.aion.bio/core/review.html) and verify the chosen download against [these checksums](STELE-SHA256SUMS). The ordinary Bean reader treats these as externally curated packs. After verifying the digest, pass `-unknown-pack` when comparing or `-accept-pack DIGEST` to the independent verifier.
+Use the [source and matching review](https://stele.aion.bio/core/review.html) and verify the chosen download against [these checksums](STELE-SHA256SUMS). The ordinary Bean reader treats these as externally curated packs. After verifying the digest, pass it with `-accept-pack` to bean and to the independent verifier.
 
 The original Bean builder and the [archive](https://stele.aion.bio/archive.html) reproduce historical claims. A reader replaying one must fetch the digest in that claim.
 
@@ -45,7 +45,7 @@ a72b2a0933f7feba57cb24ce1461c278168a7dd619b31ba7566ab87bc50c714e
 ```
 
 The file uses `pack/1` to check the source and printed panel for ambiguous test names. Bean 0.8.3 and later read this format.
-Bean treats this as an external pack. Verify the digest above before choosing `-unknown-pack`. The independent verifier takes `-accept-pack` with that digest.
+Bean treats this as an external pack. Verify the digest above. Then pass it with `-accept-pack` to bean and to the independent verifier.
 The [release review](https://stele.aion.bio/iron/review.html) gives the source files, both builders, and the rule for each iron measurement.
 
 ## Aion's fasting glucose and lipid pack

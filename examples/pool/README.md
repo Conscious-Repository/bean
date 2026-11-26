@@ -36,7 +36,7 @@ The port is 10547. Set `POOL_PORT` for another.
 | 6 | the other user | Finds the event with `nak req -k 1063`, and checks its signature with `nak verify`. Fetches the pack with `curl`. Holds it to the SHA-256 and the size of the event, and checks it with `tools/pack/check.py`. |
 | 7 | the other user | Fetches the archive and the survey pack from the URLs that the pack names. Holds each to the SHA-256 and the size that the pack states. |
 | 8 | the other user | Builds the pack again from those two files. The bytes must be the bytes that they fetched. |
-| 9 | the other user | Compares a made-up reading with the pack: `bean compare -pack … -unknown-pack`. |
+| 9 | the other user | Compares a made-up reading with the pack: `bean compare -pack … -accept-pack`, with the SHA-256 that the pointer names. |
 
 The numbers are the steps of the plan. Steps 2 and 3 are the keys and the other user's made-up log.
 

@@ -68,7 +68,7 @@ It writes over nothing.
 - Its caveats are the builder's own. They say that n counts identity ids, and not people.
 - Its `source.files` names two files: the archive as `pool-bundles.zip`, and the survey pack that the claims name as `survey.pack`.
 
-bean has no record of such a pack. `bean compare` takes it only with `-unknown-pack`, and says so with each result.
+bean has no record of such a pack. `bean compare` takes it only with `-accept-pack <sha256>` or `-unknown-pack`, and says so with each result.
 
 bean's own lines under a result are wrong for this pack. It prints "fewer than 100 people" and "in this sample". Those are forty keys of one script. For the cell of one identity, bean prints that identity's value as the median and as the middle half. It says to compare the SHA-256 "with the one that its publisher states", and this pack has no publisher. The measure keeps the survey pack's own label.
 

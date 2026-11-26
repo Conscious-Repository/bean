@@ -18,7 +18,10 @@ import (
 // bean reads it, checks every rule of its format and goes nowhere. With no
 // reading it shows the pack's menu. With readings and no cohort, each row
 // gets its own cohort from two records of the person (person.go).
-func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, unknown bool) {
+//
+// accept is the SHA-256 that the person passed with -accept-pack, or "".
+// The file must have it, whether bean has the pack on record or not.
+func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, unknown bool, accept string) {
 	// No more is read than a pack can be: a pipe states no size.
 	f, err := os.Open(path)
 	if err != nil {
@@ -32,6 +35,9 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 	p, err := pack.Read(data)
 	if err != nil {
 		fail(fmt.Errorf("%s: %w", path, err))
+	}
+	if accept != "" && accept != p.SHA256 {
+		fail(fmt.Errorf("this is not the pack that -accept-pack names.\n  SHA-256 of the file:  %s\n  -accept-pack names:   %s\nCompare the SHA-256 with the one that the pack's publisher states. A file that differs may be another pack, or a download that was cut short", p.SHA256, accept))
 	}
 	menu := slices.Sorted(maps.Keys(p.Cohorts))
 	if cohort == "" && len(pos) == 0 && typ == "" && !save {
@@ -61,8 +67,8 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 	// A pack that bean has no record of is used only when told to, as a
 	// file that is not the one on record is. Whoever built it chose its
 	// tables, its caveats and what each reading is set against.
-	if !onRec && !unknown {
-		fail(fmt.Errorf("bean has no record of this pack (SHA-256 %s). Whoever built it chose its tables, its caveats and what each reading is set against. Compare its SHA-256 with the one that its publisher states, or build the pack again from the files that it names. To use it as it is, pass -unknown-pack: each result then says so", p.SHA256))
+	if !onRec && !unknown && accept == "" {
+		fail(fmt.Errorf("bean has no record of this pack (SHA-256 %s). Whoever built it chose its tables, its caveats and what each reading is set against. Compare its SHA-256 with the one that its publisher states, or build the pack again from the files that it names. Then pass -accept-pack <sha256> with the SHA-256 that the publisher states: bean uses the pack only when the two are the same, and each result says that bean has no record of it. -unknown-pack takes any file", p.SHA256))
 	}
 	readings, l := compareReadings(s, typ, pos)
 	var who person

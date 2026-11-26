@@ -55,7 +55,7 @@ make pack                                                                     # 
 
 - **`-out` names a new file.** The builder writes over nothing.
 - **A pack holds the tests whose files you give.** `DEMO_J` is always needed. A file that a pack holds nothing of is named and left out, so `*.xpt` works. Two sets of files give a pack on record, and bean says so. The six files `DEMO_J`, `TCHOL_J`, `HDL_J`, `GHB_J`, `CBC_J` and `BMX_J` give the pack of 13 measures. With `BIOPRO_J` and `FERTIN_J` as well, the eight give the pack of 20 measures.
-- **A file that is not the one on record is refused.** It may be a download that was cut short. `-unknown-files` builds from it, and the pack then says so in its caveats. Such a pack is not the pack on record: `bean compare` takes it only with `-unknown-pack`.
+- **A file that is not the one on record is refused.** It may be a download that was cut short. `-unknown-files` builds from it, and the pack then says so in its caveats. Such a pack is not the pack on record: `bean compare` takes it only with `-accept-pack` or `-unknown-pack`.
 - **Keep the pack file.** Your log names a pack by its SHA-256 and does not hold it. A reader of a comparison that you share needs the same pack to compute it again.
 - **Use the type names and units that the pack lists.** `bean compare -pack nhanes.pack` shows them: a reading in another unit gets no number.
 
@@ -229,7 +229,7 @@ A pack is well formed or not, and a check can tell. Whether its tables are true 
 
 bean has two packs on record, each by its SHA-256: the NHANES pack of 13 measures, and the NHANES pack of 20 measures. For any other pack:
 
-- `bean compare -pack` shows a warning, and compares only with `-unknown-pack`. Each result then has the caveat above, in the output and in the saved claim.
+- `bean compare -pack` shows a warning and the pack's SHA-256. It compares only with `-accept-pack <sha256>` when the file has that SHA-256, or with `-unknown-pack` for any file. Each result then has the caveat above, in the output and in the saved claim. Neither flag puts the pack on record, and bean stores neither.
 - `bean check-bundle` and the check page mark the row: `by pack 7f3fda515b16 (NOT on record)`. They show what the reading was set against in quotation marks: it is the claim's word. They show the title only as what the sender calls it.
 - `tools/compare/reproduce.py` computes the claim again, prints `NOT on record`, and fails. A reader who trusts the pack's publisher names the SHA-256: `-accept-pack <SHA-256>`.
 
@@ -267,7 +267,7 @@ A pack is public data, and a file. It needs no account and no server of its own.
 - **A pointer is not the data.** A publisher can announce a pack: its title, its SHA-256 and where it is. A signed note on Nostr relays can carry that. The relays then hold a pointer and no health record.
 - **A host may charge for bytes.** Storage and bandwidth cost money, and a host can ask for payment before it serves a file. bean holds no wallet. A person pays a host, if they must, with their own tools.
 - **Nobody is paid to compute.** A paid comparison would send the cohort or the value to the one who computes. That is the disclosure that a pack exists to prevent.
-- **Who says that a pack is the right one.** Today: this repository states the SHA-256 of each of the two NHANES packs, below. Two builders that share no code give each from the files: `bean-pack-nhanes`, and `tools/pack/rebuild_nhanes.py` in Python.
+- **Who says that a pack is the right one.** Today: this repository states the SHA-256 of each of the two NHANES packs, below. Two builders that share no code give each from the files: `bean-pack-nhanes`, and `tools/pack/rebuild_nhanes.py` in Python. For any other pack, the person says it in each run. They compare its SHA-256 with the one that its publisher states, and pass it with `-accept-pack`.
 
 The pack that `bean-pack-nhanes` version 1 builds from the six files on record has this SHA-256. The files are `DEMO_J`, `TCHOL_J`, `HDL_J`, `GHB_J`, `CBC_J` and `BMX_J`.
 

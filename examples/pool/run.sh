@@ -171,7 +171,7 @@ echo "8. They built the pack again, and got the same bytes."
 # 9. A comparison with the fetched pack. Nothing is saved in the log.
 echo "9. They compare the made-up reading with the pack. What follows is bean's own output."
 echo
-bean -dir "$U/log" compare -pack "$U/pool.pack" -unknown-pack -cohort pool-female-20-29 -type lab.hdl-cholesterol || stop "bean did not compare with the fetched pack"
+bean -dir "$U/log" compare -pack "$U/pool.pack" -accept-pack "$(tag x)" -cohort pool-female-20-29 -type lab.hdl-cholesterol || stop "bean did not compare with the fetched pack"
 echo
 
 echo "What this run checked:"

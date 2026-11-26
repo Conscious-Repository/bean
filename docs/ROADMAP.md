@@ -2,7 +2,7 @@
 
 This file is the one place for open paths: what bean does now, what comes next, and what is not decided. Work that is done is in the git history. The reasons are in [DECISIONS.md](DECISIONS.md), and [KNOWN-GAPS.md](KNOWN-GAPS.md) lists known limits. Nothing here is final.
 
-**Where bean stands (2026-11-26).** A person keeps a log, and imports lab reports, Apple Health and CSV files. They compare a reading with a survey, or with a reference pack. They share chosen records as one sealed file, with six words or sealed to the reader's address. A reader who runs bean answers with signed notes, and the person takes them into their log. A public host serves reference packs ([EXTERNAL-PACKS.md](EXTERNAL-PACKS.md)). Release 0.8.5 is out, as a pre-release: it adds the cohort from two records (DECISIONS 348). `main` is 0.8.6, which keeps those two records out of a share unless the person chooses them (DECISIONS 350). Two people keep a log, so `main` is a release, with or without a tag (DECISIONS 310).
+**Where bean stands (2026-11-26).** A person keeps a log, and imports lab reports, Apple Health and CSV files. They compare a reading with a survey, or with a reference pack. They share chosen records as one sealed file, with six words or sealed to the reader's address. A reader who runs bean answers with signed notes, and the person takes them into their log. A public host serves reference packs ([EXTERNAL-PACKS.md](EXTERNAL-PACKS.md)). Release 0.8.5 adds the cohort from two records (DECISIONS 348). Release 0.8.6 keeps those two records out of a share unless the person chooses them (DECISIONS 350). Both are out, as pre-releases. `main` is 0.8.7, with no tag: a person accepts one pack by its SHA-256 (DECISIONS 351). Two people keep a log, so `main` is a release, with or without a tag (DECISIONS 310).
 
 ## Now: the proof of concept
 
@@ -48,7 +48,6 @@ The sender should be able to review and stop each permission, and each reader sh
 - Whether bean ever keeps a package or a pack with the log, so that an export holds it.
 - Where code lives. Proposed: what runs offline is here, and what listens on a network is not.
 - Whether the documents name a publisher. The rule is that they name none (DECISIONS 318). Since 2026-11-23 some name one: EXTERNAL-PACKS.md, `STELE-SHA256SUMS`, FIRST-RUN.md with a second address of the same hand, and one line of UPGRADING.md. So do `examples/coverage`, in its README, a selection file and the default address of `fetch.py`, and a format name in `bean coverage`. A review raised this, and not the owner (DECISIONS 346).
-- Whether a person accepts one pack by its SHA-256 in a run, in place of `-unknown-pack` for any pack. The signed list of DECISIONS 308 stands, and waits. A review raised this, and not the owner (DECISIONS 346).
 - Whether the relay of DECISIONS 318 comes before a tool reads a pointer. Three reviews of 2026-11-25 said that it waits (DECISIONS 346).
 
 ## Later
