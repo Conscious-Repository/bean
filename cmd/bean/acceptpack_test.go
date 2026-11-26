@@ -33,14 +33,15 @@ func TestComparePackAcceptPack(t *testing.T) {
 	// An error of use: a value that is not a SHA-256, both flags, and
 	// -accept-pack with no pack. bean opens no pack for any of them.
 	for name, a := range map[string][]string{
-		"upper case":   append(args, "-accept-pack", strings.ToUpper(digest)),
-		"63 digits":    append(args, "-accept-pack", digest[:63]),
-		"a prefix":     append(args, "-accept-pack", "sha256:"+digest),
-		"both flags":   append(args, "-accept-pack", digest, "-unknown-pack"),
-		"no pack":      {"compare", "-accept-pack", digest, "-sex", "male", "-age", "30-39", ids[0]},
-		"a typo, menu": {"compare", "-pack", path, "-accept-pack", "x"},
-		"empty":        append(args, "-accept-pack", ""),
-		"empty, both":  append(args, "-accept-pack=", "-unknown-pack"),
+		"upper case":     append(args, "-accept-pack", strings.ToUpper(digest)),
+		"63 digits":      append(args, "-accept-pack", digest[:63]),
+		"a prefix":       append(args, "-accept-pack", "sha256:"+digest),
+		"both flags":     append(args, "-accept-pack", digest, "-unknown-pack"),
+		"no pack":        {"compare", "-accept-pack", digest, "-sex", "male", "-age", "30-39", ids[0]},
+		"a typo, menu":   {"compare", "-pack", path, "-accept-pack", "x"},
+		"empty":          append(args, "-accept-pack", ""),
+		"empty, both":    append(args, "-accept-pack=", "-unknown-pack"),
+		"empty, no pack": {"compare", "-accept-pack=", "-sex", "male", "-age", "30-39", ids[0]},
 	} {
 		out, errs, code := run(t, dir, "", a...)
 		if code != 2 || out != "" || !strings.Contains(errs, "usage") {

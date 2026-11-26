@@ -163,7 +163,7 @@ Compares with a reference pack: one file of public reference data, with a table 
 - That way shows, and saves no comparison: `-save` needs `-cohort`. As with `-cohort`, bean first deletes the saved comparisons of a reading that is gone. It works only with a pack on record. `-accept-pack` and `-unknown-pack` do not change that. With `-cohort`, bean reads neither record.
 - With no record that counts, the command exits 2 and names `-cohort`. When a record breaks a rule, it exits 1. It names the record by id, and never its value.
 - A pack that bean has no record of is refused, with a warning and its SHA-256. Whoever built such a pack chose its tables, its caveats and what each reading is set against.
-- `-accept-pack <sha256>` uses such a pack when the file has that SHA-256. Pass the SHA-256 that the pack's publisher states. When the file has another, bean stops and shows both.
+- `-accept-pack <sha256>` uses such a pack when the file has that SHA-256. The value is 64 hex digits in lower case, with no prefix. Pass the SHA-256 that the pack's publisher states. When the file has another, bean stops and shows both.
 - `-unknown-pack` uses any such file as it is. Pass one of the two flags, not both.
 - With either flag, each row says `pack NOT on record`, and each saved claim has that caveat. A claim is the same with either flag. bean stores no record of the flag.
 - `-accept-pack` with a pack on record checks the SHA-256 as well, and changes nothing else.
