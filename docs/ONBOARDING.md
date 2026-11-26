@@ -273,7 +273,7 @@ Saved comparisons, the reference files you kept and the records of your shares a
 | `the file was not accepted, and nothing was written` | The file is not one that the importer takes at all, or you did not say yes. |
 | `no reading was read` | A line the importer could not read for sure. The file is kept. See [If no reading was read](#if-no-reading-was-read). |
 | `bean: input missing: <id>` | Use the record id from `bean ls` or the `kept` line, not the `stored as` id. |
-| `bean has no record of this pack` | The file is not one of the two packs that bean has on record. For one of those two, check the SHA-256 (step 5) and fetch or build it again. For any other pack, compare its SHA-256 with the one that its publisher states. Then pass `-unknown-pack`: each result says so. |
+| `bean has no record of this pack` | The file is not one of the two packs that bean has on record. For one of those two, check the SHA-256 (step 5) and fetch or build it again. For any other pack, compare its SHA-256 with the one that its publisher states. Then pass the publisher's value with `-accept-pack <sha256>`. Each result says that bean has no record of the pack. `-unknown-pack` takes any file. |
 | `not comparable: ...` in a row | The row says why, for example a unit that the pack does not take. bean converts no unit. |
 | `changed: ... this input says ...` | A newer report changed a value. If it is right, import again with `-corrections`. |
 | `bean: undecided: ...` from `restore` | Expected on the first run. Read the list, then `-seal-all` (step 9). |

@@ -137,7 +137,7 @@ bean's part is the same, whoever made the pack and whoever serves it. It keeps y
 | Stage | What bean does | How a person checks it |
 |---|---|---|
 | Your reading | On an import, keeps the file first, then signs each reading that you confirmed. | `bean verify`, and `shasum -a 256` of your file. |
-| The pack | Names it by the SHA-256 of its bytes. It stops at a pack that it does not have on record, unless you pass `-unknown-pack`. | `shasum -a 256` against [REFERENCE.md](REFERENCE.md#how-a-pack-travels), or build the pack again. |
+| The pack | Names it by the SHA-256 of its bytes. It stops at a pack that it does not have on record, unless you pass its SHA-256 with `-accept-pack`, or `-unknown-pack`. | `shasum -a 256` against [REFERENCE.md](REFERENCE.md#how-a-pack-travels), or build the pack again. |
 | The match | Compares only a type and a unit that the pack lists, and converts no unit. | `bean compare -pack <file>` lists them. |
 | The arithmetic | Runs on your machine. bean has no command that fetches from a network. | The method and its test values are in REFERENCE.md. |
 | The result | Writes nothing, unless you pass `-save`. Then it signs the reading's id, the pack's SHA-256, the group, the method, the numbers and the caveats. | `bean show <id>`. |

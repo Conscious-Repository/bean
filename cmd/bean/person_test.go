@@ -597,12 +597,13 @@ func TestWhichPersonRecordsCount(t *testing.T) {
 // of a cohort are its builder's, so the person names the cohort.
 func TestComparePackFromRecordsNeedsAPackOnRecord(t *testing.T) {
 	dir, _, ids := compareLog(t, "TCHOL_J", "HDL_J", "DEMO_J")
-	path, _ := testPack(t)
+	path, digest := testPack(t)
 	add(t, dir, "person.sex", "male")
 	add(t, dir, "person.birth", "1986-05")
 	// The last has record ids beside -type: for a pack that is not on
-	// record, the first error is the one of before.
-	for _, args := range [][]string{{"compare", "-pack", path, ids[0]}, {"compare", "-pack", path, "-unknown-pack", ids[0]}, {"compare", "-pack", path, "-unknown-pack", "-type", "lab.*"}, {"compare", "-pack", path, "-type", "lab.*", ids[0]}} {
+	// record, the first error is the one of before. -accept-pack does not
+	// put a pack on record.
+	for _, args := range [][]string{{"compare", "-pack", path, ids[0]}, {"compare", "-pack", path, "-unknown-pack", ids[0]}, {"compare", "-pack", path, "-accept-pack", digest, ids[0]}, {"compare", "-pack", path, "-unknown-pack", "-type", "lab.*"}, {"compare", "-pack", path, "-type", "lab.*", ids[0]}} {
 		out, errs, code := run(t, dir, "", args...)
 		if code != 2 || out != "" || !strings.Contains(errs, "name a cohort of the pack with -cohort: female-20-29, ") || !strings.Contains(errs, "bean takes a cohort from your records only with a pack that it has on record") {
 			t.Errorf("%v: %d\n%s\n%s", args, code, out, errs)

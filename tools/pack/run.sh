@@ -93,7 +93,7 @@ saved=0
 # The pack of the synthetic files is not one that bean has on record: bean
 # uses it only when told to, and each claim then says so.
 b compare -pack "$T/syn.pack" -cohort male-30-39 -type 'lab.*' >"$T/cmp.txt" 2>&1 && say "bean compares with a pack that it has no record of, without -unknown-pack"
-grep -q "pass -unknown-pack" "$T/cmp.txt" || say "bean does not say how to use a pack that it has no record of"
+grep -q "pass -accept-pack <sha256>" "$T/cmp.txt" || say "bean does not say how to use a pack that it has no record of"
 for cohort in $(b compare -pack "$T/syn.pack" | sed -n 's/^  \([a-z]*-[0-9]*-[a-z0-9]*\): .*/\1/p'); do
   for type in 'lab.*' weight; do
     b compare -pack "$T/syn.pack" -unknown-pack -cohort "$cohort" -type "$type" -save >"$T/cmp.txt" 2>&1 && saved=$((saved + $(grep -c '^saved ' "$T/cmp.txt")))
