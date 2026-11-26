@@ -1,0 +1,32 @@
+name: Vulnerabilities
+
+# govulncheck sets what bean's code calls against Go's list of known
+# faults. It runs apart from CI: it needs the host vuln.go.dev, and the
+# list changes with no commit. So a commit that passed can fail later, and
+# a commit must not wait for it. The weekly run is the one on main.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '43 5 * * 1'
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      # make tools builds govulncheck with the Go of go.mod, at the version
+      # that the Makefile names.
+      - name: Check bean against Go's list of faults
+        run: |
+          make tools
+          PATH="$(go env GOPATH)/bin:$PATH" make vuln

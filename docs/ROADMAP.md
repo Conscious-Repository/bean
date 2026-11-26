@@ -113,7 +113,7 @@ A second publisher can serve the same public pack. With the first host unreachab
 - A table of names for one quantity. It waits for a real case (DECISIONS 323).
 - On the edge of a pack's cohorts, a row can advise a month of birth where no month gives a number (DECISIONS 348).
 - A test that holds the sex and the ages of each cohort in bean's code to the menu that the pack's builder uses.
-- `make vuln` does not run with the Go that `go.mod` names: the checker does not load that library from source (DECISIONS 348).
+- Newer versions of `golang.org/x/crypto` and `golang.org/x/sys`. `make vuln` names 22 listed faults in the two, and bean's code calls none (DECISIONS 349).
 
 ## Not planned
 
