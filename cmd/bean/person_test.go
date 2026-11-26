@@ -195,11 +195,11 @@ func TestComparePackRowsWithNoCohort(t *testing.T) {
 	year := add(t, dir, "person.birth", "1986")
 	const (
 		noDate   = "not comparable: the reading has no date: name a cohort with -cohort"
-		after    = "not comparable: the reading is dated after now: name a cohort with -cohort"
+		after    = "not comparable: the reading is dated after now: correct its date, or name a cohort with -cohort"
 		before   = "not comparable: the reading is dated before the birth in person.birth: correct one, or name a cohort with -cohort"
 		none     = "not comparable: the pack has no cohort for the age on that date: -cohort sets it against a cohort of another age"
 		edge     = "not comparable: the date lies on the edge of two cohorts: name one with -cohort"
-		menuEdge = "not comparable: the date lies on the edge of the pack's cohorts: to choose one, pass -cohort"
+		menuEdge = "not comparable: the date lies on the edge of the pack's cohorts: name one with -cohort if it holds the age on that date"
 		month    = ", or correct person.birth to a year and a month"
 	)
 	undated := `{"type":"lab.cholesterol-total","times":{"observed":null},"value":{"n":160,"unit":"mg/dL"},"source":{"system":"self","adapter":"synthetic@1","ref":null}}`
@@ -326,7 +326,7 @@ func TestComparePackStopsOnTheRecords(t *testing.T) {
 	// records and where their rules are. It has no command to copy: whoever
 	// runs this may be the person's assistant, and the two are optional.
 	out, errs, code := compare(dir)
-	if code != 2 || out != "" || !strings.HasPrefix(errs, "bean: "+cohort) || !strings.Contains(errs, "The log has no current person.sex and no person.birth that your identity signed. Both are optional, and -cohort needs neither: docs/REFERENCE.md, \"The cohort from two records\", has the rules and says who can read them") || strings.Contains(errs, "bean add") || strings.Contains(errs, "does not read") {
+	if code != 2 || out != "" || !strings.HasPrefix(errs, "bean: "+cohort) || !strings.Contains(errs, "The log has no current person.sex and no person.birth that your identity signed. Both are optional, and -cohort needs neither. docs/REFERENCE.md, \"The cohort from two records\", has the rules and says who can read them") || strings.Contains(errs, "bean add") || strings.Contains(errs, "does not read") {
 		t.Errorf("no record: %d\n%s\n%s", code, out, errs)
 	}
 	// A record that was deleted is not a record that bean does not read.
@@ -350,9 +350,11 @@ func TestComparePackStopsOnTheRecords(t *testing.T) {
 	twoValues := "do not state one value. Correct one with bean add %s <value> -corrects <id>, or delete one with bean purge <id>. Or " + cohort
 	wrongForm := "is not a year of four digits with no unit, or a year and a month as 1986-05. Correct it with bean add person.birth <value> -corrects <id>. Or " + cohort
 	for name, tc := range map[string]stop{
-		"no birth":                   {sex: [][]string{{"male"}}, code: 2, want: []string{cohort, "The log has no current person.birth that your identity signed."}, never: []string{"no current person.sex"}},
-		"no sex":                     {birth: [][]string{{"1986"}}, code: 2, want: []string{cohort, "The log has no current person.sex that your identity signed."}, never: []string{"no person.birth"}},
-		"two sexes":                  {sex: [][]string{{"male"}, {"female"}}, birth: [][]string{{"1986"}}, code: 1, want: []string{"the records person.sex (", strings.Replace(twoValues, "%s", "person.sex", 1)}},
+		"no birth": {sex: [][]string{{"male"}}, code: 2, want: []string{cohort, "The log has no current person.birth that your identity signed."}, never: []string{"no current person.sex"}},
+		"no sex":   {birth: [][]string{{"1986"}}, code: 2, want: []string{cohort, "The log has no current person.sex that your identity signed."}, never: []string{"no person.birth"}},
+		// Two values of sex can both be true, each for its own dates: -cohort
+		// comes before the correction.
+		"two sexes":                  {sex: [][]string{{"male"}, {"female"}}, birth: [][]string{{"1986"}}, code: 1, want: []string{"the records person.sex (", "do not state one value, and bean takes one value for every date. If each holds for its own dates, " + cohort, ". If one is wrong, correct it with bean add person.sex <value> -corrects <id>, or delete it with bean purge <id>"}},
 		"two births":                 {sex: [][]string{{"male"}}, birth: [][]string{{"1986"}, {"1987"}}, code: 1, want: []string{"the records person.birth (", strings.Replace(twoValues, "%s", "person.birth", 1)}},
 		"a year and its month":       {sex: [][]string{{"male"}}, birth: [][]string{{"1986"}, {"1986-05"}}, code: 1, want: []string{"the records person.birth ("}},
 		"a birth and one in no form": {sex: [][]string{{"male"}}, birth: [][]string{{"1986"}, {"spring"}}, code: 1, want: []string{"the records person.birth (", "do not state one value"}},
@@ -446,8 +448,10 @@ func TestWhichPersonRecordsCount(t *testing.T) {
 		t.Fatal(errs)
 	}
 	add(t, dir, "-agent", "person.sex", "male")
-	const notRead = "What it holds of these types, bean does not read: only a record that your identity signed about you counts, with the source self and no ref, as bean add writes it."
-	if _, errs, code := compare(); code != 2 || !strings.Contains(errs, "The log has no current person.sex and no person.birth that your identity signed. "+notRead+" Both are optional") {
+	// The record that this is said of was written with bean add -agent: the
+	// words name no command, and nothing that an assistant can do.
+	const notRead = "What it holds of these types, bean does not read: only a record that your identity signed about you counts, with the source self and no ref. A record of an agent or of a peer never counts."
+	if _, errs, code := compare(); code != 2 || !strings.Contains(errs, "The log has no current person.sex and no person.birth that your identity signed. "+notRead+" Both are optional") || strings.Contains(errs, "bean add") {
 		t.Fatalf("only an agent's record: %d\n%s", code, errs)
 	}
 	add(t, dir, "-agent", "person.birth", "1950")

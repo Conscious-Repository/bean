@@ -107,16 +107,18 @@ func readPerson(s *core.Store, l *core.Loaded, menu string) person {
 		// or not, and whoever runs this may be their assistant.
 		notRead := ""
 		if otherRecords(l, missing) {
-			notRead = " What it holds of these types, bean does not read: only a record that your identity signed about you counts, with the source self and no ref, as bean add writes it."
+			notRead = " What it holds of these types, bean does not read: only a record that your identity signed about you counts, with the source self and no ref. A record of an agent or of a peer never counts."
 		}
-		badArg(fmt.Errorf("name a cohort of the pack with -cohort: %s. With no -cohort, bean takes each reading's cohort from its date and from two records, person.sex and person.birth. The log has no current %s that your identity signed.%s Both are optional, and -cohort needs neither: docs/REFERENCE.md, \"The cohort from two records\", has the rules and says who can read them", menu, strings.Join(missing, " and no "), notRead))
+		badArg(fmt.Errorf("name a cohort of the pack with -cohort: %s. With no -cohort, bean takes each reading's cohort from its date and from two records, person.sex and person.birth. The log has no current %s that your identity signed.%s Both are optional, and -cohort needs neither. docs/REFERENCE.md, \"The cohort from two records\", has the rules and says who can read them", menu, strings.Join(missing, " and no "), notRead))
 	}
 	orCohort := "Or name a cohort of the pack with -cohort: " + menu
 	p := person{sexIDs: shortIDs(sexes), birthIDs: shortIDs(births)}
 	// All of one type must state one value. The number 1986 and the text
 	// 1986 are one value.
+	// Two values of sex can both be true, each for its own dates. bean
+	// takes one value for every date, so -cohort comes first here.
 	if !oneValue(sexes) {
-		fail(fmt.Errorf("the records person.sex (%s) do not state one value. Correct one with bean add person.sex <value> -corrects <id>, or delete one with bean purge <id>. %s", p.sexIDs, orCohort))
+		fail(fmt.Errorf("the records person.sex (%s) do not state one value, and bean takes one value for every date. If each holds for its own dates, name a cohort of the pack with -cohort: %s. If one is wrong, correct it with bean add person.sex <value> -corrects <id>, or delete it with bean purge <id>", p.sexIDs, menu))
 	}
 	if !oneValue(births) {
 		fail(fmt.Errorf("the records person.birth (%s) do not state one value. Correct one with bean add person.birth <value> -corrects <id>, or delete one with bean purge <id>. %s", p.birthIDs, orCohort))
@@ -149,7 +151,7 @@ func (p person) cohortOf(s *core.Store, k pack.OnRecordPack, r *core.Record) (co
 	case !ok:
 		return "", "the reading has no date: name a cohort with -cohort"
 	case at.After(s.Now()):
-		return "", "the reading is dated after now: name a cohort with -cohort"
+		return "", "the reading is dated after now: correct its date, or name a cohort with -cohort"
 	}
 	id, why := k.CohortAt(p.sex, p.birth, months)
 	switch why {
@@ -161,7 +163,8 @@ func (p person) cohortOf(s *core.Store, k pack.OnRecordPack, r *core.Record) (co
 	case pack.Edge, pack.MenuEdge:
 		refused = "the date lies on the edge of two cohorts: name one with -cohort"
 		if why == pack.MenuEdge {
-			refused = "the date lies on the edge of the pack's cohorts: to choose one, pass -cohort"
+			// One of the two ages is in no cohort of the pack.
+			refused = "the date lies on the edge of the pack's cohorts: name one with -cohort if it holds the age on that date"
 		}
 		if p.birthYear {
 			// Not "add": a second record with another value is a stop.
