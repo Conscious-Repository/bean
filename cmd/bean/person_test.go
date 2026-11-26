@@ -93,8 +93,13 @@ func TestComparePackFromRecords(t *testing.T) {
 	if lines[1] != want {
 		t.Errorf("the line above the table:\n%s\nwant:\n%s", lines[1], want)
 	}
+	// The ids and the path of the pack are random: they are no word of bean.
+	said := strings.ReplaceAll(out, lines[2], "")
+	for _, id := range []string{sex, birth, old, recent, ids[0], ids[1]} {
+		said = strings.ReplaceAll(said, id[7:19], "")
+	}
 	for _, never := range []string{"you chose", "you stated", "You chose", "You stated", "1986", "male, age"} {
-		if strings.Contains(out, never) {
+		if strings.Contains(said, never) {
 			t.Errorf("the output says %q:\n%s", never, out)
 		}
 	}
@@ -122,8 +127,19 @@ func TestComparePackFromRecords(t *testing.T) {
 	// A reading that the pack has no measure for was set against no
 	// cohort, and its row shows none: another unit, and another type.
 	otherUnit := add(t, dir, "lab.cholesterol-total", "4.9", "-unit", "mmol/L", "-at", "2024-06-01")
-	shown, _, _ := run(t, dir, "", "compare", "-pack", path, otherUnit, ids[2], recent)
-	for id, want := range map[string]string{otherUnit: "-", ids[2]: "-", recent: "male-30-39"} {
+	words := `{"type":"lab.cholesterol-total","times":{"observed":{"start":"2024-06-01T00:00:00Z","precision":"day"}},"value":{"s":"see the report","unit":"mg/dL"},"source":{"system":"self","adapter":"synthetic@1","ref":null}}`
+	if _, errs, code := run(t, dir, words+"\n", "append"); code != 0 {
+		t.Fatal(errs)
+	}
+	ls, _, _ := run(t, dir, "", "ls", "-json", "-type", "lab.cholesterol-total")
+	notNumber := ""
+	for _, line := range strings.Split(ls, "\n") {
+		if strings.Contains(line, "see the report") {
+			notNumber = line[strings.Index(line, `"id":"`)+6:][:71]
+		}
+	}
+	shown, _, _ := run(t, dir, "", "compare", "-pack", path, otherUnit, ids[2], recent, notNumber)
+	for id, want := range map[string]string{otherUnit: "-", ids[2]: "-", notNumber: "-", recent: "male-30-39"} {
 		if got, row := cohortOfRow(t, shown, id); got != want {
 			t.Errorf("the cohort of a row is %q, want %q:\n%s", got, want, row)
 		}
@@ -248,7 +264,9 @@ func TestComparePackRowsWithNoCohort(t *testing.T) {
 		}
 		// No line names an age, and none names the value of a record.
 		for _, line := range strings.Split(out, "\n") {
-			if strings.Contains(line, "not comparable") && strings.ContainsAny(strings.SplitN(line, "not comparable", 2)[1][:60], "0123456789") {
+			// The last field of a row is its id, which is random.
+			fields := strings.Fields(line)
+			if strings.Contains(line, "not comparable") && strings.ContainsAny(strings.SplitN(strings.Join(fields[:len(fields)-1], " "), "not comparable", 2)[1], "0123456789") {
 				t.Errorf("a refusal with a number in it:\n%s", line)
 			}
 		}
@@ -393,12 +411,17 @@ func TestComparePackStopsOnTheRecords(t *testing.T) {
 					named++
 				}
 			}
+			// An id is random, and can hold the digits of a value by chance.
+			said := first
+			for _, id := range recordIDs {
+				said = strings.ReplaceAll(said, id, "")
+			}
 			if strings.Contains(first, "person.sex (") && named != len(tc.sex) || strings.Contains(first, "person.birth (") && named != len(tc.birth) {
 				t.Errorf("%s: the stop does not name each record by id:\n%s", name, first)
 			}
 			for _, v := range values {
 				// "as 1986-05" is bean's own example of the form.
-				if v != "1" && v != "yes" && strings.Contains(strings.ReplaceAll(first, "as 1986-05", ""), v) {
+				if v != "1" && v != "yes" && strings.Contains(strings.ReplaceAll(said, "as 1986-05", ""), v) {
 					t.Errorf("%s: the stop holds the value %q:\n%s", name, v, first)
 				}
 			}
@@ -445,6 +468,20 @@ func TestWhichPersonRecordsCount(t *testing.T) {
 	out, errs, code = compare()
 	if code != 0 || !strings.Contains(out, "person.birth ("+number[7:19]+", ") && !strings.Contains(out, ", "+number[7:19]+"), signed") {
 		t.Fatalf("a number and a text of one year: %d\n%s\n%s", code, out, errs)
+	}
+	// A number and a text of one year are one value for a birth only. As
+	// two records of sex they are two values, and the stop says so.
+	two := t.TempDir()
+	if err := os.CopyFS(two, os.DirFS(dir)); err != nil {
+		t.Fatal(err)
+	}
+	run(t, two, "", "purge", sex)
+	add(t, two, "person.sex", "1990")
+	if _, errs, code := run(t, two, strings.Replace(text, "person.birth", "person.sex", 1)+"\n", "append"); code != 0 {
+		t.Fatal(errs)
+	}
+	if _, errs, code := run(t, two, "", "compare", "-pack", path, ids[0]); code != 1 || !strings.Contains(errs, "the records person.sex (") || !strings.Contains(errs, "do not state one value") {
+		t.Fatalf("a number and a text as two records of sex: %d\n%s", code, errs)
 	}
 	// Records that do not count, each with another value. None of them
 	// stops the run, moves the cohort or is named above the table.

@@ -49,12 +49,13 @@ func personRecords(l *core.Loaded, typ string) []*core.Record {
 	return out
 }
 
-// oneValue reports records that all state the same value. A birth in one
-// of its forms is the months that it names, so that a number and a text of
-// one year are one value. Any other value is its canonical bytes.
+// oneValue reports records of one type that all state the same value. A
+// birth in one of its forms is the months that it names, so that a number
+// and a text of one year are one value. Any other value is its canonical
+// bytes.
 func oneValue(records []*core.Record) bool {
 	stated := func(r *core.Record) string {
-		if months, ok := pack.BirthMonths(r.Value); ok {
+		if months, ok := pack.BirthMonths(r.Value); ok && r.Type == pack.BirthType {
 			return fmt.Sprint(months)
 		}
 		return string(core.Canonical(r.Value))
