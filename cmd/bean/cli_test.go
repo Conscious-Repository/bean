@@ -10,6 +10,7 @@ import (
 
 	"github.com/Conscious-Repository/bean/core"
 	"github.com/Conscious-Repository/bean/internal/nhanes"
+	"github.com/Conscious-Repository/bean/internal/pack"
 )
 
 // The test binary runs main() when BEAN_TEST_MAIN is set, so these tests
@@ -24,6 +25,11 @@ func TestMain(m *testing.M) {
 			if name, digest, ok := strings.Cut(pair, "="); ok {
 				nhanes.Known[name] = digest
 			}
+		}
+		// A test can put the synthetic pack on record in the same way, by
+		// its SHA-256: it has the menu of the survey's packs.
+		if digest := os.Getenv("BEAN_TEST_PACK_ON_RECORD"); digest != "" {
+			pack.Known[digest] = pack.Known["10555d6769421d4305cbcd4ff14960d8b966ddd829a50581a9584a60a84d29e2"]
 		}
 		os.Args = append([]string{"bean"}, os.Args[1:]...)
 		main()

@@ -153,12 +153,15 @@ Each row starts with the date the sample was taken, as `bean ls` shows it. Then 
 
 A comparison says where a value lies in a sample. It does not say whether the value is healthy.
 
-### `compare -pack <file> [-cohort <cohort> [-unknown-pack] [-save] <id>... | -type <type>]`
+### `compare -pack <file> [[-cohort <cohort> [-unknown-pack] [-save]] <id>... | -type <type>]`
 
 Compares with a reference pack: one file of public reference data, with a table for each measure and each cohort on its menu. [REFERENCE.md](REFERENCE.md) has the format, the method and how a pack is built.
 
 - With only `-pack`, it shows what the pack holds: its SHA-256, its source and the files it was built from. Then come the types and units it takes, and its cohorts. It says whether this is the pack that bean has on record.
 - `-cohort` names one cohort of the pack's menu, such as `male-30-39`. The output and `-save` are as above. A saved claim names the pack by its SHA-256.
+- With readings and no `-cohort`, each row gets the cohort of the age on the reading's own date. bean takes it from two records, `person.sex` and `person.birth`, which you state with `bean add`. Both are optional. A COHORT column shows each row's cohort. [REFERENCE.md](REFERENCE.md#the-cohort-from-two-records) has the rules, and says who can read the two records.
+- That way shows, and saves nothing: `-save` and `-unknown-pack` need `-cohort`. It works only with a pack on record. With `-cohort`, bean reads neither record.
+- With no record that counts, the command exits 2 and names `-cohort`. When a record breaks a rule, it exits 1. It names the record by id, and never its value.
 - A pack that bean has no record of is refused, with a warning. `-unknown-pack` uses it as it is: each row then says `pack NOT on record`, and each saved claim has that caveat. Whoever built such a pack chose its tables, its caveats and what each reading is set against.
 - The pack decides which types and units it takes. The output shows which measure each reading was set against. A reading in another unit gets a row that says so, and no number.
 - A pack can require signed fields of a reading: its source system, its test and its panel. A reading without them gets a row that names them, and no number. The row starts with `required signed fields:` or `required signed evidence:`. An importer writes those fields from a report. `bean add` writes none, so a reading typed by hand cannot meet such a rule.

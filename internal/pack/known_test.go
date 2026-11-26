@@ -21,6 +21,9 @@ var held = map[string]string{
 	// This row left out the least n of a cell on 2026-11-19 (DECISIONS 333,
 	// UPGRADING.md 0.8.2): a cell has none now, and no text of a claim changed.
 	"the texts of a claim": "f44279528f561dcf2b97cf59a82e7b134b8cb58888d753fcf00384b31b6212dc",
+	// Whom each cohort of the two packs holds, since 2026-11-26 (DECISIONS
+	// 348). No saved comparison reads it.
+	"the sex and the ages of each cohort": "8d196eaf9c9b641d3159f74ed2bf0497bc1159d8f97b5dc9527afd46eb5b45de",
 }
 
 func digestOf(v any) string {
@@ -39,6 +42,13 @@ func TestWhatIsOnRecordNeverChanges(t *testing.T) {
 	for digest, k := range Known {
 		got[digest] = digestOf(k)
 	}
+	// Whom each cohort of a pack on record holds. A change moves the
+	// cohort that a reading gets from the person's records.
+	groups := map[string]map[string]Group{}
+	for digest, k := range Known {
+		groups[digest] = k.groups
+	}
+	got["the sex and the ages of each cohort"] = digestOf(groups)
 	for name, want := range held {
 		if got[name] != want {
 			t.Errorf("%s: what bean holds has the SHA-256 %s, and the one that is held here is %s", name, got[name], want)

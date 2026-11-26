@@ -226,7 +226,7 @@ func TestPackNoteIsNotThePacksWord(t *testing.T) {
 	c.reading = &core.Record{ID: "sha256:" + strings.Repeat("0", 64), Type: "lab.x", Value: map[string]any{"n": 1.0}}
 	c.result.N = 200
 	var b bytes.Buffer
-	printComparisons(&b, []comparison{c}, "head", "", true)
+	printComparisons(&b, []comparison{c}, "head", "", true, false)
 	if strings.Contains(b.String(), "pack NOT on record") || !strings.Contains(b.String(), `  - the pack says: "`+pack.CaveatNotOnRecord+`"`) {
 		t.Errorf("a pack's words made bean's note:\n%s", b.String())
 	}

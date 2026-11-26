@@ -20,6 +20,10 @@ type OnRecordPack struct {
 	Caveats        []string
 	MeasureCaveats map[string][]string
 	CohortCaveats  map[string][]string
+	// groups says whom each cohort holds: its sex and its ages. No check
+	// of a saved comparison reads it. bean compare -pack reads it when the
+	// person names no cohort (DECISIONS 345).
+	groups map[string]Group
 }
 
 // The caveats that a claim adds to its pack's, in this order
@@ -148,10 +152,12 @@ var nhanesAdded = []nhanesMeasure{
 // nhanesPack is what bean holds of an NHANES pack with these measures.
 // Weight is a body measure, and every other measure is a lab test.
 func nhanesPack(what string, lists ...[]nhanesMeasure) OnRecordPack {
+	cohorts, groups := sexByAge()
 	k := OnRecordPack{
 		What:           what,
 		Measures:       map[string]string{},
-		Cohorts:        sexByAge(),
+		Cohorts:        cohorts,
+		groups:         groups,
 		Same:           map[string][]Same{},
 		Caveats:        []string{"NHANES is a sample of people living in the United States in the survey years, not a reference range"},
 		MeasureCaveats: map[string][]string{},
@@ -175,16 +181,18 @@ func nhanesPack(what string, lists ...[]nhanesMeasure) OnRecordPack {
 const nhanesLab = "the lab that measured the reading and NHANES used their own instruments and methods"
 
 // sexByAge is the menu of the NHANES pack: each sex, by ten years of age
-// from 20 to 79, and 80 and over.
-func sexByAge() map[string]string {
-	out := map[string]string{}
+// from 20 to 79, and 80 and over. It gives each cohort in words, and the
+// sex and the ages that it holds.
+func sexByAge() (map[string]string, map[string]Group) {
+	texts, groups := map[string]string{}, map[string]Group{}
 	for _, sex := range []string{"female", "male"} {
 		for from := 20; from < 80; from += 10 {
-			out[fmt.Sprintf("%s-%d-%d", sex, from, from+9)] = fmt.Sprintf("%s, age %d-%d", sex, from, from+9)
+			id := fmt.Sprintf("%s-%d-%d", sex, from, from+9)
+			texts[id], groups[id] = fmt.Sprintf("%s, age %d-%d", sex, from, from+9), Group{sex, from, from + 9}
 		}
-		out[sex+"-80-over"] = sex + ", age 80 and over"
+		texts[sex+"-80-over"], groups[sex+"-80-over"] = sex+", age 80 and over", Group{sex, 80, -1}
 	}
-	return out
+	return texts, groups
 }
 
 // OnRecord says in a few words whether bean knows a pack by its SHA-256.

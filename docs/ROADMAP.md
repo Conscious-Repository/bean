@@ -2,7 +2,7 @@
 
 This file is the one place for open paths: what bean does now, what comes next, and what is not decided. Work that is done is in the git history. The reasons are in [DECISIONS.md](DECISIONS.md), and [KNOWN-GAPS.md](KNOWN-GAPS.md) lists known limits. Nothing here is final.
 
-**Where bean stands (2026-11-25).** A person keeps a log, and imports lab reports, Apple Health and CSV files. They compare a reading with a survey, or with a reference pack. They share chosen records as one sealed file, with six words or sealed to the reader's address. A reader who runs bean answers with signed notes, and the person takes them into their log. A public host serves reference packs ([EXTERNAL-PACKS.md](EXTERNAL-PACKS.md)). Release 0.8.4 is out, as a pre-release. Two people keep a log, so `main` is a release, with or without a tag (DECISIONS 310).
+**Where bean stands (2026-11-26).** A person keeps a log, and imports lab reports, Apple Health and CSV files. They compare a reading with a survey, or with a reference pack. They share chosen records as one sealed file, with six words or sealed to the reader's address. A reader who runs bean answers with signed notes, and the person takes them into their log. A public host serves reference packs ([EXTERNAL-PACKS.md](EXTERNAL-PACKS.md)). Release 0.8.4 is out, as a pre-release. `main` says 0.8.5, which has no tag: it adds the cohort from two records (DECISIONS 348). Two people keep a log, so `main` is a release, with or without a tag (DECISIONS 310).
 
 ## Now: the proof of concept
 
@@ -41,6 +41,8 @@ The sender should be able to review and stop each permission, and each reader sh
 
 - Whether the survey method drops its 30 too, as a pack cell did (DECISIONS 333). The packs on record would need a new builder version.
 - Whether a result from a very small cell gets words of its own.
+- Whether sex and birth stay two records, or become the flags `-sex` and `-born` of `bean compare -pack`, which store nothing. The author chose the records (DECISIONS 345, 348).
+- Whether `bean coverage` takes the cohort from the two records as well. It needs `-cohort` today.
 - Whether 1.0 can come while `pack/0` is a draft, and whether a review from outside the project is a condition of 1.0.
 - Whether the caveat of a small cohort stays at 100, and why 100. The number is set twice in the code, with no reason given.
 - Whether a record gets a mark for a value that was typed by hand.
@@ -87,10 +89,10 @@ Not built: `bean pair` and `bean import-device`, and the device's label wherever
 
 ### Path 4: compare with public data, from any source
 
-Done: reference packs, two NHANES packs on record, and `bean compare -pack` (DECISIONS 281, 309). A pool path with made-up contributors is built as a test (DECISIONS 334 to 336). Open:
+Done: reference packs, two NHANES packs on record, and `bean compare -pack` (DECISIONS 281, 309). A pool path with made-up contributors is built as a test (DECISIONS 334 to 336). `bean compare -pack` takes each row's cohort from two records of the person, `person.sex` and `person.birth` (DECISIONS 345, 348). Open:
 
 - **A second source, from another publisher.** The pack format does not lock before a second real source is built into a pack. Leads, none confirmed: other parts of NHANES, other open US survey files, and counts of genetic variants. Tables in journals may not be free to hand on.
-- **The cohort from two records of the person.** `person.sex` and `person.birth` are ordinary records, and `bean compare -pack` takes each row's cohort from them. It shows, and `-save` still needs `-cohort`. The design is on paper (DECISIONS 345). It is built after the two-person run.
+- **The cohort from two records, for a pack that is not on record.** bean's code holds the sex and the ages of each cohort, for the two packs on record only. A pack states a cohort in words. A field for the sex and the ages would be a change to the pack format (DECISIONS 348).
 - **More tests** by [REFERENCE-PLAN.md](REFERENCE-PLAN.md): values below a detection limit, more of the blood count, and a caveat with a size. The fasting tests need a weight of their own, which is a decision of their own.
 - **A publisher signs a pack,** and **a person keeps their own list of packs** (DECISIONS 308). Each is built when a second publisher exists.
 - **The check page computes a shared comparison again,** when the reader gives it the pack.

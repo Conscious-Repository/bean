@@ -40,6 +40,7 @@ bean-pack-nhanes -out nhanes.pack *.xpt                                # build t
 bean compare -pack nhanes.pack                                         # what the pack holds
 bean compare -pack nhanes.pack -cohort male-30-39 -type 'lab.*'        # compare
 bean compare -pack nhanes.pack -cohort male-30-39 -type weight -save   # compare, and keep the result
+bean compare -pack nhanes.pack -type 'lab.*'                           # each reading with the cohort of its own date: see below
 ```
 
 Then, in the folder of bean's code:
@@ -57,6 +58,31 @@ make pack                                                                     # 
 - **A file that is not the one on record is refused.** It may be a download that was cut short. `-unknown-files` builds from it, and the pack then says so in its caveats. Such a pack is not the pack on record: `bean compare` takes it only with `-unknown-pack`.
 - **Keep the pack file.** Your log names a pack by its SHA-256 and does not hold it. A reader of a comparison that you share needs the same pack to compute it again.
 - **Use the type names and units that the pack lists.** `bean compare -pack nhanes.pack` shows them: a reading in another unit gets no number.
+
+## The cohort from two records
+
+One run with `-cohort` sets every reading against one cohort, whatever its date. A reading of ten years ago then gets the cohort of today. With readings and no `-cohort`, bean gives each reading the cohort of the age that you had on its date. It needs two records for that. Both are optional, and you state each once:
+
+```
+bean add person.sex male          # exactly male or female
+bean add person.birth 1986-05     # a year, or a year and a month
+bean compare -pack nhanes.pack -type 'lab.*'
+```
+
+- **They are ordinary records.** You sign them, and `bean ls -type 'person.*'` shows them. Correct one with `bean add <type> <value> -corrects <id>`, and delete one with `bean purge <id>`. A deleted correction brings back the record that it replaced. They sync, export and share as any record.
+- **Which records count.** Current records that your identity signed about you, with the source `self` and no import ref. bean does not read a record that an agent, a peer or an importer wrote. All records of one type must state one value. The number 1986 and the text `1986` are one value.
+- **The birth** is a year of four digits with no unit, or a year and a month as `1986-05`. It is not after now. bean takes no day of birth.
+- **The sex** is exactly `male` or `female`, the two groups of the survey. It picks a group to compare with, and says nothing more about you. If neither word fits, or you do not want to state one, use `-cohort`. One value stands for every date: if that is not so for you, use `-cohort` too.
+- **The age on a date.** bean counts in months, from year 0. The months of a reading are those of its observed start, as written. A year alone is its twelve months, for a birth and for a reading whose precision is a year. The lowest age is floor((first month of the reading - last month of the birth - 1) / 12). The highest is floor((last month of the reading - first month of the birth) / 12). A row has a cohort when both ages are in one cohort.
+- **A row with no cohort has no number, and says why.** The reading has no date, a date after now, or a date before the birth. Or the date lies on the edge of two cohorts, or the pack has no cohort for that age. No row names an age. With a year of birth alone, one calendar year in ten lies on an edge. With the month of birth, it is one month in ten years.
+- **The pack must be one on record.** A pack gives a cohort in words, and no format has a field for its sex and ages. bean's code holds both for each cohort of the two packs on record. For any other pack, name the cohort.
+- **It shows, and does not save.** `-save` needs `-cohort`: run once for each cohort, with the ids of its readings. A saved claim says that you chose the cohort, and it would not be true here. The caveat on the screen is another: `the cohort follows from those records as they are now: bean does not know whether you belong to it`.
+- **When a record breaks a rule, bean stops.** It names the type, the ids and the rule, and never the value. `-cohort` always works: bean then reads neither record, and nothing new is in your log.
+- **A caveat of one cohort names it.** The rows of one run can differ in cohort. So a caveat that the pack states for one cohort shows as `the pack says of male-80-over: "..."`.
+
+**Who can read the two records.** Whoever reads your log reads them: a copy, an export, and a share of `*`. A share of `lab.*`, or of a comparison, does not carry them. An assistant that reads the log reads them, through `bean mcp` or with `bean ls` in your shell. The table shows a cohort for each row, to you and to anyone that you paste it to. Rows on both sides of a birthday narrow the birth down, and so does a row on an edge. `bean compare -pack` with `-cohort` needs no record.
+
+**What bean does not know.** The line above the table names the two records by id, and says that your identity signed them. It does not say that you wrote them: a program with your key can write such a record. A second record with another value makes this way stop, until you correct or delete one. A reading with a wrong date gets the cohort of that date: the date and the cohort are in its row. So does a reading that you typed late with no `-at`. A reading keeps the month that its date was written with, in the offset of that place. The DATE column shows the time in the zone of your machine. So near the end of a month, the cohort can be the one of the month before or after.
 
 ## The file
 

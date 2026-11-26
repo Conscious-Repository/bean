@@ -15,8 +15,9 @@ import (
 
 // comparePack is bean compare -pack: it places readings in the cells of a
 // reference pack (docs/REFERENCE.md). The pack is a file on this machine.
-// bean reads it, checks every rule of its format and goes nowhere. Without
-// a cohort it shows the pack's menu.
+// bean reads it, checks every rule of its format and goes nowhere. With no
+// reading it shows the pack's menu. With readings and no cohort, each row
+// gets its own cohort from two records of the person (person.go).
 func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, unknown bool) {
 	// No more is read than a pack can be: a pipe states no size.
 	f, err := os.Open(path)
@@ -33,28 +34,40 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 		fail(fmt.Errorf("%s: %w", path, err))
 	}
 	menu := slices.Sorted(maps.Keys(p.Cohorts))
-	if cohort == "" {
-		if len(pos) > 0 || typ != "" || save {
-			badArg(fmt.Errorf("name a cohort of the pack with -cohort: %s", strings.Join(menu, ", ")))
-		}
+	if cohort == "" && len(pos) == 0 && typ == "" && !save {
 		printPack(p)
 		return
 	}
+	// A comparison is saved only with a cohort that the person names: the
+	// signed claim says that they chose it (DECISIONS 345).
+	if cohort == "" && save {
+		badArg(fmt.Errorf("name a cohort of the pack with -cohort: %s. -save keeps a comparison only with a cohort that you name: run once for each cohort, with the ids of its readings", strings.Join(menu, ", ")))
+	}
 	co, ok := p.Cohorts[cohort]
-	if !ok {
+	if cohort != "" && !ok {
 		badArg(fmt.Errorf("the pack has no cohort %q. It has: %s", cohort, strings.Join(menu, ", ")))
 	}
 	if (len(pos) == 0) == (typ == "") {
 		badArg(errors.New("say which readings to compare: record ids, or -type, and not both"))
 	}
+	// With no cohort, each row gets its own from two records of the person.
+	// bean knows whom a cohort holds only for a pack on record.
+	onRec := pack.IsKnown(p.SHA256)
+	fromRecords := cohort == ""
+	if fromRecords && !onRec {
+		badArg(errNoCohortForUnknownPack(strings.Join(menu, ", ")))
+	}
 	// A pack that bean has no record of is used only when told to, as a
 	// file that is not the one on record is. Whoever built it chose its
 	// tables, its caveats and what each reading is set against.
-	onRec := pack.IsKnown(p.SHA256)
 	if !onRec && !unknown {
 		fail(fmt.Errorf("bean has no record of this pack (SHA-256 %s). Whoever built it chose its tables, its caveats and what each reading is set against. Compare its SHA-256 with the one that its publisher states, or build the pack again from the files that it names. To use it as it is, pass -unknown-pack: each result then says so", p.SHA256))
 	}
 	readings, l := compareReadings(s, typ, pos)
+	var who person
+	if fromRecords {
+		who = readPerson(s, l, strings.Join(menu, ", "))
+	}
 	labels := l.PairedLabels()
 	var rows []comparison
 	var claims []map[string]any
@@ -63,7 +76,16 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 		v, isNumber := r.Value["n"].(float64)
 		unit, _ := r.Value["unit"].(string)
 		id, units, panelMismatch := p.MatchRecord(r)
-		cell := p.Cell(id, cohort)
+		// The row's own cohort, or why it has none. It is worked out only
+		// for a reading that the pack has a measure for: any other row
+		// was set against no cohort, and shows none.
+		rowCohort, noCohort := cohort, ""
+		if fromRecords && id != "" && isNumber {
+			rowCohort, noCohort = who.cohortOf(s, pack.Known[p.SHA256], r)
+			// The row names it, also when the pack has no table for it.
+			c.cohort = rowCohort
+		}
+		cell := p.Cell(id, rowCohort)
 		switch {
 		case len(units) == 0:
 			c.refused, c.unmapped = "no reference data for this type", true
@@ -85,6 +107,8 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 			c.refused = fmt.Sprintf("the reading has no unit, and the pack takes this type only in %s", strings.Join(units, " or "))
 		case id == "":
 			c.refused = fmt.Sprintf("the reading is in %q, and the pack takes this type only in %s", unit, strings.Join(units, " or "))
+		case noCohort != "":
+			c.refused = noCohort
 		case cell == nil:
 			c.refused = "the pack has no table of this measure for this cohort"
 		default:
@@ -100,8 +124,14 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 				c.against = fmt.Sprintf("%s in %s against %s", r.Type, unit, p.Measures[id].Label)
 			}
 			c.result = res
-			c.caveats = p.PlacementCaveats(id, cohort, res.N, c.by != "")
-			c.stated = len(p.StatedCaveats(id, cohort))
+			c.caveats = p.PlacementCaveats(id, rowCohort, res.N, c.by != "")
+			c.stated = len(p.StatedCaveats(id, rowCohort))
+			if fromRecords {
+				// On the screen only: nothing of this run is saved.
+				c.caveats[c.stated] = caveatFromRecords
+				c.cohortCaveats = len(p.Cohorts[rowCohort].Caveats)
+				break
+			}
 			claims = append(claims, packRecord(c, p, cohort, co, cell.MethodVersion()))
 		}
 		rows = append(rows, c)
@@ -113,8 +143,18 @@ func comparePack(s *core.Store, path, cohort, typ string, pos []string, save, un
 		}
 	}
 	slices.Sort(known)
-	head := fmt.Sprintf("Compared with the pack %q. Cohort: %q.\nThe pack is %s, SHA-256 %s.\n%s", p.Title, co.Text, path, p.SHA256, onRecord(p))
-	printComparisons(os.Stdout, rows, head, strings.Join(known, ", "), typ == "")
+	where := fmt.Sprintf("The pack is %s, SHA-256 %s.\n%s", path, p.SHA256, onRecord(p))
+	if fromRecords {
+		// No line says that the person stated or chose the cohort: a key
+		// proves neither. The ids let them see which records it follows.
+		head := fmt.Sprintf("Compared with the pack %q.\nCohort: each row's own, from the records person.sex (%s) and person.birth (%s), signed under your identity. To choose one, pass -cohort.\n%s", p.Title, who.sexIDs, who.birthIDs, where)
+		compared := printComparisons(os.Stdout, rows, head, strings.Join(known, ", "), typ == "", true)
+		endComparisons(l, compared)
+		fmt.Println(notSavedFromRecords)
+		return
+	}
+	head := fmt.Sprintf("Compared with the pack %q. Cohort: %q.\n%s", p.Title, co.Text, where)
+	printComparisons(os.Stdout, rows, head, strings.Join(known, ", "), typ == "", false)
 	saveComparisons(s, l, claims, save, "the pack")
 }
 

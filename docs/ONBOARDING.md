@@ -20,7 +20,7 @@ Give the assistant these rules first:
 > Help me set up bean by following docs/ONBOARDING.md. Rules:
 >
 > 1. Never ask for my 24 words. Never run `bean init`, `bean rotate` or `bean restore`: I run them myself, in a terminal you cannot read. If I start to type or paste the words to you, stop me. I also run `bean import` myself: it shows my values for me to check. Never pass `-yes` for me.
-> 2. Do not look at my health data. Do not open my lab reports or log files, and do not run `bean ls`, `bean show`, `bean compare`, `bean coverage`, `bean check-bundle`, `bean export` or `bean blob get` unless I ask. Never run `bean share`, `bean reply` or `bean accept`: I decide what leaves and what comes in, at my own terminal. Use exit codes and counts: the `added` line of an import, the `summary` line of `bean verify`.
+> 2. Do not look at my health data. Do not open my lab reports or log files, and do not run `bean ls`, `bean show`, `bean compare`, `bean coverage`, `bean check-bundle`, `bean export` or `bean blob get` unless I ask. Never run `bean share`, `bean reply` or `bean accept`: I decide what leaves and what comes in, at my own terminal. Use exit codes and counts: the `added` line of an import, the `summary` line of `bean verify`. Never ask for my sex or my birth, and never add a `person.sex` or `person.birth` record for me.
 > 3. If no reading was read, ask for the counts of `bean-import-lab -count`, as the guide shows, not the report or its values.
 > 4. Keep my data on my machine. Do not upload files or paste my records anywhere. Connecting you to my log through MCP is where my records start to reach your provider. Do it only when I say so, read-only first (`bean mcp`, no `-write` or `-blobs`). Ask before `-write` or `-blobs`.
 > 5. Never run `bean address`, and never read or copy a key file. A key file opens every package that was sealed to its address. Never pass `-key` or `-address-words` for me. I type the address words myself: they are my check that an address is my reader's.
@@ -153,6 +153,7 @@ Nothing is written until you add `-save`. Then each result is a record that you 
 - **What bean checks,** and what no check shows: [ARCHITECTURE.md](ARCHITECTURE.md#what-bean-checks-in-a-comparison).
 - **A pack from a host.** You fetch one file and check the same SHA-256, and the rest is as above ([FIRST-RUN.md](FIRST-RUN.md#each-compares-with-a-pack)).
 - **A group of your own,** by ethnicity, body or food: [COMPARE.md](COMPARE.md).
+- **The group of each reading's own date.** One run with `-cohort` sets an old reading against the one group that you name. State your sex and your birth once, as two records, and leave `-cohort` out ([REFERENCE.md](REFERENCE.md#the-cohort-from-two-records)). Both records are optional. Whoever reads your log reads them, and so does an assistant that you connect.
 - **Keep the pack file.** Your log names it and does not hold it.
 
 ## 6. Share with one person (optional)
