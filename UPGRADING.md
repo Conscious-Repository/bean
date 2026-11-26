@@ -42,11 +42,12 @@ Do not run `purge` or `gc` on the copies. Only they erase anything.
 
 No record changes, and `bean verify` and `bean ls` print the same for an existing log. `bean compare -pack` can take each reading's cohort from two records that you state ([DECISIONS 348](docs/DECISIONS.md)).
 
-- **With `-cohort`, nothing changes.** bean prints the same lines and saves the same claim. It reads neither of the two records.
+- **With `-cohort`, a run that compares prints the same lines** and saves the same claim. It reads neither of the two records. An error of usage shows a new usage line.
 - **With only `-pack`, nothing changes.** bean lists what the pack holds.
 - **`bean compare -pack` with readings and no `-cohort` was an error, with exit 2.** It started with the words `name a cohort of the pack with -cohort:`. In three cases it is still that error, with a sentence more. They are: with `-save`, with a pack that is not on record, and when no `person.sex` or no `person.birth` record counts.
-- **The new way is for a pack on record, with no `-save`.** bean then checks the selection and reads the log, as it does with `-cohort`. An error there comes first. Record ids beside `-type` give exit 2. No log, or no reading that matches, gives exit 1.
-- **With both records, that command prints a table.** Each row has the cohort of the age on the reading's own date, in a new COHORT column. [REFERENCE.md](docs/REFERENCE.md#the-cohort-from-two-records) has the rules. It saves nothing.
+- **The new way is for a pack on record, with no `-save`.** bean then checks the selection and reads the log, as it does with `-cohort`. An error there comes first. Record ids beside `-type` give exit 2. No reading that matches gives exit 1.
+- **That way can now delete a saved comparison.** As every `bean compare` with readings, it first deletes the saved comparisons of a reading that was corrected or deleted. In 0.8.4 this command stopped before that. It does so also when it then stops for a record.
+- **With both records, that command prints a table.** Each row has the cohort of the age on the reading's own date, in a new COHORT column. [REFERENCE.md](docs/REFERENCE.md#the-cohort-from-two-records) has the rules. It saves no comparison.
 - **Which records count.** A record counts when your identity signed it about you, with the source `self` and no ref. `bean add` with no `-agent` writes it so.
 - **If your log already has a record of type `person.sex` or `person.birth`,** bean now reads it. Until now bean gave these types no meaning. `bean ls -type 'person.*'` shows what your log holds. A record that breaks a rule stops that command with exit 1, and not 2. The stop names the record by id. With `-cohort`, bean reads neither.
 - **The two records are optional, and they are ordinary records.** Whoever reads your log reads them: a copy, an export, a share of `*`, and an assistant with `bean mcp`. A share of `lab.*` or of a comparison does not carry them.

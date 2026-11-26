@@ -117,6 +117,9 @@ const (
 	HasCohort Why = iota
 	// BeforeBirth: the reading is before the birth.
 	BeforeBirth
+	// MaybeBeforeBirth: the reading is before the birth or just after it:
+	// the lowest age is below zero.
+	MaybeBeforeBirth
 	// Edge: the two ages are in two cohorts.
 	Edge
 	// MenuEdge: one age is in a cohort, and the other is in none.
@@ -141,8 +144,11 @@ func (k OnRecordPack) cohortOf(sex string, age int) string {
 // between two.
 func (k OnRecordPack) CohortAt(sex string, birth, reading Months) (string, Why) {
 	lowest, highest := Ages(reading, birth)
-	if highest < 0 {
+	switch {
+	case highest < 0:
 		return "", BeforeBirth
+	case lowest < 0:
+		return "", MaybeBeforeBirth
 	}
 	a, b := k.cohortOf(sex, lowest), k.cohortOf(sex, highest)
 	switch {

@@ -12,8 +12,9 @@ import (
 
 // bean compare -pack with no -cohort takes each reading's cohort from two
 // records of the person, person.sex and person.birth, and from the
-// reading's own date (DECISIONS 345). It shows, and saves nothing. With
-// -cohort bean reads neither record.
+// reading's own date (DECISIONS 345). It shows, and saves no comparison.
+// As every compare with readings, it first deletes the saved comparisons
+// of a reading that is gone. With -cohort bean reads neither record.
 
 // caveatFromRecords takes the place of "you chose the cohort" on the
 // screen. No claim holds it: a comparison is saved only with -cohort.
@@ -157,6 +158,9 @@ func (p person) cohortOf(s *core.Store, k pack.OnRecordPack, r *core.Record) (co
 	switch why {
 	case pack.BeforeBirth:
 		return "", "the reading is dated before the birth in person.birth: correct one, or name a cohort with -cohort"
+	case pack.MaybeBeforeBirth:
+		// Not "the age on that date": the person was perhaps not born.
+		return "", "the reading may be dated before the birth in person.birth: correct one, or name a cohort with -cohort"
 	case pack.NoCohort:
 		// Every cohort of the menu is then of another age, and the row says so.
 		return "", "the pack has no cohort for the age on that date: -cohort sets it against a cohort of another age"

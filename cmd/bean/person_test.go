@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Conscious-Repository/bean/core"
 )
 
 // personLog is compareLog with the synthetic pack on record for the runs
@@ -203,6 +205,7 @@ func TestComparePackRowsWithNoCohort(t *testing.T) {
 		noDate   = "not comparable: the reading has no date: name a cohort with -cohort"
 		after    = "not comparable: the reading is dated after now: correct its date, or name a cohort with -cohort"
 		before   = "not comparable: the reading is dated before the birth in person.birth: correct one, or name a cohort with -cohort"
+		maybe    = "not comparable: the reading may be dated before the birth in person.birth: correct one, or name a cohort with -cohort"
 		none     = "not comparable: the pack has no cohort for the age on that date: -cohort sets it against a cohort of another age"
 		edge     = "not comparable: the date lies on the edge of two cohorts: name one with -cohort"
 		menuEdge = "not comparable: the date lies on the edge of the pack's cohorts: name one with -cohort if it holds the age on that date"
@@ -245,7 +248,8 @@ func TestComparePackRowsWithNoCohort(t *testing.T) {
 		appendedIDs[2]:                           edge + month, // all of 2016: 29 or 30
 		cholesterol(t, dir, "160", "2999-01-01"): after,
 		cholesterol(t, dir, "160", "1985-12-31"): before,
-		cholesterol(t, dir, "160", "1986-06-01"): none,             // 0 at most
+		cholesterol(t, dir, "160", "1986-06-01"): maybe,            // the year of the birth: no age is sure
+		cholesterol(t, dir, "160", "1987-06-01"): none,             // 0 or 1
 		cholesterol(t, dir, "160", "2004-06-01"): none,             // 17 or 18
 		cholesterol(t, dir, "160", "2006-06-01"): menuEdge + month, // 19 or 20
 		cholesterol(t, dir, "160", "2007-01-01"): "",               // 20 or 21
@@ -294,7 +298,8 @@ func TestComparePackRowsWithNoCohort(t *testing.T) {
 		cholesterol(t, dir, "160", "2016-06-01"):                "",
 		cholesterol(t, dir, "160", "2006-05-15"):                menuEdge,
 		cholesterol(t, dir, "160", "1986-04-30"):                before,
-		cholesterol(t, dir, "160", "1986-05-01"):                none,
+		cholesterol(t, dir, "160", "1986-05-01"):                maybe,
+		cholesterol(t, dir, "160", "1986-06-01"):                none,
 	}, "female")
 	// A cohort that the pack has no table for: the row names the cohort
 	// that it means, and has no number.
@@ -707,5 +712,58 @@ func TestRealPackTakesTheCohortFromTheRecords(t *testing.T) {
 		if fields := strings.Fields(packRow(out, id)); len(fields) < 5 || fields[4] != "18.9" {
 			t.Errorf("with -cohort male-30-39, want 18.9 in the row: %s", packRow(out, id))
 		}
+	}
+}
+
+// TestComparePackFromRecordsDeletesAStaleComparison: as every compare with
+// readings, a run with no -cohort first deletes the saved comparisons of a
+// reading that was corrected or deleted. It saves no comparison, and it is
+// not a run that writes nothing. It does so also when it then stops for
+// the records. A correction that another tool copied into the log is the
+// case: no command of bean has seen it yet.
+func TestComparePackFromRecordsDeletesAStaleComparison(t *testing.T) {
+	dir, path, ids := personLog(t)
+	if out, errs, code := run(t, dir, "", "compare", "-pack", path, "-cohort", "male-40-49", "-save", ids[0], ids[1]); code != 0 {
+		t.Fatalf("-save: %d\n%s\n%s", code, out, errs)
+	}
+	count := func(d string) int {
+		ls, _, _ := run(t, d, "", "ls", "-type", "comparison.percentile")
+		return strings.Count(ls, "comparison.percentile")
+	}
+	// Each reading is corrected in a copy, and only the file of the
+	// correction comes back.
+	stale := func(reading, value string) {
+		t.Helper()
+		other := t.TempDir()
+		if err := os.CopyFS(other, os.DirFS(dir)); err != nil {
+			t.Fatal(err)
+		}
+		typ := map[string]string{ids[0]: "lab.cholesterol-total", ids[1]: "lab.hdl-cholesterol"}[reading]
+		correction := add(t, other, typ, value, "-unit", "mg/dL", "-at", "2026-11-01", "-corrects", reading)
+		data, err := os.ReadFile(filepath.Join(other, core.PathOf(correction)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		to := filepath.Join(dir, core.PathOf(correction))
+		if err := os.MkdirAll(filepath.Dir(to), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(to, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stale(ids[0], "201")
+	// No person record: the run stops as before, and has deleted first.
+	out, errs, code := run(t, dir, "", "compare", "-pack", path, "-type", "lab.*")
+	if code != 2 || out != "" || !strings.Contains(errs, "bean: deleted 1 saved comparisons: their readings were corrected or deleted") || !strings.Contains(errs, "name a cohort of the pack with -cohort") {
+		t.Fatalf("a stop after a stale comparison: %d\n%s\n%s", code, out, errs)
+	}
+	// With both records: it deletes, prints the table and saves none.
+	add(t, dir, "person.sex", "male")
+	add(t, dir, "person.birth", "1986-05")
+	stale(ids[1], "61")
+	out, errs, code = run(t, dir, "", "compare", "-pack", path, "-type", "lab.*")
+	if code != 0 || !strings.Contains(errs, "bean: deleted 1 saved comparisons") || !strings.Contains(out, notSavedFromRecords) || count(dir) != 0 {
+		t.Fatalf("a table after a stale comparison: %d, %d comparisons\n%s\n%s", code, count(dir), out, errs)
 	}
 }

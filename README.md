@@ -241,7 +241,7 @@ bean compare -pack nhanes.pack                                       # what it h
 bean compare -pack nhanes.pack -cohort male-30-39 -type 'lab.*'      # compare
 ```
 
-With no `-cohort`, bean takes each reading's cohort from its date and from two records that you state once: `person.sex` and `person.birth`. Both are optional ([REFERENCE.md](docs/REFERENCE.md#the-cohort-from-two-records)).
+With a pack on record and no `-cohort`, bean takes each reading's cohort from its date and from two records: `person.sex` and `person.birth`. Both are optional ([REFERENCE.md](docs/REFERENCE.md#the-cohort-from-two-records)).
 
 Today you build a pack, someone gives you the file, or you fetch one from a host with `curl`. Any person can run a [read-only host](examples/pack-host/README.md). Keep the pack file: your log names it by its SHA-256 and does not hold it.
 
