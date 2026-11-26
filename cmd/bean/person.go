@@ -104,13 +104,14 @@ func readPerson(s *core.Store, l *core.Loaded, menu string) person {
 			missing = append(missing, pack.BirthType)
 		}
 		// No command to copy is here: the two are the person's to state,
-		// or not, and whoever runs this may be their assistant.
+		// or not, and whoever runs this may be their assistant. The forms
+		// are here: a person with only the program has no REFERENCE.md.
 		notRead := ""
 		if otherRecords(l, missing) {
 			// It says what does not count, and not how to write one that does.
 			notRead = " What it does hold does not count. No record of an agent or of a peer counts, and none about another person, with another source or with a ref."
 		}
-		badArg(fmt.Errorf("name a cohort of the pack with -cohort: %s. With no -cohort, bean takes each reading's cohort from its date and from two records, person.sex and person.birth. The log has no current %s record that counts.%s Both are optional, and -cohort needs neither. docs/REFERENCE.md, \"The cohort from two records\", has the rules and says who can read them", menu, strings.Join(missing, " and no "), notRead))
+		badArg(fmt.Errorf("name a cohort of the pack with -cohort: %s. With no -cohort, bean takes each reading's cohort from its date and from two records, person.sex and person.birth. The log has no current %s record that counts.%s Both are optional, and -cohort needs neither. person.sex is male or female. person.birth is a year, or a year and a month as 1986-05. Whoever reads your log reads them. docs/REFERENCE.md, \"The cohort from two records\", has the rules", menu, strings.Join(missing, " and no "), notRead))
 	}
 	orCohort := "Or name a cohort of the pack with -cohort: " + menu
 	p := person{sexIDs: shortIDs(sexes), birthIDs: shortIDs(births)}
@@ -124,16 +125,26 @@ func readPerson(s *core.Store, l *core.Loaded, menu string) person {
 	if !oneValue(births) {
 		fail(fmt.Errorf("the records person.birth (%s) do not state one value. Correct one with bean add person.birth <value> -corrects <id>, or delete one with bean purge <id>. %s", p.birthIDs, orCohort))
 	}
+	// Several records can state one value. The stop then speaks of each:
+	// who corrects one alone comes to the stop for two values.
+	theBirth, it := "the record person.birth ("+p.birthIDs+") is", "it"
+	if len(births) > 1 {
+		theBirth, it = "the records person.birth ("+p.birthIDs+") are", "each"
+	}
 	birth, form := pack.BirthMonths(births[0].Value)
 	if !form {
-		fail(fmt.Errorf("the record person.birth (%s) is not a year of four digits with no unit, or a year and a month as 1986-05. Correct it with bean add person.birth <value> -corrects <id>. %s", p.birthIDs, orCohort))
+		fail(fmt.Errorf("%s not a year of four digits with no unit, or a year and a month as 1986-05. Correct %s with bean add person.birth <value> -corrects <id>. %s", theBirth, it, orCohort))
 	}
 	if birth.After(s.Now()) {
-		fail(fmt.Errorf("the record person.birth (%s) is after now. Correct it with bean add person.birth <value> -corrects <id>. %s", p.birthIDs, orCohort))
+		fail(fmt.Errorf("%s after now. Correct %s with bean add person.birth <value> -corrects <id>. %s", theBirth, it, orCohort))
 	}
 	sex, ok := pack.Sex(sexes[0].Value)
 	if !ok {
-		fail(fmt.Errorf("the record person.sex (%s) is not exactly male or female, the two groups that this pack has. Name a cohort of the pack with -cohort: %s", p.sexIDs, menu))
+		theSex := "the record person.sex (" + p.sexIDs + ") is"
+		if len(sexes) > 1 {
+			theSex = "the records person.sex (" + p.sexIDs + ") are"
+		}
+		fail(fmt.Errorf("%s not exactly male or female, the two groups that this pack has. Name a cohort of the pack with -cohort: %s", theSex, menu))
 	}
 	p.sex, p.birth, p.birthYear = sex, birth, birth.First != birth.Last
 	return p
@@ -161,7 +172,8 @@ func (p person) cohortOf(s *core.Store, k pack.OnRecordPack, r *core.Record) (co
 		return "", "the reading is dated before the birth in person.birth: correct one. -cohort sets it against a cohort of another age"
 	case pack.MaybeBeforeBirth:
 		// Not "the age on that date": the person was perhaps not born.
-		return "", "the reading may be dated before the birth in person.birth: correct one. -cohort sets it against a cohort of another age"
+		// And not "correct one": both dates can be true, as for a newborn.
+		return "", "the reading may be dated before the birth in person.birth: if one of the two dates is wrong, correct it. -cohort sets it against a cohort of another age"
 	case pack.NoCohort:
 		// Every cohort of the menu is then of another age, and the row says so.
 		return "", "the pack has no cohort for the age on that date: -cohort sets it against a cohort of another age"
@@ -172,10 +184,11 @@ func (p person) cohortOf(s *core.Store, k pack.OnRecordPack, r *core.Record) (co
 			refused = "the date lies on the edge of the pack's cohorts: name one with -cohort if it holds the age on that date"
 		}
 		// A month of birth helps a reading that has a month. A reading of
-		// a whole year stays on its edge, whatever the month. And not
-		// "add": a second record with another value is a stop.
+		// a whole year stays on its edge, whatever the month. Not "add":
+		// a second record with another value is a stop. And not "correct":
+		// a year alone is not wrong.
 		if p.birthYear && months.First == months.Last {
-			refused += ", or correct person.birth to a year and a month"
+			refused += ", or replace person.birth with a year and a month"
 		}
 		return "", refused
 	}

@@ -223,11 +223,11 @@ func TestComparePackRowsWithNoCohort(t *testing.T) {
 		noDate   = "not comparable: the reading has no date: name a cohort with -cohort"
 		after    = "not comparable: the reading is dated after now: correct its date, or name a cohort with -cohort"
 		before   = "not comparable: the reading is dated before the birth in person.birth: correct one. -cohort sets it against a cohort of another age"
-		maybe    = "not comparable: the reading may be dated before the birth in person.birth: correct one. -cohort sets it against a cohort of another age"
+		maybe    = "not comparable: the reading may be dated before the birth in person.birth: if one of the two dates is wrong, correct it. -cohort sets it against a cohort of another age"
 		none     = "not comparable: the pack has no cohort for the age on that date: -cohort sets it against a cohort of another age"
 		edge     = "not comparable: the date lies on the edge of two cohorts: name one with -cohort"
 		menuEdge = "not comparable: the date lies on the edge of the pack's cohorts: name one with -cohort if it holds the age on that date"
-		month    = ", or correct person.birth to a year and a month"
+		month    = ", or replace person.birth with a year and a month"
 	)
 	undated := `{"type":"lab.cholesterol-total","times":{"observed":null},"value":{"n":160,"unit":"mg/dL"},"source":{"system":"self","adapter":"synthetic@1","ref":null}}`
 	wholeYear := `{"type":"lab.cholesterol-total","times":{"observed":{"start":"2015-01-01T00:00:00Z","precision":"year"}},"value":{"n":161,"unit":"mg/dL"},"source":{"system":"self","adapter":"synthetic@1","ref":null}}`
@@ -356,7 +356,7 @@ func TestComparePackStopsOnTheRecords(t *testing.T) {
 	// records and where their rules are. It has no command to copy: whoever
 	// runs this may be the person's assistant, and the two are optional.
 	out, errs, code := compare(dir)
-	if code != 2 || out != "" || !strings.HasPrefix(errs, "bean: "+cohort) || !strings.Contains(errs, "The log has no current person.sex and no person.birth record that counts. Both are optional, and -cohort needs neither. docs/REFERENCE.md, \"The cohort from two records\", has the rules and says who can read them") || strings.Contains(errs, "bean add") || strings.Contains(errs, "does not count") {
+	if code != 2 || out != "" || !strings.HasPrefix(errs, "bean: "+cohort) || !strings.Contains(errs, "The log has no current person.sex and no person.birth record that counts. Both are optional, and -cohort needs neither. person.sex is male or female. person.birth is a year, or a year and a month as 1986-05. Whoever reads your log reads them. docs/REFERENCE.md, \"The cohort from two records\", has the rules") || strings.Contains(errs, "bean add") || strings.Contains(errs, "does not count") {
 		t.Errorf("no record: %d\n%s\n%s", code, out, errs)
 	}
 	// A record that was deleted is not a record that bean does not read.
@@ -399,13 +399,17 @@ func TestComparePackStopsOnTheRecords(t *testing.T) {
 		"a birth with a fraction":    {sex: [][]string{{"male"}}, birth: [][]string{{"1986.5"}}, code: 1, want: []string{wrongForm}},
 		"a birth with a unit":        {sex: [][]string{{"male"}}, birth: [][]string{{"1986", "-unit", "a"}}, code: 1, want: []string{wrongForm}},
 		"a birth after now":          {sex: [][]string{{"male"}}, birth: [][]string{{"2999"}}, code: 1, want: []string{"the record person.birth (", "is after now. Correct it with bean add person.birth <value> -corrects <id>. Or " + cohort}},
+		// Several records with one bad value: the stop speaks of each. Who
+		// corrects one alone comes to the stop for two values.
+		"two births of one wrong form": {sex: [][]string{{"male"}}, birth: [][]string{{"86"}, {"86"}}, code: 1, want: []string{"the records person.birth (", ") are not a year of four digits with no unit, or a year and a month as 1986-05. Correct each with bean add person.birth <value> -corrects <id>. Or " + cohort}, never: []string{"the record person", "Correct it"}},
+		"two births after now":         {sex: [][]string{{"male"}}, birth: [][]string{{"2999"}, {"2999"}}, code: 1, want: []string{"the records person.birth (", ") are after now. Correct each with bean add person.birth <value> -corrects <id>. Or " + cohort}, never: []string{"the record person", "Correct it"}},
 		// For a word that the pack does not have, -cohort alone: nobody is
 		// asked to write what is not true.
 		"another word of sex":                      {sex: [][]string{{"intersex"}}, birth: [][]string{{"1986"}}, code: 1, want: []string{"the record person.sex (", "is not exactly male or female, the two groups that this pack has. Name a cohort of the pack with -cohort: female-20-29, "}, never: []string{"orrect", "purge", "bean add"}},
 		"a sex in capitals":                        {sex: [][]string{{"Male"}}, birth: [][]string{{"1986"}}, code: 1, want: []string{"is not exactly male or female"}, never: []string{"orrect"}},
 		"a sex that is a number":                   {sex: [][]string{{"1"}}, birth: [][]string{{"1986"}}, code: 1, want: []string{"is not exactly male or female"}},
 		"a sex that is yes":                        {sex: [][]string{{"yes"}}, birth: [][]string{{"1986"}}, code: 1, want: []string{"is not exactly male or female"}},
-		"the same word twice, and not of the pack": {sex: [][]string{{"intersex"}, {"intersex"}}, birth: [][]string{{"1986"}}, code: 1, want: []string{"is not exactly male or female"}, never: []string{"orrect"}},
+		"the same word twice, and not of the pack": {sex: [][]string{{"intersex"}, {"intersex"}}, birth: [][]string{{"1986"}}, code: 1, want: []string{"the records person.sex (", ") are not exactly male or female, the two groups that this pack has. Name a cohort"}, never: []string{"orrect"}},
 	} {
 		d := t.TempDir()
 		if err := os.CopyFS(d, os.DirFS(dir)); err != nil {

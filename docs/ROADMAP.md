@@ -41,8 +41,8 @@ The sender should be able to review and stop each permission, and each reader sh
 
 - Whether the survey method drops its 30 too, as a pack cell did (DECISIONS 333). The packs on record would need a new builder version.
 - Whether a result from a very small cell gets words of its own.
-- Whether sex and birth stay two records, or become the flags `-sex` and `-born` of `bean compare -pack`, which store nothing. The author chose the records (DECISIONS 345, 348).
-- Whether `bean coverage` takes the cohort from the two records as well. It needs `-cohort` today.
+- Whether sex and birth stay two records, or become the flags `-sex` and `-born` of `bean compare -pack`, which store nothing. The author chose the records. Of three reviews of 2026-11-26, two leaned to the flags and one to the records (DECISIONS 345, 348).
+- Whether `bean coverage` takes the cohort from the two records as well. It needs `-cohort` today. The three reviews of 2026-11-26 said that it waits (DECISIONS 348).
 - Whether 1.0 can come while `pack/0` is a draft, and whether a review from outside the project is a condition of 1.0.
 - Whether the caveat of a small cohort stays at 100, and why 100. The number is set twice in the code, with no reason given.
 - Whether a record gets a mark for a value that was typed by hand.
@@ -112,6 +112,9 @@ A second publisher can serve the same public pack. With the first host unreachab
 - Require the CI check on `main`. Today GitHub reports that `main` is not protected. On 2026-11-23, 17 commits reached `main` with no pull request and no review (DECISIONS 346).
 - `internal/coverage` repeats the match rules of `internal/pack` to show them. Its tests are those of the command, with two of its own.
 - A table of names for one quantity. It waits for a real case (DECISIONS 323).
+- A `person.sex` or `person.birth` record that is `about` another record counts today. Whether such a comment counts is open (DECISIONS 348).
+- On the edge of a pack's cohorts, a row can advise a month of birth where no month gives a number (DECISIONS 348).
+- A test that holds the sex and the ages of each cohort in bean's code to the menu that the pack's builder uses.
 
 ## Not planned
 

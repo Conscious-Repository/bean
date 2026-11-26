@@ -52,7 +52,7 @@ No record changes, and `bean verify` and `bean ls` print the same for an existin
 - **If your log already has a record of type `person.sex` or `person.birth`,** bean now reads it. Until now bean gave these types no meaning. `bean ls -type 'person.*'` shows what your log holds. A record that breaks a rule stops that command with exit 1, and not 2. The stop names the record by id. With `-cohort`, bean reads neither.
 - **The two records are optional, and they are ordinary records.** Whoever reads your log reads them: a copy, an export, a share of `*`, and an assistant with `bean mcp`. A share of `lab.*` or of a comparison does not carry them.
 - **An earlier release gives the two records no meaning.** It lists them with `bean ls`, like any record. There, `bean compare -pack` with readings and no `-cohort` stays an error.
-- **Copy the rule for your assistant again.** [ONBOARDING.md](docs/ONBOARDING.md) now tells it not to ask for your sex or birth, and not to add these records. A record that it adds with a plain `bean add` is signed under your identity.
+- **Copy the rule for your assistant again.** [ONBOARDING.md](docs/ONBOARDING.md) now tells it not to ask for your sex or birth, not to add these records, and not to choose a cohort for you. A record that it adds with a plain `bean add` is signed under your identity.
 - **The usage line of `compare -pack` changes.** It shows that `-save` needs `-cohort`, and that readings can come with no `-cohort`.
 - **No saved comparison reads differently.** No text of a claim changes, and the two packs on record are the same two.
 
