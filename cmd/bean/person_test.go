@@ -625,10 +625,10 @@ func TestCohortCaveatNamesItsCohort(t *testing.T) {
 	}
 }
 
-// TestPersonRecordsAreOrdinaryRecords: the two are listed, corrected,
-// shared and deleted as any record. A share of lab readings or of a
-// comparison does not bring them, and a share of everything does. The MCP
-// tool does not write them: they are not in the vocabulary.
+// TestPersonRecordsAreOrdinaryRecords: the two are listed and shared as
+// any record. A share of lab readings or of a comparison does not bring
+// them, and a share of everything does. The MCP tool does not write them:
+// they are not in the vocabulary. Other tests correct and delete them.
 func TestPersonRecordsAreOrdinaryRecords(t *testing.T) {
 	dir, path, ids := personLog(t)
 	sex, birth := add(t, dir, "person.sex", "male"), add(t, dir, "person.birth", "1986-05")
