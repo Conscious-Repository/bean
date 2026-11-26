@@ -37,6 +37,12 @@ jobs:
         with:
           name: bean-check
           path: dist/
+      # make tools builds staticcheck with the Go of go.mod, at the version
+      # that the Makefile names. make vuln runs apart, in vuln.yml.
+      - name: Lint
+        run: |
+          make tools
+          PATH="$(go env GOPATH)/bin:$PATH" make lint
       - name: Verify build, tests and vectors
         run: |
           make fmt vet build prose test vectors second compare pack pool bundles device example demo

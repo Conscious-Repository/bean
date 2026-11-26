@@ -1,13 +1,15 @@
 # make check runs every check that a commit needs. make fuzz and make smoke
 # run the longer checks. Tools: staticcheck and govulncheck on the PATH,
 # and a python3 with tools/requirements.txt installed for the vectors.
+# make tools installs the two checkers.
 PY ?= python3
 FUZZTIME ?= 2m
 
-.PHONY: help check build fmt vet test lint vuln prose vectors second compare pack pool bundles device page dist pagetest example differential demo fuzz smoke
+.PHONY: help check tools build fmt vet test lint vuln prose vectors second compare pack pool bundles device page dist pagetest example differential demo fuzz smoke
 
 help:
 	@echo "make check         every check a commit needs (fmt vet build test lint vuln prose vectors second compare pack pool bundles device pagetest example differential demo)"
+	@echo "make tools         install staticcheck and govulncheck, built with the Go of go.mod"
 	@echo "make test          go test -race -failfast ./..."
 	@echo "make prose         no sentence of a document is longer than 25 words"
 	@echo "make vectors       regenerate vectors/ and check them byte for byte and with Python"
@@ -42,11 +44,27 @@ test:
 	go test -race -failfast -skip TestVerifyScales ./...
 	go test -failfast ./core -run TestVerifyScales
 
+# staticcheck and govulncheck read the standard library from source, with
+# the type checker of the Go that built them. A checker from an older Go
+# than the one go.mod names cannot read that library. So this builds both
+# with the Go of this folder, at the versions that CI uses. They go where
+# go install puts a program: GOBIN, or the bin folder of GOPATH.
+STATICCHECK = honnef.co/go/tools/cmd/staticcheck@v0.8.2
+GOVULNCHECK = golang.org/x/vuln/cmd/govulncheck@v1.10.0
+tools:
+	GOTOOLCHAIN=$$(go env GOVERSION) go install $(STATICCHECK)
+	GOTOOLCHAIN=$$(go env GOVERSION) go install $(GOVULNCHECK)
+
 lint:
 	staticcheck ./...
 
+# govulncheck asks the first go on the PATH which Go it is, with modules
+# off. That go then does not switch to the toolchain of go.mod. When it is
+# older, govulncheck reads the library of the newer Go as the older
+# language, and stops with "requires go1.26 or later". So the Go of this
+# folder goes first on the PATH. The check needs the host vuln.go.dev.
 vuln:
-	govulncheck ./...
+	PATH="$$(go env GOROOT)/bin:$$PATH" govulncheck ./...
 
 # The documents use Simplified Technical English. This checks the rule of
 # it that can be counted: a sentence has at most 25 words. DECISIONS.md is a
