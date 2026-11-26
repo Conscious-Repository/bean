@@ -231,7 +231,8 @@ bean has two packs on record, each by its SHA-256: the NHANES pack of 13 measure
 
 - `bean compare -pack` shows a warning and the pack's SHA-256. It compares only with `-accept-pack <sha256>` when the file has that SHA-256, or with `-unknown-pack` for any file. Each result then has the caveat above, in the output and in the saved claim. Neither flag puts the pack on record, and bean stores neither.
 - `bean check-bundle` and the check page mark the row: `by pack 7f3fda515b16 (NOT on record)`. They show what the reading was set against in quotation marks: it is the claim's word. They show the title only as what the sender calls it.
-- `tools/compare/reproduce.py` computes the claim again, prints `NOT on record`, and fails. A reader who trusts the pack's publisher names the SHA-256: `-accept-pack <SHA-256>`.
+- `tools/compare/reproduce.py` computes the claim again, prints `NOT on record`, and fails. A reader who trusts the pack's publisher names the SHA-256: `-accept-pack <SHA-256>`. The tool fails for a value that names a pack on record, or no pack that it was given.
+- A saved claim does not say whether the person used `-accept-pack` or `-unknown-pack`. The two claims are the same. A reader cannot tell from a claim that anyone checked the pack's SHA-256.
 
 For a pack on record, bean holds each measure's label, the types and units that it takes, each cohort in words, and the caveats. A row shows the label and the cohort, whatever the claim says. A claim that says otherwise is marked `(the claim MISSTATES this pack)`. So is one that sets a reading against a measure that does not take it, and one that drops a caveat or adds one.
 
