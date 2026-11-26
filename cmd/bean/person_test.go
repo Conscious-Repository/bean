@@ -134,6 +134,11 @@ func TestComparePackFromRecords(t *testing.T) {
 	if ls, _, _ := run(t, dir, "", "ls", "-all", "-type", "comparison.*"); ls != "" {
 		t.Errorf("a run with no -cohort saved a comparison:\n%s", ls)
 	}
+	// -unknown-pack changes nothing here: the pack is one on record.
+	plain, _, _ := run(t, dir, "", "compare", "-pack", path, "-type", "lab.*")
+	if same, _, code := run(t, dir, "", "compare", "-pack", path, "-unknown-pack", "-type", "lab.*"); code != 0 || same != plain || !strings.Contains(same, "male-20-29") {
+		t.Errorf("-unknown-pack with a pack on record: %d\n%s", code, same)
+	}
 	// -save needs -cohort, as before, and writes nothing without it.
 	out, errs, code = run(t, dir, "", "compare", "-pack", path, "-type", "lab.*", "-save")
 	if code != 2 || !strings.Contains(errs, "name a cohort of the pack with -cohort: female-20-29") || !strings.Contains(errs, "-save keeps a comparison only with a cohort that you name: run once for each cohort, with the ids of its readings") || out != "" {
@@ -176,10 +181,10 @@ func TestComparePackRowsWithNoCohort(t *testing.T) {
 		noDate   = "not comparable: the reading has no date: name a cohort with -cohort"
 		after    = "not comparable: the reading is dated after now: name a cohort with -cohort"
 		before   = "not comparable: the reading is dated before the birth in person.birth: correct one, or name a cohort with -cohort"
-		none     = "not comparable: the pack has no cohort for the age on that date: to choose one, pass -cohort"
+		none     = "not comparable: the pack has no cohort for the age on that date: -cohort sets it against a cohort of another age"
 		edge     = "not comparable: the date lies on the edge of two cohorts: name one with -cohort"
 		menuEdge = "not comparable: the date lies on the edge of the pack's cohorts: to choose one, pass -cohort"
-		month    = ", or add the month of birth"
+		month    = ", or correct person.birth to a year and a month"
 	)
 	undated := `{"type":"lab.cholesterol-total","times":{"observed":null},"value":{"n":160,"unit":"mg/dL"},"source":{"system":"self","adapter":"synthetic@1","ref":null}}`
 	wholeYear := `{"type":"lab.cholesterol-total","times":{"observed":{"start":"2015-01-01T00:00:00Z","precision":"year"}},"value":{"n":161,"unit":"mg/dL"},"source":{"system":"self","adapter":"synthetic@1","ref":null}}`
@@ -418,7 +423,7 @@ func TestWhichPersonRecordsCount(t *testing.T) {
 		t.Fatal(errs)
 	}
 	add(t, dir, "-agent", "person.sex", "male")
-	const notRead = "It has one that bean does not read: only a record that your identity signed about you with bean add counts, and not one of an agent, a peer or an importer."
+	const notRead = "What it holds of these types, bean does not read: only a record that your identity signed about you, as bean add writes it, counts, and not one of an agent, a peer or an importer."
 	if _, errs, code := compare(); code != 2 || !strings.Contains(errs, "The log has no current person.sex and no person.birth that your identity signed. "+notRead+" Both are optional") {
 		t.Fatalf("only an agent's record: %d\n%s", code, errs)
 	}

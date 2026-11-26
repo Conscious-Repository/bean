@@ -153,7 +153,7 @@ Nothing is written until you add `-save`. Then each result is a record that you 
 - **What bean checks,** and what no check shows: [ARCHITECTURE.md](ARCHITECTURE.md#what-bean-checks-in-a-comparison).
 - **A pack from a host.** You fetch one file and check the same SHA-256, and the rest is as above ([FIRST-RUN.md](FIRST-RUN.md#each-compares-with-a-pack)).
 - **A group of your own,** by ethnicity, body or food: [COMPARE.md](COMPARE.md).
-- **The group of each reading's own date.** One run with `-cohort` sets an old reading against the one group that you name. State your sex and your birth once, as two records, and leave `-cohort` out ([REFERENCE.md](REFERENCE.md#the-cohort-from-two-records)). Both records are optional. Whoever reads your log reads them, and so does an assistant that you connect.
+- **The group of each reading's own date.** One run with `-cohort` sets an old reading against the one group that you name. You can state your sex and your birth once, as two records, and then leave `-cohort` out ([REFERENCE.md](REFERENCE.md#the-cohort-from-two-records)). Both records are optional. Whoever reads your log reads them, and so does an assistant that you connect.
 - **Keep the pack file.** Your log names it and does not hold it.
 
 ## 6. Share with one person (optional)

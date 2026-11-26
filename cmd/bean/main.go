@@ -46,7 +46,7 @@ Compare
   compare -sex <s> -age <from>-<to> [-where <rule>]... [-unknown-files] [-save] <id>... | -type <type>
                                 Show where a reading lies among people like the
                                 ones you describe, in public survey data (NHANES).
-  compare -pack <file> [[-cohort <cohort> [-unknown-pack] [-save]] <id>... | -type <type>]
+  compare -pack <file> [[-cohort <cohort> [-save]] [-unknown-pack] <id>... | -type <type>]
                                 The same with a reference pack: one file of
                                 public reference data. With only -pack, show
                                 what the pack holds. With readings and no
@@ -135,7 +135,7 @@ var syntax = map[string]string{
 	"accept":        "accept [-label <name>] [-words \"<eight words>\"] [-yes | -key <key file>] <reply>",
 	"unpair":        "unpair <name>",
 	"coverage":      "coverage -sources <file> -cohort <id> [-assets <folder>] [-report <sha256>] [-json]",
-	"compare":       "compare -sex male|female -age <from>-<to> [-where <DATASET>.<VARIABLE>=<value>|<from>-<to>]... [-unknown-files] [-save] <id>... | -type <type>\n       bean [-dir <folder>] compare -pack <file> [[-cohort <cohort> [-unknown-pack] [-save]] <id>... | -type <type>]",
+	"compare":       "compare -sex male|female -age <from>-<to> [-where <DATASET>.<VARIABLE>=<value>|<from>-<to>]... [-unknown-files] [-save] <id>... | -type <type>\n       bean [-dir <folder>] compare -pack <file> [[-cohort <cohort> [-save]] [-unknown-pack] <id>... | -type <type>]",
 	"mcp":           "mcp [-write] [-blobs] [-label <name>]",
 	"agent":         "agent init [-label <name>] [-identity <id>] | agent pair <npub> [-label <name>]",
 	"sync":          "sync <source folder>",

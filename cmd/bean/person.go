@@ -104,7 +104,7 @@ func readPerson(s *core.Store, l *core.Loaded, menu string) person {
 		// or not, and whoever runs this may be their assistant.
 		notRead := ""
 		if otherRecords(l, missing) {
-			notRead = " It has one that bean does not read: only a record that your identity signed about you with bean add counts, and not one of an agent, a peer or an importer."
+			notRead = " What it holds of these types, bean does not read: only a record that your identity signed about you, as bean add writes it, counts, and not one of an agent, a peer or an importer."
 		}
 		badArg(fmt.Errorf("name a cohort of the pack with -cohort: %s. With no -cohort, bean takes each reading's cohort from its date and from two records, person.sex and person.birth. The log has no current %s that your identity signed.%s Both are optional, and -cohort needs neither: docs/REFERENCE.md, \"The cohort from two records\", has the rules and says who can read them", menu, strings.Join(missing, " and no "), notRead))
 	}
@@ -153,14 +153,16 @@ func (p person) cohortOf(s *core.Store, k pack.OnRecordPack, r *core.Record) (co
 	case pack.BeforeBirth:
 		return "", "the reading is dated before the birth in person.birth: correct one, or name a cohort with -cohort"
 	case pack.NoCohort:
-		return "", "the pack has no cohort for the age on that date: to choose one, pass -cohort"
+		// Every cohort of the menu is then of another age, and the row says so.
+		return "", "the pack has no cohort for the age on that date: -cohort sets it against a cohort of another age"
 	case pack.Edge, pack.MenuEdge:
 		refused = "the date lies on the edge of two cohorts: name one with -cohort"
 		if why == pack.MenuEdge {
 			refused = "the date lies on the edge of the pack's cohorts: to choose one, pass -cohort"
 		}
 		if p.birthYear {
-			refused += ", or add the month of birth"
+			// Not "add": a second record with another value is a stop.
+			refused += ", or correct person.birth to a year and a month"
 		}
 		return "", refused
 	}
