@@ -395,7 +395,7 @@ python3 tools/compare/reproduce.py for-ana DEMO_J.xpt TCHOL_J.xpt
 python3 tools/compare/reproduce.py for-ana ~/bean-export/blobs
 ```
 
-A comparison that was made with a reference pack needs that pack ([REFERENCE.md](REFERENCE.md)). `bean check-bundle` and the page show in the row what the reading was set against, and `by pack` with the first digits of its SHA-256. For the pack that bean has on record, the label and the cohort are bean's own words for that pack. A claim that says otherwise is marked. A pack that bean has no record of is marked `(NOT on record)`, and its label is in quotation marks: it is the claim's word. The numbers of a comparison are shown as claimed. Below the records they give the full SHA-256. Send the pack file with the package, or tell your reader where it is: it is public data.
+A comparison that was made with a reference pack needs that pack ([REFERENCE.md](REFERENCE.md)). `bean check-bundle` and the page show in the row what the reading was set against, and `by pack` with the first digits of its SHA-256. For the pack that bean has on record, the label and the cohort are bean's own words for that pack. A claim that says otherwise is marked. A pack that bean has no record of is marked `(NOT on record)`, and its label is in quotation marks: it is the claim's word. The numbers of a comparison are shown as claimed, unless you give the pack with `-pack`. Below the records they give the full SHA-256. Send the pack file with the package, or tell your reader where it is: it is public data.
 
 ```
 bean check-bundle -pack nhanes.pack for-ana

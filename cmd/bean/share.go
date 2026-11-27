@@ -957,7 +957,7 @@ func cmdCheckBundle(args []string) {
 		if len(packPaths) > 0 {
 			line = strings.Replace(line, bundle.NotComputedAgain, "The comparisons above are shown as claimed. After bundle ok, bean says which of them computes again with the packs given.", 1)
 			if strings.HasPrefix(line, bundle.PackNotHere) {
-				line = bundle.PackNotHere + " After bundle ok, bean says which pack each one needs. The SHA-256 names the pack:"
+				line = bundle.PackNotHere + " After bundle ok, bean says which comparisons compute again with the packs given. The SHA-256 names the pack:"
 			}
 		}
 		fmt.Println(safe(line))

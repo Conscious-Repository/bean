@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/Conscious-Repository/bean/core"
 	"maps"
 	"os"
 	"path/filepath"
@@ -162,7 +163,7 @@ func TestCheckBundlePackHonest(t *testing.T) {
 		"comparisons: 3 compute again, 0 differ, 0 cannot be checked",
 		"\nevery comparison by a pack computes again\n",
 		"After bundle ok, bean says which of them computes again with the packs given.",
-		"not in this bundle. After bundle ok, bean says which pack each one needs.",
+		"not in this bundle. After bundle ok, bean says which comparisons compute again with the packs given.",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("no %q in\n%s", want, out)
@@ -186,7 +187,7 @@ func TestCheckBundlePackHonest(t *testing.T) {
 	// -accept-pack names another pack: nothing is accepted.
 	other := strings.Repeat("a", 64)
 	out, _, code = run(t, "", "", "check-bundle", "-pack", pc.pack, "-accept-pack", other, bundle)
-	if code != 3 || !strings.Contains(out, "NOT on record: the pack "+pc.digest) || !strings.Contains(out, "-accept-pack "+other+" names no pack that bean has no record of") {
+	if code != 3 || !strings.Contains(out, "NOT on record: the pack "+pc.digest) || !strings.Contains(out, "-accept-pack "+other+" does not count: no pack that was given with -pack has that SHA-256") {
 		t.Errorf("another -accept-pack: %d\n%s", code, out)
 	}
 }
@@ -220,7 +221,7 @@ func TestCheckBundlePackOnRecord(t *testing.T) {
 			t.Errorf("%s: %d\n%s\n%s", name, code, out, errs)
 		}
 		out, _, code = run(t, "", "", "check-bundle", "-pack", pc.pack, "-accept-pack", pc.digest, bundle)
-		if code != 3 || !strings.Contains(out, "-accept-pack "+pc.digest+" names no pack that bean has no record of") {
+		if code != 3 || !strings.Contains(out, "-accept-pack "+pc.digest+" does not count: it names a pack that bean has on record") {
 			t.Errorf("%s, -accept-pack: %d\n%s", name, code, out)
 		}
 	}
@@ -331,7 +332,7 @@ func TestCheckBundlePackCannotCheck(t *testing.T) {
 	out, _, code := run(t, "", "", "check-bundle", "-pack", otherPack, "-accept-pack", otherDigest, bundle)
 	v := verdicts(out)
 	if code != 3 || len(v) != 3 || !strings.Contains(out, "CANNOT CHECK: the pack with SHA-256 "+pc.digest+" was not given. Get that pack, and pass its file with -pack") ||
-		!strings.Contains(out, "(SHA-256 "+otherDigest+") is named by no comparison here") || !strings.Contains(out, "-accept-pack "+otherDigest+" names no pack") ||
+		!strings.Contains(out, "(SHA-256 "+otherDigest+") is named by no comparison here") || !strings.Contains(out, "-accept-pack "+otherDigest+" does not count: no comparison here names that pack") ||
 		!strings.Contains(out, "0 compute again, 0 differ, 3 cannot be checked") {
 		t.Errorf("another pack: %d\n%s", code, out)
 	}
@@ -555,4 +556,39 @@ func TestCheckBundlePackLocked(t *testing.T) {
 	if code != 1 || !strings.Contains(out, "the package did not open") || strings.Contains(out, "-pack: nothing was computed") {
 		t.Errorf("%d\n%s", code, out)
 	}
+}
+
+// TestRecomputeClaimTwoPeople: a claim about a reading of another person
+// differs. A bundle that passes cannot hold one, so the records are made
+// here: the reading of the true claim, with another subject.
+func TestRecomputeClaimTwoPeople(t *testing.T) {
+	pc := newPackClaims(t, "-accept-pack", mustDigest(t))
+	bundle := bundleOf(t, pc.dir)
+	in := bundleRecords(t, bundle)
+	records := core.VerifyFiles(in).Records
+	claim := records[pc.claim["id"].(string)]
+	reading := *records[claim.Context["reading"].(string)]
+	reading.Subject = "sha256:" + strings.Repeat("ef", 32)
+	records[reading.ID] = &reading
+	g := readGivenPacks([]string{pc.pack})
+	if _, err := recomputeClaim(claim, records, g, map[string]bool{}); err == nil || !strings.Contains(err.Error(), "about two people") {
+		t.Errorf("a reading of another person: %v", err)
+	}
+}
+
+// bundleRecords are the record files of a bundle's folder, by path.
+func bundleRecords(t *testing.T, dir string) map[string][]byte {
+	t.Helper()
+	in := map[string][]byte{}
+	err := filepath.WalkDir(filepath.Join(dir, "objects"), func(p string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			rel, _ := filepath.Rel(dir, p)
+			in[filepath.ToSlash(rel)], err = os.ReadFile(p)
+		}
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return in
 }

@@ -136,6 +136,11 @@ func recomputeClaim(c *core.Record, records map[string]*core.Record, g givenPack
 	if reading == nil {
 		return "", cannotCheck{fmt.Sprintf("the reading %s is not in the bundle. Ask the sender for a bundle that holds it", short(rid))}
 	}
+	// A bundle that passes holds no reading of another person: a hand-built
+	// one could. reproduce.py refuses it too.
+	if reading.Subject != c.Subject {
+		return "", differs("the claim and its reading are about two people")
+	}
 	rv, _ := reading.Raw["value"].(map[string]any)
 	value, ok := rv["n"].(float64)
 	if !ok || value < 0 {
@@ -366,10 +371,22 @@ func recomputeLines(in map[string][]byte, g givenPacks, accepted []string) ([]st
 		ok = false
 	}
 	for _, digest := range slices.Compact(slices.Sorted(slices.Values(accepted))) {
-		if !unrecorded[digest] {
-			lines = append(lines, fmt.Sprintf("-accept-pack %s names no pack that bean has no record of and that a comparison here was computed with. It may name a pack on record, a pack that was not given, or one whose comparisons stopped at an earlier check. Compare it with the SHA-256 that the publisher states", digest))
-			ok = false
+		if unrecorded[digest] {
+			continue
 		}
+		why := "no comparison here was computed with it. Compare it with the SHA-256 that the publisher states"
+		switch {
+		case pack.IsKnown(digest):
+			why = "it names a pack that bean has on record, which needs no -accept-pack"
+		case g.packs[digest] != nil && !named[digest]:
+			why = "no comparison here names that pack"
+		case g.packs[digest] != nil:
+			why = "each comparison with that pack stopped at an earlier check, above"
+		case g.packs[digest] == nil:
+			why = "no pack that was given with -pack has that SHA-256"
+		}
+		lines = append(lines, fmt.Sprintf("-accept-pack %s does not count: %s", digest, why))
+		ok = false
 	}
 	if len(claims) == 0 {
 		lines = append(lines, "the bundle holds no comparison: there is nothing to compute again")
