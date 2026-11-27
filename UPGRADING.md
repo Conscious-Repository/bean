@@ -53,6 +53,8 @@ No record changes, and `bean verify` and `bean ls` print the same for an existin
 - **With `-pack`, lines follow `bundle ok`.** Exit 3 means the bundle passed, and a comparison did not compute again or was not checked. Exit 1 still means a bundle that failed. A bundle with no comparison exits 3 with `-pack`.
 - **A pack that bean has no record of counts only with `-accept-pack <sha256>`,** as in `compare`. With a pack on record, that flag fails the check, as in `reproduce.py`.
 - **Without the flag, the comparison's own line says so:** `computes again, with a pack NOT accepted` ([DECISIONS 355](docs/DECISIONS.md)).
+- **A record of another type `comparison.*` is `CANNOT CHECK`,** and the check does not pass ([DECISIONS 356](docs/DECISIONS.md)). `tools/compare/reproduce.py` now fails for such a record too. Before, it did not read it.
+- **`bean compare` with `-cohort`, `-accept-pack` or `-unknown-pack` and no `-pack` names what is missing.** Before, it printed only the usage. The exit is still 2.
 
 ### 0.8.6 (2026-11-26)
 

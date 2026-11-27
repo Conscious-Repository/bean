@@ -402,7 +402,7 @@ bean check-bundle -pack nhanes.pack for-ana
 python3 tools/compare/reproduce.py for-ana nhanes.pack
 ```
 
-A comparison computes again with any pack that is well formed, and a made-up pack is well formed. So `check-bundle -pack` and `reproduce.py` fail for a pack that is not on record, and say so. bean says it on the comparison's own line too: `computes again, with a pack NOT accepted`. A reader who trusts that pack's publisher passes `-accept-pack` and its SHA-256. A comparison that names no pack and no files is marked `(names NO reference data)`: nobody can compute it again.
+A comparison computes again with any pack that is well formed, and a made-up pack is well formed. So `check-bundle -pack` and `reproduce.py` fail for a pack that is not on record, and say so. bean says it on the comparison's own line too: `computes again, with a pack NOT accepted`. A record of a type `comparison.*` that the tools do not compute is `CANNOT CHECK`, and both fail. A reader who trusts that pack's publisher passes `-accept-pack` and its SHA-256. A comparison that names no pack and no files is marked `(names NO reference data)`: nobody can compute it again.
 
 ## The bundle, exactly
 

@@ -210,6 +210,7 @@ With `-pack <file>`, bean also computes each comparison by a pack again, by the 
 
 - The lines come after `bundle ok`. Each comparison gets one: `computes again`, `DIFFERS` and why, or `CANNOT CHECK` and what to get.
 - `CANNOT CHECK` is a check that cannot be made: the pack with that SHA-256 was not given, or the reading is not in the bundle.
+- A record of another type `comparison.*` is `CANNOT CHECK` too. The bundle shows it as a comparison, and bean computes again only `comparison.percentile`.
 - A comparison with the survey's files is `not computed here`, and the check does not pass. `tools/compare/reproduce.py` computes it, given the files.
 - A pack that bean has no record of counts only with `-accept-pack <sha256>`, as in `compare`. Take the value from the pack's publisher. The flag may repeat.
 - Without that flag, the line of such a comparison says `computes again, with a pack NOT accepted`, and the check does not pass.
@@ -218,7 +219,7 @@ With `-pack <file>`, bean also computes each comparison by a pack again, by the 
 - A file that is not a pack is named, and each comparison that names it differs. A file that cannot be read is an error of use. So is one over 64 MiB.
 - The check says once what it shows: the numbers follow from the reading and the pack. It does not show that the reading is true, or that the pack is right.
 - No check reads the dates of a claim. Its times are the sender's, and bean does not compute them again.
-- Exit 0 when every comparison computes again, and each pack is on record or accepted. Exit 3 when the bundle passed and that is not so. A bundle with no comparison exits 3 with `-pack`, since nothing was computed.
+- Exit 0 when every comparison computes again, and each pack is on record or accepted. Exit 3 when the bundle passed and that is not so. A bundle with no comparison exits 3 with `-pack`, since nothing was computed. Its last line says that the bundle holds no comparison.
 - Exit 1 stays a bundle that failed. Then nothing is computed, and the last line says so. An error of use exits 2.
 - With `-unpack`, a package that passes is written also when the exit is 3.
 - Treat any exit but 0 as not checked. A bundle with a comparison of the survey's files exits 3 by design: bean does not compute it.

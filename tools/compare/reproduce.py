@@ -15,6 +15,9 @@ a data file. So a `bean export` folder or a share bundle with its files is
 enough by itself, and so is the output of `bean ls -json` next to the NHANES
 files you downloaded from CDC, or next to a pack.
 
+A record of another type comparison.* is CANNOT CHECK, and the run fails: a
+bundle shows it as a comparison, and this tool does not compute it.
+
 For each comparison.percentile record it checks, in this order:
 
  1. the record is what its id says and its signature is good, and so is
@@ -596,7 +599,10 @@ def main(argv):
         except OSError as err:
             print("cannot read %s: %s" % (safe(path), err))
             return 1
-    claims = [r for r in inputs.records.values() if r["type"] == "comparison.percentile"]
+    # A bundle shows each record of a type comparison.* as a comparison. So
+    # each is a claim here: one that this tool does not compute must not
+    # hide behind those that it does.
+    claims = [r for r in inputs.records.values() if str(r.get("type", "")).startswith("comparison.")]
     bad = 0
     for digest, (path, why) in sorted(inputs.packbad.items()):
         print("REFUSED pack %s %s" % (digest[:12], safe("%s: %s" % (path, why))))
@@ -611,6 +617,8 @@ def main(argv):
     signers = {}
     for claim in sorted(claims, key=lambda r: r["id"]):
         try:
+            if claim["type"] != "comparison.percentile":
+                raise Missing("its type is %s, and this tool computes again only comparison.percentile" % json.dumps(claim["type"]))
             word, text = "reproduced", check(claim, inputs)
             signers[claim["kid"]] = signers.get(claim["kid"], 0) + 1
         except Missing as err:

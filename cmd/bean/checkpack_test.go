@@ -62,7 +62,7 @@ func newPackClaims(t *testing.T, flags ...string) packClaims {
 // lsClaims are the comparisons of a log, as bean ls -json shows them.
 func lsClaims(t *testing.T, dir string) []map[string]any {
 	t.Helper()
-	out, errs, code := run(t, dir, "", "ls", "-json", "-type", "comparison.percentile")
+	out, errs, code := run(t, dir, "", "ls", "-json", "-type", "comparison.*")
 	if code != 0 {
 		t.Fatalf("ls: %s", errs)
 	}
@@ -483,7 +483,7 @@ func TestCheckBundlePackEdges(t *testing.T) {
 	noClaims := filepath.Join(t.TempDir(), "none")
 	run(t, plain, "", "share", "-yes", "-out", noClaims, "-type", "weight")
 	out, _, code = run(t, "", "", "check-bundle", "-pack", pc.pack, noClaims)
-	if code != 3 || !strings.Contains(out, "the bundle holds no comparison: there is nothing to compute again. The check of the bundle passed, as bundle ok says. Without -pack, its exit is 0\n") || !strings.Contains(out, "named by no comparison here") {
+	if code != 3 || !strings.HasSuffix(out, "\nthe bundle holds no comparison: there is nothing to compute again. The check of the bundle passed, as bundle ok says. Without -pack, its exit is 0\n") || !strings.Contains(out, "named by no comparison here") || strings.Contains(out, "NOT passed") {
 		t.Errorf("no comparison: %d\n%s", code, out)
 	}
 }
@@ -646,5 +646,25 @@ func TestRecomputeClaimOtherSigner(t *testing.T) {
 	cv[len(cv)-2], cv[len(cv)-1] = cv[len(cv)-1], cv[len(cv)-2]
 	if _, err := recomputeClaim(&claim, records, g, map[string]bool{}); err == nil || !strings.Contains(err.Error(), "the caveats are not") {
 		t.Errorf("the caveat of a pack not on record after the signer's: %v", err)
+	}
+}
+
+// TestCheckBundlePackOtherType: a bundle shows a record of any type
+// comparison.* as a comparison. bean computes only comparison.percentile
+// again, so a claim of another type is not checked, and the run does not
+// pass with it, whatever the other claims do.
+func TestCheckBundlePackOtherType(t *testing.T) {
+	pc := newPackClaims(t, "-accept-pack", mustDigest(t))
+	for _, alone := range []bool{false, true} {
+		dir, id := pc.forge(t, alone, func(r, ctx map[string]any) {
+			r["type"] = "comparison.zscore"
+			res(ctx)["percentile"] = 99.9
+		})
+		out, errs, code := run(t, "", "", "check-bundle", "-pack", pc.pack, "-accept-pack", pc.digest, bundleOf(t, dir))
+		v := verdicts(out)
+		if code != 3 || v[id] != "CANNOT CHECK" || !strings.Contains(out, `CANNOT CHECK: its type is "comparison.zscore", and bean computes again only comparison.percentile.`) ||
+			strings.Contains(out, "every comparison by a pack computes again") || !strings.HasSuffix(out, "\ncomputed again: NOT passed. The lines above say what differs or is missing, and what you can do\n") {
+			t.Errorf("alone %v: %d, %s is %q\n%s\n%s", alone, code, id, v[id], out, errs)
+		}
 	}
 }

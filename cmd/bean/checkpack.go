@@ -11,6 +11,7 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/Conscious-Repository/bean/core"
 	"github.com/Conscious-Repository/bean/internal/pack"
@@ -317,8 +318,11 @@ func short(id string) string {
 func recomputeLines(in map[string][]byte, g givenPacks, accepted []string) ([]string, bool) {
 	records := core.VerifyFiles(in).Records
 	var claims []*core.Record
+	// The rows of a bundle show each record of a type comparison.* as a
+	// comparison. So each is a claim here: one that bean does not compute
+	// must not hide behind those that it does.
 	for _, r := range records {
-		if r.Type == compareType {
+		if strings.HasPrefix(r.Type, "comparison.") {
 			claims = append(claims, r)
 		}
 	}
@@ -340,6 +344,11 @@ func recomputeLines(in map[string][]byte, g givenPacks, accepted []string) ([]st
 				named[d] = true
 				by = d
 			}
+		}
+		if c.Type != compareType {
+			cannot++
+			lines = append(lines, fmt.Sprintf("  %s  CANNOT CHECK: its type is %s, and bean computes again only %s. Ask the sender what made it, and do not rely on its numbers", c.ID[7:19], quoted(c.Type), compareType))
+			continue
 		}
 		text, err := recomputeClaim(c, records, g, unrecorded)
 		var cc cannotCheck
@@ -404,9 +413,6 @@ func recomputeLines(in map[string][]byte, g givenPacks, accepted []string) ([]st
 		lines = append(lines, fmt.Sprintf("-accept-pack %s does not count: %s", digest, why))
 		ok = false
 	}
-	if len(claims) == 0 {
-		lines = append(lines, "the bundle holds no comparison: there is nothing to compute again. The check of the bundle passed, as bundle ok says. Without -pack, its exit is 0")
-	}
 	lines = append(lines,
 		"A comparison that computes again shows that its numbers follow from its reading and its pack. It does not show that the reading is true, or that the pack is right.",
 		fmt.Sprintf("comparisons: %d compute again, %d differ, %d cannot be checked, %d with the survey's files not computed here", again, diff, cannot, files))
@@ -414,6 +420,9 @@ func recomputeLines(in map[string][]byte, g givenPacks, accepted []string) ([]st
 		lines = append(lines, "A comparison that DIFFERS is not what its reading and its pack give. Ask the sender, and do not rely on its numbers.")
 	}
 	switch {
+	case len(claims) == 0:
+		// Nothing differs and nothing is missing: the last line says so.
+		lines = append(lines, "the bundle holds no comparison: there is nothing to compute again. The check of the bundle passed, as bundle ok says. Without -pack, its exit is 0")
 	case ok && accepts:
 		lines = append(lines, "every comparison by a pack computes again. A pack that bean has no record of counts only by -accept-pack, as a line above says")
 	case ok:

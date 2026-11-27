@@ -183,10 +183,11 @@ PYEOF
   bean -dir "$T/flog$forged" ls -all -json >"$T/forged-log.jsonl"
   [ "${3:-}" = alone ] || [ "$(grep -c . "$T/forged-log.jsonl")" = $(($(b ls -all -json | grep -c .) + 1)) ] || { say "forge $1: the forged claim was not added"; return; }
   "$PY" -I "$ROOT/tools/compare/reproduce.py" -accept-pack "$DIGEST" "$T/forged-log.jsonl" "$T/syn.pack" >"$T/fo.txt" 2>&1 && say "reproduce.py passes a forged claim: $1"
-  [ "$(grep -c '^DIFFERS' "$T/fo.txt")" = 1 ] || say "forge $1: reproduce.py does not refuse exactly the forged claim: $(grep -c '^DIFFERS' "$T/fo.txt") refused"
+  local word=${4:-DIFFERS}
+  [ "$(grep -c "^$word" "$T/fo.txt")" = 1 ] || say "forge $1: reproduce.py does not say $word of exactly the forged claim: $(grep -c "^$word" "$T/fo.txt") times"
   bean -dir "$T/flog$forged" share -yes -out "$T/fbundle$forged" -type 'comparison.*' >/dev/null 2>&1 || { say "forge $1: the comparisons were not shared"; return; }
   agree "forge $1" "$T/fbundle$forged" -pack "$T/syn.pack" -accept-pack "$DIGEST"
-  [ "$(grep -c '^  [0-9a-f]*  DIFFERS: ' "$T/ag-bean.txt")" = 1 ] || say "forge $1: check-bundle -pack does not refuse exactly the forged claim"
+  [ "$(grep -c "^  [0-9a-f]*  $word: " "$T/ag-bean.txt")" = 1 ] || say "forge $1: check-bundle -pack does not say $word of exactly the forged claim"
 }
 forge "a second record it is about" 'r["refs"].append({"rel": "about", "id": other["id"]})'
 forge "a reading of a type that the measure does not take" 'c["reading"] = other["id"]; r["refs"] = [{"rel": "about", "id": other["id"]}]'
@@ -206,6 +207,11 @@ forge "another value" 'r["value"]["n"] = 99.9'
 # source or a member more is not one that bean compare writes.
 forge "another source system" 'source["system"] = "quest"' alone
 forge "a member more beside the context" 'more["x-note"] = "audited"' alone
+# A bundle shows a record of any type comparison.* as a comparison. Neither
+# tool computes another type again, and neither passes with one: a sender
+# cannot hide a claim from the check by its type.
+forge "another type of comparison" 'r["type"] = "comparison.zscore"; c["result"]["percentile"] = 99.9' "" "CANNOT CHECK"
+forge "another type of comparison, alone" 'r["type"] = "comparison.zscore"' alone "CANNOT CHECK"
 
 # A pack can be put on record after a claim was saved with it. The claim
 # then still says that bean had no record of the pack, and it must still

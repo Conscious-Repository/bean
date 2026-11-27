@@ -59,6 +59,10 @@ func TestComparePackAcceptPack(t *testing.T) {
 	if _, errs, _ := run(t, dir, "", append(args, "-accept-pack", other, "-accept-pack", digest)...); !strings.Contains(errs, "-accept-pack names the one pack of -pack: pass it once") {
 		t.Errorf("twice: %s", errs)
 	}
+	// Without -pack the flag names no pack: the error says what is missing.
+	if _, errs, code := run(t, dir, "", "compare", "-accept-pack", digest, "-type", "lab.*", "-sex", "male", "-age", "30-39"); code != 2 || !strings.Contains(errs, "-cohort, -accept-pack and -unknown-pack go with -pack: give the file of the pack with -pack") {
+		t.Errorf("no -pack: %d, %s", code, errs)
+	}
 	if _, errs, _ := run(t, dir, "", append(args, "-accept-pack", digest, "-unknown-pack")...); !strings.Contains(errs, "pass -accept-pack or -unknown-pack, not both") {
 		t.Errorf("both flags: %s", errs)
 	}
