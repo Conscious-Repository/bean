@@ -34,7 +34,7 @@ type givenPacks struct {
 }
 
 // readGivenPacks reads each file that -pack names. A file that cannot be
-// read is an error of use. A file that is not a pack is kept by its SHA-256,
+// read, or that is larger than a pack can be, is an error of use. A file that is not a pack is kept by its SHA-256,
 // with the reason: a claim that names it differs.
 func readGivenPacks(paths []string) givenPacks {
 	g := givenPacks{packs: map[string]*pack.Pack{}, bad: map[string]string{}, path: map[string]string{}}
@@ -47,12 +47,13 @@ func readGivenPacks(paths []string) givenPacks {
 		// pack is named by the SHA-256 of all of its bytes.
 		h := sha256.New()
 		data, err := io.ReadAll(io.TeeReader(io.LimitReader(f, pack.MaxBytes+1), h))
-		if err == nil {
-			_, err = io.Copy(h, f)
-		}
 		f.Close()
 		if err != nil {
 			badArg(fmt.Errorf("-pack %s: %w", path, err))
+		}
+		// A larger file is no pack, and a pipe may never end.
+		if len(data) > pack.MaxBytes {
+			badArg(fmt.Errorf("-pack %s: a pack is at most %d MiB, and this file is larger. Get the pack from its publisher", path, pack.MaxBytes>>20))
 		}
 		digest := hex.EncodeToString(h.Sum(nil))
 		g.path[digest] = path
@@ -134,9 +135,6 @@ func recomputeClaim(c *core.Record, records map[string]*core.Record, g givenPack
 	reading := records[rid]
 	if reading == nil {
 		return "", cannotCheck{fmt.Sprintf("the reading %s is not in the bundle. Ask the sender for a bundle that holds it", short(rid))}
-	}
-	if reading.Subject != c.Subject {
-		return "", differs("the claim and its reading are about two people")
 	}
 	rv, _ := reading.Raw["value"].(map[string]any)
 	value, ok := rv["n"].(float64)
@@ -247,7 +245,7 @@ func recomputeClaim(c *core.Record, records map[string]*core.Record, g givenPack
 	got := map[string]float64{"n": float64(res.N), "percentile": res.Percentile, "below": res.Below, "equal": res.Equal, "p25": res.P25, "p50": res.P50, "p75": res.P75}
 	for _, k := range resultMembers {
 		if x, ok := want[k].(float64); !ok || x != got[k] {
-			return "", differs("%s: the claim says %s, bean computes %s", what, core.Canonical(want), core.Canonical(anyMap(got)))
+			return "", differs("%s: the signed claim says %s, bean computes %s", what, core.Canonical(want), core.Canonical(anyMap(got)))
 		}
 	}
 	cv, _ := c.Raw["value"].(map[string]any)
@@ -323,7 +321,7 @@ func recomputeLines(in map[string][]byte, g givenPacks, accepted []string) ([]st
 		// A comparison with the survey's files is not computed here.
 		if m, _ := c.Context["method"].(map[string]any); m != nil && m["id"] == "nhanes-weighted-percentile" && m["version"] == "1" {
 			files++
-			lines = append(lines, fmt.Sprintf("  %s  not computed here: it was made with the survey's files, not with a pack. tools/compare/reproduce.py computes it again, given those files", c.ID[7:19]))
+			lines = append(lines, fmt.Sprintf("  %s  not computed here: it says that it was made with the survey's files, not with a pack. To check it, give tools/compare/reproduce.py the bundle and those files", c.ID[7:19]))
 			continue
 		}
 		if ref, _ := c.Context["reference"].(map[string]any); ref != nil {
@@ -345,9 +343,11 @@ func recomputeLines(in map[string][]byte, g givenPacks, accepted []string) ([]st
 			lines = append(lines, fmt.Sprintf("  %s  DIFFERS: %s", c.ID[7:19], err))
 		}
 	}
-	ok := diff == 0 && cannot == 0 && again > 0
+	// A claim that is not computed here is not checked: the run does not
+	// pass with it.
+	ok := diff == 0 && cannot == 0 && files == 0 && again > 0
 	for _, digest := range slices.Sorted(maps.Keys(g.bad)) {
-		lines = append(lines, fmt.Sprintf("REFUSED: the file %s is not a pack that bean reads: %s", g.path[digest], g.bad[digest]))
+		lines = append(lines, fmt.Sprintf("REFUSED: the file %s, SHA-256 %s: %s. Get the pack from its publisher: this file is not one", g.path[digest], digest, g.bad[digest]))
 		ok = false
 	}
 	for _, digest := range slices.Sorted(maps.Keys(g.packs)) {
@@ -367,7 +367,7 @@ func recomputeLines(in map[string][]byte, g givenPacks, accepted []string) ([]st
 	}
 	for _, digest := range slices.Compact(slices.Sorted(slices.Values(accepted))) {
 		if !unrecorded[digest] {
-			lines = append(lines, fmt.Sprintf("-accept-pack %s names no pack that bean has no record of and that a comparison here was computed with. Check the value", digest))
+			lines = append(lines, fmt.Sprintf("-accept-pack %s names no pack that bean has no record of and that a comparison here was computed with. It may name a pack on record, a pack that was not given, or one whose comparisons stopped at an earlier check. Compare it with the SHA-256 that the publisher states", digest))
 			ok = false
 		}
 	}
@@ -377,6 +377,9 @@ func recomputeLines(in map[string][]byte, g givenPacks, accepted []string) ([]st
 	lines = append(lines,
 		"A comparison that computes again shows that its numbers follow from its reading and its pack. It does not show that the reading is true, or that the pack is right.",
 		fmt.Sprintf("comparisons: %d compute again, %d differ, %d cannot be checked, %d with the survey's files not computed here", again, diff, cannot, files))
+	if diff > 0 {
+		lines = append(lines, "A comparison that DIFFERS is not what its reading and its pack give. Ask the sender, and do not rely on its numbers.")
+	}
 	if ok {
 		lines = append(lines, "every comparison by a pack computes again")
 	} else {

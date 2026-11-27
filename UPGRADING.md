@@ -49,7 +49,7 @@ No record changes, and `bean verify` and `bean ls` print the same for an existin
 - **The cohort from two records is still for a pack on record only.** `-accept-pack` does not change that.
 - **The refusal of a pack with no record has new words.** It names `-accept-pack <sha256>` first, then `-unknown-pack`. A script that looks for `pass -unknown-pack` finds it no longer.
 - **`bean check-bundle -pack <file>` computes each comparison by a pack again** ([DECISIONS 353](docs/DECISIONS.md)). Without `-pack` the check prints what it printed before, byte for byte.
-- **With `-pack`, lines follow `bundle ok`.** Exit 3 means the bundle passed, and a comparison did not compute again or could not be checked. Exit 1 still means a bundle that failed.
+- **With `-pack`, lines follow `bundle ok`.** Exit 3 means the bundle passed, and a comparison did not compute again or was not checked. Exit 1 still means a bundle that failed.
 - **A pack that bean has no record of counts only with `-accept-pack <sha256>`,** as in `compare`. With a pack on record, that flag fails the check, as in `reproduce.py`.
 
 ### 0.8.6 (2026-11-26)

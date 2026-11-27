@@ -162,12 +162,13 @@ func TestCheckBundlePackHonest(t *testing.T) {
 		"comparisons: 3 compute again, 0 differ, 0 cannot be checked",
 		"\nevery comparison by a pack computes again\n",
 		"After bundle ok, bean says which of them computes again with the packs given.",
+		"not in this bundle. After bundle ok, bean says which pack each one needs.",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("no %q in\n%s", want, out)
 		}
 	}
-	if strings.Contains(out, "not computed again here") || strings.Contains(strings.ToLower(out), "healthy") {
+	if strings.Contains(out, "not computed again here") || strings.Contains(out, "give it to tools/compare/reproduce.py") || strings.Contains(strings.ToLower(out), "healthy") {
 		t.Errorf("words that do not hold:\n%s", out)
 	}
 	// Without -pack the check prints what it printed before.
@@ -303,7 +304,7 @@ func TestCheckBundlePackForged(t *testing.T) {
 		dir, id := pc.forge(t, f.alone, f.change)
 		out, errs, code := run(t, "", "", "check-bundle", "-pack", pc.pack, "-accept-pack", pc.digest, bundleOf(t, dir))
 		v := verdicts(out)
-		if code != 3 || v[id] != "DIFFERS" {
+		if code != 3 || v[id] != "DIFFERS" || !strings.Contains(out, "Ask the sender, and do not rely on its numbers.") {
 			t.Errorf("%s: %d, %s is %q\n%s\n%s", f.name, code, id, v[id], out, errs)
 			continue
 		}
@@ -352,7 +353,7 @@ func TestCheckBundlePackCannotCheck(t *testing.T) {
 	notPack := filepath.Join(t.TempDir(), "x.pack")
 	os.WriteFile(notPack, []byte("pack"), 0o644)
 	out, _, code = run(t, "", "", "check-bundle", "-pack", notPack, "-pack", pc.pack, "-accept-pack", pc.digest, bundle)
-	if code != 3 || !strings.Contains(out, "REFUSED: the file "+notPack+" is not a pack that bean reads") || len(verdicts(out)) != 3 {
+	if code != 3 || !strings.Contains(out, "REFUSED: the file "+notPack+", SHA-256 "+fileDigest(notPack)+": it is not a pack") || len(verdicts(out)) != 3 {
 		t.Errorf("not a pack: %d\n%s", code, out)
 	}
 	// A bundle that fails: nothing is computed, and exit 1 keeps its meaning.
@@ -367,6 +368,11 @@ func TestCheckBundlePackCannotCheck(t *testing.T) {
 func TestCheckBundlePackUsage(t *testing.T) {
 	path, digest := testPack(t)
 	b := t.TempDir()
+	// A file larger than a pack can be is not read to its end.
+	large := filepath.Join(b, "large.pack")
+	if f, err := os.Create(large); err != nil || f.Truncate(65<<20) != nil || f.Close() != nil {
+		t.Fatal("no large file")
+	}
 	for name, a := range map[string][]string{
 		"upper case":         {"-pack", path, "-accept-pack", strings.ToUpper(digest)},
 		"a prefix":           {"-pack", path, "-accept-pack", "sha256:" + digest},
@@ -374,6 +380,7 @@ func TestCheckBundlePackUsage(t *testing.T) {
 		"no pack":            {"-accept-pack", digest},
 		"a pack that is not": {"-pack", filepath.Join(b, "none.pack")},
 		"an empty -pack":     {"-pack="},
+		"a file too large":   {"-pack", large},
 	} {
 		out, errs, code := run(t, "", "", append(append([]string{"check-bundle"}, a...), b)...)
 		if code != 2 || out != "" || errs == "" {
@@ -493,6 +500,9 @@ func TestCheckBundlePackOrder(t *testing.T) {
 		{"another method, and no reading", "a method this bean does not compute again", nil, false, func(r, ctx map[string]any) {
 			ctx["method"], ctx["reading"], r["refs"] = map[string]any{"id": "weighted-median", "version": "1"}, missing, []any{map[string]any{"rel": "about", "id": missing}}
 		}},
+		{"a later version of the method, and no reading", "a method this bean does not compute again", nil, false, func(r, ctx map[string]any) {
+			ctx["method"], ctx["reading"], r["refs"] = map[string]any{"id": "weighted-percentile", "version": "3"}, missing, []any{map[string]any{"rel": "about", "id": missing}}
+		}},
 		{"a reading below zero, and no pack", "the reading is not a number of zero or more", []string{other}, false, func(r, ctx map[string]any) {
 			ctx["reading"], r["refs"] = negative, []any{map[string]any{"rel": "about", "id": negative}}
 		}},
@@ -515,5 +525,34 @@ func TestCheckBundlePackOrder(t *testing.T) {
 		if code != 3 || verdicts(out)[id] != "DIFFERS" || !strings.Contains(out, f.why) {
 			t.Errorf("%s: %d, %s is %q\n%s\n%s", f.name, code, id, verdicts(out)[id], out, errs)
 		}
+	}
+}
+
+// TestCheckBundlePackSurveyLabel: a claim that says that it was made with
+// the survey's files is not computed here, and the run does not pass with
+// it: a sender cannot carry a claim through under that label.
+func TestCheckBundlePackSurveyLabel(t *testing.T) {
+	pc := newPackClaims(t, "-accept-pack", mustDigest(t))
+	dir, id := pc.forge(t, false, func(r, ctx map[string]any) {
+		ctx["method"] = map[string]any{"id": "nhanes-weighted-percentile", "version": "1"}
+		res(ctx)["percentile"] = 99.9
+	})
+	out, _, code := run(t, "", "", "check-bundle", "-pack", pc.pack, "-accept-pack", pc.digest, bundleOf(t, dir))
+	if code != 3 || verdicts(out)[id] != "not computed here" || strings.Contains(out, "every comparison by a pack computes again") || !strings.Contains(out, "computed again: NOT passed") {
+		t.Errorf("%d\n%s", code, out)
+	}
+}
+
+// TestCheckBundlePackLocked: a sealed package that does not open was not
+// checked, and -pack adds no line that says it failed.
+func TestCheckBundlePackLocked(t *testing.T) {
+	pc := newPackClaims(t, "-accept-pack", mustDigest(t))
+	sealed := filepath.Join(t.TempDir(), "p.bean")
+	if out, errs, code := run(t, pc.dir, "", "share", "-yes", "-seal", "-out", sealed, "-type", "comparison.*"); code != 0 {
+		t.Fatalf("share -seal: %d\n%s\n%s", code, out, errs)
+	}
+	out, _, code := run(t, "", "wrong words here\n", "check-bundle", "-pack", pc.pack, sealed)
+	if code != 1 || !strings.Contains(out, "the package did not open") || strings.Contains(out, "-pack: nothing was computed") {
+		t.Errorf("%d\n%s", code, out)
 	}
 }

@@ -196,7 +196,7 @@ A comparison is shown as its claim states it. The check proves who signed the cl
 bean check-bundle -pack nhanes.pack for-ana
 ```
 
-After `bundle ok`, each comparison gets a line: `computes again`, `DIFFERS` and why, or `CANNOT CHECK` and the SHA-256 of the pack to get. That shows that the numbers follow from the reading and the pack. It does not show that the reading is true, or that the pack is right. A pack that bean has no record of counts only with `-accept-pack <sha256>`, taken from its publisher. Exit 3 means the bundle passed, and a comparison did not compute again or could not be checked. `tools/compare/reproduce.py` computes a comparison again too, also one made with the survey's files ([COMPARE.md](COMPARE.md)).
+After `bundle ok`, each comparison gets a line: `computes again`, `DIFFERS` and why, or `CANNOT CHECK` and the SHA-256 of the pack to get. That shows that the numbers follow from the reading and the pack. It does not show that the reading is true, or that the pack is right. A pack that bean has no record of counts only with `-accept-pack <sha256>`, taken from its publisher. Exit 3 means the bundle passed, and a comparison did not compute again or was not checked. `tools/compare/reproduce.py` computes a comparison again too, also one made with the survey's files ([COMPARE.md](COMPARE.md)).
 
 `python3 tools/second/checkbundle.py for-ana` runs the same five rules without bean. Its listing is plainer: each record's time, type and raw value.
 

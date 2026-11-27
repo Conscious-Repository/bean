@@ -195,6 +195,9 @@ type Result struct {
 // comparisons. bean check-bundle -pack says other words in its place.
 const NotComputedAgain = "The comparisons above are shown as claimed, and are not computed again here: tools/compare/reproduce.py does that."
 
+// PackNotHere begins the line that names the packs of the comparisons.
+const PackNotHere = "A comparison by a pack was made with a file of reference data that is not in this bundle."
+
 // Lines is the result as bean check-bundle prints it.
 func (res Result) Lines() []string {
 	lines := slices.Clone(res.Head)
@@ -590,7 +593,7 @@ func Check(in Input) Result {
 		// The reader needs the pack to compute such a comparison again, and
 		// the title is the sender's word: the SHA-256 is what names a pack.
 		if len(packs) > 0 {
-			res.Tail = append(res.Tail, "A comparison by a pack was made with a file of reference data that is not in this bundle. To compute it again, get the pack with that SHA-256 and give it to tools/compare/reproduce.py with the bundle. The SHA-256 names the pack:")
+			res.Tail = append(res.Tail, PackNotHere+" To compute it again, get the pack with that SHA-256 and give it to tools/compare/reproduce.py with the bundle. The SHA-256 names the pack:")
 			res.Tail = append(res.Tail, packs...)
 		}
 	}

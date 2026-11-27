@@ -956,6 +956,9 @@ func cmdCheckBundle(args []string) {
 		// With -pack the lines after "bundle ok" say what was computed again.
 		if len(packPaths) > 0 {
 			line = strings.Replace(line, bundle.NotComputedAgain, "The comparisons above are shown as claimed. After bundle ok, bean says which of them computes again with the packs given.", 1)
+			if strings.HasPrefix(line, bundle.PackNotHere) {
+				line = bundle.PackNotHere + " After bundle ok, bean says which pack each one needs. The SHA-256 names the pack:"
+			}
 		}
 		fmt.Println(safe(line))
 	}
@@ -968,7 +971,8 @@ func cmdCheckBundle(args []string) {
 			}
 			fmt.Println("This is a reply to a share, not a bundle: the person it is for reads it with " + how + ".")
 		}
-		if len(packPaths) > 0 {
+		// A package that did not open was not checked: it said so.
+		if len(packPaths) > 0 && !in.Locked {
 			fmt.Println("-pack: nothing was computed again, since the bundle did not pass its check")
 		}
 		os.Exit(1)

@@ -70,6 +70,8 @@ Share
                                 sent you. -key opens a package that is sealed
                                 to your address. -unpack writes a package
                                 that passes into a folder, with its files.
+                                -pack computes each comparison by that pack
+                                again; exit 3 when one does not.
   reply -to <what you received> [-key <file>] [-for <address>] -out <new file> <id> <note> [<id> <note>]...
                                 Sign notes about records that someone shared
                                 with you, and seal them for that person:

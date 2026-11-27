@@ -210,15 +210,15 @@ With `-pack <file>`, bean also computes each comparison by a pack again, by the 
 
 - The lines come after `bundle ok`. Each comparison gets one: `computes again`, `DIFFERS` and why, or `CANNOT CHECK` and what to get.
 - `CANNOT CHECK` is a check that cannot be made: the pack with that SHA-256 was not given, or the reading is not in the bundle.
-- A comparison with the survey's files is `not computed here`. `tools/compare/reproduce.py` computes it, given the files.
+- A comparison with the survey's files is `not computed here`, and the check does not pass. `tools/compare/reproduce.py` computes it, given the files.
 - A pack that bean has no record of counts only with `-accept-pack <sha256>`, as in `compare`. Take the value from the pack's publisher. The flag may repeat.
 - `-accept-pack` with a pack on record, or with a pack that no comparison used, fails the check. So does `reproduce.py`.
-- A file that is not a pack is named, and each comparison that names it differs. A file that cannot be read is an error of use.
+- A file that is not a pack is named, and each comparison that names it differs. A file that cannot be read is an error of use. So is one over 64 MiB.
 - The check says once what it shows: the numbers follow from the reading and the pack. It does not show that the reading is true, or that the pack is right.
-- Exit 0 when every comparison by a pack computes again, and each pack is on record or accepted. Exit 3 when the bundle passed and that is not so.
+- Exit 0 when every comparison computes again, and each pack is on record or accepted. Exit 3 when the bundle passed and that is not so.
 - Exit 1 stays a bundle that failed. Then nothing is computed, and the last line says so. An error of use exits 2.
 
-`reproduce.py` is a second implementation that shares no code with bean. `make pack` gives both the same records, and they must agree on each claim.
+`reproduce.py` is a second implementation that shares no code with bean. `make pack` gives both the same records, and they must agree on each claim. `check-bundle -pack` places a value with the code of `bean compare`: a fault there would be in both.
 
 A reader with no terminal runs the same check in a browser. `make page` builds `bean-check.html`, one file that reads a bundle's folder or a zip file of it and sends nothing ([SHARE.md](SHARE.md)).
 
