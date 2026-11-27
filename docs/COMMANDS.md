@@ -212,6 +212,7 @@ With `-pack <file>`, bean also computes each comparison by a pack again, by the 
 - `CANNOT CHECK` is a check that cannot be made: the pack with that SHA-256 was not given, or the reading is not in the bundle.
 - A comparison with the survey's files is `not computed here`, and the check does not pass. `tools/compare/reproduce.py` computes it, given the files.
 - A pack that bean has no record of counts only with `-accept-pack <sha256>`, as in `compare`. Take the value from the pack's publisher. The flag may repeat.
+- Without that flag, the line of such a comparison says `computes again, with a pack NOT accepted`, and the check does not pass.
 - `-accept-pack` with a pack on record, or with a pack that no comparison used, fails the check. So does `reproduce.py`.
 - When every comparison computes again and a pack counts only by `-accept-pack`, the last line says so.
 - A file that is not a pack is named, and each comparison that names it differs. A file that cannot be read is an error of use. So is one over 64 MiB.
