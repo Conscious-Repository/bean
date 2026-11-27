@@ -190,7 +190,13 @@ bean check-bundle -key ~/keys/bean-reader.key for-ana.bean   # a package that is
 
 One command checks the bundle and, when it passes, shows what it holds. Each record has its time as the sender recorded it, its type and its value. A record that the sender did not sign shows who signed it. Each comparison is in words, such as `percentile 46 of lab.cholesterol-total 187 mg/dL, among male, age 30-39 (n 339)`, with its caveats below. A bundle that fails lists no record and shows no note. The check still prints the share record's id, its signer and the counts. You need no log of your own for this, and the check changes nothing in the folder.
 
-A comparison is shown as its claim states it. The check proves who signed the claim, not its arithmetic: `tools/compare/reproduce.py` computes it again ([COMPARE.md](COMPARE.md)).
+A comparison is shown as its claim states it. The check proves who signed the claim, not its arithmetic. To compute a comparison by a pack again, give the check the pack:
+
+```
+bean check-bundle -pack nhanes.pack for-ana
+```
+
+After `bundle ok`, each comparison gets a line: `computes again`, `DIFFERS` and why, or `CANNOT CHECK` and the SHA-256 of the pack to get. That shows that the numbers follow from the reading and the pack. It does not show that the reading is true, or that the pack is right. A pack that bean has no record of counts only with `-accept-pack <sha256>`, taken from its publisher. Exit 3 means the bundle passed, and a comparison did not compute again or could not be checked. `tools/compare/reproduce.py` computes a comparison again too, also one made with the survey's files ([COMPARE.md](COMPARE.md)).
 
 `python3 tools/second/checkbundle.py for-ana` runs the same five rules without bean. Its listing is plainer: each record's time, type and raw value.
 
@@ -392,10 +398,11 @@ python3 tools/compare/reproduce.py for-ana ~/bean-export/blobs
 A comparison that was made with a reference pack needs that pack ([REFERENCE.md](REFERENCE.md)). `bean check-bundle` and the page show in the row what the reading was set against, and `by pack` with the first digits of its SHA-256. For the pack that bean has on record, the label and the cohort are bean's own words for that pack. A claim that says otherwise is marked. A pack that bean has no record of is marked `(NOT on record)`, and its label is in quotation marks: it is the claim's word. The numbers of a comparison are shown as claimed. Below the records they give the full SHA-256. Send the pack file with the package, or tell your reader where it is: it is public data.
 
 ```
+bean check-bundle -pack nhanes.pack for-ana
 python3 tools/compare/reproduce.py for-ana nhanes.pack
 ```
 
-A comparison computes again with any pack that is well formed, and a made-up pack is well formed. So `reproduce.py` fails for a pack that is not on record, and says so. A reader who trusts that pack's publisher passes `-accept-pack` and its SHA-256. A comparison that names no pack and no files is marked `(names NO reference data)`: nobody can compute it again.
+A comparison computes again with any pack that is well formed, and a made-up pack is well formed. So `check-bundle -pack` and `reproduce.py` fail for a pack that is not on record, and say so. A reader who trusts that pack's publisher passes `-accept-pack` and its SHA-256. A comparison that names no pack and no files is marked `(names NO reference data)`: nobody can compute it again.
 
 ## The bundle, exactly
 

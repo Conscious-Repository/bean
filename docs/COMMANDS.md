@@ -202,9 +202,23 @@ Makes a key file for packages that are sealed to you, or shows the address of on
 - Both print `address <address>`, then `address words <eight words>`, then what you must know before you give the address away.
 - It needs no log. bean keeps no key file and no list of them: `bean restore` and `bean export` do not hold one.
 
-### `check-bundle [-key <file>] [-unpack <new folder>] <folder or file>`
+### `check-bundle [-key <file>] [-unpack <new folder>] [-pack <file>]... [-accept-pack <sha256>]... <folder or file>`
 
 Checks a bundle, shows what it holds when it passes, and changes nothing in it. Given a file, it reads a zip file of a bundle's folder, or a sealed package. One scan of the file's header decides what it asks for. For a package that is sealed with words it asks for the six words, and reads them from standard input. A package that is sealed to an address opens with `-key <file>`, your key file with exactly one identity. Flags come before the file's name. With wrong words, without the key or with another key, the last line is `the package did not open: nothing was checked`, exit 1. When a key opened the package, the check first says that anyone who has your address can seal to it. With `-unpack`, a package that passes is written into a new folder as a bundle, with the files it carries. It needs no log, and reads only the bundle's `objects` and `files` folders; anything else in the folder is named and not read. It prints any record that fails, then the share record's id and the identity and key that signed it. It prints how many records and files it holds. It prints who signed the records: the person, an agent the person paired, or another key. It prints how many are corrections of a record that is not in the bundle. When every check passed it lists the records under `It holds:`, a comparison in words with its reading, cohort and n. Then `bundle ok`, exit 0, or `bundle FAILED: <n> problems`, exit 1. It says each time what no bundle can show: that it is complete, that a value is true, and who the identity is. Nor can a bundle show that the key that signed is still the person's. `tools/second/checkbundle.py` does the same check without bean.
+
+With `-pack <file>`, bean also computes each comparison by a pack again, by the four steps of [REFERENCE.md](REFERENCE.md) ("The claim"). The flag may repeat, one for each pack. Without it the check prints what it printed before.
+
+- The lines come after `bundle ok`. Each comparison gets one: `computes again`, `DIFFERS` and why, or `CANNOT CHECK` and what to get.
+- `CANNOT CHECK` is a check that cannot be made: the pack with that SHA-256 was not given, or the reading is not in the bundle.
+- A comparison with the survey's files is `not computed here`. `tools/compare/reproduce.py` computes it, given the files.
+- A pack that bean has no record of counts only with `-accept-pack <sha256>`, as in `compare`. Take the value from the pack's publisher. The flag may repeat.
+- `-accept-pack` with a pack on record, or with a pack that no comparison used, fails the check. So does `reproduce.py`.
+- A file that is not a pack is named, and each comparison that names it differs. A file that cannot be read is an error of use.
+- The check says once what it shows: the numbers follow from the reading and the pack. It does not show that the reading is true, or that the pack is right.
+- Exit 0 when every comparison by a pack computes again, and each pack is on record or accepted. Exit 3 when the bundle passed and that is not so.
+- Exit 1 stays a bundle that failed. Then nothing is computed, and the last line says so. An error of use exits 2.
+
+`reproduce.py` is a second implementation that shares no code with bean. `make pack` gives both the same records, and they must agree on each claim.
 
 A reader with no terminal runs the same check in a browser. `make page` builds `bean-check.html`, one file that reads a bundle's folder or a zip file of it and sends nothing ([SHARE.md](SHARE.md)).
 

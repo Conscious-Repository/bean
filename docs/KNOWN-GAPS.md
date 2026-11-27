@@ -32,7 +32,7 @@ What bean does not do well today, said out loud. [ROADMAP.md](ROADMAP.md) says w
   - A source with a stranger's broken file makes every `sync` from it exit 1.
   - The purge check in `bean import` reads only this copy's `local/purged-refs.jsonl`.
 - From the reviews of reference packs (DECISIONS 283, 284):
-  - A check of a bundle does not compute a comparison again. A claim with false numbers that names the pack on record reads like a true one there. `reproduce.py` with the pack finds it (ROADMAP, path 4: the check page computes a shared comparison again).
+  - `bean check-bundle` computes a comparison by a pack again only with `-pack`. Without it, and on the check page, a claim with false numbers that names the pack on record reads like a true one. `check-bundle -pack` and `reproduce.py` with the pack find it (ROADMAP, path 4: the check page computes a shared comparison again).
   - The Python check of a bundle, `checkbundle.py`, does not mark a comparison's pack. `reproduce.py` does.
   - The list of packs on record is in bean's code. A second publisher needs a signature, not a line in that list.
   - A pull request's build of the check page names the merge commit, which nobody can build again. The build on `main` and on a tag names a real commit.

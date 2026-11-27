@@ -40,7 +40,7 @@ Do not run `purge` or `gc` on the copies. Only they erase anything.
 
 ### 0.8.7 (2026-11-26)
 
-No record changes, and `bean verify` and `bean ls` print the same for an existing log. `bean compare -pack` gets one flag ([DECISIONS 351](docs/DECISIONS.md)).
+No record changes, and `bean verify` and `bean ls` print the same for an existing log. `bean compare -pack` gets one flag ([DECISIONS 351](docs/DECISIONS.md)), and `bean check-bundle` gets two.
 
 - **`-accept-pack <sha256>` uses a pack that bean has no record of, when the file has that SHA-256.** Pass the SHA-256 that the pack's publisher states.
 - **When the file has another SHA-256, bean stops with exit 1, and prints both values.** A value that is not 64 lower-case hex digits is an error of use, with exit 2. So is an empty value.
@@ -48,6 +48,9 @@ No record changes, and `bean verify` and `bean ls` print the same for an existin
 - **`-unknown-pack` works as before.** The two flags together are an error of use, with exit 2. With a pack on record, `-accept-pack` checks the SHA-256 too, and changes nothing else.
 - **The cohort from two records is still for a pack on record only.** `-accept-pack` does not change that.
 - **The refusal of a pack with no record has new words.** It names `-accept-pack <sha256>` first, then `-unknown-pack`. A script that looks for `pass -unknown-pack` finds it no longer.
+- **`bean check-bundle -pack <file>` computes each comparison by a pack again** ([DECISIONS 353](docs/DECISIONS.md)). Without `-pack` the check prints what it printed before, byte for byte.
+- **With `-pack`, lines follow `bundle ok`.** Exit 3 means the bundle passed, and a comparison did not compute again or could not be checked. Exit 1 still means a bundle that failed.
+- **A pack that bean has no record of counts only with `-accept-pack <sha256>`,** as in `compare`. With a pack on record, that flag fails the check, as in `reproduce.py`.
 
 ### 0.8.6 (2026-11-26)
 

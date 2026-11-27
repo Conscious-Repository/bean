@@ -88,13 +88,13 @@ Not built: `bean pair` and `bean import-device`, and the device's label wherever
 
 ### Path 4: compare with public data, from any source
 
-Done: reference packs, two NHANES packs on record, and `bean compare -pack` (DECISIONS 281, 309). A pool path with made-up contributors is built as a test (DECISIONS 334 to 336). `bean compare -pack` takes each row's cohort from two records of the person, `person.sex` and `person.birth` (DECISIONS 345, 348). Open:
+Done: reference packs, two NHANES packs on record, and `bean compare -pack` (DECISIONS 281, 309). A pool path with made-up contributors is built as a test (DECISIONS 334 to 336). `bean compare -pack` takes each row's cohort from two records of the person, `person.sex` and `person.birth` (DECISIONS 345, 348). `bean check-bundle -pack` computes a shared comparison by a pack again (DECISIONS 353). Open:
 
 - **A second source, from another publisher.** The pack format does not lock before a second real source is built into a pack. Leads, none confirmed: other parts of NHANES, other open US survey files, and counts of genetic variants. Tables in journals may not be free to hand on.
 - **The cohort from two records, for a pack that is not on record.** bean's code holds the sex and the ages of each cohort, for the two packs on record only. A pack states a cohort in words. A field for the sex and the ages would be a change to the pack format (DECISIONS 348).
 - **More tests** by [REFERENCE-PLAN.md](REFERENCE-PLAN.md): values below a detection limit, more of the blood count, and a caveat with a size. The fasting tests need a weight of their own, which is a decision of their own.
 - **A publisher signs a pack,** and **a person keeps their own list of packs** (DECISIONS 308). Each is built when a second publisher exists.
-- **The check page computes a shared comparison again,** when the reader gives it the pack.
+- **The check page computes a shared comparison again,** when the reader gives it the pack. `bean check-bundle -pack` does since 0.8.7 (DECISIONS 353); the page in a browser does not yet.
 - **A pool of real people.** It needs a share that names its reader, written consent and a review of the law (DECISIONS 325, 328). It also needs a pack format for data that is not public ([POOL-PLAN.md](POOL-PLAN.md)). A pack lists every value of a cell, so a small pool shows each member's value.
 
 ### Portability check

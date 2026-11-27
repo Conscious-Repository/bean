@@ -276,6 +276,9 @@ Saved comparisons, the reference files you kept and the records of your shares a
 | `bean has no record of this pack` | The file is not one of the two packs that bean has on record. For one of those two, check the SHA-256 (step 5) and fetch or build it again. For any other pack, compare its SHA-256 with the one that its publisher states. Then pass the publisher's value with `-accept-pack <sha256>`. Each result says that bean has no record of the pack. `-unknown-pack` takes any file. |
 | `this is not the pack that -accept-pack names` | The file has another SHA-256 than the value you passed. Fetch the pack again, and compare its SHA-256 with the publisher's. Do not pass the file's own value. |
 | `-accept-pack takes the SHA-256 of a pack` | Pass 64 hex digits in lower case, with no prefix such as `sha256:`. An empty value is refused too. |
+| `CANNOT CHECK: the pack with SHA-256 ... was not given` from `check-bundle -pack` | Get the pack with that SHA-256 from its publisher, and pass its file with `-pack`. A file with another SHA-256 is another pack. |
+| `DIFFERS: ...` from `check-bundle -pack` | The claim is not what its reading and its pack give. The line says what differs. Ask the sender; do not read its numbers. |
+| `NOT on record: the pack ...` from `check-bundle -pack` | As for `bean has no record of this pack`, above: pass the publisher's value with `-accept-pack <sha256>`. |
 | `not comparable: ...` in a row | The row says why, for example a unit that the pack does not take. bean converts no unit. |
 | `changed: ... this input says ...` | A newer report changed a value. If it is right, import again with `-corrections`. |
 | `bean: undecided: ...` from `restore` | Expected on the first run. Read the list, then `-seal-all` (step 9). |

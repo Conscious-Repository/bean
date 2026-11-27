@@ -65,7 +65,7 @@ Share
                                 Make a key file and its address, for packages
                                 that are sealed to you. Or show the address
                                 of a key file. It needs no log.
-  check-bundle [-key <file>] [-unpack <new folder>] <folder or file>
+  check-bundle [-key <file>] [-unpack <new folder>] [-pack <file>]... [-accept-pack <sha256>]... <folder or file>
                                 Check a bundle or a sealed package someone
                                 sent you. -key opens a package that is sealed
                                 to your address. -unpack writes a package
@@ -130,7 +130,7 @@ var syntax = map[string]string{
 	"verify":        "verify",
 	"share":         "share -out <new folder or file> [-seal | -for <address> [-address-words \"<eight words>\"]] [-files] [-note <text>] [-yes] <id>... | -type <type> [-since <time>] [-until <time>]",
 	"address":       "address -out <new key file> | address -key <key file>",
-	"check-bundle":  "check-bundle [-key <key file>] [-unpack <new folder>] <folder, zip file or sealed package>",
+	"check-bundle":  "check-bundle [-key <key file>] [-unpack <new folder>] [-pack <file>]... [-accept-pack <sha256>]... <folder, zip file or sealed package>",
 	"reply":         "reply -to <what you received> [-key <key file>] [-for <address> [-address-words \"<eight words>\"] [-yes]] -out <new file> <id> <note> [<id> <note>]...",
 	"accept":        "accept [-label <name>] [-words \"<eight words>\"] [-yes | -key <key file>] <reply>",
 	"unpair":        "unpair <name>",

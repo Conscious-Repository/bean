@@ -6,7 +6,9 @@
 #   - rebuild_nhanes.py builds every table again from the files;
 #   - reproduce.py computes every comparison that bean saved with the pack;
 #   - a pack with one thing wrong is refused by bean and by check.py;
-#   - a claim that was changed is refused by reproduce.py.
+#   - a claim that was changed is refused by reproduce.py;
+#   - bean check-bundle -pack gives each claim of a bundle the verdict that
+#     reproduce.py gives it.
 #
 # With BEAN_NHANES_DIR set to a folder of CDC's own files, it also builds
 # the pack of the files on record and checks its SHA-256.
@@ -121,6 +123,26 @@ cp "$T/syn.pack" "$T/reference-data.bin"
 # Without the pack the claims cannot be checked, and that is said.
 "$PY" -I "$ROOT/tools/compare/reproduce.py" "$T/records.jsonl" >"$T/rp0.txt" 2>&1 && say "reproduce.py passes claims without their pack"
 grep -q "CANNOT CHECK" "$T/rp0.txt" || say "reproduce.py does not say that it cannot check without the pack"
+# bean check-bundle -pack computes the claims of a bundle again, and must
+# give each the verdict that reproduce.py gives on the same records. Both
+# fail together, or pass together.
+agree() {
+  local what=$1 bundle=$2; shift 2
+  bean check-bundle "$@" "$bundle" >"$T/ag-bean.txt" 2>&1; local g=$?
+  local accept=() a
+  for a in "$@"; do [ "${prev:-}" = -accept-pack ] && accept+=(-accept-pack "$a"); [ "${prev:-}" = -pack ] && accept+=("$a"); prev=$a; done; prev=
+  "$PY" -I "$ROOT/tools/compare/reproduce.py" "$bundle" "${accept[@]}" >"$T/ag-py.txt" 2>&1; local p=$?
+  sed -n 's/^  \([0-9a-f]\{12\}\)  computes again: .*/\1 ok/p; s/^  \([0-9a-f]\{12\}\)  DIFFERS: .*/\1 differs/p; s/^  \([0-9a-f]\{12\}\)  CANNOT CHECK: .*/\1 cannot/p' "$T/ag-bean.txt" | sort >"$T/ag-bean.v"
+  sed -n 's/^reproduced \([0-9a-f]\{12\}\) .*/\1 ok/p; s/^DIFFERS \([0-9a-f]\{12\}\) .*/\1 differs/p; s/^CANNOT CHECK \([0-9a-f]\{12\}\) .*/\1 cannot/p' "$T/ag-py.txt" | sort >"$T/ag-py.v"
+  [ -s "$T/ag-bean.v" ] || say "$what: bean check-bundle -pack gives no verdict: $(tail -2 "$T/ag-bean.txt")"
+  cmp -s "$T/ag-bean.v" "$T/ag-py.v" || say "$what: bean check-bundle -pack and reproduce.py differ: $(diff "$T/ag-bean.v" "$T/ag-py.v" | grep '^[<>]' | head -2 | tr '\n' ' ')"
+  { [ "$g" = 0 ] && [ "$p" = 0 ]; } || { [ "$g" = 3 ] && [ "$p" = 1 ]; } || say "$what: bean check-bundle -pack exits $g, reproduce.py exits $p"
+}
+agree "the comparisons that bean saved" "$T/bundle" -pack "$T/syn.pack" -accept-pack "$DIGEST"
+agree "the comparisons that bean saved, with the pack not named" "$T/bundle" -pack "$T/syn.pack"
+grep -q "^NOT on record: the pack $DIGEST" "$T/ag-bean.txt" || say "check-bundle -pack does not say that the pack is not on record"
+agree "the comparisons that bean saved, and another -accept-pack" "$T/bundle" -pack "$T/syn.pack" -accept-pack "$(printf 'a%.0s' $(seq 64))"
+
 # A claim that was changed: a result, the cohort's text, a caveat.
 for change in 's/"percentile":\([0-9.]*\)/"percentile":99.9/' 's/"text":"male, age 30-39"/"text":"male, age 20-29"/' 's/you chose the cohort: [^"]*"/"/'; do
   sed "$change" "$T/records.jsonl" >"$T/changed.jsonl"
@@ -162,6 +184,9 @@ PYEOF
   [ "${3:-}" = alone ] || [ "$(grep -c . "$T/forged-log.jsonl")" = $(($(b ls -all -json | grep -c .) + 1)) ] || { say "forge $1: the forged claim was not added"; return; }
   "$PY" -I "$ROOT/tools/compare/reproduce.py" -accept-pack "$DIGEST" "$T/forged-log.jsonl" "$T/syn.pack" >"$T/fo.txt" 2>&1 && say "reproduce.py passes a forged claim: $1"
   [ "$(grep -c '^DIFFERS' "$T/fo.txt")" = 1 ] || say "forge $1: reproduce.py does not refuse exactly the forged claim: $(grep -c '^DIFFERS' "$T/fo.txt") refused"
+  bean -dir "$T/flog$forged" share -yes -out "$T/fbundle$forged" -type 'comparison.*' >/dev/null 2>&1 || { say "forge $1: the comparisons were not shared"; return; }
+  agree "forge $1" "$T/fbundle$forged" -pack "$T/syn.pack" -accept-pack "$DIGEST"
+  [ "$(grep -c '^  [0-9a-f]*  DIFFERS: ' "$T/ag-bean.txt")" = 1 ] || say "forge $1: check-bundle -pack does not refuse exactly the forged claim"
 }
 forge "a second record it is about" 'r["refs"].append({"rel": "about", "id": other["id"]})'
 forge "a reading of a type that the measure does not take" 'c["reading"] = other["id"]; r["refs"] = [{"rel": "about", "id": other["id"]}]'
@@ -303,6 +328,10 @@ text = re.sub(r'"n":(\d+)', r'"n":\1.0', json.dumps(p, indent=1), count=1)
 open(sys.argv[2], "w").write(text)
 EOF2
 bean -dir "$T/log" compare -pack "$T/other.pack" >/dev/null 2>&1 || say "bean refuses a pack that is written another way"
+# A pack with another SHA-256 is not the pack that a claim names: no claim
+# can be checked with it.
+agree "the comparisons that bean saved, with another pack" "$T/bundle" -pack "$T/other.pack"
+grep -q "CANNOT CHECK: the pack with SHA-256 $DIGEST was not given" "$T/ag-bean.txt" || say "check-bundle -pack does not say which pack to get"
 "$PY" -I "$HERE/check.py" "$T/other.pack" >/dev/null 2>&1 || say "check.py refuses a pack that is written another way"
 
 # A cell has no least number of people. Both read a pack with a cell of
@@ -327,6 +356,9 @@ done
 b ls -json >"$T/small-records.jsonl"
 "$PY" -I "$ROOT/tools/compare/reproduce.py" -accept-pack "$SMALLDIGEST" -accept-pack "$DIGEST" "$T/small-records.jsonl" "$T/syn.pack" "$T/small.pack" >"$T/small-rp.txt" 2>&1 \
   || say "reproduce.py does not get what bean saved with a small cell: $(tail -2 "$T/small-rp.txt")"
+rm -rf "$T/small-bundle"; b share -yes -out "$T/small-bundle" -type 'comparison.*' >/dev/null 2>&1 || say "the comparisons with a small cell were not shared"
+agree "the comparisons with two packs" "$T/small-bundle" -pack "$T/syn.pack" -pack "$T/small.pack" -accept-pack "$SMALLDIGEST" -accept-pack "$DIGEST"
+agree "the comparisons with two packs, and one given" "$T/small-bundle" -pack "$T/small.pack" -accept-pack "$SMALLDIGEST"
 
 real=""
 if [ -n "${BEAN_NHANES_DIR:-}" ]; then
@@ -347,5 +379,5 @@ if [ -n "${BEAN_NHANES_DIR:-}" ]; then
   done
   real=", and each pack of CDC's files is one on record"
 fi
-[ "$rc" = 0 ] && echo "pack: check.py reads the pack that bean builds and gives the method's four vectors, rebuild_nhanes.py builds the same pack byte for byte and refuses $i with one other member changed, reproduce.py computes $saved saved comparisons again, refuses $forged forged claims and fails on a pack that is not on record, and bean and check.py both refuse $wrong packs with one thing wrong$real"
+[ "$rc" = 0 ] && echo "pack: check.py reads the pack that bean builds and gives the method's four vectors, rebuild_nhanes.py builds the same pack byte for byte and refuses $i with one other member changed, reproduce.py computes $saved saved comparisons again, refuses $forged forged claims and fails on a pack that is not on record, bean check-bundle -pack gives each claim of a bundle the same verdict, and bean and check.py both refuse $wrong packs with one thing wrong$real"
 exit $rc
