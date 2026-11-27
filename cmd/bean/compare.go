@@ -130,7 +130,10 @@ func cmdCompare(s *core.Store, args []string) {
 		comparePack(s, *packPath, *packCohort, *typ, pos, *save, *unknownPack, acceptPack)
 		return
 	}
-	if *packCohort != "" || *unknownPack || accepted || (len(pos) == 0) == (*typ == "") {
+	if *packCohort != "" || *unknownPack || accepted {
+		badArg(errors.New("-cohort, -accept-pack and -unknown-pack go with -pack: give the file of the pack with -pack"))
+	}
+	if (len(pos) == 0) == (*typ == "") {
 		usage()
 	}
 	cohort, err := parseCohort(*sex, *age, where)
