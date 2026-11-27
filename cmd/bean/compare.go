@@ -98,28 +98,36 @@ func cmdCompare(s *core.Store, args []string) {
 	packPath := fs.String("pack", "", "compare with a reference pack: a file")
 	packCohort := fs.String("cohort", "", "with -pack: a cohort of the pack's menu")
 	unknownPack := fs.Bool("unknown-pack", false, "with -pack: also compare with a pack that bean has no record of")
-	acceptPack := fs.String("accept-pack", "", "with -pack: use a pack that bean has no record of when its SHA-256 is this one")
+	var acceptPacks multiFlag
+	fs.Var(&acceptPacks, "accept-pack", "with -pack: use a pack that bean has no record of when its SHA-256 is this one")
 	pos, err := parseInterspersed(fs, args)
 	if err != nil {
 		usage()
 	}
 	// An empty -accept-pack, as from a variable that is not set, must not
 	// read as no flag.
-	accepted := false
-	fs.Visit(func(f *flag.Flag) { accepted = accepted || f.Name == "accept-pack" })
+	accepted := len(acceptPacks) > 0
+	acceptPack := ""
+	if accepted {
+		acceptPack = acceptPacks[0]
+	}
 	if *packPath != "" {
 		if *sex != "" || *age != "" || len(where) > 0 || *unknown {
 			badArg(errors.New("with -pack, name a cohort of the pack's menu with -cohort: -sex, -age, -where and -unknown-files are for the files"))
 		}
 		// The value names one pack: a typo must not read as a pack that
 		// differs. One flag is enough, and two would leave one unused.
-		if accepted && !pack.IsDigest(*acceptPack) {
-			badArg(fmt.Errorf("-accept-pack takes the SHA-256 of a pack: 64 hex digits in lower case, with no prefix, not %q", *acceptPack))
+		// So a second value is an error of use too (DECISIONS 354).
+		if len(acceptPacks) > 1 {
+			badArg(errors.New("-accept-pack names the one pack of -pack: pass it once"))
+		}
+		if accepted && !pack.IsDigest(acceptPack) {
+			badArg(fmt.Errorf("-accept-pack takes the SHA-256 of a pack: 64 hex digits in lower case, with no prefix, not %q", acceptPack))
 		}
 		if accepted && *unknownPack {
 			badArg(errors.New("pass -accept-pack or -unknown-pack, not both"))
 		}
-		comparePack(s, *packPath, *packCohort, *typ, pos, *save, *unknownPack, *acceptPack)
+		comparePack(s, *packPath, *packCohort, *typ, pos, *save, *unknownPack, acceptPack)
 		return
 	}
 	if *packCohort != "" || *unknownPack || accepted || (len(pos) == 0) == (*typ == "") {

@@ -193,7 +193,13 @@ func printPack(p *pack.Pack) {
 	for _, text := range p.Caveats {
 		fmt.Println("  - the pack says: " + quoted(text))
 	}
-	fmt.Println(onRecord(p))
+	// The list names the flag that a pack with no record needs, and not
+	// the file's value: that comes from the publisher (DECISIONS 354).
+	if pack.IsKnown(p.SHA256) {
+		fmt.Println(onRecord(p))
+	} else {
+		fmt.Println(onRecord(p) + " To compare with it, pass -accept-pack <sha256> with the SHA-256 that the publisher states. Take it from the publisher, not from this list.")
+	}
 }
 
 // onRecord says whether bean knows the pack. A pack is what its SHA-256

@@ -215,7 +215,12 @@ func recomputeClaim(c *core.Record, records map[string]*core.Record, g givenPack
 		{"cohort.text", text(ctx["cohort"].(map[string]any)["text"]), cohort.Text},
 	} {
 		if t.got != t.want {
-			return "", differs("%s is not the pack's: the pack says: %q", t.name, t.want)
+			// Both texts are quotes: the claim's words are the sender's.
+			claim := "says: " + quoted(t.got)
+			if t.got == text(nil) {
+				claim = "holds no text"
+			}
+			return "", differs("%s is not the pack's: the claim %s, and the pack says: %s", t.name, claim, quoted(t.want))
 		}
 	}
 	if method["id"] != pack.MethodID || method["version"] != cell.MethodVersion() {
@@ -362,8 +367,10 @@ func recomputeLines(in map[string][]byte, g givenPacks, accepted []string) ([]st
 	}
 	// A comparison computes again with any pack that is well formed. What
 	// it means depends on who built the pack.
+	accepts := false
 	for _, digest := range slices.Sorted(maps.Keys(unrecorded)) {
 		if slices.Contains(accepted, digest) {
+			accepts = true
 			lines = append(lines, fmt.Sprintf("accepted with -accept-pack: the pack %s, which bean has no record of. Its tables, its caveats and what it sets a reading against are its builder's word", digest))
 			continue
 		}
@@ -374,22 +381,22 @@ func recomputeLines(in map[string][]byte, g givenPacks, accepted []string) ([]st
 		if unrecorded[digest] {
 			continue
 		}
-		why := "no comparison here was computed with it. Compare it with the SHA-256 that the publisher states"
+		var why string
 		switch {
 		case pack.IsKnown(digest):
 			why = "it names a pack that bean has on record, which needs no -accept-pack"
-		case g.packs[digest] != nil && !named[digest]:
-			why = "no comparison here names that pack"
-		case g.packs[digest] != nil:
-			why = "each comparison with that pack stopped at an earlier check, above"
 		case g.packs[digest] == nil:
 			why = "no pack that was given with -pack has that SHA-256"
+		case !named[digest]:
+			why = "no comparison here names that pack"
+		default:
+			why = "each comparison with that pack stopped at an earlier check, above"
 		}
 		lines = append(lines, fmt.Sprintf("-accept-pack %s does not count: %s", digest, why))
 		ok = false
 	}
 	if len(claims) == 0 {
-		lines = append(lines, "the bundle holds no comparison: there is nothing to compute again")
+		lines = append(lines, "the bundle holds no comparison: there is nothing to compute again. The check of the bundle passed, as bundle ok says. Without -pack, its exit is 0")
 	}
 	lines = append(lines,
 		"A comparison that computes again shows that its numbers follow from its reading and its pack. It does not show that the reading is true, or that the pack is right.",
@@ -397,9 +404,12 @@ func recomputeLines(in map[string][]byte, g givenPacks, accepted []string) ([]st
 	if diff > 0 {
 		lines = append(lines, "A comparison that DIFFERS is not what its reading and its pack give. Ask the sender, and do not rely on its numbers.")
 	}
-	if ok {
+	switch {
+	case ok && accepts:
+		lines = append(lines, "every comparison by a pack computes again. A pack that bean has no record of counts only by -accept-pack, as a line above says")
+	case ok:
 		lines = append(lines, "every comparison by a pack computes again")
-	} else {
+	default:
 		lines = append(lines, "computed again: NOT passed. The lines above say what differs or is missing, and what you can do")
 	}
 	return lines, ok

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"github.com/Conscious-Repository/bean/core"
+	"github.com/Conscious-Repository/bean/internal/pack"
 	"maps"
 	"os"
 	"path/filepath"
@@ -161,7 +162,7 @@ func TestCheckBundlePackHonest(t *testing.T) {
 		"accepted with -accept-pack: the pack " + pc.digest,
 		"It does not show that the reading is true, or that the pack is right.",
 		"comparisons: 3 compute again, 0 differ, 0 cannot be checked",
-		"\nevery comparison by a pack computes again\n",
+		"\nevery comparison by a pack computes again. A pack that bean has no record of counts only by -accept-pack, as a line above says\n",
 		"After bundle ok, bean says which of them computes again with the packs given.",
 		"not in this bundle. After bundle ok, bean says which comparisons compute again with the packs given.",
 	} {
@@ -217,11 +218,13 @@ func TestCheckBundlePackOnRecord(t *testing.T) {
 	for name, pc := range map[string]packClaims{"before": before, "now": now} {
 		bundle := bundleOf(t, pc.dir)
 		out, errs, code := run(t, "", "", "check-bundle", "-pack", pc.pack, bundle)
-		if v := verdicts(out); code != 0 || len(v) != 3 || !strings.Contains(out, "(on record): percentile") || strings.Contains(out, "NOT on record") {
+		if v := verdicts(out); code != 0 || len(v) != 3 || !strings.Contains(out, "(on record): percentile") || strings.Contains(out, "NOT on record") ||
+			!strings.HasSuffix(out, "\nevery comparison by a pack computes again\n") {
 			t.Errorf("%s: %d\n%s\n%s", name, code, out, errs)
 		}
-		out, _, code = run(t, "", "", "check-bundle", "-pack", pc.pack, "-accept-pack", pc.digest, bundle)
-		if code != 3 || !strings.Contains(out, "-accept-pack "+pc.digest+" does not count: it names a pack that bean has on record") {
+		// A value given twice is one line, not two.
+		out, _, code = run(t, "", "", "check-bundle", "-pack", pc.pack, "-accept-pack", pc.digest, "-accept-pack", pc.digest, bundle)
+		if code != 3 || strings.Count(out, "-accept-pack "+pc.digest+" does not count: it names a pack that bean has on record, which needs no -accept-pack\n") != 1 {
 			t.Errorf("%s, -accept-pack: %d\n%s", name, code, out)
 		}
 	}
@@ -241,6 +244,13 @@ func TestCheckBundlePackOnRecord(t *testing.T) {
 // refuses it, and only it.
 func TestCheckBundlePackForged(t *testing.T) {
 	pc := newPackClaims(t, "-accept-pack", mustDigest(t))
+	// The words of a line, where a case holds them. A text of the claim is
+	// a quote, as the pack's is.
+	words := map[string]string{
+		"another title":              `title is not the pack's: the claim says: "NHANES 2017-2018 (reference range)", and the pack says: "`,
+		"a label that is not text":   `label is not the pack's: the claim holds no text, and the pack says: "`,
+		"a reading that is not text": "DIFFERS: the claim's reading is not a record id",
+	}
 	for _, f := range []struct {
 		name   string
 		alone  bool
@@ -256,6 +266,8 @@ func TestCheckBundlePackForged(t *testing.T) {
 			ctx["reading"], r["refs"] = pc.ldl, []any{map[string]any{"rel": "about", "id": pc.ldl}}
 		}},
 		{"another title", false, func(r, ctx map[string]any) { ref(ctx)["title"] = "NHANES 2017-2018 (reference range)" }},
+		{"a label that is not text", false, func(r, ctx map[string]any) { ref(ctx)["label"] = 7.0 }},
+		{"a reading that is not text", false, func(r, ctx map[string]any) { ctx["reading"] = 7.0 }},
 		{"another source", false, func(r, ctx map[string]any) { ref(ctx)["source"] = "a clinical reference" }},
 		{"another label", false, func(r, ctx map[string]any) { ref(ctx)["label"] = "LDL Cholesterol (mg/dL)" }},
 		{"another unit", false, func(r, ctx map[string]any) { ref(ctx)["unit"] = "mmol/L" }},
@@ -305,7 +317,7 @@ func TestCheckBundlePackForged(t *testing.T) {
 		dir, id := pc.forge(t, f.alone, f.change)
 		out, errs, code := run(t, "", "", "check-bundle", "-pack", pc.pack, "-accept-pack", pc.digest, bundleOf(t, dir))
 		v := verdicts(out)
-		if code != 3 || v[id] != "DIFFERS" || !strings.Contains(out, "Ask the sender, and do not rely on its numbers.") {
+		if code != 3 || v[id] != "DIFFERS" || !strings.Contains(out, "Ask the sender, and do not rely on its numbers.") || !strings.Contains(out, words[f.name]) {
 			t.Errorf("%s: %d, %s is %q\n%s\n%s", f.name, code, id, v[id], out, errs)
 			continue
 		}
@@ -460,7 +472,7 @@ func TestCheckBundlePackEdges(t *testing.T) {
 	noClaims := filepath.Join(t.TempDir(), "none")
 	run(t, plain, "", "share", "-yes", "-out", noClaims, "-type", "weight")
 	out, _, code = run(t, "", "", "check-bundle", "-pack", pc.pack, noClaims)
-	if code != 3 || !strings.Contains(out, "the bundle holds no comparison: there is nothing to compute again") || !strings.Contains(out, "named by no comparison here") {
+	if code != 3 || !strings.Contains(out, "the bundle holds no comparison: there is nothing to compute again. The check of the bundle passed, as bundle ok says. Without -pack, its exit is 0\n") || !strings.Contains(out, "named by no comparison here") {
 		t.Errorf("no comparison: %d\n%s", code, out)
 	}
 }
@@ -591,4 +603,37 @@ func bundleRecords(t *testing.T, dir string) map[string][]byte {
 		t.Fatal(err)
 	}
 	return in
+}
+
+// TestRecomputeClaimOtherSigner: a claim about a reading that another key
+// signed holds the caveat of that signer last. For a claim saved before its
+// pack was put on record, the caveat of a pack not on record comes before
+// it, as bean compare writes them (DECISIONS 319). The records are made
+// here, as in the test above.
+func TestRecomputeClaimOtherSigner(t *testing.T) {
+	pc := newPackClaims(t, "-accept-pack", mustDigest(t))
+	records := core.VerifyFiles(bundleRecords(t, bundleOf(t, pc.dir))).Records
+	claim := *records[pc.claim["id"].(string)]
+	reading := *records[claim.Context["reading"].(string)]
+	reading.Author = "sha256:" + strings.Repeat("ef", 32)
+	records[reading.ID] = &reading
+	// The claim as bean compare saved it while the pack was not on record.
+	var raw map[string]any
+	data, _ := json.Marshal(claim.Raw)
+	json.Unmarshal(data, &raw)
+	ctx := raw["context"].(map[string]any)
+	ctx["caveats"] = append(ctx["caveats"].([]any), pack.CaveatAuthor)
+	claim.Raw = raw
+	pack.Known[pc.digest] = pack.Known["10555d6769421d4305cbcd4ff14960d8b966ddd829a50581a9584a60a84d29e2"]
+	t.Cleanup(func() { delete(pack.Known, pc.digest) })
+	g := readGivenPacks([]string{pc.pack})
+	if _, err := recomputeClaim(&claim, records, g, map[string]bool{}); err != nil {
+		t.Errorf("the caveat of a pack not on record before the signer's: %v", err)
+	}
+	// Last, after the signer's, it is not in its place.
+	cv := ctx["caveats"].([]any)
+	cv[len(cv)-2], cv[len(cv)-1] = cv[len(cv)-1], cv[len(cv)-2]
+	if _, err := recomputeClaim(&claim, records, g, map[string]bool{}); err == nil || !strings.Contains(err.Error(), "the caveats are not") {
+		t.Errorf("the caveat of a pack not on record after the signer's: %v", err)
+	}
 }
