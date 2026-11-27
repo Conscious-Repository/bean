@@ -912,6 +912,9 @@ func cmdCheckBundle(args []string) {
 	fs.SetOutput(io.Discard)
 	unpack := fs.String("unpack", "", "for a package that passes: write its bundle into this new folder")
 	keyFile := fs.String("key", "", "for a package that is sealed to a key: the key file that opens it")
+	var packPaths, accepted multiFlag
+	fs.Var(&packPaths, "pack", "compute each comparison by this pack again: a file; may repeat")
+	fs.Var(&accepted, "accept-pack", "with -pack: a pack that bean has no record of, by its SHA-256; may repeat")
 	if err := fs.Parse(args); err != nil || fs.NArg() != 1 {
 		usage()
 	}
@@ -919,6 +922,18 @@ func cmdCheckBundle(args []string) {
 	fs.Visit(func(f *flag.Flag) { keyGiven = keyGiven || f.Name == "key" })
 	if keyGiven && *keyFile == "" {
 		badArg(errors.New("-key names a key file"))
+	}
+	for _, digest := range accepted {
+		if !pack.IsDigest(digest) {
+			badArg(fmt.Errorf("-accept-pack takes the SHA-256 of a pack: 64 hex digits in lower case, with no prefix, not %q", digest))
+		}
+	}
+	if len(accepted) > 0 && len(packPaths) == 0 {
+		badArg(errors.New("-accept-pack goes with -pack: give the file of each pack whose comparisons are to be computed again"))
+	}
+	var given givenPacks
+	if len(packPaths) > 0 {
+		given = readGivenPacks(packPaths)
 	}
 	path := fs.Arg(0)
 	var lines []string
@@ -938,6 +953,13 @@ func cmdCheckBundle(args []string) {
 		lines, ok = res.Lines(), res.OK
 	}
 	for _, line := range lines {
+		// With -pack the lines after "bundle ok" say what was computed again.
+		if len(packPaths) > 0 {
+			line = strings.Replace(line, bundle.NotComputedAgain, "The comparisons above are shown as claimed. After bundle ok, bean says which of them computes again with the packs given.", 1)
+			if strings.HasPrefix(line, bundle.PackNotHere) {
+				line = bundle.PackNotHere + " After bundle ok, bean says which comparisons compute again with the packs given. The SHA-256 names the pack:"
+			}
+		}
 		fmt.Println(safe(line))
 	}
 	if !ok {
@@ -949,7 +971,21 @@ func cmdCheckBundle(args []string) {
 			}
 			fmt.Println("This is a reply to a share, not a bundle: the person it is for reads it with " + how + ".")
 		}
+		// A package that did not open was not checked: it said so.
+		if len(packPaths) > 0 && !in.Locked {
+			fmt.Println("-pack: nothing was computed again, since the bundle did not pass its check")
+		}
 		os.Exit(1)
+	}
+	// A bundle that passes and a comparison that does not compute again, or
+	// cannot be checked: exit 3. Exit 1 stays a bundle that failed.
+	computes := true
+	if len(packPaths) > 0 {
+		var more []string
+		more, computes = recomputeLines(in.Records, given, accepted)
+		for _, line := range more {
+			fmt.Println(safe(line))
+		}
 	}
 	if *unpack != "" {
 		if err := unpackBundle(in, *unpack); err != nil {
@@ -960,6 +996,9 @@ func cmdCheckBundle(args []string) {
 		} else {
 			fmt.Printf("unpacked into %s: it carries no file\n", *unpack)
 		}
+	}
+	if !computes {
+		os.Exit(3)
 	}
 }
 
