@@ -93,7 +93,7 @@ A new method version costs each reader a second grammar of claims. So it comes w
 - A test that needs zero and that people have, which the share of eosinophils may be.
 - A reading that is finer than the source's step, in a test that people have.
 
-**One thing must not wait: the words for a format that a reader does not know.** Today bean says `it is not a pack of version 0`. A reader that ships before a newer format exists must already say the right thing. So bean, the Python check and the check page say this: the pack is in a format that this bean does not read. A newer bean may read it.
+**One thing must not wait: the words for a format that a reader does not know.** When this plan was written, bean said `it is not a pack of version 0`. Since 0.8.4 it says `unsupported pack format`, and lists the formats that it reads. A reader that ships before a newer format exists must already say the right thing. So bean, the Python check and the check page say this: the pack is in a format that this bean does not read. A newer bean may read it.
 
 ## Decision 2: the four tests with a detection limit
 

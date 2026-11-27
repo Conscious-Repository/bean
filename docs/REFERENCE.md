@@ -241,7 +241,7 @@ For a pack on record, bean holds each measure's label, the types and units that 
 
 Three more marks. `(names NO reference data)`: the comparison names no pack and no files. `(names BOTH a pack and files)`: a comparison is made with one. `(is NOT about a reading)`: it is about one of bean's own records, such as another comparison.
 
-**What a check of a bundle does not do.** It does not compute a comparison again: it has the claim and not the pack. So a claim with false numbers that names the pack on record reads like a true one there. `reproduce.py` with the pack is what finds it.
+**What a check of a bundle does not do.** Without `-pack`, it does not compute a comparison again: it has the claim and not the pack. So a claim with false numbers that names the pack on record reads like a true one there. `bean check-bundle -pack` and `reproduce.py`, each with the pack, are what find it.
 
 One list in bean's code is not how many publishers will be known. A publisher's signature is built when a second publisher exists ([ROADMAP.md](ROADMAP.md), path 4).
 
