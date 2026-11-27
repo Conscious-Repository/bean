@@ -320,9 +320,10 @@ func recomputeLines(in map[string][]byte, g givenPacks, accepted []string) ([]st
 	var claims []*core.Record
 	// The rows of a bundle show each record of a type comparison.* as a
 	// comparison. So each is a claim here: one that bean does not compute
-	// must not hide behind those that it does.
+	// must not hide behind those that it does. A row of the type
+	// "comparison" alone reads as one too.
 	for _, r := range records {
-		if strings.HasPrefix(r.Type, "comparison.") {
+		if r.Type == "comparison" || strings.HasPrefix(r.Type, "comparison.") {
 			claims = append(claims, r)
 		}
 	}
@@ -374,9 +375,11 @@ func recomputeLines(in map[string][]byte, g givenPacks, accepted []string) ([]st
 	// A claim that is not computed here is not checked: the run does not
 	// pass with it.
 	ok := diff == 0 && cannot == 0 && files == 0 && again > 0
+	// unused: a file or a flag of the reader that the check did not use.
+	unused := false
 	for _, digest := range slices.Sorted(maps.Keys(g.bad)) {
 		lines = append(lines, fmt.Sprintf("REFUSED: the file %s, SHA-256 %s: %s. Get the pack from its publisher: this file is not one", g.path[digest], digest, g.bad[digest]))
-		ok = false
+		ok, unused = false, true
 	}
 	for _, digest := range slices.Sorted(maps.Keys(g.packs)) {
 		if !named[digest] {
@@ -411,7 +414,7 @@ func recomputeLines(in map[string][]byte, g givenPacks, accepted []string) ([]st
 			why = "each comparison with that pack stopped at an earlier check, above"
 		}
 		lines = append(lines, fmt.Sprintf("-accept-pack %s does not count: %s", digest, why))
-		ok = false
+		ok, unused = false, true
 	}
 	lines = append(lines,
 		"A comparison that computes again shows that its numbers follow from its reading and its pack. It does not show that the reading is true, or that the pack is right.",
@@ -421,8 +424,13 @@ func recomputeLines(in map[string][]byte, g givenPacks, accepted []string) ([]st
 	}
 	switch {
 	case len(claims) == 0:
-		// Nothing differs and nothing is missing: the last line says so.
-		lines = append(lines, "the bundle holds no comparison: there is nothing to compute again. The check of the bundle passed, as bundle ok says. Without -pack, its exit is 0")
+		// No claim differs and none is missing. The last line says so,
+		// and it does not hide a file or a flag that was not used.
+		last := "the bundle holds no comparison: there is nothing to compute again. The check of the bundle passed, as bundle ok says. The exit is 3 with -pack, and 0 without it"
+		if unused {
+			last += ". A line above names a file that was refused, or a flag that did not count"
+		}
+		lines = append(lines, last)
 	case ok && accepts:
 		lines = append(lines, "every comparison by a pack computes again. A pack that bean has no record of counts only by -accept-pack, as a line above says")
 	case ok:

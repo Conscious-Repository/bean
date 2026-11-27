@@ -185,7 +185,16 @@ PYEOF
   "$PY" -I "$ROOT/tools/compare/reproduce.py" -accept-pack "$DIGEST" "$T/forged-log.jsonl" "$T/syn.pack" >"$T/fo.txt" 2>&1 && say "reproduce.py passes a forged claim: $1"
   local word=${4:-DIFFERS}
   [ "$(grep -c "^$word" "$T/fo.txt")" = 1 ] || say "forge $1: reproduce.py does not say $word of exactly the forged claim: $(grep -c "^$word" "$T/fo.txt") times"
-  bean -dir "$T/flog$forged" share -yes -out "$T/fbundle$forged" -type 'comparison.*' >/dev/null 2>&1 || { say "forge $1: the comparisons were not shared"; return; }
+  # A share by the type comparison.* leaves the type "comparison" out: for
+  # that case the comparisons are shared by id.
+  if [ "${5:-}" = byid ]; then
+    bean -dir "$T/flog$forged" ls -json >"$T/forged-now.jsonl"
+    # shellcheck disable=SC2046
+    bean -dir "$T/flog$forged" share -yes -out "$T/fbundle$forged" $("$PY" -I -c 'import json, sys
+print(" ".join(r["id"] for r in map(json.loads, open(sys.argv[1])) if (r["type"] + ".").startswith("comparison.")))' "$T/forged-now.jsonl") >/dev/null 2>&1 || { say "forge $1: the comparisons were not shared by id"; return; }
+  else
+    bean -dir "$T/flog$forged" share -yes -out "$T/fbundle$forged" -type 'comparison.*' >/dev/null 2>&1 || { say "forge $1: the comparisons were not shared"; return; }
+  fi
   agree "forge $1" "$T/fbundle$forged" -pack "$T/syn.pack" -accept-pack "$DIGEST"
   [ "$(grep -c "^  [0-9a-f]*  $word: " "$T/ag-bean.txt")" = 1 ] || say "forge $1: check-bundle -pack does not say $word of exactly the forged claim"
 }
@@ -212,6 +221,7 @@ forge "a member more beside the context" 'more["x-note"] = "audited"' alone
 # cannot hide a claim from the check by its type.
 forge "another type of comparison" 'r["type"] = "comparison.zscore"; c["result"]["percentile"] = 99.9' "" "CANNOT CHECK"
 forge "another type of comparison, alone" 'r["type"] = "comparison.zscore"' alone "CANNOT CHECK"
+forge "the type comparison with no dot" 'r["type"] = "comparison"; c["result"]["percentile"] = 99.9' "" "CANNOT CHECK" byid
 
 # A pack can be put on record after a claim was saved with it. The claim
 # then still says that bean had no record of the pack, and it must still
