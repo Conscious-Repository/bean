@@ -94,7 +94,7 @@ Done: reference packs, two NHANES packs on record, and `bean compare -pack` (DEC
 - **The cohort from two records, for a pack that is not on record.** bean's code holds the sex and the ages of each cohort, for the two packs on record only. A pack states a cohort in words. A field for the sex and the ages would be a change to the pack format (DECISIONS 348).
 - **More tests** by [REFERENCE-PLAN.md](REFERENCE-PLAN.md): values below a detection limit, more of the blood count, and a caveat with a size. The fasting tests need a weight of their own, which is a decision of their own.
 - **A publisher signs a pack,** and **a person keeps their own list of packs** (DECISIONS 308). Each is built when a second publisher exists.
-- **The check page computes a shared comparison again,** when the reader gives it the pack. `bean check-bundle -pack` does since 0.8.7 (DECISIONS 353); the page in a browser does not yet.
+- **The check page computes a shared comparison again,** when the reader gives it the pack. `bean check-bundle -pack` does since 0.8.7 (DECISIONS 353); the page in a browser does not yet. First the check moves into the code that the page runs, with its tests. Then the page takes a pack file from the reader, and fetches none. A pack with no record counts only with a SHA-256 that the reader types.
 - **A pool of real people.** It needs a share that names its reader, written consent and a review of the law (DECISIONS 325, 328). It also needs a pack format for data that is not public ([POOL-PLAN.md](POOL-PLAN.md)). A pack lists every value of a cell, so a small pool shows each member's value.
 
 ### Portability check

@@ -218,6 +218,7 @@ With `-pack <file>`, bean also computes each comparison by a pack again, by the 
 - Exit 0 when every comparison computes again, and each pack is on record or accepted. Exit 3 when the bundle passed and that is not so.
 - Exit 1 stays a bundle that failed. Then nothing is computed, and the last line says so. An error of use exits 2.
 - With `-unpack`, a package that passes is written also when the exit is 3.
+- Treat any exit but 0 as not checked. A bundle with a comparison of the survey's files exits 3 by design: bean does not compute it.
 
 `reproduce.py` is a second implementation that shares no code with bean. `make pack` gives both the same records, and they must agree on each claim. `check-bundle -pack` places a value with the code of `bean compare`: a fault there would be in both.
 
