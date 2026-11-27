@@ -117,8 +117,7 @@ func cmdCompare(s *core.Store, args []string) {
 		}
 		// The value names one pack: a typo must not read as a pack that
 		// differs. One flag is enough, and two would leave one unused.
-		// One run uses one pack: a second value would be unused, and bean
-		// does not pick one (DECISIONS 354).
+		// So a second value is an error of use too (DECISIONS 354).
 		if len(acceptPacks) > 1 {
 			badArg(errors.New("-accept-pack names the one pack of -pack: pass it once"))
 		}
