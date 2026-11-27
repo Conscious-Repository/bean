@@ -1,6 +1,6 @@
 # External reference packs
 
-Release 0.8.4 and later read `pack/2`, `pack/3` and `pack/4`. Release 0.8.3 reads `pack/0` and `pack/1` ([UPGRADING.md](../UPGRADING.md)).
+Release 0.8.4 and later read `pack/2`, `pack/3` and `pack/4`. Release 0.8.3 reads `pack/0` and `pack/1` ([UPGRADING.md](../UPGRADING.md)). `-accept-pack` needs release 0.8.7 or later.
 
 ## Routine ratios, iron capacity and assay sources
 

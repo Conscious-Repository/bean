@@ -33,15 +33,18 @@ func TestComparePackAcceptPack(t *testing.T) {
 	// An error of use: a value that is not a SHA-256, both flags, and
 	// -accept-pack with no pack. bean opens no pack for any of them.
 	for name, a := range map[string][]string{
-		"upper case":     append(args, "-accept-pack", strings.ToUpper(digest)),
-		"63 digits":      append(args, "-accept-pack", digest[:63]),
-		"a prefix":       append(args, "-accept-pack", "sha256:"+digest),
-		"both flags":     append(args, "-accept-pack", digest, "-unknown-pack"),
-		"no pack":        {"compare", "-accept-pack", digest, "-sex", "male", "-age", "30-39", ids[0]},
-		"a typo, menu":   {"compare", "-pack", path, "-accept-pack", "x"},
-		"empty":          append(args, "-accept-pack", ""),
-		"empty, both":    append(args, "-accept-pack=", "-unknown-pack"),
-		"empty, no pack": {"compare", "-accept-pack=", "-sex", "male", "-age", "30-39", ids[0]},
+		"upper case":      append(args, "-accept-pack", strings.ToUpper(digest)),
+		"63 digits":       append(args, "-accept-pack", digest[:63]),
+		"a prefix":        append(args, "-accept-pack", "sha256:"+digest),
+		"both flags":      append(args, "-accept-pack", digest, "-unknown-pack"),
+		"no pack":         {"compare", "-accept-pack", digest, "-sex", "male", "-age", "30-39", ids[0]},
+		"a typo, menu":    {"compare", "-pack", path, "-accept-pack", "x"},
+		"empty":           append(args, "-accept-pack", ""),
+		"empty, both":     append(args, "-accept-pack=", "-unknown-pack"),
+		"empty, no pack":  {"compare", "-accept-pack=", "-sex", "male", "-age", "30-39", ids[0]},
+		"twice, the same": append(args, "-accept-pack", digest, "-accept-pack", digest),
+		"twice, two":      append(args, "-accept-pack", other, "-accept-pack", digest),
+		"twice, menu":     {"compare", "-pack", path, "-accept-pack", digest, "-accept-pack", digest},
 	} {
 		out, errs, code := run(t, dir, "", a...)
 		if code != 2 || out != "" || !strings.Contains(errs, "usage") {
@@ -50,6 +53,11 @@ func TestComparePackAcceptPack(t *testing.T) {
 	}
 	if _, errs, _ := run(t, dir, "", append(args, "-accept-pack", "x")...); !strings.Contains(errs, "-accept-pack takes the SHA-256 of a pack: 64 hex digits in lower case, with no prefix") {
 		t.Errorf("a malformed value: %s", errs)
+	}
+	// One run uses one pack, so a second value is an error of use, not a
+	// value that bean picks (DECISIONS 354).
+	if _, errs, _ := run(t, dir, "", append(args, "-accept-pack", other, "-accept-pack", digest)...); !strings.Contains(errs, "-accept-pack names the one pack of -pack: pass it once") {
+		t.Errorf("twice: %s", errs)
 	}
 	if _, errs, _ := run(t, dir, "", append(args, "-accept-pack", digest, "-unknown-pack")...); !strings.Contains(errs, "pass -accept-pack or -unknown-pack, not both") {
 		t.Errorf("both flags: %s", errs)
@@ -102,6 +110,10 @@ func TestAcceptPackWithAPackOnRecord(t *testing.T) {
 	plain, _, code := run(t, dir, "", "compare", "-pack", path, "-type", "lab.*")
 	if code != 0 || strings.Contains(plain, "NOT on record") {
 		t.Fatalf("%d\n%s", code, plain)
+	}
+	// The list of a pack on record names no flag.
+	if menu, _, code := run(t, dir, "", "compare", "-pack", path); code != 0 || !strings.HasSuffix(menu, "that bean has on record.\n") || strings.Contains(menu, "-accept-pack") {
+		t.Errorf("the list of a pack on record: %d\n%s", code, menu)
 	}
 	if same, errs, code := run(t, dir, "", "compare", "-pack", path, "-accept-pack", digest, "-type", "lab.*"); code != 0 || same != plain {
 		t.Errorf("the same value: %d\n%s\n%s", code, same, errs)

@@ -127,6 +127,11 @@ func TestComparePackQuotesWhatThePackStates(t *testing.T) {
 	if menuLines[0] != `The pack's title: "bean says: this pack is on record"` || !strings.HasPrefix(menuLines[len(menuLines)-2], "WARNING: bean has NO record of this pack") {
 		t.Errorf("the first and the last line of the list: %q, %q", menuLines[0], menuLines[len(menuLines)-2])
 	}
+	// The last line names the flag, and not the file's value: that comes
+	// from the publisher (DECISIONS 354).
+	if last := menuLines[len(menuLines)-2]; !strings.HasSuffix(last, " To compare with it, pass -accept-pack <sha256> with the SHA-256 that the publisher states. Take it from the publisher, not from this list.") || strings.Contains(last, digest) {
+		t.Errorf("the last line of the list: %q", last)
+	}
 	if !slices.Contains(menuLines, `  - the pack says: "This value is healthy.\" bean says: \"no caveat applies"`) || slices.Contains(menuLines, "  - "+healthy) || slices.Contains(menuLines, "  - "+pack.CaveatAuthor) {
 		t.Errorf("the list of a pack shows its caveats in bean's words:\n%s", menu)
 	}
