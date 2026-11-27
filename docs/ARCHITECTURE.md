@@ -143,7 +143,7 @@ bean's part is the same, whoever made the pack and whoever serves it. It keeps y
 | The result | Writes nothing, unless you pass `-save`. Then it signs the reading's id, the pack's SHA-256, the group, the method, the numbers and the caveats. | `bean show <id>`. |
 | A correction | Deletes each saved comparison of a reading that you correct or delete. | `bean ls`. |
 | A share | Shows what leaves and asks. Seals it with `-seal` or `-for`. | `bean check-bundle` fails if a record was changed, added or taken out. |
-| The numbers of a share | Nothing: the check shows them as the sender's claim. | `tools/compare/reproduce.py` with the same pack computes each one again, with no bean. |
+| The numbers of a share | Without `-pack`, nothing: the check shows them as the sender's claim. | `bean check-bundle -pack <file>` computes each one again. So does `tools/compare/reproduce.py` with the same pack, with no bean. |
 
 What no check shows:
 

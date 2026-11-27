@@ -250,7 +250,7 @@ Today you build a pack, someone gives you the file, or you fetch one from a host
 - **Your reading stays home.** The pack comes to your machine whole, and bean has no command that fetches from a network. A host sees your network address and that you fetched a file. It sees no value and no cohort.
 - **The pack is what its SHA-256 says.** You check it against [REFERENCE.md](docs/REFERENCE.md#how-a-pack-travels), or build the same bytes yourself. bean stops at a pack that it does not have on record, unless you pass its SHA-256 with `-accept-pack`, or `-unknown-pack`.
 - **A saved result can be computed again.** It is your signed record of the reading, the pack and the method. Another person with the pack gets the same numbers, with no bean.
-- **What you share is checked too.** A peer opens your sealed package, and the check fails if a record was changed, added or taken out. It does not compute a comparison again: `reproduce.py` does.
+- **What you share is checked too.** A peer opens your sealed package, and the check fails if a record was changed, added or taken out. With `-pack <file>`, the check also computes each comparison by that pack again. `reproduce.py` does the same with no bean.
 - **bean proves who signed, and never that a value is true.** A saved comparison also gives its reading away: share one as you would the reading.
 
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#what-bean-checks-in-a-comparison) has each check, and what you can compare with today.
