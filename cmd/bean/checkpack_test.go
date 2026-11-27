@@ -98,7 +98,7 @@ func copyLog(t *testing.T, dir string) string {
 	return to
 }
 
-var verdictLine = regexp.MustCompile(`(?m)^  ([0-9a-f]{12})  (computes again|DIFFERS|CANNOT CHECK|not computed here): `)
+var verdictLine = regexp.MustCompile(`(?m)^  ([0-9a-f]{12})  (computes again|computes again, with a pack NOT accepted|DIFFERS|CANNOT CHECK|not computed here): `)
 
 // verdicts are the words of check-bundle -pack for each claim, by the
 // start of its id.
@@ -185,11 +185,22 @@ func TestCheckBundlePackHonest(t *testing.T) {
 		!strings.Contains(out, "pass -accept-pack <sha256>") || strings.Contains(out, "-accept-pack "+pc.digest) || !strings.Contains(out, "computed again: NOT passed") {
 		t.Errorf("no -accept-pack: %d\n%s", code, out)
 	}
+	// Each claim's own line says that its pack was not accepted.
+	for id, word := range verdicts(out) {
+		if word != "computes again, with a pack NOT accepted" {
+			t.Errorf("no -accept-pack: the line of %s says %q", id, word)
+		}
+	}
 	// -accept-pack names another pack: nothing is accepted.
 	other := strings.Repeat("a", 64)
 	out, _, code = run(t, "", "", "check-bundle", "-pack", pc.pack, "-accept-pack", other, bundle)
 	if code != 3 || !strings.Contains(out, "NOT on record: the pack "+pc.digest) || !strings.Contains(out, "-accept-pack "+other+" does not count: no pack that was given with -pack has that SHA-256") {
 		t.Errorf("another -accept-pack: %d\n%s", code, out)
+	}
+	for id, word := range verdicts(out) {
+		if word != "computes again, with a pack NOT accepted" {
+			t.Errorf("another -accept-pack: the line of %s says %q", id, word)
+		}
 	}
 }
 
@@ -219,7 +230,7 @@ func TestCheckBundlePackOnRecord(t *testing.T) {
 		bundle := bundleOf(t, pc.dir)
 		out, errs, code := run(t, "", "", "check-bundle", "-pack", pc.pack, bundle)
 		if v := verdicts(out); code != 0 || len(v) != 3 || !strings.Contains(out, "(on record): percentile") || strings.Contains(out, "NOT on record") ||
-			!strings.HasSuffix(out, "\nevery comparison by a pack computes again\n") {
+			!strings.HasSuffix(out, "\nevery comparison by a pack computes again\n") || strings.Contains(out, "NOT accepted") {
 			t.Errorf("%s: %d\n%s\n%s", name, code, out, errs)
 		}
 		// A value given twice is one line, not two.

@@ -132,7 +132,7 @@ agree() {
   local accept=() a
   for a in "$@"; do [ "${prev:-}" = -accept-pack ] && accept+=(-accept-pack "$a"); [ "${prev:-}" = -pack ] && accept+=("$a"); prev=$a; done; prev=
   "$PY" -I "$ROOT/tools/compare/reproduce.py" "$bundle" "${accept[@]}" >"$T/ag-py.txt" 2>&1; local p=$?
-  sed -n 's/^  \([0-9a-f]\{12\}\)  computes again: .*/\1 ok/p; s/^  \([0-9a-f]\{12\}\)  DIFFERS: .*/\1 differs/p; s/^  \([0-9a-f]\{12\}\)  CANNOT CHECK: .*/\1 cannot/p' "$T/ag-bean.txt" | sort >"$T/ag-bean.v"
+  sed -n 's/^  \([0-9a-f]\{12\}\)  computes again[^:]*: .*/\1 ok/p; s/^  \([0-9a-f]\{12\}\)  DIFFERS: .*/\1 differs/p; s/^  \([0-9a-f]\{12\}\)  CANNOT CHECK: .*/\1 cannot/p' "$T/ag-bean.txt" | sort >"$T/ag-bean.v"
   sed -n 's/^reproduced \([0-9a-f]\{12\}\) .*/\1 ok/p; s/^DIFFERS \([0-9a-f]\{12\}\) .*/\1 differs/p; s/^CANNOT CHECK \([0-9a-f]\{12\}\) .*/\1 cannot/p' "$T/ag-py.txt" | sort >"$T/ag-py.v"
   [ -s "$T/ag-bean.v" ] || say "$what: bean check-bundle -pack gives no verdict: $(tail -2 "$T/ag-bean.txt")"
   cmp -s "$T/ag-bean.v" "$T/ag-py.v" || say "$what: bean check-bundle -pack and reproduce.py differ: $(diff "$T/ag-bean.v" "$T/ag-py.v" | grep '^[<>]' | head -2 | tr '\n' ' ')"

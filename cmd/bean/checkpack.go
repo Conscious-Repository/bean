@@ -334,9 +334,11 @@ func recomputeLines(in map[string][]byte, g givenPacks, accepted []string) ([]st
 			lines = append(lines, fmt.Sprintf("  %s  not computed here: it says that it was made with the survey's files, not with a pack. To check it, give tools/compare/reproduce.py the bundle and those files", c.ID[7:19]))
 			continue
 		}
+		by := ""
 		if ref, _ := c.Context["reference"].(map[string]any); ref != nil {
 			if d, _ := ref["pack"].(string); d != "" {
 				named[d] = true
+				by = d
 			}
 		}
 		text, err := recomputeClaim(c, records, g, unrecorded)
@@ -344,7 +346,14 @@ func recomputeLines(in map[string][]byte, g givenPacks, accepted []string) ([]st
 		switch {
 		case err == nil:
 			again++
-			lines = append(lines, fmt.Sprintf("  %s  computes again: %s", c.ID[7:19], text))
+			// The numbers follow from the pack. A pack that bean has no
+			// record of counts only when the reader accepts it, and the
+			// claim's own line says so: a reader may stop at that line.
+			word := "computes again"
+			if unrecorded[by] && !slices.Contains(accepted, by) {
+				word = "computes again, with a pack NOT accepted"
+			}
+			lines = append(lines, fmt.Sprintf("  %s  %s: %s", c.ID[7:19], word, text))
 		case errors.As(err, &cc):
 			cannot++
 			lines = append(lines, fmt.Sprintf("  %s  CANNOT CHECK: %s", c.ID[7:19], err))

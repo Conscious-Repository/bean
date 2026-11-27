@@ -279,6 +279,7 @@ Saved comparisons, the reference files you kept and the records of your shares a
 | `-accept-pack names the one pack of -pack` | Pass `-accept-pack` once to `bean compare`. `check-bundle` takes one for each pack. |
 | `CANNOT CHECK: the pack with SHA-256 ... was not given` from `check-bundle -pack` | Get the pack with that SHA-256 from its publisher, and pass its file with `-pack`. A file with another SHA-256 is another pack. |
 | `DIFFERS: ...` from `check-bundle -pack` | The claim is not what its reading and its pack give. The line says what differs. Ask the sender; do not read its numbers. |
+| `computes again, with a pack NOT accepted: ...` from `check-bundle -pack` | The numbers follow from the pack, and bean has no record of that pack. The check did not pass. See the next row. |
 | `NOT on record: the pack ...` from `check-bundle -pack` | As for `bean has no record of this pack`, above: pass the publisher's value with `-accept-pack <sha256>`. Do not pass the value that bean printed: that checks nothing. |
 | `REFUSED: the file ...` from `check-bundle -pack` | The file is not a pack that bean reads. Get the pack from its publisher. |
 | `-accept-pack ... does not count` | The line says why. Pass only the SHA-256 that the publisher states for a pack that a comparison names. |
