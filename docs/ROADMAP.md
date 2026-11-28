@@ -17,6 +17,13 @@ This file is the one place for open paths: what bean does now, what comes next, 
 3. **Trial 3: two readers, multi-host failover and portability.** Pick two verified contacts and show what each will get. Seal separately to each using the same one-reader format. Give them different scopes. Remove one while an update is queued and check that only the remaining reader gets the next matching result once. A reader adding a contact grants that person nothing. Block the first relay and Blossom host, then start a fresh reader from a second host holding the authorized package. Verify the same signed share ID and sender offline with the reader's own key.
 4. **Peer discovery cards on Nostr (DECISIONS 340, 360).** In the same separate tool, a person can publish an optional short card with a reader address and no measurement. Design must settle out-of-band voice verification on first contact and whenever an address changes. A card for a rare condition can identify a person.
 
+**Open for the design of trial 1 (DECISIONS 360).**
+
+- **What a relay learns.** A gift wrap hides the sender, and names the reader's Nostr key in the clear. So a relay can count a reader's notices, and see when each arrives. A public list of a reader's relays shows where to watch. The owner decided that a host lists no package by reader (DECISIONS 358), and a list of peers' keys was cut (DECISIONS 325). The design says how a relay keeps to that, or the owner changes the rule. One candidate: a relay gives a notice only to the reader that it names, after that reader proves the key.
+- **Where a person's Nostr key is kept.** The client holds it, and it is a new secret. Does the rule for a key file with a passphrase cover it (DECISIONS 328)? Whoever takes it reads each notice and can send a false one. It opens no package.
+- **Which key signs an upload.** A key made for that one upload signs it, never a key of a log. The file host learns the size, the time, the hash and each network address.
+- **What binds a Nostr key to a person.** A contact holds a Nostr key, eight identity words and an address. The design says which of them a person checks by voice, and when.
+
 Candidates for a client that talks to a network, none of them audited (DECISIONS 359). Outside a trial on one machine, it refuses to dial loopback, private and CGNAT (`100.64.0.0/10`) addresses. It ignores proxy variables, and it caps the size of a response. Its tests play recorded HTTP exchanges for an outage, a timeout and a replay. A host carrying personal packages deletes a package after fetch and keeps no list of readers (DECISIONS 358). Stateless signed capability tokens for fetch and delete are one candidate (DECISIONS 359).
 
 **Live two-person run on real relays and Blossom hosts.** Two real people run the whole loop: import, compare with a hosted pack, and discover or pin each other. They share and reply over Nostr and Blossom, verify offline, and prove a second host works. Record where each person needed help and what failed.
@@ -55,7 +62,7 @@ Candidates for a client that talks to a network, none of them audited (DECISIONS
 - Whether the documents name a publisher. The rule is that they name none (DECISIONS 318). Since 2026-11-23 some name one: EXTERNAL-PACKS.md, `STELE-SHA256SUMS`, FIRST-RUN.md with a second address of the same hand, and one line of UPGRADING.md. So do `examples/coverage`, in its README, a selection file and the default address of `fetch.py`, and a format name in `bean coverage`. A review raised this, and not the owner (DECISIONS 346).
 - Left by the audit before release 0.8.7 (DECISIONS 356). The refusals of `bean compare -pack` print the file's own SHA-256 beside the flag. The list of a pack still names `-accept-pack` after the person passed it.
 - The three picks for `-accept-pack`, each of which the owner can reverse (DECISIONS 354). The list of a pack with no record names the flag. Upper-case digits stay refused. `compare` refuses a second value.
-- Whether the relay of DECISIONS 318 comes before a tool reads a pointer. Three reviews of 2026-11-25 said that it waits (DECISIONS 346).
+- Whether a publisher's relay for pointers to packs (DECISIONS 318) comes before a tool reads a pointer. Three reviews of 2026-11-25 said that it waits (DECISIONS 346). A relay for notices between peers is in 0.9 (DECISIONS 360). Which relays the live run uses is not decided.
 
 ## Later
 
