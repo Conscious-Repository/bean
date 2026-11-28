@@ -53,7 +53,7 @@ bean share -for <Ana's address> -note "my lipids" -out for-ana.bean <id> <id>
 - `bean ls` shows the id at the end of each row.
 - bean asks for Ana's eight address words. Type the ones from the call.
 - bean shows what leaves, and what a seal to an address means. Read it, then answer `y`.
-- bean prints the start of the share's id. Tell Ana.
+- bean prints the start of the share's id, and the whole id after `share record`. Tell Ana both, by another way than the package, such as a message in the call.
 - Send `for-ana.bean` by a channel that you two already use. Do not put it on a public host.
 
 ## Ana reads, and answers
@@ -65,6 +65,7 @@ bean reply -to for-ana.bean -key ~/keys/bean.key -for <Ben's address> -out reply
 
 - The check shows the signer's identity words. They must be the words that Ben read in the call. If they are not, stop.
 - The check shows the start of the share's id. It must be the one that Ben told you.
+- From 0.8.8, bean compares both for you. Add `-signer "<Ben's eight identity words>" -share <Ben's whole share id>` before the file's name. bean refuses a package that is not that one, and shows none of its records. If it refuses, stop.
 - The check lists each record with its id. A note is about one record: give its id, or the first 6 digits or more.
 - A comparison is shown as Ben claims it. With the pack it names, `bean check-bundle -pack <file> -key ~/keys/bean.key for-ana.bean` computes it again. That shows the arithmetic, not that the value is true. A pack that bean has no record of also needs `-accept-pack` with its publisher's SHA-256. Without `-pack`, the check names `tools/compare/reproduce.py` for this step. `-pack` does it with bean.
 - `bean reply` asks for Ben's eight address words, says that you cannot open the reply again, and asks. Answer `y`.
