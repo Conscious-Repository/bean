@@ -4,7 +4,7 @@ For people and agents who change the code. Read [CORE.md](CORE.md) first: it is 
 
 ## Build and test
 
-Needs Go 1.24 or later. Check with `go version`. The `toolchain` line in `go.mod` names the Go release that the checks use; `go` gets it when your release is older. An older Go fails with `package crypto/hkdf is not in GOROOT`.
+Needs Go 1.25 or later. Check with `go version`. The `toolchain` line in `go.mod` names the Go release that the checks use; `go` gets it when your release is older. An older Go fails with `package crypto/hkdf is not in GOROOT`.
 
 ```
 go build ./...
