@@ -81,7 +81,7 @@ func TestCheckBundleExpect(t *testing.T) {
 		t.Errorf("the words in upper case, with commas: exit %d\n%s", code, out)
 	}
 	// Spaces around an id, as a copy from a chat brings them.
-	if out, code := check("-signer", " "+identity+" ", "-share", "  "+share+" "); code != 0 || !strings.Contains(out, idMatch) || !strings.Contains(out, shareMatch) {
+	if out, code := check("-signer", " "+identity+"\n", "-share", "  "+share+"\r\n"); code != 0 || !strings.Contains(out, idMatch) || !strings.Contains(out, shareMatch) {
 		t.Errorf("ids with spaces around them: exit %d\n%s", code, out)
 	}
 	// The share alone.
@@ -250,7 +250,7 @@ func TestCheckBundleExpectUsage(t *testing.T) {
 	w := strings.Fields(words)
 	// Each flag is given once: bean does not pick one of two values.
 	for _, args := range [][]string{{"-signer", words, "-signer", words}, {"-share", share, "-share", share}} {
-		if out, errs, code := run(t, "", "", append(append([]string{"check-bundle", "-key", f.key}, args...), f.pkg)...); code != 2 || out != "" || !strings.Contains(errs, args[0]+" is given more than once") {
+		if out, errs, code := run(t, "", "", append(append([]string{"check-bundle", "-key", f.key}, args...), f.pkg)...); code != 2 || out != "" || !strings.Contains(errs, "-signer and -share are each given once") {
 			t.Errorf("%s twice: exit %d\n%s\n%s", args[0], code, out, errs)
 		}
 	}
@@ -265,13 +265,15 @@ func TestCheckBundleExpectUsage(t *testing.T) {
 		{"-signer", "sha256:" + strings.ToUpper(share[7:]), "-signer takes the signer's identity id in full"},
 		{"-signer", strings.Join(w[:7], " ") + "\n" + w[7], "not printable"},
 		{"-signer", words + "\x1b[2J", "not printable"},
-		{"-signer", words + "‮", "not printable"},
+		{"-signer", words + "\u202e", "not printable"},
 		{"-share", "", "-share takes the whole id of the share record"},
 		{"-share", share[:19], "The start of an id is not enough"},
-		{"-share", share[7:], "-share takes the whole id of the share record"},
+		{"-share", share[7:], "with sha256: before its 64 hex digits"},
 		{"-share", "sha256:" + strings.ToUpper(share[7:]), "64 hex digits in lower case"},
 		{"-share", share + "0", "-share takes the whole id of the share record"},
-		{"-share", share + "\r", "not printable"},
+		{"-share", share[:30] + "\r" + share[30:], "not printable"},
+		{"-signer", words[:3] + "\t" + words[3:], "not printable"},
+		{"-signer", strings.Replace(words, " ", "\u00a0", 1), "type the eight identity words with plain spaces"},
 		{"-share", share[:70] + "а", "-share takes the whole id"},
 		{"-share", "\x1b]0;bundle ok\x07", "not printable"},
 	} {
@@ -279,7 +281,7 @@ func TestCheckBundleExpectUsage(t *testing.T) {
 		if code != 2 || out != "" || !strings.Contains(errs, c.says) {
 			t.Errorf("%s %q: exit %d\n%s\n%s", c.flag, c.value, code, out, errs)
 		}
-		if c.value != "" && strings.Contains(errs, c.value) || strings.ContainsAny(errs, "\x1b\r‮") {
+		if c.value != "" && strings.Contains(errs, c.value) || strings.ContainsAny(errs, "\x1b\r\t\u202e") {
 			t.Errorf("%s %q: the error shows the value:\n%q", c.flag, c.value, errs)
 		}
 	}

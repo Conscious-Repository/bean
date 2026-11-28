@@ -208,7 +208,7 @@ Checks a bundle, shows what it holds when it passes, and changes nothing in it. 
 
 With `-signer` and `-share`, the reader states whom and which share they expect ([DECISIONS 358](DECISIONS.md)). Without them the check prints what it printed before.
 
-- `-signer` takes the signer's eight identity words, as they read them to you, or their identity id in full. Letter case, commas and hyphens do not count in the words. Spaces around a value are cut.
+- `-signer` takes the signer's eight identity words, as they read them to you, or their identity id in full. Letter case, commas and hyphens do not count in the words. Spaces and line ends around a value are cut.
 - `-share` takes the whole id of the share record, as `bean share` prints it: `sha256:` and 64 hex digits. The start of an id is not enough.
 - bean compares them only when the bundle passes its check. A package that did not open prints as without the flags. A bundle that failed gets one more line: nothing was compared.
 - When each part matches, a line says so before `bundle ok`. The words line says that the words match, not the whole id. Eight words are 88 bits of the id.

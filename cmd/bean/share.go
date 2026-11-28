@@ -352,7 +352,7 @@ func cmdShare(s *core.Store, args []string) {
 	}
 	fmt.Printf("shared %d records and %d files in %s\n", len(shared), len(distinct), out)
 	fmt.Printf("share record %s\n", shareID)
-	who := "\nYour identity words, which are not a secret:\n  " + core.IDWords(l.ID) + "\nThe reader's check shows the identity words of whoever signed. Read yours to the reader, so that they know the records are yours.\nThe check also shows this share's time and the start of its id, " + shareID[7:19] + ": tell the reader, so that they know which share this is.\nA reader with bean 0.8.8 or later can give bean check-bundle your identity words with -signer, and the whole id of the share record with -share. bean then refuses another signer or another share."
+	who := "\nYour identity words, which are not a secret:\n  " + core.IDWords(l.ID) + "\nThe reader's check shows the identity words of whoever signed. Read yours to the reader, so that they know the records are yours.\nThe check also shows this share's time and the start of its id, " + shareID[7:19] + ": tell the reader, so that they know which share this is.\nSend the reader the whole id of the share record, above, by another way than the package. With bean 0.8.8 or later they give it to bean check-bundle -share, and your identity words to -signer. bean then refuses another signer or another share. The check page does not take them."
 	if to != nil {
 		fmt.Println("The package is sealed to the address that you gave. Whoever holds the key file of that address can open it.")
 		fmt.Println("You cannot open this file again, unless the address is your own. To keep a copy, do not delete those records, or keep a bean export.")
@@ -927,10 +927,8 @@ func cmdCheckBundle(args []string) {
 	if set["key"] && *keyFile == "" {
 		badArg(errors.New("-key names a key file"))
 	}
-	for name, f := range map[string]onceFlag{"signer": signer, "share": shareID} {
-		if f.n > 1 {
-			badArg(fmt.Errorf("-%s is given more than once: give the one that you expect", name))
-		}
+	if signer.n > 1 || shareID.n > 1 {
+		badArg(errors.New("-signer and -share are each given once: give the one that you expect"))
 	}
 	want := parseExpect(signer.v, shareID.v, set["signer"], set["share"])
 	for _, digest := range accepted {
@@ -1096,11 +1094,12 @@ func (e expect) given() bool { return e.words != "" || e.identity != "" || e.sha
 func parseExpect(signer, share string, signerGiven, shareGiven bool) expect {
 	var e expect
 	if signerGiven {
-		// Spaces around a value come with a copy from a chat: they are cut.
-		signer = strings.Trim(signer, " ")
+		// Spaces and a line end around a value come with a copy from a
+		// chat: they are cut.
+		signer = strings.TrimSpace(signer)
 		switch words := bundle.CleanAddressWords(signer); {
 		case !printable(signer):
-			badArg(errors.New("-signer holds a character that is not printable: give the signer's eight identity words, or their identity id in full"))
+			badArg(errors.New("-signer holds a character that is not printable, such as a tab or a no-break space: type the eight identity words with plain spaces, or give the identity id in full"))
 		case strings.HasPrefix(strings.ToLower(signer), "sha256:"):
 			if !core.IsID(signer) {
 				badArg(errors.New("-signer takes the signer's identity id in full: sha256: and 64 hex digits in lower case, as bean whoami prints it. Or it takes their eight identity words"))
@@ -1113,10 +1112,12 @@ func parseExpect(signer, share string, signerGiven, shareGiven bool) expect {
 		}
 	}
 	if shareGiven {
-		share = strings.Trim(share, " ")
+		share = strings.TrimSpace(share)
 		switch {
 		case !printable(share):
-			badArg(errors.New("-share holds a character that is not printable: give the whole id of the share record"))
+			badArg(errors.New("-share holds a character that is not printable, such as a tab or a no-break space: type or paste the whole id of the share record again"))
+		case core.IsID("sha256:" + share):
+			badArg(errors.New("-share takes the whole id of the share record with sha256: before its 64 hex digits, as bean share prints it after share record"))
 		case strings.HasPrefix(share, "sha256:") && len(share) < 71:
 			badArg(errors.New("-share takes the whole id of the share record, as bean share prints it after share record. The start of an id is not enough"))
 		case !core.IsID(share):
