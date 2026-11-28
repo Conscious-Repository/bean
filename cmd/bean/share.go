@@ -352,7 +352,7 @@ func cmdShare(s *core.Store, args []string) {
 	}
 	fmt.Printf("shared %d records and %d files in %s\n", len(shared), len(distinct), out)
 	fmt.Printf("share record %s\n", shareID)
-	who := "\nYour identity words, which are not a secret:\n  " + core.IDWords(l.ID) + "\nThe reader's check shows the identity words of whoever signed. Read yours to the reader, so that they know the records are yours.\nThe check also shows this share's time and the start of its id, " + shareID[7:19] + ": tell the reader, so that they know which share this is."
+	who := "\nYour identity words, which are not a secret:\n  " + core.IDWords(l.ID) + "\nThe reader's check shows the identity words of whoever signed. Read yours to the reader, so that they know the records are yours.\nThe check also shows this share's time and the start of its id, " + shareID[7:19] + ": tell the reader, so that they know which share this is.\nA reader with bean 0.8.8 or later can give bean check-bundle your identity words with -signer, and the whole id of the share record with -share. bean then refuses another signer or another share."
 	if to != nil {
 		fmt.Println("The package is sealed to the address that you gave. Whoever holds the key file of that address can open it.")
 		fmt.Println("You cannot open this file again, unless the address is your own. To keep a copy, do not delete those records, or keep a bean export.")
@@ -916,8 +916,9 @@ func cmdCheckBundle(args []string) {
 	var packPaths, accepted multiFlag
 	fs.Var(&packPaths, "pack", "compute each comparison by this pack again: a file; may repeat")
 	fs.Var(&accepted, "accept-pack", "with -pack: a pack that bean has no record of, by its SHA-256; may repeat")
-	signer := fs.String("signer", "", "the signer that you expect: their eight identity words, or their identity id in full")
-	shareID := fs.String("share", "", "the share that you expect: the whole id of its share record")
+	var signer, shareID onceFlag
+	fs.Var(&signer, "signer", "the signer that you expect: their eight identity words, or their identity id in full")
+	fs.Var(&shareID, "share", "the share that you expect: the whole id of its share record")
 	if err := fs.Parse(args); err != nil || fs.NArg() != 1 {
 		usage()
 	}
@@ -926,7 +927,12 @@ func cmdCheckBundle(args []string) {
 	if set["key"] && *keyFile == "" {
 		badArg(errors.New("-key names a key file"))
 	}
-	want := parseExpect(*signer, *shareID, set["signer"], set["share"])
+	for name, f := range map[string]onceFlag{"signer": signer, "share": shareID} {
+		if f.n > 1 {
+			badArg(fmt.Errorf("-%s is given more than once: give the one that you expect", name))
+		}
+	}
+	want := parseExpect(signer.v, shareID.v, set["signer"], set["share"])
 	for _, digest := range accepted {
 		if !pack.IsDigest(digest) {
 			badArg(fmt.Errorf("-accept-pack takes the SHA-256 of a pack: 64 hex digits in lower case, with no prefix, not %q", digest))
@@ -965,7 +971,7 @@ func cmdCheckBundle(args []string) {
 		if refused = !match; refused {
 			lines, verdict = refusedHead(res), "bundle REFUSED: it is not the one that you named. Its records are not shown."
 		} else {
-			lines = slices.Clone(lines[:len(lines)-1])
+			lines = lines[:len(lines)-1]
 		}
 		lines = append(append(lines, told...), verdict)
 	}
@@ -991,6 +997,9 @@ func cmdCheckBundle(args []string) {
 		// A package that did not open was not checked: it said so.
 		if len(packPaths) > 0 && !in.Locked {
 			fmt.Println("-pack: nothing was computed again, since the bundle did not pass its check")
+		}
+		if want.given() && !in.Locked {
+			fmt.Println("-signer, -share: nothing was compared, since the bundle did not pass its check")
 		}
 		os.Exit(1)
 	}
@@ -1087,26 +1096,31 @@ func (e expect) given() bool { return e.words != "" || e.identity != "" || e.sha
 func parseExpect(signer, share string, signerGiven, shareGiven bool) expect {
 	var e expect
 	if signerGiven {
+		// Spaces around a value come with a copy from a chat: they are cut.
+		signer = strings.Trim(signer, " ")
 		switch words := bundle.CleanAddressWords(signer); {
 		case !printable(signer):
 			badArg(errors.New("-signer holds a character that is not printable: give the signer's eight identity words, or their identity id in full"))
-		case strings.HasPrefix(signer, "sha256:"):
+		case strings.HasPrefix(strings.ToLower(signer), "sha256:"):
 			if !core.IsID(signer) {
-				badArg(errors.New("-signer takes the signer's identity id in full: sha256: and 64 hex digits in lower case. Or it takes their eight identity words"))
+				badArg(errors.New("-signer takes the signer's identity id in full: sha256: and 64 hex digits in lower case, as bean whoami prints it. Or it takes their eight identity words"))
 			}
 			e.identity = signer
 		case len(strings.Fields(words)) != 8 || !all(strings.Fields(words), core.IsWord):
-			badArg(errors.New("-signer takes the signer's eight identity words, each a word of the list that bean whoami uses. Or it takes their identity id in full"))
+			badArg(errors.New("-signer takes the signer's eight identity words, each a word of the list that bean whoami uses. Check the spelling of each word. Or it takes their identity id in full"))
 		default:
 			e.words = words
 		}
 	}
 	if shareGiven {
+		share = strings.Trim(share, " ")
 		switch {
 		case !printable(share):
 			badArg(errors.New("-share holds a character that is not printable: give the whole id of the share record"))
+		case strings.HasPrefix(share, "sha256:") && len(share) < 71:
+			badArg(errors.New("-share takes the whole id of the share record, as bean share prints it after share record. The start of an id is not enough"))
 		case !core.IsID(share):
-			badArg(errors.New("-share takes the whole id of the share record: sha256: and 64 hex digits in lower case, as bean share prints it. The start of an id is not enough"))
+			badArg(errors.New("-share takes the whole id of the share record: sha256: and 64 hex digits in lower case, as bean share prints it after share record"))
 		}
 		e.share = share
 	}
@@ -1166,18 +1180,34 @@ func (e expect) against(res bundle.Result) ([]string, bool) {
 	return lines, ok
 }
 
-// refusedHead is what a refused bundle shows: who signed and which share
-// it is, and the counts. The note is the signer's word, and is left out
-// with the records.
+// refusedHead is what a refused bundle shows: what a key shows, who
+// signed, which share it is, and the counts. Each of those lines is bean's
+// own. The rest of the head holds the signer's words: the note, the names
+// of pairings and of files that lay in the bundle. They are left out with
+// the records.
 func refusedHead(res bundle.Result) []string {
 	var head []string
 	for _, line := range res.Head {
-		if res.Note == "" || line != "note: "+res.Note {
+		own := slices.Contains(res.ByKey, line)
+		for _, prefix := range []string{"share ", "signed by identity ", "identity words: ", "records: ", "signed: ", "corrections: "} {
+			own = own || strings.HasPrefix(line, prefix)
+		}
+		if own {
 			head = append(head, line)
 		}
 	}
 	return head
 }
+
+// onceFlag is a flag that may be given once. A second value is an error
+// of use: bean does not pick one of two.
+type onceFlag struct {
+	v string
+	n int
+}
+
+func (f *onceFlag) String() string     { return f.v }
+func (f *onceFlag) Set(v string) error { f.v, f.n = v, f.n+1; return nil }
 
 // checkBundle checks the bundle in a folder by the five rules of
 // docs/SHARE.md, and changes nothing in it. It returns the lines to print

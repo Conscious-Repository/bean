@@ -134,7 +134,7 @@ var syntax = map[string]string{
 	"verify":        "verify",
 	"share":         "share -out <new folder or file> [-seal | -for <address> [-address-words \"<eight words>\"]] [-files] [-note <text>] [-yes] <id>... | -type <type> [-since <time>] [-until <time>]",
 	"address":       "address -out <new key file> | address -key <key file>",
-	"check-bundle":  "check-bundle [-key <key file>] [-signer \"<eight identity words>\" | <identity id>] [-share <share id>] [-unpack <new folder>] [-pack <file>]... [-accept-pack <sha256>]... <folder, zip file or sealed package>",
+	"check-bundle":  "check-bundle [-key <key file>] [-signer \"<eight identity words>\"|<identity id>] [-share <share id>] [-unpack <new folder>] [-pack <file>]... [-accept-pack <sha256>]... <folder, zip file or sealed package>",
 	"reply":         "reply -to <what you received> [-key <key file>] [-for <address> [-address-words \"<eight words>\"] [-yes]] -out <new file> <id> <note> [<id> <note>]...",
 	"accept":        "accept [-label <name>] [-words \"<eight words>\"] [-yes | -key <key file>] <reply>",
 	"unpair":        "unpair <name>",

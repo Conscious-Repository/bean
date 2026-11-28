@@ -45,6 +45,7 @@ No record changes, and `bean verify` and `bean ls` print the same for an existin
 - **The last line for a bundle with no comparison has new words.** It states both exits: 3 with `-pack`, and 0 without it. A script that looks for `Without -pack, its exit is 0` finds it no longer.
 - **That line says also when a file was refused, or a flag did not count.** In 0.8.7 only a line above said so.
 - **`bean check-bundle` takes `-signer` and `-share`** ([DECISIONS 358](docs/DECISIONS.md)). They name the signer and the share that the reader expects. A package that is not that one ends with `bundle REFUSED`, exit 1. Without the two flags the check prints what it printed before, byte for byte.
+- **`bean share` prints one more line,** after the start of the share's id. It says that a reader with 0.8.8 can pass the words and the whole id to `check-bundle`.
 - **A record of the type `comparison` alone is `CANNOT CHECK`,** as one of another type `comparison.*` is since 0.8.7. `tools/compare/reproduce.py` fails for it too.
 
 ### 0.8.7 (2026-11-27)

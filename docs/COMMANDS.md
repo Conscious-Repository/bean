@@ -202,21 +202,21 @@ Makes a key file for packages that are sealed to you, or shows the address of on
 - Both print `address <address>`, then `address words <eight words>`, then what you must know before you give the address away.
 - It needs no log. bean keeps no key file and no list of them: `bean restore` and `bean export` do not hold one.
 
-### `check-bundle [-key <file>] [-signer "<eight words>" | <id>] [-share <id>] [-unpack <new folder>] [-pack <file>]... [-accept-pack <sha256>]... <folder or file>`
+### `check-bundle [-key <file>] [-signer "<eight words>"|<id>] [-share <id>] [-unpack <new folder>] [-pack <file>]... [-accept-pack <sha256>]... <folder or file>`
 
 Checks a bundle, shows what it holds when it passes, and changes nothing in it. Given a file, it reads a zip file of a bundle's folder, or a sealed package. One scan of the file's header decides what it asks for. For a package that is sealed with words it asks for the six words, and reads them from standard input. A package that is sealed to an address opens with `-key <file>`, your key file with exactly one identity. Flags come before the file's name. With wrong words, without the key or with another key, the last line is `the package did not open: nothing was checked`, exit 1. When a key opened the package, the check first says that anyone who has your address can seal to it. With `-unpack`, a package that passes is written into a new folder as a bundle, with the files it carries. It needs no log, and reads only the bundle's `objects` and `files` folders; anything else in the folder is named and not read. It prints any record that fails, then the share record's id and the identity and key that signed it. It prints how many records and files it holds. It prints who signed the records: the person, an agent the person paired, or another key. It prints how many are corrections of a record that is not in the bundle. When every check passed it lists the records under `It holds:`, a comparison in words with its reading, cohort and n. Then `bundle ok`, exit 0, or `bundle FAILED: <n> problems`, exit 1. It says each time what no bundle can show: that it is complete, that a value is true, and who the identity is. Nor can a bundle show that the key that signed is still the person's. `tools/second/checkbundle.py` does the same check without bean.
 
 With `-signer` and `-share`, the reader states whom and which share they expect ([DECISIONS 358](DECISIONS.md)). Without them the check prints what it printed before.
 
-- `-signer` takes the signer's eight identity words, as they read them to you, or their identity id in full. Letter case, commas and hyphens do not count.
+- `-signer` takes the signer's eight identity words, as they read them to you, or their identity id in full. Letter case, commas and hyphens do not count in the words. Spaces around a value are cut.
 - `-share` takes the whole id of the share record, as `bean share` prints it: `sha256:` and 64 hex digits. The start of an id is not enough.
-- bean compares them only when the bundle passes its check. A bundle that failed, or a package that did not open, prints as without the flags.
+- bean compares them only when the bundle passes its check. A package that did not open prints as without the flags. A bundle that failed gets one more line: nothing was compared.
 - When each part matches, a line says so before `bundle ok`. The words line says that the words match, not the whole id. Eight words are 88 bits of the id.
 - These lines do not show that a value is true. What you gave is only as good as the way it came to you. Get it by another way than the package.
-- When a part does not match, the check shows who signed and which share it is. A line says which part is NOT the one that you gave, and what to do.
-- Then no record and no note is shown. The last line is `bundle REFUSED: it is not the one that you named`, and the exit is 1.
+- When a part does not match, the check shows who signed, which share it is, and the counts. A line says which part is NOT the one that you gave, and what to do.
+- Then no record is shown, and none of the signer's own words: no note, no name of a pairing, and no name of another file. The last line is `bundle REFUSED: it is not the one that you named`, and the exit is 1.
 - On a refusal `-pack` computes nothing, and `-unpack` writes nothing.
-- Any other value is an error of use, exit 2. So is a word that is not on the list, and a character that is not printable. bean does not print the value back.
+- Any other value is an error of use, exit 2. So is a word that is not on the list, and a character that is not printable. bean does not print the value back. Each flag may be given once.
 
 With `-pack <file>`, bean also computes each comparison by a pack again, by the four steps of [REFERENCE.md](REFERENCE.md) ("The claim"). The flag may repeat, one for each pack. Without it the check prints what it printed before.
 

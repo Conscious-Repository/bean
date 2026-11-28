@@ -367,7 +367,7 @@ func TestShareFor(t *testing.T) {
 	// What is printed: the identity words and the start of the share's id,
 	// that the sender cannot open the file, and no line about six words or
 	// a browser.
-	for _, want := range []string{"is sealed to the address that you gave", "You cannot open this file again, unless the address is your own", "Your identity words, which are not a secret", "the start of its id", "The reader opens it with bean check-bundle -key <their key file>, or with the age tool", "A bean that has no bean address does not open it"} {
+	for _, want := range []string{"is sealed to the address that you gave", "You cannot open this file again, unless the address is your own", "Your identity words, which are not a secret", "the start of its id", "The reader opens it with bean check-bundle -key <their key file>, or with the age tool", "A bean that has no bean address does not open it", "can give bean check-bundle your identity words with -signer, and the whole id of the share record with -share"} {
 		if !strings.Contains(f.stdout, want) {
 			t.Errorf("share -for does not say %q:\n%s", want, f.stdout)
 		}

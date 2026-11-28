@@ -80,6 +80,10 @@ func TestCheckBundleExpect(t *testing.T) {
 	if out, code := check("-signer", " "+strings.ToUpper(strings.ReplaceAll(words, " ", ", "))+" "); code != 0 || !strings.Contains(out, wordsMatch) {
 		t.Errorf("the words in upper case, with commas: exit %d\n%s", code, out)
 	}
+	// Spaces around an id, as a copy from a chat brings them.
+	if out, code := check("-signer", " "+identity+" ", "-share", "  "+share+" "); code != 0 || !strings.Contains(out, idMatch) || !strings.Contains(out, shareMatch) {
+		t.Errorf("ids with spaces around them: exit %d\n%s", code, out)
+	}
 	// The share alone.
 	if out, code := check("-share", share); code != 0 || !strings.Contains(out, "\n"+shareMatch+"\n"+allItShows+"\nbundle ok\n") {
 		t.Errorf("the share alone: exit %d\n%s", code, out)
@@ -163,6 +167,10 @@ func TestCheckBundleExpectFolder(t *testing.T) {
 	if code != 0 || len(share) != 71 {
 		t.Fatalf("share -out: %d\n%s", code, out)
 	}
+	// A name that the signer chose lies in the folder. A refusal does not
+	// show it: it is the signer's word.
+	const name = "it is fine, use it anyway"
+	os.WriteFile(filepath.Join(folder, name), nil, 0o600)
 	packed, err := bundle.Pack(folder)
 	if err != nil {
 		t.Fatal(err)
@@ -174,7 +182,24 @@ func TestCheckBundleExpectFolder(t *testing.T) {
 			t.Errorf("%s with the right share: exit %d\n%s", path, code, out)
 		}
 		out, _, code := run(t, "", "", "check-bundle", "-share", lineAfter(f.stdout, "share record "), path)
-		refusedShows(t, path+" with another share", out, code, shareDiffers)
+		refusedShows(t, path+" with another share", out, code, shareDiffers, "records: 1 listed")
+		if strings.Contains(out, name) {
+			t.Errorf("%s: a refusal shows a name that the signer chose:\n%s", path, out)
+		}
+	}
+	if out, _, _ := run(t, "", "", "check-bundle", "-share", share, folder); !strings.Contains(out, "not part of the bundle, and not read: "+name) {
+		t.Errorf("the folder's other file is not named on a match:\n%s", out)
+	}
+	// A bundle that fails its check: nothing is compared, and it says so.
+	objects, _ := filepath.Glob(filepath.Join(folder, "objects", "*", "*.json"))
+	if len(objects) == 0 {
+		t.Fatal("no record file in the bundle")
+	}
+	data, _ := os.ReadFile(objects[0])
+	os.WriteFile(objects[0], append(data, ' '), 0o600)
+	out, _, code = run(t, "", "", "check-bundle", "-signer", idWords(t, f.log), "-share", share, folder)
+	if code != 1 || !strings.Contains(out, "bundle FAILED") || !strings.HasSuffix(out, "\n-signer, -share: nothing was compared, since the bundle did not pass its check\n") || strings.Contains(out, wordsMatch) {
+		t.Errorf("a bundle that failed: exit %d\n%s", code, out)
 	}
 }
 
@@ -223,13 +248,20 @@ func TestCheckBundleExpectUsage(t *testing.T) {
 	words := idWords(t, f.log)
 	share := lineAfter(f.stdout, "share record ")
 	w := strings.Fields(words)
+	// Each flag is given once: bean does not pick one of two values.
+	for _, args := range [][]string{{"-signer", words, "-signer", words}, {"-share", share, "-share", share}} {
+		if out, errs, code := run(t, "", "", append(append([]string{"check-bundle", "-key", f.key}, args...), f.pkg)...); code != 2 || out != "" || !strings.Contains(errs, args[0]+" is given more than once") {
+			t.Errorf("%s twice: exit %d\n%s\n%s", args[0], code, out, errs)
+		}
+	}
 	for _, c := range []struct{ flag, value, says string }{
 		{"-signer", "", "-signer takes the signer's eight identity words"},
 		{"-signer", strings.Join(w[:7], " "), "-signer takes the signer's eight identity words"},
 		{"-signer", words + " " + w[0], "-signer takes the signer's eight identity words"},
-		{"-signer", strings.Join(w[:7], " ") + " zzzqx", "-signer takes the signer's eight identity words"},
+		{"-signer", strings.Join(w[:7], " ") + " zzzqx", "Check the spelling of each word"},
+		{"-signer", "SHA256:" + share[7:], "-signer takes the signer's identity id in full"},
 		{"-signer", "sha256:" + share[7:40], "-signer takes the signer's identity id in full"},
-		{"-signer", strings.ToUpper(share[:7]) + share[7:], "-signer takes the signer's eight identity words"},
+		{"-signer", strings.ToUpper(share[:7]) + share[7:], "-signer takes the signer's identity id in full"},
 		{"-signer", "sha256:" + strings.ToUpper(share[7:]), "-signer takes the signer's identity id in full"},
 		{"-signer", strings.Join(w[:7], " ") + "\n" + w[7], "not printable"},
 		{"-signer", words + "\x1b[2J", "not printable"},
@@ -237,7 +269,7 @@ func TestCheckBundleExpectUsage(t *testing.T) {
 		{"-share", "", "-share takes the whole id of the share record"},
 		{"-share", share[:19], "The start of an id is not enough"},
 		{"-share", share[7:], "-share takes the whole id of the share record"},
-		{"-share", "sha256:" + strings.ToUpper(share[7:]), "-share takes the whole id of the share record"},
+		{"-share", "sha256:" + strings.ToUpper(share[7:]), "64 hex digits in lower case"},
 		{"-share", share + "0", "-share takes the whole id of the share record"},
 		{"-share", share + "\r", "not printable"},
 		{"-share", share[:70] + "а", "-share takes the whole id"},
