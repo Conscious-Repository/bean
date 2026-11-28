@@ -14,7 +14,7 @@ This file is the one place for open paths: what bean does now, what comes next, 
 2. **One ongoing permission.** The sender chooses between sharing once and including future results, with a separate expiry for that permission. If the window refers to when a reading was taken, use its observation date. Hold an undated reading for review. Test a late import, a correction and an unrelated reading. Recheck the current permission before every handoff, including retries. Stop or expiry cancels queued work still under sender control. Once a recipient can retrieve the sealed bytes, count them as released even if unread. A timeout leaves delivery uncertain. Retry the same sealed package only while authorized. The reader catches up after an outage and recognizes a repeated signed share ID. Replaying an older share must never replace a correction.
 3. **Two readers.** Pick two verified contacts and show what each will get. Seal separately to each using the same one-reader format. Give them different scopes. Remove one while an update is queued and check that only the remaining reader gets the next matching result once. A reader adding a contact grants that person nothing. Block the first host and start a fresh reader from a second inbox holding the authorized package. Verify the same signed share ID and sender offline with the reader’s own key.
 
-The sender should be able to review and stop each permission, and each reader should be able to receive updates without moving files by hand. The client owns contacts, permissions, delivery and retries. If the trial exposes a missing offline operation, bring that specific case to bean. A public host for personal packages still needs the protected reader key described in path 1 (DECISIONS 328).
+The sender should be able to review and stop each permission, and each reader should be able to receive updates without moving files by hand. The client owns contacts, permissions, delivery and retries. Once it talks to a network in a repository of its own, it vets every outbound dial against loopback, private and CGNAT (`100.64.0.0/10`) addresses. It ignores proxy variables and caps response sizes. Test outages, timeouts and replays against recorded HTTP exchanges. For a lab inbox, use stateless signed capability tokens for fetch and delete, so the server holds no accounts and no reader list. If the trial exposes a missing offline operation, bring that specific case to bean. A public host for personal packages still needs the protected reader key described in path 1 (DECISIONS 328).
 
 ## Next: 0.9, then the lock
 
@@ -28,8 +28,8 @@ The sender should be able to review and stop each permission, and each reader sh
 - **The built-in list of known packs.** It is in bean's code, which makes the project the judge of every pack. Should it only be a hint, outside the locked formats?
 - **`pack/0` changed its meaning without a new label.** Release 0.8.2 reads packs that 0.8.1 refuses, and a reply to an address came the same way. Should a loosened format get a new label, and should bundles and replies carry a mark?
 - **A text of a pack is judged by the reader's Unicode version.** Two readers can differ on a character that a later version names. Should the format name one version, or refuse every character with no category (DECISIONS 347)?
-- **Four pack labels came in one day** (`pack/1` to `pack/4`, DECISIONS 346). Each names one added rule, and a later label takes the rules before it. Is that one format with optional parts, or a label for each rule? Each rule is written three times: in bean, in `tools/pack/check.py` and in `tools/compare/reproduce.py`.
-- **Nostr kind 29944 is not registered,** but the validity rules use it. Register it, or accept the risk in writing?
+- **Four pack labels came in one day** (`pack/1` to `pack/4`, DECISIONS 346). Each names one added rule, and a later label takes the rules before it. Collapse them into one format with explicit rule fields, or keep one label per rule? Each rule is written three times: in bean, in `tools/pack/check.py` and in `tools/compare/reproduce.py`.
+- **Nostr kind 29944 is not registered,** but the validity rules use it. It sits in the NIP-01 ephemeral range, and no known collision exists (DECISIONS 359). Register it, or accept the risk in writing?
 - **P-256 lets a hardware signer use random nonces,** and no device exists yet. A weak random source can leak the key. Should P-256 stay out of the lock until a real device signs?
 - **A stolen Nostr key could swap the address of every peer** who finds addresses on Nostr. Does an address from Nostr still need a check by voice once, and again when it changes?
 - **A lab server that carries packages would see who shares with whom.** Decide before trial 3. The recommendation that the owner took: size, time, network address and hash only, no listing by reader, and delete after fetch (DECISIONS 358).
@@ -61,7 +61,7 @@ Each path waits for its real case. The steps that are done are in DECISIONS.md.
 Done: a seal with six words, a seal to a reader's address, and the `age` format. The review before a share says what leaves. Identity words show who signed. Open:
 
 - A key that the check page makes for a reader who has only a browser. A forged page would take a key that opens every package, so it needs a design of its own (SHARE-PLAN.md).
-- A package by link on a file host, sealed to the reader's key. The owner's rule: a key file with a passphrase comes first (DECISIONS 328). A key made for that one upload signs it, never a key of a log. The host learns the size, the time and each network address.
+- A package by link on a file host, sealed to the reader's key. The owner's rule: a key file with a passphrase comes first (DECISIONS 328). Enforce a scrypt work-factor ceiling and one refusal message for a wrong passphrase, a malformed file or a factor above the ceiling. A key made for that one upload signs it, never a key of a log. The host learns the size, the time and each network address.
 - A second, independent place for the check page's SHA-256, and a short address of the project's own.
 - Whether `-seal` becomes the default, `bean share -except <id>`, and an end date for a package.
 
@@ -94,7 +94,7 @@ Done: reference packs, two NHANES packs on record, and `bean compare -pack` (DEC
 - **A second source, from another publisher.** The pack format does not lock before a second real source is built into a pack. Leads, none confirmed: other parts of NHANES, other open US survey files, and counts of genetic variants. Tables in journals may not be free to hand on.
 - **The cohort from two records, for a pack that is not on record.** bean's code holds the sex and the ages of each cohort, for the two packs on record only. A pack states a cohort in words. A field for the sex and the ages would be a change to the pack format (DECISIONS 348).
 - **More tests** by [REFERENCE-PLAN.md](REFERENCE-PLAN.md): values below a detection limit, more of the blood count, and a caveat with a size. The fasting tests need a weight of their own, which is a decision of their own.
-- **A publisher signs a pack,** and **a person keeps their own list of packs** (DECISIONS 308). Each is built when a second publisher exists.
+- **A publisher signs a pack,** and **a person keeps their own list of packs** (DECISIONS 308). Grouping `kind 1063` file pointers under one replaceable `kind 30063` release set is one candidate for a signed catalog. Each is built when a second publisher exists.
 - **The check page computes a shared comparison again,** when the reader gives it the pack. `bean check-bundle -pack` does since 0.8.7 (DECISIONS 353); the page in a browser does not yet. First the check moves into the code that the page runs, with its tests. Then the page takes a pack file from the reader, and fetches none. A pack with no record counts only with a SHA-256 that the reader types.
 - **A pool of real people.** It needs a share that names its reader, written consent and a review of the law (DECISIONS 325, 328). It also needs a pack format for data that is not public ([POOL-PLAN.md](POOL-PLAN.md)). A pack lists every value of a cell, so a small pool shows each member's value.
 
@@ -114,7 +114,9 @@ A second publisher can serve the same public pack. With the first host unreachab
 - A table of names for one quantity. It waits for a real case (DECISIONS 323).
 - On the edge of a pack's cohorts, a row can advise a month of birth where no month gives a number (DECISIONS 348).
 - A test that holds the sex and the ages of each cohort in bean's code to the menu that the pack's builder uses.
-- Newer versions of `golang.org/x/crypto` and `golang.org/x/sys`. `make vuln` names 22 listed faults in the two, and bean's code calls none (DECISIONS 349).
+- `golang.org/x/crypto` v0.59.0 and `go 1.26.0` after migrating deprecated `ecdsa.PublicKey` and `ecdsa.PrivateKey` fields in `core/keys.go` and `tools/genvectors/p256.go` (DECISIONS 359).
+- Static security linting (`gosec`, `errcheck`, `govet` with all analyzers, `nolintlint`) alongside `staticcheck` (DECISIONS 359).
+- A small, versioned agent skill beside `bean mcp`, distilling the AI rules of `ONBOARDING.md` so assistants stay in bounds.
 
 ## Not planned
 
