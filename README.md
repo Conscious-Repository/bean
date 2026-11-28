@@ -65,7 +65,7 @@ It needs Go and `curl`, and downloads about 7 MB from CDC. With Python and `pip 
 
 | You need | For | Install on macOS |
 |---|---|---|
-| Go 1.24 or later | Building `bean`. On the first build, Go downloads the toolchain that `go.mod` names (go1.27.4). | `brew install go` |
+| Go 1.25 or later | Building `bean`. On the first build, Go downloads the toolchain that `go.mod` names (go1.27.4). | `brew install go` |
 | `pdftotext` | Lab report PDFs only | `brew install poppler` |
 | `make` | `make page`, the page that checks a bundle in a browser | It comes with Xcode's command line tools |
 | Python 3 | Optional: the checks that use no bean (`tools/second`, `tools/compare`) | `brew install python`, then `pip install -r tools/requirements.txt` |

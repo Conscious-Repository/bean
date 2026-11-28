@@ -183,8 +183,10 @@ No stage needs a change to bean. The owner decided that the host comes first (DE
 **Not known.**
 
 - Which programs run, their versions, and whether each can hold the rules above.
-- How the logs are held to a week, and to no network address.
+- How the logs are held to a week, and to no network address. A candidate: a timer on the server does it, and no person.
 - Limits of size and of rate, and who patches the server.
+- Whether the host's setup is one declared file, with a check of free disk space before each deploy.
+- How a host with more than two packs lists them. One candidate: a replaceable event of kind 30063 that names the kind 1063 pointers.
 
 ## What each party learns
 
