@@ -285,6 +285,10 @@ Saved comparisons, the reference files you kept and the records of your shares a
 | `the bundle holds no comparison: ...` from `check-bundle -pack` | The bundle passed, and it has nothing to compute again. The exit is 3 with `-pack`, and 0 without it. Read the lines above for a file or a flag that was not used. |
 | `NOT on record: the pack ...` from `check-bundle -pack` | As for `bean has no record of this pack`, above: pass the publisher's value with `-accept-pack <sha256>`. Do not pass the value that bean printed: that checks nothing. |
 | `REFUSED: the file ...` from `check-bundle -pack` | The file is not a pack that bean reads. Get the pack from its publisher. |
+| `-signer: NOT the signer that you gave` from `check-bundle` | Another identity signed the package. Check the eight words that you typed. If they are right, do not use the package. Ask the person for their identity words again, by another way than the package came. |
+| `-share: NOT the share that you gave` from `check-bundle` | The package holds another share, which can be an older one of the same person. Check the id that you gave. If it is right, ask the sender which share they sent. |
+| `bundle REFUSED: it is not the one that you named` | A line above says which part differs. bean shows none of its records, and `-unpack` writes nothing. The exit is 1. |
+| `-signer takes ...`, `-share takes ...` from `check-bundle` | Give eight identity words of the list, or an identity id in full. Give the whole share id that `bean share` printed, not its start. |
 | `-accept-pack ... does not count` | The line says why. Pass only the SHA-256 that the publisher states for a pack that a comparison names. |
 | Exit 3 from `check-bundle -pack` | The bundle passed. A comparison did not compute again or was not checked, or the bundle holds none. The lines after `bundle ok` say which. |
 | `not comparable: ...` in a row | The row says why, for example a unit that the pack does not take. bean converts no unit. |

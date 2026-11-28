@@ -17,6 +17,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 
 	"filippo.io/age"
 
@@ -915,14 +916,17 @@ func cmdCheckBundle(args []string) {
 	var packPaths, accepted multiFlag
 	fs.Var(&packPaths, "pack", "compute each comparison by this pack again: a file; may repeat")
 	fs.Var(&accepted, "accept-pack", "with -pack: a pack that bean has no record of, by its SHA-256; may repeat")
+	signer := fs.String("signer", "", "the signer that you expect: their eight identity words, or their identity id in full")
+	shareID := fs.String("share", "", "the share that you expect: the whole id of its share record")
 	if err := fs.Parse(args); err != nil || fs.NArg() != 1 {
 		usage()
 	}
-	keyGiven := false
-	fs.Visit(func(f *flag.Flag) { keyGiven = keyGiven || f.Name == "key" })
-	if keyGiven && *keyFile == "" {
+	set := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
+	if set["key"] && *keyFile == "" {
 		badArg(errors.New("-key names a key file"))
 	}
+	want := parseExpect(*signer, *shareID, set["signer"], set["share"])
 	for _, digest := range accepted {
 		if !pack.IsDigest(digest) {
 			badArg(fmt.Errorf("-accept-pack takes the SHA-256 of a pack: 64 hex digits in lower case, with no prefix, not %q", digest))
@@ -936,11 +940,10 @@ func cmdCheckBundle(args []string) {
 		given = readGivenPacks(packPaths)
 	}
 	path := fs.Arg(0)
-	var lines []string
-	var ok bool
+	var res bundle.Result
 	var in bundle.Input
 	if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() {
-		lines, ok, in = checkPackage(path, *keyFile)
+		res, in = checkPackage(path, *keyFile)
 	} else if *unpack != "" {
 		fail(errors.New("-unpack is for a package that is one file: a folder is unpacked already"))
 	} else {
@@ -949,8 +952,22 @@ func cmdCheckBundle(args []string) {
 			fmt.Fprintln(os.Stderr, notSealedLine)
 		}
 		in = bundle.ReadDir(path)
-		res := bundle.Check(in)
-		lines, ok = res.Lines(), res.OK
+		res = bundle.Check(in)
+	}
+	lines, ok := res.Lines(), res.OK
+	// What the reader expects is compared only with a bundle that passed:
+	// only then are its signer and its share known. A refusal shows who
+	// signed and which share it is, and none of its records.
+	refused := false
+	if ok && want.given() {
+		told, match := want.against(res)
+		verdict := lines[len(lines)-1]
+		if refused = !match; refused {
+			lines, verdict = refusedHead(res), "bundle REFUSED: it is not the one that you named. Its records are not shown."
+		} else {
+			lines = slices.Clone(lines[:len(lines)-1])
+		}
+		lines = append(append(lines, told...), verdict)
 	}
 	for _, line := range lines {
 		// With -pack the lines after "bundle ok" say what was computed again.
@@ -974,6 +991,17 @@ func cmdCheckBundle(args []string) {
 		// A package that did not open was not checked: it said so.
 		if len(packPaths) > 0 && !in.Locked {
 			fmt.Println("-pack: nothing was computed again, since the bundle did not pass its check")
+		}
+		os.Exit(1)
+	}
+	// Exit 1, as for a bundle that failed: the reader must not use it, and
+	// exit 3 says that a bundle passed (DECISIONS 358).
+	if refused {
+		if len(packPaths) > 0 {
+			fmt.Println("-pack: nothing was computed again, since the bundle is not the one that you named")
+		}
+		if *unpack != "" {
+			fmt.Println("-unpack: nothing was written, since the bundle is not the one that you named")
 		}
 		os.Exit(1)
 	}
@@ -1038,10 +1066,117 @@ func unpackBundle(in bundle.Input, dir string) error {
 // or a sealed package. For one that is sealed with words it asks for the
 // six words, and reads them from standard input. One that is sealed to a
 // key opens with keyFile.
-func checkPackage(path, keyFile string) ([]string, bool, bundle.Input) {
+func checkPackage(path, keyFile string) (bundle.Result, bundle.Input) {
 	in := readPackage(path, bufio.NewReader(os.Stdin), keyFile)
-	res := bundle.Check(in)
-	return res.Lines(), res.OK, in
+	return bundle.Check(in), in
+}
+
+// expect is what the reader of a bundle says that they expect, with
+// -signer and -share (DECISIONS 358). Each part is "" when not given.
+// words are the signer's eight identity words, identity the signer's id
+// in full, and share the whole id of the share record.
+type expect struct {
+	words, identity, share string
+}
+
+func (e expect) given() bool { return e.words != "" || e.identity != "" || e.share != "" }
+
+// parseExpect reads -signer and -share. A value that is not eight words of
+// the list, or not an id in full, is an error of use. The error does not
+// show the value: it may hold anything.
+func parseExpect(signer, share string, signerGiven, shareGiven bool) expect {
+	var e expect
+	if signerGiven {
+		switch words := bundle.CleanAddressWords(signer); {
+		case !printable(signer):
+			badArg(errors.New("-signer holds a character that is not printable: give the signer's eight identity words, or their identity id in full"))
+		case strings.HasPrefix(signer, "sha256:"):
+			if !core.IsID(signer) {
+				badArg(errors.New("-signer takes the signer's identity id in full: sha256: and 64 hex digits in lower case. Or it takes their eight identity words"))
+			}
+			e.identity = signer
+		case len(strings.Fields(words)) != 8 || !all(strings.Fields(words), core.IsWord):
+			badArg(errors.New("-signer takes the signer's eight identity words, each a word of the list that bean whoami uses. Or it takes their identity id in full"))
+		default:
+			e.words = words
+		}
+	}
+	if shareGiven {
+		switch {
+		case !printable(share):
+			badArg(errors.New("-share holds a character that is not printable: give the whole id of the share record"))
+		case !core.IsID(share):
+			badArg(errors.New("-share takes the whole id of the share record: sha256: and 64 hex digits in lower case, as bean share prints it. The start of an id is not enough"))
+		}
+		e.share = share
+	}
+	return e
+}
+
+// printable reports a value with no control character and no character
+// that changes how text is shown. Such a value is never printed back.
+func printable(s string) bool {
+	for _, r := range s {
+		if r != ' ' && !unicode.IsPrint(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func all(words []string, ok func(string) bool) bool {
+	for _, w := range words {
+		if !ok(w) {
+			return false
+		}
+	}
+	return true
+}
+
+// against compares a bundle that passed its check with what the reader
+// expects. It gives a line for each part that the reader gave, and reports
+// whether each such part is so. Eight words are 88 bits of the id, so the
+// line says that the words match, and not that the id does.
+func (e expect) against(res bundle.Result) ([]string, bool) {
+	var lines []string
+	ok := true
+	switch {
+	case e.words != "" && e.words == res.Words:
+		lines = append(lines, "-signer: the signer's identity words are the eight words that you gave.")
+	case e.words != "":
+		ok = false
+		lines = append(lines, "-signer: NOT the signer that you gave. The identity words above are not the words that you gave. If you mistyped a word, run the check again. If not, do not use this package. Ask the person whom you expect for their identity words again, by another way than the package came.")
+	case e.identity != "" && e.identity == res.Identity:
+		lines = append(lines, "-signer: the signer's identity id is the id that you gave.")
+	case e.identity != "":
+		ok = false
+		lines = append(lines, "-signer: NOT the signer that you gave. The identity above is not the id that you gave. Do not use this package. Ask the person whom you expect for their identity words again, by another way than the package came.")
+	}
+	switch {
+	case e.share == "":
+	case e.share == res.Share:
+		lines = append(lines, "-share: this is the share whose whole id you gave.")
+	default:
+		ok = false
+		lines = append(lines, "-share: NOT the share that you gave. The share id above is not the id that you gave, and it can be an older share of the same signer. Check the id that you gave. If it is right, do not use this package. Ask the signer which share they sent, by another way than the package came.")
+	}
+	if ok {
+		lines = append(lines, "That is all that these lines show. They do not show that a value is true. What you gave is only as good as the way it came to you.")
+	}
+	return lines, ok
+}
+
+// refusedHead is what a refused bundle shows: who signed and which share
+// it is, and the counts. The note is the signer's word, and is left out
+// with the records.
+func refusedHead(res bundle.Result) []string {
+	var head []string
+	for _, line := range res.Head {
+		if res.Note == "" || line != "note: "+res.Note {
+			head = append(head, line)
+		}
+	}
+	return head
 }
 
 // checkBundle checks the bundle in a folder by the five rules of
